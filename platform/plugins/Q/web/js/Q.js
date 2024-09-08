@@ -1777,7 +1777,7 @@ Q.isInteger = function _Q_isInteger(value, strictComparison) {
  *	Whether it is an array
  */
 Q.isArrayLike = function _Q_isArrayLike(value) {
-	return (Q.typeOf(value) === 'array') || value instanceof $;
+	return (Q.typeOf(value) === 'array') || (window.$ && value instanceof $);
 };
 
 /**
