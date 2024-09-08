@@ -1,0 +1,254 @@
+@import "../../font-awesome/css/font-awesome.css";
+
+.Q_video_tool {
+    font-size: 0;
+    position: relative;
+    min-height: 250px;
+}
+.Q_video_composer {
+    padding: 10px;
+    position: relative;
+}
+.video-js .vjs-time-control {
+    display: block;
+}
+.video-js .vjs-remaining-time {
+    display: none;
+}
+.video-js .vjs-time-control {
+    padding-right: 0;
+    padding-left: 0;
+}
+.video-js .vjs-time-divider {
+    text-align: center;
+}
+.video-js .vjs-marker {
+    height: 50%;
+    bottom: 24%;
+}
+.Q_video_advertising .video-js .vjs-play-progress {
+    background-color: yellow;
+}
+.Q_video_composer label[for=url] {
+    margin-top: 10px;
+    display: block;
+    white-space: nowrap;
+}
+.Q_video_composer label[for=url] button,
+.Q_video_composer label[for=url] input {
+    display: inline-block;
+}
+.Q_video_composer label[for=url] input {
+    width: 60%;
+    margin-right: 5px;
+}
+
+.Q_dialog_video {
+    min-width: 330px;
+}
+.Q_dialog_video .Q_video_player {
+    display: none;
+    margin-bottom: 10px;
+}
+.Q_dialog_video .Q_video_composer[data-composer=false] .Q_video_player {
+    display: block;
+}
+
+.Q_dialog_video .Q_tabbing_container .Q_tabbing_item {
+    min-height: 100px;
+}
+.Q_dialog_video .Q_tabbing_container .Q_tabbing_item[data-content=upload] input.Q_video_file,
+.Q_dialog_video .Q_tabbing_container .Q_tabbing_item[data-content=link] label {
+    display: block;
+    margin: 30px auto 0;
+    width: 90%;
+    white-space: nowrap;
+}
+.Q_dialog_video .Q_tabbing_container .Q_tabbing_item[data-content=link] label button {
+    display: inline;
+}
+.Q_dialog_video .Q_tabbing_container .Q_video_composer_upload_limit {
+    margin: 3px auto 0;
+    display: block;
+    text-align: center;
+    font-size: 14px;
+    color: red;
+}
+.Q_dialog_video .Q_video_composer .Q_tabbing_tabs > .Q_tabbing_tab {
+    width: 60px;
+    background-repeat: no-repeat;
+    background-position: top center;
+    padding-top: 40px;
+}
+.Q_dialog_video .Q_video_composer .Q_tabbing_tabs > .Q_tabbing_tab[data-name=edit] {
+    background-image: url(../../img/audio/edit/40.png);
+}
+.Q_dialog_video .Q_video_composer[data-composer=true] .Q_tabbing_tabs > .Q_tabbing_tab[data-name=edit],
+.Q_dialog_video .Q_video_composer[data-composer=true] .Q_tabbing_container > .Q_tabbing_item[data-content=edit] {
+    display: none;
+}
+.Q_dialog_video .Q_video_composer .Q_tabbing_tabs > .Q_tabbing_tab[data-name=upload] {
+    background-image: url(../../img/audio/upload/40.png);
+}
+.Q_dialog_video .Q_video_composer .Q_tabbing_tabs > .Q_tabbing_tab[data-name=link] {
+    background-image: url(../../img/audio/link/40.png);
+}
+.Q_video_composer .Q_video_composer_submit {
+    text-align: center;
+    white-space: nowrap;
+    margin-top: 10px;
+}
+.Q_video_composer .Q_video_composer_submit button {
+    display: inline-block;
+    margin: 0 2%;
+}
+.Q_dialog_video .Q_tabbing_container .Q_video_composer_clip {
+    margin-top: 10px;
+}
+.Q_dialog_video button,
+.Q_dialog_video input {
+    height: 40px;
+}
+.Q_dialog_video .Q_video_composer_submit button[name=reset] {
+    display: none;
+}
+.Q_video_twitch,
+.Q_video_odysee {
+    overflow: hidden;
+    position: relative;
+}
+.Q_video_twitch iframe,
+.Q_video_odysee iframe {
+    border: 0;
+    width: 100%;
+    height: 100%;
+}
+.Q_video_tool .Q_video_spinner {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    background-image: url(../../img/throbbers/coolspinner_dark.gif);
+    background-repeat: no-repeat;
+    background-position: center center;
+}
+.Q_video_tool .Q_video_skip {
+    display: none;
+}
+.Q_video_tool.Q_video_advertising .Q_video_skip {
+    position: absolute;
+    right: 10px;
+    bottom: 50px;
+    display: block;
+    white-space: nowrap;
+    padding: 5px 10px;
+    border: 1px solid black;
+    border-radius: 5px;
+    background-color: grey;
+    color: #fff;
+    cursor: pointer;
+}
+.Q_video_tool.Q_video_advertising .vjs-progress-control,
+.Q_video_tool.Q_video_advertising .vjs-progress-control * {
+    pointer-events: none;
+}
+.Q_video_tool .vjs-progress-control.Q_video_clips_control {
+    overflow: hidden;
+}
+.Q_video_hidden {
+    position: absolute;
+    top: -1000px;
+}
+
+.Q_video_tool .video-js .vjs-big-play-button {
+    width: 50%;
+    height: 50%;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    border: none;
+    background-color: unset;
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-size: contain;
+}
+.Q_video_tool .video-js .vjs-big-play-button .vjs-icon-placeholder,
+.Q_video_tool .video-js .vjs-big-play-button .vjs-control-text {
+    display: none;
+}
+.Q_video_tool .vjs-paused .vjs-big-play-button,
+.Q_video_tool .vjs-has-started .vjs-big-play-button {
+    display: block;
+}
+.Q_video_tool .vjs-playing .vjs-big-play-button {
+    display: none;
+}
+.Q_video_tool .Q_video_clips_pointer {
+    position: absolute;
+    width: 2px;
+    height: 50%;
+    background-color: red;
+    -webkit-transition: all .2s linear;
+    -moz-transition: all .2s linear;
+    -o-transition: all .2s linear;
+    -ms-transition: all .2s linear;
+    transition: all .2s linear;
+}
+.Q_video_tool .Q_video_overlay_play {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    background-repeat: no-repeat;
+    background-size: cover;
+}
+.Q_video_tool .Q_video_overlay_play img {
+    position: absolute;
+    height: 100%;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: pointer;
+}
+.Q_video_tool.Q_floating_tool {
+    padding-top: 40px;
+    background-color: blue;
+    cursor: move;
+}
+.Q_video_tool.Q_floating_tool .Q_video_overlay_play {
+    top: 40px;
+    height: calc(100% - 40px);
+}
+.Q_video_tool .Q_video_close {
+    display: none;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 40px;
+    height: 40px;
+    line-height: 40px;
+    color: red;
+    text-align: center;
+    cursor: pointer;
+}
+.Q_video_tool .Q_video_close:after {
+    font-size: 30px;
+    font-family: 'FontAwesome';
+    content: "\f00d";
+}
+.Q_video_tool.Q_floating_tool .Q_video_close {display: block}
+
+.Q_video_tool.Q_floating_tool .video-js.vjs-4-3 {
+    padding: 0;
+    height: 100%;
+}
+
+.Q_dialog_content > .Q_video_tool {
+    position: relative;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+}

@@ -1,0 +1,160 @@
+{
+    "request": {
+        "error": "Gabim {{status}} gjatë kërkesës",
+        "canceled": "Kërkesa u anulua",
+        "500": "Gabim i brendshëm i serverit",
+        "404": "Nuk u gjet: {{url}}",
+        "501": "Kërkesa u ndërpre",
+        "401": "I paautorizuar",
+        "403": "e ndaluar"
+    },
+    "nonce": {
+        "sameDomain": "Seanca skadoi. Rifresko faqen dhe provo sërish.",
+        "otherDomain": "Kërkesa e bllokuar për domenin e huaj në {{baseUrl}}"
+    },
+    "words": {
+        "tap": "trokitje e lehtë",
+        "click": "klikoni",
+        "yes": "po",
+        "no": "nr",
+        "Tap": "Prekni",
+        "Click": "Klikoni",
+        "Yes": "po",
+        "No": "Nr",
+        "OK": "Ne rregull",
+        "Alert": "Alarmi",
+        "Confirm": "Konfirmimi",
+        "Prompt": "Futni Tekstin"
+    },
+    "months": {
+        "1": "janar",
+        "2": "shkurt",
+        "3": "marsh",
+        "4": "prill",
+        "5": "Mund",
+        "6": "qershor",
+        "7": "korrik",
+        "8": "gusht",
+        "9": "shtator",
+        "10": "tetor",
+        "11": "Nëntor",
+        "12": "dhjetor"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Lejo qasjen në mikrofonin tënd",
+        "record": "Regjistro",
+        "recording": "Regjistrimi",
+        "remains": "Mbetet",
+        "maximum": "maksimale",
+        "playing": "Duke luajtur",
+        "recorded": "I regjistruar",
+        "clip": "klip",
+        "orupload": "Ose Ngarko",
+        "usethis": "Përdor këtë",
+        "discard": "Hidhni",
+        "encoding": "Kodimi"
+    },
+    "alert": {
+        "title": "Njoftim"
+    },
+    "confirm": {
+        "title": "Konfirmo",
+        "ok": "po",
+        "cancel": "Nr"
+    },
+    "prompt": {
+        "title": "Futni Tekstin",
+        "ok": "Ne rregull"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Gabim gjatë leximit të skedarit",
+        "cameraCommands": {
+            "prompt": "Çfarë do të dëshironit të bënit?",
+            "photo": "Bëni një foto të re",
+            "library": "Zgjidhni nga biblioteka"
+        },
+        "tooSmall": "Ju lutemi zgjidhni një imazh më të madh.",
+        "cropping": {
+            "title": "Rregulloni madhësinë dhe pozicionin",
+            "touchscreen": "Përdorni gishtat për të zmadhuar dhe zvarritur",
+            "notTouchscreen": "Përdorni miun dhe timonin për të zmadhuar dhe zvarritur"
+        },
+        "errorType": "Na vjen keq, por ky lloj skedari nuk mbështetet"
+    },
+    "timestamp": {
+        "lastNight": "mbrëmë",
+        "lastEvening": "prag të fundit",
+        "yesterday": "dje",
+        "thisMorning": "këtë mëngjes",
+        "today": "sot",
+        "tonight": "sonte",
+        "tomorrowMorning": "tom Morn",
+        "tomorrow": "nesër",
+        "hoursAgo": "{{h}} orë më parë",
+        "hourAgo": "{{h}} orë më parë",
+        "minuteAgo": "{{m}} minutë më parë",
+        "minutesAgo": "{{m}} minuta më parë",
+        "secondAgo": "{{s}} sekondë më parë",
+        "secondsAgo": "{{s}} sekonda më parë",
+        "fewSecondsAgo": "sekonda më parë",
+        "rightNow": "pikërisht tani",
+        "inSecond": "në {{s}} sekondë",
+        "inSeconds": "në {{s}} sekonda",
+        "inMinute": "në {{m}} minutë",
+        "inMinutes": "në {{m}} minuta",
+        "inHour": "në {{h}} orë",
+        "inHours": "në {{h}} orë",
+        "inUnderMinute": "në më pak se 1 minutë"
+    },
+    "tabs": {
+        "more": "më shumë",
+        "Menu": "Menu"
+    },
+    "video": {
+        "clip": "klip",
+        "errorNoSource": "Nuk ka burim video",
+        "SkipAfter": "Kalo pas",
+        "Skip": "Kapërceni"
+    },
+    "pdf": {
+        "clip": "klip",
+        "errorNoSource": "Nuk ka burim pdf"
+    },
+    "clip": {
+        "SetClipStart": "Cakto fillimin e klipit",
+        "ClipStart": "Fillimi i klipit",
+        "SetClipEnd": "Cakto Fundin e Klipit",
+        "ClipEnd": "Fundi i klipit",
+        "StartMoreEnd": "Pozicioni fillestar nuk mund të jetë më shumë se pozicioni i fundit",
+        "EndLessStart": "Pozicioni i fundit nuk mund të jetë më i vogël se pozicioni i fillimit",
+        "WhichInvalid": "Argumenti &#39;cil&#39; është i pavlefshëm"
+    },
+    "durations": {
+        "second": "e dyta",
+        "seconds": "sekonda",
+        "minute": "minutë",
+        "minutes": "minuta",
+        "hour": "orë",
+        "day": "ditë",
+        "days": "ditë",
+        "week": "javë",
+        "weeks": "javë",
+        "month": "muaj",
+        "months": "muaj",
+        "year": "vit",
+        "years": "vjet",
+        "decade": "dekadë",
+        "decades": "dekada",
+        "century": "shekulli",
+        "centuries": "shekuj"
+    },
+    "browser": {
+        "insecureContext": "Ju duhet të shfletoni në një kontekst të sigurt që kjo të funksionojë"
+    },
+    "scan": {
+        "QR": "Skanoni kodet QR"
+    },
+    "input": {
+        "Placeholder": "Filloni të shkruani..."
+    }
+}

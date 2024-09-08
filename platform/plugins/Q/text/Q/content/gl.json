@@ -1,0 +1,158 @@
+{
+    "request": {
+        "error": "Erro {{status}} durante a solicitude",
+        "canceled": "Solicitude cancelada",
+        "500": "Error interno do servidor",
+        "404": "Non atopado: {{url}}",
+        "501": "Solicitude interrompida",
+        "401": "Non autorizado",
+        "403": "Prohibido"
+    },
+    "nonce": {
+        "sameDomain": "A sesión caducou. Actualiza a páxina e téntao de novo.",
+        "otherDomain": "Bloqueouse a solicitude de varios dominios a un dominio estranxeiro en {{baseUrl}}"
+    },
+    "words": {
+        "tap": "tocar",
+        "click": "prema",
+        "yes": "si",
+        "no": "non",
+        "Tap": "Toca",
+        "Click": "Fai clic",
+        "Yes": "Si",
+        "No": "Non",
+        "OK": "Ok",
+        "Alert": "Alerta",
+        "Confirm": "Confirmación",
+        "Prompt": "Introduce texto"
+    },
+    "months": {
+        "1": "xaneiro",
+        "2": "febreiro",
+        "3": "marzo",
+        "4": "abril",
+        "5": "maio",
+        "6": "xuño",
+        "7": "xullo",
+        "8": "agosto",
+        "9": "setembro",
+        "10": "Outubro",
+        "11": "novembro",
+        "12": "decembro"
+    },
+    "durations": {
+        "second": "segundo",
+        "seconds": "segundos",
+        "minute": "minuto",
+        "minutes": "minutos",
+        "hour": "horas",
+        "day": "día",
+        "days": "días",
+        "week": "semana",
+        "weeks": "semanas",
+        "month": "mes",
+        "months": "meses",
+        "year": "ano",
+        "years": "anos",
+        "decade": "década",
+        "decades": "décadas",
+        "century": "século",
+        "centuries": "séculos"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Permite o acceso ao teu micrófono",
+        "record": "Gravar",
+        "recording": "Gravación",
+        "remains": "queda",
+        "maximum": "máximo",
+        "playing": "Xogando",
+        "recorded": "Gravado",
+        "clip": "clip",
+        "discard": "Descartar",
+        "encoding": "Codificación"
+    },
+    "video": {
+        "clip": "clip",
+        "errorNoSource": "Sen fonte de vídeo",
+        "SkipAfter": "Saltar despois",
+        "Skip": "Saltar"
+    },
+    "pdf": {
+        "clip": "clip",
+        "errorNoSource": "Sen fonte pdf"
+    },
+    "clip": {
+        "SetClipStart": "Establecer o inicio do clip",
+        "ClipStart": "Inicio do clip",
+        "SetClipEnd": "Establecer o final do clip",
+        "ClipEnd": "Fin do clip",
+        "StartMoreEnd": "A posición inicial non pode ser máis que a posición final",
+        "EndLessStart": "A posición final non pode ser inferior á posición inicial",
+        "WhichInvalid": "Argumento &#39;cal&#39; non é válido"
+    },
+    "alert": {
+        "title": "Aviso"
+    },
+    "confirm": {
+        "title": "Confirmar",
+        "ok": "Si",
+        "cancel": "Non"
+    },
+    "prompt": {
+        "title": "Introduce texto",
+        "ok": "Ok"
+    },
+    "tabs": {
+        "more": "máis",
+        "Menu": "Menú"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Erro ao ler o ficheiro",
+        "errorType": "Sentímolo, pero este tipo de ficheiro non é compatible",
+        "cameraCommands": {
+            "prompt": "Que che gustaría facer?",
+            "photo": "Saca unha foto nova",
+            "library": "Seleccionar da biblioteca"
+        },
+        "tooSmall": "Escolle unha imaxe máis grande.",
+        "cropping": {
+            "title": "Axustar tamaño e posición",
+            "touchscreen": "Use os dedos para facer zoom e arrastrar",
+            "notTouchscreen": "Usa o rato e a roda para facer zoom e arrastrar"
+        }
+    },
+    "timestamp": {
+        "lastNight": "Onte á noite",
+        "lastEvening": "última véspera",
+        "yesterday": "onte",
+        "thisMorning": "esta mañá",
+        "today": "hoxe",
+        "tonight": "esta noite",
+        "tomorrowMorning": "mañá pola mañá",
+        "tomorrow": "mañá",
+        "hoursAgo": "Hai {{h}} horas",
+        "hourAgo": "Hai {{h}} hora",
+        "minuteAgo": "Hai {{m}} minuto",
+        "minutesAgo": "Hai {{m}} minutos",
+        "secondAgo": "Hai {{s}} segundo",
+        "secondsAgo": "Hai {{s}} segundos",
+        "fewSecondsAgo": "segundos atrás",
+        "rightNow": "agora",
+        "inSecond": "en {{s}} segundos",
+        "inSeconds": "en {{s}} segundos",
+        "inMinute": "en {{m}} minuto",
+        "inMinutes": "en {{m}} minutos",
+        "inHour": "en {{h}} hora",
+        "inHours": "en {{h}} horas",
+        "inUnderMinute": "en menos de 1 minuto"
+    },
+    "browser": {
+        "insecureContext": "Debes navegar nun contexto seguro para que isto funcione"
+    },
+    "scan": {
+        "QR": "Escanear códigos QR"
+    },
+    "input": {
+        "Placeholder": "Comeza a escribir..."
+    }
+}

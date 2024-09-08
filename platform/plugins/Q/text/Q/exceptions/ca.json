@@ -1,0 +1,5 @@
+{
+    "MissingFile": "falta el fitxer {{filename}}",
+    "InvalidLanguage": "llenguatge no vàlid {{language}}",
+    "RequiredField": "Es requereix {{field}}"
+}

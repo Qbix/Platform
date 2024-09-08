@@ -1,0 +1,88 @@
+.Q_filter_tool {
+	display: inline-block;
+}
+
+.Q_filter_fullscreen {
+	overflow: auto;
+}
+
+.Q_filter_results {
+	position: relative;
+	padding: 5px;
+	border: solid 1px #ccc;
+	background: white;
+	color: black;
+	font-weight: normal;
+	font-style: normal;
+	cursor: pointer;
+}
+.Q_filter_tool:not(.Q_filter_begun) .Q_filter_results,
+.Q_filter_results:empty {
+	display: none;
+}
+
+.Q_filter_notFullscreen .Q_filter_results {
+	max-height: 100px;
+	overflow: auto;
+	position: absolute;
+	z-index: 9999; /* to overlap possible sibling elements */
+}
+
+.Q_filter_fullscreen .Q_placeholder {
+	width: 100% !important;
+	margin: 0 !important;
+}
+
+.Q_filter_tool input.Q_filter_input {
+	padding-right: 32px !important;
+	cursor: default;
+}
+
+.Q_filter_fullscreen.Q_filter_begun {
+	position: relative;
+	width: 100% !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+.Q_filter_fullscreen.Q_filter_begun .Q_placeholders_container {
+	width: 100% !important;
+}
+
+.Q_filter_fullscreen.Q_filter_begun .Q_filter_input {
+	width: 100% !important;
+	max-width: 100% !important;
+	margin: 0 !important;
+}
+
+.Q_filter_begun .Q_filter_input.Q_nonempty,
+.Q_filter_fullscreen.Q_filter_begun .Q_filter_input {
+	background-image: url(../../img/clear.png) !important;
+	background-repeat: no-repeat !important;
+	background-position: right center !important;
+}
+
+.Q_filter_input.Q_filter_chose.Q_nonempty {
+	color: #000 !important;
+	background-color: #eef !important;
+	background-image: url(../../img/clear.png) !important;
+	background-repeat: no-repeat !important;
+	background-position: right center !important;
+	font-weight: bold !important;
+}
+
+.Q_filter_tool .Q_filter_results table {
+	width: 100%; background: #fff;
+}
+
+.Q_filter_tool .Q_filter_results table td {
+	vertical-align: middle;
+}
+
+.Q_filter_tool .Q_filter_results tr:hover {
+	background: #ccc; cursor: pointer;
+}
+
+.Q_filter_hide {
+	display: none !important;
+}

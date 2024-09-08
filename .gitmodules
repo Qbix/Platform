@@ -1,0 +1,63 @@
+[submodule "platform/plugins/Users"]
+	path = platform/plugins/Users
+	url = https://github.com/Qbix/Users
+[submodule "platform/plugins/Q/web/js/qrcode"]
+	path = platform/plugins/Q/web/js/qrcode
+	url = https://github.com/Qbix/Q-qrcode
+[submodule "platform/plugins/Q/web/js/videojs"]
+	path = platform/plugins/Q/web/js/videojs
+	url = https://github.com/Qbix/Q-videojs
+[submodule "platform/plugins/Q/web/js/froala"]
+	path = platform/plugins/Q/web/js/froala
+	url = https://github.com/Qbix/Q-froala
+[submodule "platform/plugins/Q/web/js/ckeditor"]
+	path = platform/plugins/Q/web/js/ckeditor
+	url = https://github.com/Qbix/Q-ckeditor
+[submodule "platform/plugins/Q/web/js/audioRecorder"]
+	path = platform/plugins/Q/web/js/audioRecorder
+	url = https://github.com/Qbix/Q-audioRecorder
+[submodule "platform/plugins/Audio"]
+	path = platform/plugins/Audio
+	url = https://github.com/Qbix/Audio
+[submodule "platform/plugins/Media"]
+	path = platform/plugins/Media
+	url = https://github.com/Qbix/Media
+[submodule "platform/plugins/Calendars"]
+	path = platform/plugins/Calendars
+	url = https://github.com/Qbix/Calendars
+[submodule "platform/plugins/Communities"]
+	path = platform/plugins/Communities
+	url = https://github.com/Qbix/Communities
+[submodule "platform/plugins/Teaching"]
+	path = platform/plugins/Teaching
+	url = https://github.com/Qbix/Teaching
+[submodule "platform/plugins/Metrics"]
+	path = platform/plugins/Metrics
+	url = https://github.com/Qbix/Metrics
+[submodule "platform/plugins/Places"]
+	path = platform/plugins/Places
+	url = https://github.com/Qbix/Places
+[submodule "platform/plugins/Travel"]
+	path = platform/plugins/Travel
+	url = https://github.com/Qbix/Travel
+[submodule "platform/plugins/Websites"]
+	path = platform/plugins/Websites
+	url = https://github.com/Qbix/Websites
+[submodule "platform/plugins/Assets"]
+	path = platform/plugins/Assets
+	url = https://github.com/Qbix/Assets
+[submodule "platform/plugins/Telegram"]
+	path = platform/plugins/Telegram
+	url = https://github.com/Qbix/Telegram
+[submodule "platform/plugins/Q/web/js/pdfjs"]
+	path = platform/plugins/Q/web/js/pdfjs
+	url = https://github.com/Qbix/Q-pdfjs
+[submodule "platform/plugins/Q/web/js/datejs"]
+	path = platform/plugins/Q/web/js/datejs
+	url = https://github.com/Qbix/Q-datejs
+[submodule "platform/plugins/Streams"]
+	path = platform/plugins/Streams
+	url = https://github.com/Qbix/Streams
+[submodule "platform/plugins/AI"]
+	path = platform/plugins/AI
+	url = https://github.com/Qbix/AI

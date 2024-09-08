@@ -1,0 +1,158 @@
+{
+    "request": {
+        "error": "Villa {{status}} við beiðni",
+        "canceled": "Hætt við beiðni",
+        "500": "Innri netþjónsvilla",
+        "404": "Fannst ekki: {{url}}",
+        "501": "Beiðni rofin",
+        "401": "Óviðkomandi",
+        "403": "Bannað"
+    },
+    "nonce": {
+        "sameDomain": "Fundur rann út. Endurnýjaðu síðuna og reyndu aftur.",
+        "otherDomain": "Lokað á beiðni milli léna til erlendra léna á {{baseUrl}}"
+    },
+    "words": {
+        "tap": "snerta",
+        "click": "smellur",
+        "yes": "Já",
+        "no": "nei",
+        "Tap": "Snertu",
+        "Click": "Smellur",
+        "Yes": "Já",
+        "No": "Nei",
+        "OK": "Allt í lagi",
+        "Alert": "Viðvörun",
+        "Confirm": "Staðfesting",
+        "Prompt": "Sláðu inn texta"
+    },
+    "months": {
+        "1": "janúar",
+        "2": "febrúar",
+        "3": "mars",
+        "4": "apríl",
+        "5": "maí",
+        "6": "júní",
+        "7": "júlí",
+        "8": "ágúst",
+        "9": "september",
+        "10": "október",
+        "11": "nóvember",
+        "12": "desember"
+    },
+    "durations": {
+        "second": "annað",
+        "seconds": "sekúndur",
+        "minute": "mínútu",
+        "minutes": "mínútur",
+        "hour": "klukkustundir",
+        "day": "dagur",
+        "days": "daga",
+        "week": "vika",
+        "weeks": "vikur",
+        "month": "mánuði",
+        "months": "mánuðum",
+        "year": "ári",
+        "years": "ár",
+        "decade": "Áratugur",
+        "decades": "áratugir",
+        "century": "öld",
+        "centuries": "aldir"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Vinsamlegast leyfðu aðgang að hljóðnemanum þínum",
+        "record": "Met",
+        "recording": "Upptaka",
+        "remains": "eftir",
+        "maximum": "hámarki",
+        "playing": "Að spila",
+        "recorded": "Skráð",
+        "clip": "bút",
+        "discard": "Fargaðu",
+        "encoding": "Kóðun"
+    },
+    "video": {
+        "clip": "bút",
+        "errorNoSource": "Enginn myndbandsuppspretta",
+        "SkipAfter": "Slepptu eftir",
+        "Skip": "Sleppa"
+    },
+    "pdf": {
+        "clip": "bút",
+        "errorNoSource": "Engin pdf heimild"
+    },
+    "clip": {
+        "SetClipStart": "Stilltu Clip Start",
+        "ClipStart": "Clip Start",
+        "SetClipEnd": "Stilltu Clip End",
+        "ClipEnd": "Clip End",
+        "StartMoreEnd": "Upphafsstaða getur ekki verið meira en lokastaða",
+        "EndLessStart": "Lokastaða má ekki vera minni en upphafsstaða",
+        "WhichInvalid": "Rök „hver“ ógild"
+    },
+    "alert": {
+        "title": "Takið eftir"
+    },
+    "confirm": {
+        "title": "Staðfesta",
+        "ok": "Já",
+        "cancel": "Nei"
+    },
+    "prompt": {
+        "title": "Sláðu inn texta",
+        "ok": "Allt í lagi"
+    },
+    "tabs": {
+        "more": "meira",
+        "Menu": "Matseðill"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Villa við að lesa skrá",
+        "errorType": "Því miður, en þessi skráargerð er ekki studd",
+        "cameraCommands": {
+            "prompt": "Hvað viltu gera?",
+            "photo": "Taktu nýja mynd",
+            "library": "Veldu úr bókasafni"
+        },
+        "tooSmall": "Vinsamlegast veldu stærri mynd.",
+        "cropping": {
+            "title": "Stilltu stærð og staðsetningu",
+            "touchscreen": "Notaðu fingurna til að þysja og draga",
+            "notTouchscreen": "Notaðu músina og hjólið til að þysja og draga"
+        }
+    },
+    "timestamp": {
+        "lastNight": "gærkvöld",
+        "lastEvening": "síðasta kvöld",
+        "yesterday": "í gær",
+        "thisMorning": "í morgun",
+        "today": "í dag",
+        "tonight": "í kvöld",
+        "tomorrowMorning": "í fyrramálið",
+        "tomorrow": "á morgun",
+        "hoursAgo": "Fyrir {{h}} klukkustundum",
+        "hourAgo": "Fyrir {{h}} klukkustund síðan",
+        "minuteAgo": "Fyrir {{m}} mínútu síðan",
+        "minutesAgo": "Fyrir {{m}} mínútum",
+        "secondAgo": "{{s}} sekúndu síðan",
+        "secondsAgo": "Fyrir {{s}} sekúndum",
+        "fewSecondsAgo": "sekúndum síðan",
+        "rightNow": "núna strax",
+        "inSecond": "á {{s}} sekúndu",
+        "inSeconds": "eftir {{s}} sekúndur",
+        "inMinute": "eftir {{m}} mínútu",
+        "inMinutes": "eftir {{m}} mínútur",
+        "inHour": "eftir {{h}} klukkustund",
+        "inHours": "eftir {{h}} klukkustundir",
+        "inUnderMinute": "á innan við 1 mínútu"
+    },
+    "browser": {
+        "insecureContext": "Þú þarft að vafra í öruggu samhengi til að þetta virki"
+    },
+    "scan": {
+        "QR": "Skannaðu QR kóða"
+    },
+    "input": {
+        "Placeholder": "Byrjaðu að skrifa..."
+    }
+}

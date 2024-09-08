@@ -1,0 +1,360 @@
+{
+	"Q": {
+		"defaultTimezone": "UTC",
+		"handlersBeforeEvent": {
+			"Q/reroute": ["Q/before/Q_reroute"],
+			"Q/initialExtras": ["Q/before/Q_initialExtras"],
+			"Q/responseExtras": ["Q/before/Q_responseExtras"],
+			"Q/sessionExtras": ["Q/before/Q_sessionExtras"],
+			"Q/tool/render": ["Q/before/Q_tool_render"],
+			"Q/view": ["Q/before/Q_view"],
+			"Q/autoload": ["Q/before/Q_autoload"]
+		},
+		"handlersAfterEvent": {
+			"Q/tool/render": ["Q/after/Q_tool_render"]
+		},
+		"autoload": {
+			"requires": {
+				"Q_Crypto": {
+					"PHP": 7.3
+				}
+			}
+		},
+		"routes": {
+			
+		},
+		"filename": {
+			"extensions": ["txt", "xml", "png", "jpeg", "gif", "jpg", "pdf", "js", "ogg", "mp3", "css", "cur"]
+		},
+		"cache": {
+			"duration": 600,
+			"secret": ""
+		},
+		"exception": {
+			"showTrace": false,
+			"showFileAndLine": false,
+			"nodeLogName": null,
+			"colors": {
+				"message": ["red"],
+				"fileAndLine": ["black", "light_gray"],
+				"trace": []
+			}
+		},
+		"log": {
+			"pattern": "{{key}}-{{day}}.log",
+			"removeAfterDays": 10,
+			"maxFileSize": 100000000,
+			"maxLength": 1024
+		},
+		"curl": {
+			"userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_1) AppleWebKit/537.36 (K HTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36"
+		},
+		"web": {
+			"ignoreUserAbort": true,
+			"requireValidNonce": {
+				"include": []
+			},
+			"statusBarOverlapped": false,
+			"contentSecurityPolicy": {
+				"script": [
+					"'unsafe-eval'",
+					"{{host}}", "*.{{host}}", "*.{{host}}:*", "{{host}}:*",
+					"'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='", /* hash of empty string */
+					"'sha256-+DLpYKpOowitqzgnHlbJ6domBEfO5iS3HhNhDTrZ0f0='",
+					"https://w.soundcloud.com",
+					"https://cdnjs.cloudflare.com",
+					"https://cdn.jsdelivr.net"   
+				],
+				"style": [
+					"'unsafe-eval'", "'unsafe-inline'",
+					"{{host}}", "*.{{host}}", "*.{{host}}:*", "{{host}}:*",
+					"https://fonts.googleapis.com",
+					"https://cdnjs.cloudflare.com",
+					"https://cdn.jsdelivr.net"
+				],
+				"styleHashes": false,
+				"worker": ["'self'"]
+			},
+			"metas": {
+				"robots": "nosnippet",
+				"googlebot": "nosnippet",
+				"googlebot-news": "nosnippet"
+			}
+		},
+		"static": {
+			"url": "{{web}}/Q/static",
+			"dir": "{{web}}/Q/static",
+			"redirect": {
+				"html": ".html",
+				"json": ".json",
+				"landing": ".landing.html",
+				"html.authenticated": false,
+				"json.authenticated": false
+			},
+			"routes": {},
+			"querystrings": {
+				"ajax": ["Q.ajax=json&Q.loadExtras=all&Q.slotNames=content%2Ctitle"]
+			},
+			"duration": 86500,
+			"generate": {
+				".html": {
+					"session": "sessionId_static",
+					"routes": ""
+				},
+				".landing.html": {
+					"session": "",
+					"routes": ""
+				},
+				".authenticated.html": {
+					"session": "sessionId_authenticated_static",
+					"routes": ""
+				},
+				".json": {
+					"session": "sessionId_static",
+					"routes": ""
+				},
+				".authenticated.json": {
+					"session": "sessionId_authenticated_static",
+					"routes": ""
+				}
+			}
+		},
+		"metrics": {
+			"gather": false
+		},
+		"response": {
+			"isBuffered": true,
+			"layout": {
+				"sidebar": false,
+				"dashboard": {
+					"mobile": "icons", /* can be 'contextual', 'icons', 'hamburger' */
+					"position": "bottom", /* can be 'top', 'bottom' */
+					"withTitles": true
+				},
+				"columns": {
+					"style": "classic", /* can be 'classic' and 'facebook'*/
+					"focusAfterActivate": true
+				}
+			}
+		},
+		"node" : {
+			"host": "127.0.0.1",
+			"port": "10500",
+			"https": false
+		},
+		"nodeInternal": {
+			"host": "127.0.0.1",
+			"port": "10501",
+			"https": false
+		},
+		"internal": {
+			"umask": "0000",
+			"phpTimeout": 300,
+			"secret": null,
+			"code": {
+				"publicKeys": []
+			},
+			"sharding": {
+				"config": "Db/config/shards.json",
+				"upcoming": "Db/config/upcoming.json",
+				"logs": "files/Db/logs",
+				"iterations": 2
+			},
+			"sigField": "sig",
+			"configServer": {
+				"url": null,
+				"internal": false,
+				"interval": 60
+			}
+		},
+		"logs": {
+			"directory": "Q/logs",
+			"removeAfterDays": 2
+		},
+		"configFiles": ["Q/config/bootstrap.json"],
+		"install": {
+			"timeLimit": 600
+		},
+		"session": {
+			"cookie": {
+				"secure": true
+			},
+			"id": {
+				"prefixes": {
+					"": "sessionId_",
+					"authenticated": "sessionId_authenticated_"
+				}
+			},
+			"startBefore": "Q/objects",
+			"appendSuffix": false,
+			"custom": true,
+			"db": null,
+			"durations": {
+				"session": 0,
+				"mobile": 315360000,
+				"tablet": 315360000,
+				"desktop": 315360000,
+				"day": 86400,
+				"month": 2678400, 
+				"year": 31536000,
+				"decade": 315360000
+			},
+			"gc": false,
+			"maxlength": 4095,
+			"userAgentInfo": ["formFactor", "platform", "version"],
+			"allowHijack": true
+		},
+		"javascript": {
+			"initialExtras": {
+				"Q": {
+					"{{Q}}/js/jquery-3.7.1.min.js": true,
+					"{{Q}}/js/handlebars-v4.0.10.min.js": true,
+					"{{Q}}/js/Q.js": true
+				}
+			},
+			"serviceWorker": {
+				"modules": {
+					"Q": "Q/serviceWorker.js"
+				},
+				"latest": {
+					"Q": {
+						"timestamp": 1689521256
+					}
+				}
+			},
+			"prettyPrintData": true,
+			"preload": null /* can be "inline", "header" or null */
+		},
+		"stylesheets": {
+			"initialExtras": {
+				"Q": {
+					"{{Q}}/css/Q.css": true
+				}
+			},
+			"preload": "inline" /* can be "inline", "header" or null */
+		},
+		"environments": {
+			"*": {
+				"preparedPath": "Q/prepared",
+				"filters": {
+					"css": {
+						"handler": "Q/filters/MatthiasMullie/css"
+					},
+					"js": {
+						"handler": "Q/filters/MatthiasMullie/js",
+						"params": {
+							"compilation_level": "SIMPLE_OPTIMIZATIONS",
+							"installedLocally": true
+						},
+						"timeout": 600
+					}
+				}
+			},
+			"prepare": {
+				"{{Q}}": ["js", "css"]
+			}
+		},
+		"uploads": {
+			"limits": {
+				"time": 18000,
+				"size": 4194304,
+				"image": {
+					"width": 5000,
+					"height": 5000
+				}
+			}
+		},
+		"bundle": {
+			"exclude": {
+				"Q": [
+					"js/ckeditor", "js/froala", "img/bookmarklet"
+				]
+			}
+		},
+		"text": {
+			"*": {
+				"ignoreCache": true,
+				"dontCache": true,
+				"duration": 3600
+			},
+			"useLocale": false,
+			"loadBeforeInit": []
+		},
+		"templates": {
+			"ignoreCache": true,
+			"dontCache": true,
+			"duration": 3600
+		},
+		"tree": {
+			"ignoreCache": false,
+			"dontCache": false,
+			"duration": 3600
+		},
+		"images": {
+			"x": {
+				"sizes": {"x": "x.png"},
+				"defaultSize": "x",
+				"maxStretch": 1
+			},
+			"lazyload": false,
+			"maxWidth": 5000,
+			"maxHeight": 5000,
+			"shouldUseBasenames": [],
+			"pixabay": null,
+			"facebook": null,
+			"google": null
+		},
+		"video": {
+			"cloud": {
+				"upload": {
+					"providers": ["muse"],
+					"muse": {
+						"url": "https://muse.ai/v/{{videoId}}",
+						"uploadEndPoint": "https://muse.ai/api/files/upload"
+					}
+				},
+				"convert": {
+					"CloudConvert": {
+						"options": {
+							"convert": {
+								"fps": 8,
+								"width": 100,
+								"height": 100,
+								"output_format": "gif",
+								"video_codec": "gif",
+								"engine": "ffmpeg",
+								"fit": "pad", /* Sets the mode of sizing the video. "Max" resizes the video to fit within the width and height, but will not increase the size of the image if it is smaller than width or height. "Crop" resizes the video to fill the width and height dimensions and crops any excess video data. "Scale" enforces the video width and height by scaling. "Pad" resizes the video to the width and height dimensions and keeps the aspect ratio by adding black bars if necessary. */
+								"trim_start": "00:00:00",
+								"trim_end": "00:00:10"
+							}
+						}
+					}
+				}
+			}
+		},
+		"random": {
+			"dontRandomize": false
+		},
+		"urls": {
+			"ignore": ["Q/urls", "Q/uploads"],
+			"normalizeLastEmptySegment": "_root"
+		},
+		"capability": {
+			"permissions": {}
+		},
+		"composer": {
+			"autoload": "*"
+		}
+	},
+	"Db": {
+		"sql": {
+			"querySeparator": "-------- NEXT QUERY STARTS HERE --------"
+		},
+		"survive": {
+			"mysql": true
+		},
+		"node": {
+			"mysql2": true
+		}
+	}
+}

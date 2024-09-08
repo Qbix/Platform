@@ -1,0 +1,160 @@
+{
+    "request": {
+        "error": "Sorğu zamanı xəta {{status}}",
+        "canceled": "Sorğu ləğv edildi",
+        "500": "Daxili server xətası",
+        "404": "Tapılmadı: {{url}}",
+        "501": "Sorğu kəsildi",
+        "401": "İcazəsiz",
+        "403": "Qadağan"
+    },
+    "nonce": {
+        "sameDomain": "Sessiya başa çatıb. Səhifəni yeniləyin və yenidən cəhd edin.",
+        "otherDomain": "{{baseUrl}} ünvanında xarici domen üçün bloklanmış çarpaz domen sorğusu"
+    },
+    "words": {
+        "tap": "vurun",
+        "click": "basın",
+        "yes": "bəli",
+        "no": "yox",
+        "Tap": "toxunun",
+        "Click": "klikləyin",
+        "Yes": "Bəli",
+        "No": "Yox",
+        "OK": "tamam",
+        "Alert": "Xəbərdarlıq",
+        "Confirm": "Təsdiq",
+        "Prompt": "Mətni daxil edin"
+    },
+    "months": {
+        "1": "yanvar",
+        "2": "fevral",
+        "3": "mart",
+        "4": "aprel",
+        "5": "Bilər",
+        "6": "iyun",
+        "7": "iyul",
+        "8": "avqust",
+        "9": "sentyabr",
+        "10": "oktyabr",
+        "11": "noyabr",
+        "12": "dekabr"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Zəhmət olmasa mikrofonunuza girişə icazə verin",
+        "record": "Qeyd",
+        "recording": "Səsyazma",
+        "remains": "qalır",
+        "maximum": "maksimum",
+        "playing": "Oynayan",
+        "recorded": "Qeydə alınıb",
+        "clip": "klip",
+        "orupload": "Və ya yükləyin",
+        "usethis": "Bunu istifadə et",
+        "discard": "Rədd etmək",
+        "encoding": "Kodlaşdırma"
+    },
+    "alert": {
+        "title": "Xəbərdarlıq"
+    },
+    "confirm": {
+        "title": "Təsdiq edin",
+        "ok": "Bəli",
+        "cancel": "Yox"
+    },
+    "prompt": {
+        "title": "Mətni daxil edin",
+        "ok": "tamam"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Faylın oxunması xətası",
+        "cameraCommands": {
+            "prompt": "Nə etmək istərdiniz?",
+            "photo": "Yeni şəkil çəkin",
+            "library": "Kitabxanadan seçin"
+        },
+        "tooSmall": "Zəhmət olmasa daha böyük şəkil seçin.",
+        "cropping": {
+            "title": "Ölçü və mövqeyi tənzimləyin",
+            "touchscreen": "Böyütmək və sürükləmək üçün barmaqlarınızdan istifadə edin",
+            "notTouchscreen": "Böyütmək və sürüşdürmək üçün siçan və təkərdən istifadə edin"
+        },
+        "errorType": "Üzr istəyirik, lakin bu fayl növü dəstəklənmir"
+    },
+    "timestamp": {
+        "lastNight": "keçən gecə",
+        "lastEvening": "son axşam",
+        "yesterday": "dünən",
+        "thisMorning": "bu səhər",
+        "today": "bu gün",
+        "tonight": "bu axşam",
+        "tomorrowMorning": "tom səhər",
+        "tomorrow": "sabah",
+        "hoursAgo": "{{h}} saat əvvəl",
+        "hourAgo": "{{h}} saat əvvəl",
+        "minuteAgo": "{{m}} dəqiqə əvvəl",
+        "minutesAgo": "{{m}} dəqiqə əvvəl",
+        "secondAgo": "{{s}} saniyə əvvəl",
+        "secondsAgo": "{{s}} saniyə əvvəl",
+        "fewSecondsAgo": "saniyə əvvəl",
+        "rightNow": "indi",
+        "inSecond": "{{s}} saniyəyə",
+        "inSeconds": "{{s}} saniyə ərzində",
+        "inMinute": "{{m}} dəqiqəyə",
+        "inMinutes": "{{m}} dəqiqəyə",
+        "inHour": "{{h}} saat ərzində",
+        "inHours": "{{h}} saat ərzində",
+        "inUnderMinute": "1 dəqiqədən az müddətdə"
+    },
+    "tabs": {
+        "more": "daha çox",
+        "Menu": "Menyu"
+    },
+    "video": {
+        "clip": "klip",
+        "errorNoSource": "Video mənbəyi yoxdur",
+        "SkipAfter": "Sonra keçin",
+        "Skip": "Keç"
+    },
+    "pdf": {
+        "clip": "klip",
+        "errorNoSource": "Pdf mənbə yoxdur"
+    },
+    "clip": {
+        "SetClipStart": "Klip Başlanğıcını təyin edin",
+        "ClipStart": "Klip Başlanğıc",
+        "SetClipEnd": "Klip Sonunu təyin edin",
+        "ClipEnd": "Klipin sonu",
+        "StartMoreEnd": "Başlanğıc mövqeyi son mövqedən çox ola bilməz",
+        "EndLessStart": "Son mövqe başlanğıc mövqeyindən az ola bilməz",
+        "WhichInvalid": "&quot;Hansı&quot; arqumenti etibarsızdır"
+    },
+    "durations": {
+        "second": "ikinci",
+        "seconds": "saniyə",
+        "minute": "dəqiqə",
+        "minutes": "dəqiqə",
+        "hour": "saat",
+        "day": "gün",
+        "days": "günlər",
+        "week": "həftə",
+        "weeks": "həftələr",
+        "month": "ay",
+        "months": "ay",
+        "year": "il",
+        "years": "illər",
+        "decade": "onillik",
+        "decades": "onilliklər",
+        "century": "əsr",
+        "centuries": "əsrlər"
+    },
+    "browser": {
+        "insecureContext": "Bunun işləməsi üçün təhlükəsiz kontekstdə axtarış etməlisiniz"
+    },
+    "scan": {
+        "QR": "QR kodları skan edin"
+    },
+    "input": {
+        "Placeholder": "Yazmağa başlayın..."
+    }
+}

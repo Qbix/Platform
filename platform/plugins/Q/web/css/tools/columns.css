@@ -1,0 +1,300 @@
+:root {
+	--column-width: 300px;
+	--column-margin: 5px;
+	--scrollbar-width: 15px;
+}
+
+.Q_columns_tool {
+	overflow: visible;
+	position: relative;
+	max-height: 100%;
+}
+.Q_notMobile .Q_columns_tool {
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+.Q_mobile .Q_columns_tool {
+	width: 100%;
+}
+
+.Q_columns_column {
+	display: inline-block;
+	vertical-align: top;
+	background: #fff;
+	overflow: hidden;
+	scrollbar-width: thin;
+}
+
+.Q_mobile .Q_columns_overlapped {
+	display: none;
+	pointer-events: none;
+}
+
+.Q_mobile .Q_columns_column {
+	width: 100%;
+	height: 5000px;
+}
+.Q_notMobile .Q_columns_column {
+	min-width: var(--column-width);
+	width: var(--column-width);
+	box-shadow: black 2px 2px 4px;
+	visibility: hidden;
+	-webkit-box-shadow: black 0 0 4px;
+	-moz-box-shadow: black 0 0 4px;
+}
+.Q_notMobile .Q_columns_column:not(:last-of-type) {
+	margin-right: var(--column-margin);
+}
+
+.Q_notMobile .Q_columns_sized .Q_columns_column {
+	visibility: visible;
+}
+
+.Q_columns_title {
+	background: #f8f8f8;
+    border-bottom: 1px solid #aaa;
+	overflow: hidden;
+	min-height: 50px;
+	user-select: none;
+}
+
+html.Q_ios.Q_standalone .Q_columns_title {
+	background-color: white;
+}
+
+.Q_columns_title .Q_close {
+	width: 40px;
+	height: 40px;
+	float: right;
+	cursor: pointer;
+	font-weight: normal;
+	color: #555;
+	padding: 5px;
+	box-sizing: content-box;
+	opacity: 0.5;
+}
+
+.Q_columns_title .Q_close img {
+	width: 40px;
+	height: 40px;
+}
+
+.Q_columns_title .Q_title_slot {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	font-size: 25px;
+	line-height: 40px;
+    padding: 5px;
+    box-sizing: border-box;
+	margin: 0;
+}
+
+.Q_columns_title_container {
+	margin: 0;
+	line-height: 40px;
+	box-sizing: border-box;
+}
+.Q_columns_column:not([data-index='0']) .Q_columns_title_container {
+	width: calc(100% - 50px);
+}
+.Q_columns_title_container > * {
+	margin: 5px;
+	width: calc(100% - 10px);
+}
+
+.Q_columns_column .Q_column_slot {
+	clear: both;
+	overflow: auto;
+	overflow-x: hidden;
+	overflow-y: auto;
+	position: relative;
+	box-sizing: border-box;
+}
+
+.Q_columns_tool.Q_fullscreen {
+	overflow: visible;
+	height: auto;
+}
+
+.Q_columns_tool.Q_fullscreen .Q_columns_column {
+	float: none;
+	width: 100%;
+}
+
+.Q_columns_tool.Q_fullscreen .Q_columns_title {
+	position: fixed;
+	z-index: 1000;
+	width: 100%;
+	top: 0;
+	left: 0;
+}
+.Q_columns_tool.Q_fullscreen .Q_column_slot {
+	position: relative;
+	padding-top: 40px;
+	box-sizing: content-box;
+	overflow: hidden;
+}
+.Q_columns_loading { height: 40px; }
+.Q_columns_mask {
+	position: absolute; 
+	top: 0; 
+	bottom: 0; 
+	left: 0; 
+	right: 0; 
+	z-index: 9999; 
+}
+
+.Q_column_slot {
+	z-index: 10;
+	width: 100%;
+}
+
+.Q_columns_column .Q_columns_title {
+	box-shadow: 0 2px 10px 3px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0, 0.1);
+}
+
+.Q_columns_column .Q_controls_slot {
+	box-shadow: 0 -2px 10px 3px rgba(0, 0, 0, 0.1), 0 -1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.Q_columns_column .Q_controls_slot {
+	background: #f8f8f8;
+	height: 50px;
+	line-height: 50px;
+	position: relative;
+	z-index: 11;
+	display: none;
+	text-align: center;
+	vertical-align: middle;
+}
+
+.Q_columns_column .Q_controls_slot>* {
+	line-height: normal;
+}
+
+.Q_columns_column.Q_columns_hasControls .Q_controls_slot {
+	display: block;
+	overflow: hidden;
+}
+
+.Q_columns_loading .Q_controls_slot { display: none; }
+
+.Q_overflowHidden {
+	overflow: hidden;
+}
+
+.Q_columns_title,
+.Q_columns_title *{
+	user-select: none;
+}
+
+.Q_notMobile .Q_columns_tool .Q_columns_container {
+	white-space: nowrap;
+	height: 100%;
+}
+.Q_notMobile .Q_columns_tool .Q_columns_container .Q_columns_column {
+	white-space: normal;
+}
+.Q_notMobile .Q_columns_stretchFirstColumn,
+.Q_notMobile .Q_columns_stretchFirstColumn[data-column-count='1'] .Q_column_0 {
+	width: 100%;
+}
+.Q_notMobile .Q_columns_stretchFirstColumn .Q_column_0 {
+	min-width: 100%;
+}
+.Q_notMobile .Q_columns_stretchFirstColumn[data-column-count='2'] .Q_column_0 {
+	min-width: var(--column-width);
+	width: calc(100% - var(--column-width) - var(--column-margin));
+}
+.Q_notMobile .Q_columns_stretchFirstColumn[data-column-count='3'] .Q_column_0 {
+	min-width: var(--column-width);
+	width: calc(100% - 2*(var(--column-width) + var(--column-margin)));
+}
+.Q_notMobile .Q_columns_stretchFirstColumn.Q_columns_over3 .Q_column_0 {
+	min-width: var(--column-width);
+	width: calc(100% - 2*(var(--column-width) + var(--column-margin)));
+}
+.Q_notMobile .Q_columns_stretchFirstColumn.Q_columns_animateWidth .Q_columns_column {
+	transition-property: width, border-radius;
+	transition-duration: 50ms;
+}
+
+
+.Q_columns_hideTitle .Q_columns_title {
+	background: none;
+	box-shadow: none;
+}
+.Q_columns_hideTitle .Q_close {
+	opacity: 1;
+	text-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+}
+.Q_columns_hideTitle .Q_columns_title .Q_close::before {
+	color: #eee;
+}
+.Q_columns_hideTitle .Q_columns_title_container {
+	display: none;
+}
+.Q_columns_hideTitle .Q_column_slot {
+	position: relative;
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_0.Q_columns_latest {
+	border-radius: 0;
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column {
+	transition: transform 300ms, border-radius 300ms, opacity 300ms;
+	border-top-left-radius: 10px;
+	border-top-right-radius: 10px;
+	box-shadow: rgb(0 0 0 / 50%) 0 -40px 500px;
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_latest {
+	box-shadow: rgb(0 0 0 / 90%) 0 -40px 500px;
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_1 {
+	transform: perspective(1800px) scaleX(1) scaleY(1) scaleZ(1) translateX(0) translateY(20px) translateZ(2px) skewX(0deg) skewY(0deg) rotateX(1deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_2 {
+	transform: perspective(1800px) scaleX(1) scaleY(1) scaleZ(1) translateX(0) translateY(40px) translateZ(2px) skewX(0deg) skewY(0deg) rotateX(1deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_3 {
+	transform: perspective(1800px) scaleX(1) scaleY(1) scaleZ(1) translateX(0) translateY(45px) translateZ(2px) skewX(0deg) skewY(0deg) rotateX(1deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_4 {
+	transform: perspective(1800px) scaleX(1) scaleY(1) scaleZ(1) translateX(0) translateY(52px) translateZ(20px) skewX(0deg) skewY(0deg) rotateX(1deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_5 {
+	transform: perspective(1800px) scaleX(1) scaleY(1) scaleZ(1) translateX(0px) translateY(65px) translateZ(2px) skewX(0deg) skewY(0deg) rotateX(1deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_columns_overlapped {
+	display: inline-block;
+	transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(-12px) translateZ(-15px) skewX(0deg) skewY(0deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_column_1.Q_columns_overlapped {
+	transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(8px) translateZ(-7px) skewX(0deg) skewY(0deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_column_2.Q_columns_overlapped {
+	transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(22px) translateZ(-5px) skewX(0deg) skewY(0deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_column_3.Q_columns_overlapped {
+	transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(33px) translateZ(-5px) skewX(0deg) skewY(0deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_column_4.Q_columns_overlapped {
+	transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(45px) translateZ(-5px) skewX(0deg) skewY(0deg);
+}
+
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_column_5.Q_columns_overlapped {
+	transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(55px) translateZ(-5px) skewX(0deg) skewY(0deg);
+}

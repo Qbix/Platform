@@ -1,0 +1,160 @@
+{
+    "request": {
+        "error": "Pogreška {{status}} tijekom zahtjeva",
+        "canceled": "Zahtjev je otkazan",
+        "500": "Interna pogreška poslužitelja",
+        "404": "Nije pronađeno: {{url}}",
+        "501": "Zahtjev je prekinut",
+        "401": "Neovlašteno",
+        "403": "Zabranjeno"
+    },
+    "nonce": {
+        "sameDomain": "Vrijeme isteklo. Osvježite stranicu i pokušajte ponovno.",
+        "otherDomain": "Blokiran zahtjev za više domena za stranu domenu na {{baseUrl}}"
+    },
+    "words": {
+        "tap": "dodir",
+        "click": "klik",
+        "yes": "Da",
+        "no": "Ne",
+        "Tap": "Dodir",
+        "Click": "Klik",
+        "Yes": "Da",
+        "No": "Ne",
+        "OK": "u redu",
+        "Alert": "uzbuna",
+        "Confirm": "Potvrda",
+        "Prompt": "Unesite tekst"
+    },
+    "months": {
+        "1": "siječnja",
+        "2": "veljača",
+        "3": "ožujak",
+        "4": "travanj",
+        "5": "svibanj",
+        "6": "lipanj",
+        "7": "srpanj",
+        "8": "kolovoz",
+        "9": "rujan",
+        "10": "listopad",
+        "11": "studeni",
+        "12": "prosinac"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Dopustite pristup svom mikrofonu",
+        "record": "Snimiti",
+        "recording": "Snimanje",
+        "remains": "ostaci",
+        "maximum": "maksimum",
+        "playing": "Igranje",
+        "recorded": "Snimljeno",
+        "clip": "isječak",
+        "orupload": "Ili učitajte",
+        "usethis": "Koristi ovo",
+        "discard": "Odbaciti",
+        "encoding": "Kodiranje"
+    },
+    "alert": {
+        "title": "Obavijest"
+    },
+    "confirm": {
+        "title": "Potvrdite",
+        "ok": "Da",
+        "cancel": "Ne"
+    },
+    "prompt": {
+        "title": "Unesite tekst",
+        "ok": "u redu"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Pogreška pri čitanju datoteke",
+        "cameraCommands": {
+            "prompt": "Što biste željeli raditi?",
+            "photo": "Snimite novu fotografiju",
+            "library": "Odaberite iz biblioteke"
+        },
+        "tooSmall": "Molimo odaberite veću sliku.",
+        "cropping": {
+            "title": "Prilagodite veličinu i položaj",
+            "touchscreen": "Koristite prste za zumiranje i povlačenje",
+            "notTouchscreen": "Koristite miš i kotačić za zumiranje i povlačenje"
+        },
+        "errorType": "Žao nam je, ali ova vrsta datoteke nije podržana"
+    },
+    "timestamp": {
+        "lastNight": "prošlu noć",
+        "lastEvening": "zadnje večeri",
+        "yesterday": "jučer",
+        "thisMorning": "jutros",
+        "today": "danas",
+        "tonight": "večeras",
+        "tomorrowMorning": "tom jutro",
+        "tomorrow": "sutra",
+        "hoursAgo": "prije {{h}} sati",
+        "hourAgo": "prije {{h}} sat",
+        "minuteAgo": "Prije {{m}} minute",
+        "minutesAgo": "Prije {{m}} minuta",
+        "secondAgo": "Prije {{s}} sekunde",
+        "secondsAgo": "Prije {{s}} sekundi",
+        "fewSecondsAgo": "prije nekoliko sekundi",
+        "rightNow": "sada",
+        "inSecond": "u {{s}} sekundi",
+        "inSeconds": "za {{s}} sekundi",
+        "inMinute": "za {{m}} minuta",
+        "inMinutes": "za {{m}} minuta",
+        "inHour": "za {{h}} sat",
+        "inHours": "za {{h}} sati",
+        "inUnderMinute": "za manje od 1 minute"
+    },
+    "tabs": {
+        "more": "više",
+        "Menu": "izbornik"
+    },
+    "video": {
+        "clip": "isječak",
+        "errorNoSource": "Nema video izvora",
+        "SkipAfter": "Preskoči nakon",
+        "Skip": "Preskočiti"
+    },
+    "pdf": {
+        "clip": "isječak",
+        "errorNoSource": "Nema pdf izvora"
+    },
+    "clip": {
+        "SetClipStart": "Postavite Clip Start",
+        "ClipStart": "Početak isječka",
+        "SetClipEnd": "Postavite Clip End",
+        "ClipEnd": "Kraj isječka",
+        "StartMoreEnd": "Početni položaj ne može biti veći od krajnjeg položaja",
+        "EndLessStart": "Krajnji položaj ne može biti manji od početne pozicije",
+        "WhichInvalid": "Argument &#39;koji&#39; je nevažeći"
+    },
+    "durations": {
+        "second": "drugi",
+        "seconds": "sekundi",
+        "minute": "minuta",
+        "minutes": "minutama",
+        "hour": "sati",
+        "day": "dan",
+        "days": "dana",
+        "week": "tjedan",
+        "weeks": "tjedni",
+        "month": "mjesec",
+        "months": "mjeseci",
+        "year": "godina",
+        "years": "godine",
+        "decade": "desetljeće",
+        "decades": "desetljećima",
+        "century": "stoljeća",
+        "centuries": "stoljeća"
+    },
+    "browser": {
+        "insecureContext": "Morate pregledavati u sigurnom kontekstu da bi ovo funkcioniralo"
+    },
+    "scan": {
+        "QR": "Skenirajte QR kodove"
+    },
+    "input": {
+        "Placeholder": "Počni tipkati..."
+    }
+}

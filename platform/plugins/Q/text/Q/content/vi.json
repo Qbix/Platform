@@ -1,0 +1,158 @@
+{
+    "request": {
+        "error": "Lỗi {{status}} trong khi yêu cầu",
+        "canceled": "Yêu cầu đã bị hủy",
+        "500": "Lỗi máy chủ nội bộ",
+        "404": "Không tìm thấy: {{url}}",
+        "501": "Yêu cầu bị gián đoạn",
+        "401": "Không được phép",
+        "403": "Cấm"
+    },
+    "nonce": {
+        "sameDomain": "Phiên hết hạn. Làm mới trang và thử lại.",
+        "otherDomain": "Yêu cầu tên miền chéo bị chặn đối với tên miền nước ngoài tại {{baseUrl}}"
+    },
+    "words": {
+        "tap": "vỗ nhẹ",
+        "click": "nhấp chuột",
+        "yes": "Đúng",
+        "no": "không",
+        "Tap": "Chạm",
+        "Click": "Nhấp chuột",
+        "Yes": "Đúng",
+        "No": "Không",
+        "OK": "ĐƯỢC RỒI",
+        "Alert": "Báo động",
+        "Confirm": "xác nhận",
+        "Prompt": "Nhập văn bản"
+    },
+    "months": {
+        "1": "Tháng một",
+        "2": "tháng 2",
+        "3": "hành khúc",
+        "4": "tháng tư",
+        "5": "Có thể",
+        "6": "tháng Sáu",
+        "7": "tháng Bảy",
+        "8": "tháng Tám",
+        "9": "Tháng Chín",
+        "10": "Tháng Mười",
+        "11": "tháng Mười Một",
+        "12": "tháng 12"
+    },
+    "durations": {
+        "second": "thứ hai",
+        "seconds": "giây",
+        "minute": "phút",
+        "minutes": "phút",
+        "hour": "giờ",
+        "day": "ngày",
+        "days": "ngày",
+        "week": "tuần",
+        "weeks": "tuần",
+        "month": "tháng",
+        "months": "tháng",
+        "year": "năm",
+        "years": "năm",
+        "decade": "thập kỷ",
+        "decades": "thập kỷ",
+        "century": "thế kỷ",
+        "centuries": "thế kỉ"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Vui lòng cho phép truy cập vào micrô của bạn",
+        "record": "Ghi lại",
+        "recording": "ghi âm",
+        "remains": "còn lại",
+        "maximum": "tối đa",
+        "playing": "Đang chơi",
+        "recorded": "Đã ghi lại",
+        "clip": "kẹp",
+        "discard": "Bỏ đi",
+        "encoding": "Mã hóa"
+    },
+    "video": {
+        "clip": "kẹp",
+        "errorNoSource": "Không có nguồn video",
+        "SkipAfter": "Bỏ qua sau",
+        "Skip": "Nhảy"
+    },
+    "pdf": {
+        "clip": "kẹp",
+        "errorNoSource": "Không có nguồn pdf"
+    },
+    "clip": {
+        "SetClipStart": "Đặt bắt đầu clip",
+        "ClipStart": "Bắt đầu clip",
+        "SetClipEnd": "Đặt kết thúc clip",
+        "ClipEnd": "Clip kết thúc",
+        "StartMoreEnd": "Vị trí bắt đầu không được nhiều hơn vị trí kết thúc",
+        "EndLessStart": "Vị trí kết thúc không được nhỏ hơn vị trí bắt đầu",
+        "WhichInvalid": "Đối số &#39;mà&#39; không hợp lệ"
+    },
+    "alert": {
+        "title": "Để ý"
+    },
+    "confirm": {
+        "title": "Xác nhận",
+        "ok": "Đúng",
+        "cancel": "Không"
+    },
+    "prompt": {
+        "title": "Nhập văn bản",
+        "ok": "ĐƯỢC RỒI"
+    },
+    "tabs": {
+        "more": "hơn",
+        "Menu": "Thực đơn"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Lỗi khi đọc tệp",
+        "errorType": "Xin lỗi, nhưng loại tệp này không được hỗ trợ",
+        "cameraCommands": {
+            "prompt": "Bạn thích làm gì?",
+            "photo": "Chụp ảnh mới",
+            "library": "Chọn từ thư viện"
+        },
+        "tooSmall": "Vui lòng chọn một hình ảnh lớn hơn.",
+        "cropping": {
+            "title": "Điều chỉnh kích thước và vị trí",
+            "touchscreen": "Sử dụng ngón tay của bạn để thu phóng và kéo",
+            "notTouchscreen": "Sử dụng chuột và bánh xe của bạn để thu phóng và kéo"
+        }
+    },
+    "timestamp": {
+        "lastNight": "tối hôm qua",
+        "lastEvening": "đêm trước",
+        "yesterday": "hôm qua",
+        "thisMorning": "bà già này",
+        "today": "hôm nay",
+        "tonight": "đêm nay",
+        "tomorrowMorning": "tom morn",
+        "tomorrow": "ngày mai",
+        "hoursAgo": "{{h}} giờ trước",
+        "hourAgo": "{{h}} giờ trước",
+        "minuteAgo": "{{m}} phút trước",
+        "minutesAgo": "{{m}} phút trước",
+        "secondAgo": "{{s}} giây trước",
+        "secondsAgo": "{{s}} giây trước",
+        "fewSecondsAgo": "Cách đây vài giây",
+        "rightNow": "ngay lập tức",
+        "inSecond": "sau {{s}} giây",
+        "inSeconds": "sau {{s}} giây",
+        "inMinute": "sau {{m}} phút nữa",
+        "inMinutes": "sau {{m}} phút nữa",
+        "inHour": "sau {{h}} giờ nữa",
+        "inHours": "sau {{h}} giờ",
+        "inUnderMinute": "trong dưới 1 phút"
+    },
+    "browser": {
+        "insecureContext": "Bạn cần duyệt trong ngữ cảnh an toàn để tính năng này hoạt động"
+    },
+    "scan": {
+        "QR": "Quét mã QR"
+    },
+    "input": {
+        "Placeholder": "Bắt đầu gõ..."
+    }
+}

@@ -1,0 +1,68 @@
+.Q_expandable_tool h2.Q_expandable_title {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+    font-weight: 300;
+    text-align:  left;
+    font-size: 20px;
+    line-height: 30px;
+    padding: 5px;
+    margin: 5px;
+}
+
+.Q_expandable_tool h2.Q_expandable_title:hover,
+.Q_expandable_tool h2.Q_expandable_title.Q_hover,
+.Q_expandable_tool h2.Q_expandable_title.Q_expanded {
+    color: #333;
+    font-weight: 400;
+	background: rgba(180, 200, 220, .7);
+}
+
+.Q_expandable_tool h2.Q_expandable_title.Q_pressed {
+    background: rgba(180, 200, 220, 0.2);
+}
+
+
+.Q_expandable_tool h2.Q_expandable_title img {
+	width:25px; height:25px; vertical-align: middle; margin-left: 5px; margin-right: 5px;
+}
+
+.Q_expandable_tool h2.Q_expandable_title span {
+	vertical-align: middle;
+}
+
+.Q_expandable_tool h2.Q_expandable_title.Q_expanded .Q_expandable_count {
+	display: none;
+}
+
+.Q_expandable_count {
+	float: right;
+    padding: 0 5px 0 5px;
+    border-radius: 5px;
+	font-size: 12px;
+	font-weight: bold;
+    margin: 7px;
+    line-height: 20px;
+}
+
+.Q_expandable_container {
+    text-align: left;
+    font-weight: 100;
+    font-size: 15px;
+    /* -webkit-mask-image: -webkit-linear-gradient(rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%); */
+	border-bottom-left-radius: 5px;
+	border-bottom-right-radius: 5px;
+    border: solid 1px rgba(255,255,255,0.2);
+    border-top: 0;
+    margin-top: -12px;
+    padding: 5px;
+    line-height: 25px;
+	width: 100%;
+	display: none;
+}
+.Q_expandable_container.Q_expanded {
+	display: block;
+}

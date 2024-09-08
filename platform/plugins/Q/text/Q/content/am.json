@@ -1,0 +1,160 @@
+{
+    "request": {
+        "error": "በጥያቄ ጊዜ ስህተት {{status}}",
+        "canceled": "ጥያቄ ተሰርዟል።",
+        "500": "የውስጥ መቆጣጠርያ ችግር",
+        "404": "አልተገኘም፦ {{url}}",
+        "501": "ጥያቄ ተቋርጧል",
+        "401": "ያልተፈቀደ",
+        "403": "የተከለከለ"
+    },
+    "nonce": {
+        "sameDomain": "ክፍለ ጊዜው አልፎበታል። ገጹን ያድሱ እና እንደገና ይሞክሩ።",
+        "otherDomain": "በ {{baseUrl}} ላይ ወደ ውጭ ጎራ የሚደረግ የጎራ ተሻጋሪ ጥያቄ ታግዷል"
+    },
+    "words": {
+        "tap": "መንካት",
+        "click": "ጠቅ ያድርጉ",
+        "yes": "አዎ",
+        "no": "አይ",
+        "Tap": "ንካ",
+        "Click": "ጠቅ ያድርጉ",
+        "Yes": "አዎ",
+        "No": "አይ",
+        "OK": "እሺ",
+        "Alert": "ማንቂያ",
+        "Confirm": "ማረጋገጫ",
+        "Prompt": "ጽሑፍ ያስገቡ"
+    },
+    "months": {
+        "1": "ጥር",
+        "2": "የካቲት",
+        "3": "መጋቢት",
+        "4": "ሚያዚያ",
+        "5": "ግንቦት",
+        "6": "ሰኔ",
+        "7": "ሀምሌ",
+        "8": "ነሐሴ",
+        "9": "መስከረም",
+        "10": "ጥቅምት",
+        "11": "ህዳር",
+        "12": "ታህሳስ"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "እባክዎ ወደ ማይክሮፎንዎ መዳረሻ ይፍቀዱ",
+        "record": "መዝገብ",
+        "recording": "መቅዳት",
+        "remains": "ቀርቷል።",
+        "maximum": "ከፍተኛ",
+        "playing": "በመጫወት ላይ",
+        "recorded": "ተመዝግቧል",
+        "clip": "ቅንጥብ",
+        "orupload": "ወይም ይጫኑ",
+        "usethis": "ይህን ይጠቀሙ",
+        "discard": "አስወግድ",
+        "encoding": "ኢንኮዲንግ"
+    },
+    "alert": {
+        "title": "ማስታወቂያ"
+    },
+    "confirm": {
+        "title": "አረጋግጥ",
+        "ok": "አዎ",
+        "cancel": "አይ"
+    },
+    "prompt": {
+        "title": "ጽሑፍ ያስገቡ",
+        "ok": "እሺ"
+    },
+    "imagepicker": {
+        "errorReadingFile": "ፋይል ማንበብ ላይ ስህተት",
+        "cameraCommands": {
+            "prompt": "ምን መስራት ይፈልጋሉ?",
+            "photo": "አዲስ ፎቶ አንሳ",
+            "library": "ከቤተ-መጽሐፍት ይምረጡ"
+        },
+        "tooSmall": "እባክዎ ትልቅ ምስል ይምረጡ።",
+        "cropping": {
+            "title": "መጠን እና አቀማመጥ ያስተካክሉ",
+            "touchscreen": "ለማጉላት እና ለመጎተት ጣቶችዎን ይጠቀሙ",
+            "notTouchscreen": "ለማጉላት እና ለመጎተት የእርስዎን መዳፊት እና ጎማ ይጠቀሙ"
+        },
+        "errorType": "ይቅርታ፣ ግን የዚህ ፋይል አይነት አይደገፍም።"
+    },
+    "timestamp": {
+        "lastNight": "ትናንትና ማታ",
+        "lastEvening": "የመጨረሻ ዋዜማ",
+        "yesterday": "ትናንት",
+        "thisMorning": "ዛሬ ጠዋት",
+        "today": "ዛሬ",
+        "tonight": "ዛሬ ማታ",
+        "tomorrowMorning": "ቶም ጠዋት",
+        "tomorrow": "ነገ",
+        "hoursAgo": "ከ{999} ሰዓታት በፊት",
+        "hourAgo": "ከ{999} ሰዓት በፊት",
+        "minuteAgo": "{{m}} ደቂቃ በፊት",
+        "minutesAgo": "ከ{999} ደቂቃዎች በፊት",
+        "secondAgo": "{{s}} ሰከንድ በፊት",
+        "secondsAgo": "{{s}} ሰከንዶች በፊት",
+        "fewSecondsAgo": "ከሰከንዶች በፊት",
+        "rightNow": "ልክ አሁን",
+        "inSecond": "በ{999} ሰከንድ ውስጥ",
+        "inSeconds": "በ{999} ሰከንዶች ውስጥ",
+        "inMinute": "በ{999} ደቂቃ ውስጥ",
+        "inMinutes": "በ{999} ደቂቃዎች ውስጥ",
+        "inHour": "በ{999} ሰዓት ውስጥ",
+        "inHours": "በ{999} ሰዓቶች ውስጥ",
+        "inUnderMinute": "ከ1 ደቂቃ በታች"
+    },
+    "video": {
+        "clip": "ቅንጥብ",
+        "errorNoSource": "ምንም የቪዲዮ ምንጭ የለም።",
+        "SkipAfter": "በኋላ ዝለል",
+        "Skip": "ዝለል"
+    },
+    "pdf": {
+        "clip": "ቅንጥብ",
+        "errorNoSource": "የፒዲኤፍ ምንጭ የለም።"
+    },
+    "clip": {
+        "SetClipStart": "የቅንጥብ ጅምርን አዘጋጅ",
+        "ClipStart": "ቅንጥብ ጀምር",
+        "SetClipEnd": "የቅንጥብ መጨረሻ አዘጋጅ",
+        "ClipEnd": "ቅንጥብ መጨረሻ",
+        "StartMoreEnd": "የመነሻ ቦታ ከመጨረሻው ቦታ በላይ ሊሆን አይችልም።",
+        "EndLessStart": "የመጨረሻው ቦታ ከመጀመሪያው አቀማመጥ ያነሰ ሊሆን አይችልም",
+        "WhichInvalid": "ክርክር &#39;የትኛው&#39; ልክ ያልሆነ"
+    },
+    "tabs": {
+        "more": "ተጨማሪ",
+        "Menu": "ምናሌ"
+    },
+    "durations": {
+        "second": "ሁለተኛ",
+        "seconds": "ሰከንዶች",
+        "minute": "ደቂቃ",
+        "minutes": "ደቂቃዎች",
+        "hour": "ሰዓታት",
+        "day": "ቀን",
+        "days": "ቀናት",
+        "week": "ሳምንት",
+        "weeks": "ሳምንታት",
+        "month": "ወር",
+        "months": "ወራት",
+        "year": "አመት",
+        "years": "ዓመታት",
+        "decade": "አስርት አመታት",
+        "decades": "አሥርተ ዓመታት",
+        "century": "ክፍለ ዘመን",
+        "centuries": "ክፍለ ዘመናት"
+    },
+    "browser": {
+        "insecureContext": "ይህ እንዲሰራ ደህንነቱ በተጠበቀ አውድ ውስጥ ማሰስ አለብህ"
+    },
+    "scan": {
+        "QR": "የQR ኮዶችን ይቃኙ"
+    },
+    "input": {
+        "Placeholder": "መተየብ ጀምር..."
+    }
+}

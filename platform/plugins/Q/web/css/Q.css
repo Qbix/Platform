@@ -1,0 +1,1143 @@
+@import "icons.css";
+
+:root {
+	--updated-color-from: rgba(255, 215, 0, 0.9);
+	--updated-color-to: rgba(255, 215, 0, 0.1);
+}
+html, body { height: 100%; height: -moz-fill-available; height: -webkit-fill-available; height: fill-available; }
+table { border-spacing:0; border-collapse:collapse; }
+body { position: relative; margin: 0; }	
+
+/* Animations */
+@keyframes Q_rotateplane {
+	0% {
+		transform: perspective(120px) rotateX(0deg) rotateY(0deg);
+	} 50% {
+		transform: perspective(120px) rotateX(-180.1deg) rotateY(0deg);
+	} 100% {
+		transform: perspective(120px) rotateX(-180deg) rotateY(-179.9deg);
+	}
+}
+
+@keyframes Q_working { /* apply to trigger element that sent request */
+	from { opacity: 0.75; }
+	to { opacity: 0.25; }
+}
+
+@keyframes Q_loading { /* apply to container loading content */
+	from { opacity: 0.75; }
+	to { opacity: 0.25; }
+}
+
+@keyframes Q_uploading {
+	from { opacity: 0.75; }
+	to { opacity: 0.25; }
+}
+
+@keyframes Q_removing {
+	from { opacity: 0.5; }
+	to { opacity: 0.25; }
+}
+@keyframes Q_pop {
+	0% { transform: scale(1); opacity: 1; }
+	50% { transform: scale(2); opacity: 0.5; }
+	100% { transform: scale(1); opacity: 1; }
+}
+@keyframes Q_pulsate {
+	0% { transform: scale(1); opacity: 1; }
+	50% { transform: scale(1.1); opacity: 1; text-shadow: 2px 2px rgba(0, 0, 0, 0.5); }
+	100% { transform: scale(1); opacity: 1; }
+}
+@keyframes Q_wiggle {
+	0% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	30% {
+		transform: scale(1.2) perspective(120px) rotateX(-10deg) rotateY(0deg);
+		opacity: 0.9;
+	}
+	70% {
+		transform: scale(0.9) perspective(120px) rotateX(10deg) rotateY(0deg);
+		opacity: 1;
+	}
+}
+@keyframes Q_grayscale {
+	0% {filter:grayscale(0%);}
+	50% {filter:grayscale(100%);}
+}
+
+@keyframes Q_forceRedraw {
+	/* sad, but we need something like this for safari 10+ */
+    from { box-shadow: inset rgba(0,0,0,0) 0 0 0; }
+    to { box-shadow: inset rgba(0,0,0,0.0000001) 0 0 0 10px; }
+}
+@keyframes Q_blink {
+	50% { border-color: #ff0000; }
+}
+@keyframes Q_fadeIn {
+	0% { visibility: hidden; }
+	0.001% { visibility: visible; opacity: 0; }
+	100% { visibility: visible; opacity: 1; }
+}
+@keyframes updated-flash-anim {
+	from { background-color: var(--updated-color-from); }
+	to { background-color: var(--updated-color-to); }
+}
+
+/* Common Q classes */
+.Q_hide { display: none !important; }
+.Q_hideUntilLoaded body { opacity: 0; }
+.Q_blink { animation: Q_blink .5s step-end infinite alternate; }
+.Q_updated_flash { animation: updated-flash-anim .5s ease-in-out alternate; }
+
+.Q_forceRedraw { animation: Q_forceRedraw 4s infinite; }
+.Q_pagebreak { page-break-after: always; }
+.Q_collapsed { border-bottom: solid 2px #777 !important; }
+.Q_square { aspect-ratio: 1 !important; height: auto !important; object-fit: cover !important; }
+.Q_compact {}
+.Q_editable { color: #225 !important; }
+.Q_editing {}
+.Q_validator_container { position: relative; width: 0; height: 0; top: 0; left: 0; overflow: visible; pointer-events: none; }
+.Q_error { color: #C22 !important; font-style: italic !important; }
+.Q_errors { color: #a00; }
+.Q_error_message { z-index: 11000; font-size: 12px; background-color: #a00; color: white; padding: 2px 5px 4px 5px; opacity: 0.8; box-sizing: content-box; }
+.Q_error_message p { margin: 0; }
+.Q_expanded { }
+.Q_field_name { color: #222; opacity:0.5; filter:alpha(opacity=50) }
+.Q_hidden { display: none; }
+.Q_modified {}
+.Q_notice { border: solid 2px #ba8; background: #f2e097 !important; padding: 5px; }
+.Q_notice a { font-weight: bold; }
+.Q_required { border: solid 2px #AAC !important; }
+.Q_success { background-color: #e2ffee !important; }
+.Q_selectable { border: 1px solid transparent; }
+.Q_notTouchscreen .Q_selectable:hover { background: #aeaeae; background: rgba(175,175,175,0.5); }
+.Q_selected { background-color: rgba(132, 184, 226, 0.732); outline: 1px solid #5ca3df; color: black; box-shadow: 0 0 6px 1px #4990ff, inset 0 0 3px #1764dd; }
+.Q_selectable.Q_selected:hover { background-color: rgba(132, 184, 226, 0.5); }
+.Q_selected_partially { background: repeating-linear-gradient(45deg, rgb(132, 184, 226, 0.8),rgb(132, 184, 226, 0.8) 10px, rgba(63, 121, 168, 0.5) 10px, rgba(63, 121, 168, 0.5) 20px); }
+.Q_throb,
+.Q_throb input,
+.Q_throb textarea { background-image: url(../img/throbbers/loading.gif); background-repeat: no-repeat; background-position: center center; }
+.Q_loading {
+	pointer-events: none;
+	opacity:0.9; filter:alpha(opacity=90);
+	animation: Q_loading 1s ease-in-out infinite alternate;
+}
+.Q_working {
+	pointer-events: none;
+	opacity: 0.5;
+	animation: Q_working 1s ease-in-out infinite alternate;
+	position: relative;
+	cursor: wait;
+}
+.Q_uploading {
+	opacity: 0.5;
+	animation: Q_uploading 1s ease-in-out infinite alternate;
+}
+.Q_removing {
+	opacity: 0.5;
+	background: white;
+	animation: Q_removing 1s ease-in-out infinite alternate;
+}
+.Q_pop {
+	animation: Q_pop 1s ease-in-out 0s 0.7;
+}
+.Q_wiggle {
+	animation: Q_wiggle 5s ease-in-out infinite;
+}
+.Q_pulsate {
+	animation: Q_pulsate 3s ease-in-out infinite alternate;
+}
+.Q_fadeIn {
+	animation: Q_fadeIn 300ms ease-in-out forwards;
+}
+
+.Q_clear{ clear: both; }
+.Q_left{ float: left; }
+.Q_right{ float: right; }
+.Q_w10{ width: 10%; }
+.Q_w20{ width: 20%; }
+.Q_w30{ width: 30%; }
+.Q_w40{ width: 40%; }
+.Q_w50{ width: 50%; }
+.Q_w60{ width: 60%; }
+.Q_w70{ width: 70%; }
+.Q_w80{ width: 80%; }
+.Q_w90{ width: 90%; }
+.Q_w100{ width: 100%; }
+
+.Q_noScrollbar::-webkit-scrollbar {
+	display: none;
+}
+.Q_noScrollbar {
+	-ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.Q_overflow {
+	overflow: auto;
+	-webkit-overflow-scrolling: touch;
+	z-index: 0; /* http://stackoverflow.com/a/16408745/467460 */
+	-webkit-transform: translateZ(0);
+}
+
+.Q_verticalOrientation .Q_orientHorizontally {
+	transform: scale(1.5) rotate(90deg);
+}
+.Q_verticalOrientation .Q_orientHorizontally::after {
+	display: block;
+	width: 100px;
+	height: 100px;
+	border-radius: 10px;
+	margin: -100px auto;
+	background-color: rgba(0, 0, 0, 0.5);
+	background-image: url(../img/hints/rotate-left.gif);
+	background-size: cover;
+	content: "";
+}
+
+/* Masks and dialogs */
+
+.Q_mask { display: none; position: absolute; z-index: 1000; top: 0; left: 0; width: 100%; height: 100%; }
+.Q_cancel_mask { z-index: 2000; text-align: center; }
+.Q_load_cancel { vertical-align: middle; margin-top: 80px; }
+.Q_notice_mask,
+.Q_screen_mask,
+.Q_dialog_mask { background-color: rgba(0, 0, 0, 0.2); }
+.Q_load_mask { background-color: rgba(0, 0, 0, 0.3); background-image: radial-gradient(circle at center 200px,hsla(0,0%,100%,.1),#000); background-attachment: fixed; }
+.Q_click_mask { background: transparent; }
+.Q_button.Q_load_cancel_button { position: absolute; left: 50vw; top: 50vh; margin-left: -25px; margin-top: -50px; box-shadow: 0 0 25px 5px rgba(255, 255, 255, 0.5); }
+
+/* Clear fix */
+
+.Q_clearfix::after { content: ""; display: block; clear: both; visibility: hidden; line-height: 0; height: 0; }
+html[xmlns] .Q_clearfix { display: block; }
+
+/* more Q styles */
+
+.Q_overlay { background: #EEEEF3; border-radius: 5px; }
+.Q_overlay .Q_title { background-color: #55A; color: white; margin: 0; padding: 5px 10px 5px 10px; font-size: 18px; font-weight: bold; border-radius: 5px 5px 0 0; }
+.Q_document_surface { background: white; padding: 10px; }
+.Q_chrome_surface { background: gray; }
+.Q_tabbed { border: 1px solid #aaa; border-top: 1px solid #eee; background: white; }
+.Q_forceDisplayBlock { display: block !important; }
+.Q_forceDisplayInline { display: inline !important; }
+.Q_forceDisplayNone { display: none !important; }
+
+/* the overlayed element */
+.Q_overlay { 
+	background: url(../img/bg/overlay.png); display:none; padding: 0; border: 2px solid #444; z-index: 9000;
+	opacity: 1; border-radius: 7px; box-shadow: 0 0 20px #333; display: flex; flex-direction: column;
+}
+
+.Q_notMobile .Q_overlay { max-width: 500px; }
+.Q_mobile .Q_overlay { max-width: 95%; }
+
+body.Q_preventScroll {
+	position: fixed;
+	overflow: hidden;
+	width: 100%;
+	min-height: 100%;
+}
+.Q_fullscreen_dialog .Q_title_slot {
+	position: relative;
+	width: 100%;
+	z-index: 99;
+	padding-top: env(safe-area-inset-top, 0);
+}
+.Q_fullscreen_dialog .Q_title_slot,
+.Q_overlay .Q_title_slot {
+	color: white;
+	background: transparent;
+	border: none;
+}
+.Q_dialog_title {
+	padding: 0 10px;
+	vertical-align: middle;
+	min-height: 40px;
+	max-height: 80px;
+	line-height: 40px;
+	box-sizing: content-box;
+	margin:0;
+	font-size: 20px;
+	min-width: 200px;
+	font-weight: bold;
+	cursor: default;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	z-index: 2;
+	background: #444; /* for non-css3 browsers */
+	background: linear-gradient(top,  #444,  #111);
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#444444', endColorstr='#111111'); /* for IE */
+	border-bottom: 1px solid #333;
+}
+.Q_dialog_title img {
+	width: 40px;
+	height: 40px;
+	vertical-align: middle;
+}
+.Q_dialog_content {
+	overflow: auto;
+	-webkit-overflow-scrolling: touch;
+	position: relative;
+	flex-grow: 2;
+}
+.Q_alert .Q_dialog_content,
+.Q_confirm .Q_dialog_content,
+.Q_prompt .Q_dialog_content {
+	text-align: center;
+}
+.Q_confirm .Q_dialog_content p:empty {
+	display: none;
+}
+.Q_prompt .Q_big_prompt p:empty {
+	display: none;
+}
+.Q_fullscreen_dialog {
+	display: flex;
+	flex-direction: column;
+	overflow: visible;
+	position: fixed;
+	z-index: 9000; /* must be at least higher than dashboard_slot z-index */
+	background: url(../img/bg/overlay.png);
+}
+
+.Q_fullscreen_dialog .Q_close
+{
+	display: block;
+	position: fixed;
+	top: env(safe-area-inset-top, 2px);
+	right: 2px;
+	height: 35px;
+	width: 35px;
+	background-image: url(../img/ui/close_big.png);
+	background-size: cover;
+	cursor: pointer;
+	z-index: 100;
+}
+.Q_fullscreen_dialog .Q_swap
+{
+	display: block;
+	position: fixed;
+	top: 2px;
+	right: 37px;
+	height: 35px;
+	width: 35px;
+	background-image: url(../img/ui/swap_big.png);
+	background-size: contain;
+	cursor: pointer;
+	z-index: 100;
+}
+.Q_overlay .Q_close {
+	background-image:url(../img/close.png);
+	position:absolute;
+	right:-15px;
+	top:-15px; 
+	cursor:pointer;
+	height:35px;
+	width:35px;
+}
+.Q_mobile .Q_overlay .Q_close {
+	right:-10px;
+}
+.Q_overlay.Q_overlay_apply .Q_close,
+.Q_fullscreen_dialog.Q_overlay_apply .Q_close { 
+	background-image:url(../img/apply.png);
+	right:-20px;
+	top:-20px; 
+	height:50px;
+	width:50px;
+	border-radius: 50%;
+	box-shadow: 0 0 0 rgba(50,200,50, 0.4);
+	animation: Q_wiggle 5s ease-in-out infinite, Q_grayscale 5s ease-in-out infinite;
+	animation-delay: 5s;
+}
+.Q_messagebox .Q_big_prompt p {
+	font-weight: bold;
+}
+
+/* buttons */
+
+.Q_buttons { text-align: center; }
+.Q_buttons * { vertical-align: middle; }
+
+.Q_button {
+	white-space: nowrap;
+	border-width:1px; font-size:1em; padding: 1px 5px 1px 5px; color: #fff; cursor:pointer; border-radius: 0.3em;
+	border-color: rgba(200,2050,200,50.5); border-bottom-color: rgba(0,50,200,50.2); border-right-color: rgba(0,50,200,50.2);
+	box-sizing: border-box;
+	
+	box-shadow: 0 0 1px rgba(50,50,50,0.5); 
+	background: #444; /* for non-css3 browsers */
+
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#444444', endColorstr='#333222'); /* for IE */
+	background: linear-gradient(top,  #444,  #333);
+}
+.Q_touchscreen .Q_button {
+	box-shadow: 0 0 5px rgba(50,50,50,0.5);
+}
+.Q_button:disabled { cursor: default; background: linear-gradient(top,  #AAA,  #888); opacity: 0.8; }
+.Q_button img { vertical-align: middle; margin-right: 5px; }
+
+.Q_button:focus,
+.Q_notTouchscreen .Q_button:hover,
+.Q_notTouchscreen .Q_button.focus {
+	box-shadow: 0 2px 10px rgba(40,40,40,0.8);
+	outline: solid 2px rgba(150, 150, 150, 0.5);
+}
+.Q_notTouchscreen .Q_button.active,
+.Q_notTouchscreen .Q_button:active {
+	box-shadow: 0 0 0 rgba(40,40,80,0.8);
+	border-bottom-color: rgba(0, 0, 250, 0.2); border-right-color: rgba(0, 0, 250, 0.2);
+	background: #333;
+	color: #fff;
+}
+.Q_notTouchscreen button:hover:disabled,
+.Q_button:hover:disabled { cursor: default; background: linear-gradient(top,  #AAA,  #888); }
+button:focus:disabled,
+.Q_button:focus:disabled { cursor: default; background: linear-gradient(top,  #AAA,  #888); }
+button.basic16 { background-color: #eee; color: black; }
+.Q_notTouchscreen button.basic16:active { background-color: #ccc; color: black; }
+.Q_button { padding: 0.4em 1em 0.4em 1em; box-sizing: border-box; }
+input { box-sizing: border-box; padding: 5px; border: solid 1px rgba(0, 0, 0, 0.2); border-radius: 5px; }
+input::placeholder { font-style: italic; }
+select { padding: 5px; border: solid 1px rgba(0, 0, 0, 0.2); border-radius: 5px; }
+
+.Q_aspect_who, .Q_aspect_who::before { color: #394ad5; border-color: #394ad5; }
+.Q_aspect_what, .Q_aspect_what::before { color: #bf1118; border-color: #bf1118; }
+.Q_aspect_info, .Q_aspect_info::before,
+.Q_aspect_where, .Q_aspect_where::before { color: #222; }
+.Q_aspect_when, .Q_aspect_when::before { color: #449944; border-color: #449944; }
+.Q_aspect_scan, .Q_aspect_scan::before { color: #444; }
+
+.Q_button.Q_aspect_who {
+	background: #394ad5; /* for non-css3 browsers */
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#394ad5', endColorstr='#2839c4'); /* for IE */
+	background: linear-gradient(top,  #394ad5,  #2839c4); /* for firefox 3.6+ */
+	color: white;
+}
+.Q_button.Q_aspect_who:active,
+.Q_button.Q_aspect_who:focus {
+	background: #2839c4;
+	color: white;
+}
+
+.Q_button.Q_aspect_what {
+	background: #bf1118; /* for non-css3 browsers */
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#bf1118', endColorstr='#72090d'); /* for IE */
+	background: linear-gradient(top,  #bf1118,  #a10e14); /* for firefox 3.6+ */
+	color: white;
+}
+.Q_button.Q_aspect_what:active,
+.Q_button.Q_aspect_what:focus {
+	background: #a10e14;
+	color: white;
+}
+
+.Q_button.Q_aspect_info,
+.Q_button.Q_aspect_where {
+	background: #737373; /* for non-css3 browsers */
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#737373', endColorstr='#626262'); /* for IE */
+	background: linear-gradient(top,  #737373,  #626262); /* for firefox 3.6+ */
+	color: white;
+}
+.Q_button.Q_aspect_info:active,
+.Q_button.Q_aspect_info:focus,
+.Q_button.Q_aspect_where:active,
+.Q_button.Q_aspect_where:focus {
+	background: #626262;
+}
+
+.Q_button.Q_aspect_when {
+	background: #449944; /* for non-css3 browsers */
+	filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#449944', endColorstr='#196019'); /* for IE */
+	background: linear-gradient(top,  #449944,  #338833); /* for firefox 3.6+ */
+	color: white;
+}
+.Q_button.Q_aspect_when:active,
+.Q_button.Q_aspect_when:focus,
+.Q_button.Q_aspect_when:active,
+.Q_button.Q_aspect_when:focus {
+	background: #338833;
+	color: white;
+}
+
+/* tooltips */
+
+.Q_tooltip { background-color: #555; /* #005; */ border:1px solid #fff; padding:10px 15px; box-sizing: content-box; width:200px; display:none; color:#fff; text-align:center; font-size:12px; z-index: 12000;
+box-shadow:0 0 10px #000; }
+
+/* big prompts */
+
+.Q_big_prompt { padding: 10px; box-sizing: border-box; }
+.Q_big_prompt label,
+.Q_big_prompt input,
+.Q_big_prompt button,
+.Q_big_prompt select,
+.Q_big_prompt .Q_button { font-size: 18px; } 
+.Q_big_prompt .Q_button,
+.Q_notTouchscreen .Q_big_prompt .Q_button { padding: 5px 1em; display: inline-block; }
+.Q_big_prompt .Q_button span { display: inline-block; line-height: 1em; margin-top: -2px; }
+.Q_big_prompt .Q_buttons>* { flex-grow: 1; }
+.Q_big_prompt .Q_buttons { white-space: nowrap;  display: flex; justify-content: space-evenly; gap: 10px; }
+.Q_big_prompt input[type=text],
+.Q_big_prompt input[type=email],
+.Q_big_prompt input[type=tel],
+.Q_big_prompt input[type=password],
+.Q_big_prompt input[type=number],
+.Q_big_prompt input.text,
+.Q_big_prompt input.email,
+.Q_big_prompt input.tel,
+.Q_big_prompt input.password,
+.Q_big_prompt input.number,
+.Q_big_prompt textarea { font-size: 18px; border-radius:3px; padding: 7px; }
+.Q_big_prompt select { font-size: 18px; border-radius: 3px; vertical-align: middle; }
+.Q_big_prompt .Q_field_title { vertical-align: middle; text-align: right; padding-right: 10px; box-sizing: content-box; }
+
+/* big messages */
+
+.Q_big_message { padding: 30px 30px 50px 30px !important; box-sizing: content-box; font-size: 20px; font-weight: bold; text-align: center; }
+.Q_big_message>div { padding-top: 20px; box-sizing: content-box; }
+.Q_big_message>.Q_explanation { font-size: 18px; font-weight: normal; }
+
+/* Some quick styles for various tools */
+
+.Q_actions_action { cursor: pointer !important; display: inline-block; zoom: 1; }
+.Q_zoomer { z-index: 9000; border-radius: 1px; box-shadow: black 3px 3px 10px; }
+.Q_contextual { display: none; }
+.Q_rating_tool { display: inline-block; min-height: 20px; }
+.Q_rating_tool div.Q_rating_star,
+.Q_rating_tool div.Q_rating_star * { width: 14px; height: 14px; border: 0; padding: 0; }
+.Q_rating_tool div.Q_rating_star { display: inline-block; position: relative; }
+.Q_rating_tool div.Q_rating_star * { position: absolute; top: 0; right: 0; }
+.Q_rating_tool div.Q_rating_star_occlusion { width: 0; overflow: hidden; }
+.Q_paging_tool { text-align: center; }
+.Q_autogrow_container .Q_placeholders_container { width: 100 !important; }
+.Q_placeholders_container,
+.Q_placeholder { display: inline-block; color: #999; font-style: italic; zoom: 1; }
+.Q_placeholders_container input,
+.Q_placeholders_container textarea { box-sizing: border-box; width: 100%; height: 100%; }
+.Q_focus .Q_placeholder { color: #aaa; }
+div.Q_placeholder { pointer-events: none; }
+.Q_clickable_container { cursor: pointer !important;  }
+.Q_clickable_container .Q_clickable_shadow { display: none; pointer-events: none; }
+.Q_clickable_stretcher.Q_clickable_sized>* { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important;  box-sizing: border-box !important; }
+.Q_notTouchscreen .Q_clickable_container.Q_hover .Q_clickable_shadow,
+.Q_notTouchscreen .Q_clickable_container:hover .Q_clickable_shadow,
+.Q_notTouchscreen .Q_clickable_container:active .Q_clickable_shadow
+ { display: block; max-width: none !important; }
+.Q_inplace_tool { display: none; visibility: hidden; }
+.Q_textfill_resizing,
+.Q_textfill_resized {
+	line-height: 1.2;
+	left: 0 !important;
+	width: 100% !important;
+	vertical-align: middle !important;
+	white-space: normal !important;
+}
+.Q_textfill_resizing {
+	overflow: visible !important;
+	width: auto !important;
+	transform: none !important;
+	max-width: none !important;
+	max-height: none !important;
+	display: inline-block !important;
+}
+.Q_textfill_resized {
+	overflow: auto;
+}
+.Q_lazy_load { opacity: 0; }
+.Q_lazy_loaded { opacity: 1; }
+.Q_lazy_load.Q_lazy_loaded { transition: opacity 300ms; }
+
+img[data-lazyload-src],
+[data-q-lazyload="waiting"],
+[data-q-lazyload="removed"] {
+	opacity: 0.1;
+	transition: opacity 0.3s;
+}
+
+[data-q-lazyload="activated"] {
+	opacity: 1;
+	transition: opacity 0.3s;
+}
+
+#dialogs_slot { display: none; }
+
+.Q_notMobile .Q_overlay.Q_alert,
+.Q_notMobile .Q_overlay.Q_confirm,
+.Q_notMobile .Q_overlay.Q_prompt { width: 350px; }
+
+/* more Q styles, and Q/actions */
+
+.basic16 { background: url(../img/icons/basic16.png); background-repeat: no-repeat; background-attachment: scroll; height: 16px; padding-left: 17px; text-align: left; font-size: 12px !important; box-sizing: border-box; }
+button.basic16 { height: 20px; border: solid 1px transparent; cursor: pointer; font-weight: bold; color: black; }
+.Q_notTouchscreen button.basic16:hover { border: outset 1px #889; cursor: pointer;  }
+.Q_notTouchscreen button.basic16:active { border: inset 1px #889; cursor: pointer; background-color: #CCC; }
+
+.basic16_home { background-position: 0 -2px; }
+.basic16_zoom { background-position: 0 -22px; }
+.basic16_view { background-position: 0 -22px; }
+.basic16_rss { background-position: 0 -42px; }
+.basic16_key { background-position: 0 -62px; }
+.basic16_flag { background-position: 0 -82px; }
+.basic16_flag2 { background-position: 0 -102px; }
+.basic16_save { background-position: 0 -122px; }
+.basic16_save2 { background-position: 0 -142px; }
+.basic16_folder { background-position: 0 -162px; }
+.basic16_clock { background-position: 0 -182px; }
+.basic16_bug { background-position: 0 -202px; }
+.basic16_group { background-position: 0 -222px; }
+.basic16_user { background-position: 0 -242px; }
+.basic16_edit { background-position: 0 -262px; }
+.basic16_light { background-position: 0 -282px; }
+.basic16_light2 { background-position: 0 -302px; }
+.basic16_lock { background-position: 0 -322px; }
+.basic16_unlock { background-position: 0 -342px; }
+.basic16_right { background-position: 0 -362px; }
+.basic16_down { background-position: 0 -382px; }
+.basic16_left { background-position: 0 -402px; }
+.basic16_up { background-position: 0 -422px; }
+.basic16_plus { background-position: 0 -442px; }
+.basic16_minus { background-position: 0 -462px; }
+.basic16_delete { background-position: 0 -482px; }
+.basic16_check { background-position: 0 -502px; }
+.basic16_error { background-position: 0 -522px; }
+.basic16_warning { background-position: 0 -542px; }
+.basic16_question { background-position: 0 -562px; }
+.basic16_info { background-position: 0 -582px; }
+.basic16_file { background-position: 0 -602px; }
+.basic16_music { background-position: 0 -622px; }
+.basic16_mail { background-position: 0 -642px; }
+.basic16_mail2 { background-position: 0 -662px; }
+.basic16_heart { background-position: 0 -682px; }
+.basic16_starfull { background-position: 0 -702px; }
+.basic16_starhalf { background-position: 0 -722px; }
+.basic16_starempty { background-position: 0 -742px; }
+.basic16_exclaim { background-position: 0 -762px; }
+.basic16_exclaim2 { background-position: 0 -782px; }
+
+.basic32 { background: url(../img/icons/basic32.png); background-repeat: no-repeat; background-attachment: scroll; height: 32px; padding-left: 34px; text-align: left; font-size: 18px; box-sizing: border-box; }
+button.basic32 { height: 40px; border: solid 1px transparent; cursor: pointer; font-weight: bold; }
+.Q_notTouchscreen button.basic32:hover { border: outset 1px #889; cursor: pointer; }
+.Q_notTouchscreen button.basic32:active { border: inset 1px #889; cursor: pointer; background-color: #CCC; }
+
+.basic32_home { background-position: 0 -4px; }
+.basic32_zoom { background-position: 0 -44px; }
+.basic32_view { background-position: 0 -44px; }
+.basic32_rss { background-position: 0 -84px; }
+.basic32_key { background-position: 0 -124px; }
+.basic32_flag { background-position: 0 -164px; }
+.basic32_flag2 { background-position: 0 -204px; }
+.basic32_save { background-position: 0 -244px; }
+.basic32_save2 { background-position: 0 -284px; }
+.basic32_folder { background-position: 0 -324px; }
+.basic32_clock { background-position: 0 -364px; }
+.basic32_bug { background-position: 0 -404px; }
+.basic32_group { background-position: 0 -444px; }
+.basic32_user { background-position: 0 -484px; }
+.basic32_edit { background-position: 0 -524px; }
+.basic32_light { background-position: 0 -564px; }
+.basic32_light2 { background-position: 0 -604px; }
+.basic32_lock { background-position: 0 -644px; }
+.basic32_unlock { background-position: 0 -684px; }
+.basic32_right { background-position: 0 -724px; }
+.basic32_down { background-position: 0 -764px; }
+.basic32_left { background-position: 0 -804px; }
+.basic32_up { background-position: 0 -844px; }
+.basic32_plus { background-position: 0 -884px; }
+.basic32_minus { background-position: 0 -924px; }
+.basic32_delete { background-position: 0 -964px; }
+.basic32_check { background-position: 0 -1004px; }
+.basic32_error { background-position: 0 -1044px; }
+.basic32_warning { background-position: 0 -1084px; }
+.basic32_question { background-position: 0 -1124px; }
+.basic32_info { background-position: 0 -1164px; }
+.basic32_file { background-position: 0 -1204px; }
+.basic32_music { background-position: 0 -1244px; }
+.basic32_mail { background-position: 0 -1284px; }
+.basic32_mail2 { background-position: 0 -1324px; }
+.basic32_heart { background-position: 0 -1364px; }
+.basic32_starfull { background-position: 0 -1404px; }
+.basic32_starhalf { background-position: 0 -1444px; }
+.basic32_starempty { background-position: 0 -1484px; }
+.basic32_exclaim { background-position: 0 -1524px; }
+.basic32_exclaim2 { background-position: 0 -1564px; }
+
+.basic16_cancel { background-position: 0 -522px; }
+.basic32_cancel { background-position: 0 -1044px; }
+.basic16_remove { background-position: 0 -482px; }
+.basic32_remove { background-position: 0 -964px; }
+.basic16_close { background-position: 0 -322px; }
+.basic32_close { background-position: 0 -644px; }
+.basic16_open { background-position: 0 -342px; }
+.basic32_open { background-position: 0 -684px; }
+.basic16_invite { background-position: 0 -440px; }
+.basic32_invite { background-position: 0 -884px; }
+
+html.Q_scanning { background: transparent !important; transform: translateZ(0); }
+html.Q_scanning body > * { display: none; transition: all 1s; }
+html > .Q_scanning_close, html > .Q_scanning_code {
+	display: none;
+}
+html.Q_scanning body > .Q_scanning_close {
+	display: block;
+	opacity: 1;
+}
+html.Q_scanning body > .Q_scanning_code {
+	display: block;
+	opacity: 1;
+	margin: auto;
+	position: absolute;
+	top: 0; left: 0; bottom: 0; right: 0;
+}
+.Q_scanning_close {
+	display: none;
+	position: absolute;
+	right: 32px;
+	top: 32px;
+	width: 32px;
+	height: 32px;
+	z-index: 9999;
+	cursor: pointer;
+}
+.Q_scanning_close::before, .Q_scanning_close::after {
+	position: absolute;
+	left: 15px;
+	content: ' ';
+	height: 33px;
+	width: 2px;
+	background-color: #000;
+	box-shadow: 0 0 12px 1px #fff;
+}
+.Q_scanning_close::before {
+	transform: rotate(45deg);
+}
+.Q_scanning_close::after {
+	transform: rotate(-45deg);
+}
+.Q_dialog_content {
+	width: 100%;
+	height: 100%;
+	min-width: 320px;
+	box-sizing: border-box;
+	position: relative;
+	min-height: 50px;
+}
+.Q_notMobile .Q_dialog_content {
+	min-width: 350px;
+}
+.Q_scanning.Q_fullscreen_dialog .Q_dialog_content {
+	overflow: hidden;
+}
+@keyframes Q_newsflash {
+	0%   { background-color: rgba(255, 215, 0, 0.5); }
+	100% { background-color: rgba(255, 215, 0, 0.1); }
+}
+.Q_newsflash {
+	background-image:none !important;
+	animation: Q_newsflash 1s ease-in-out;
+}
+
+@-webkit-keyframes Q_errorFlash {
+	0%   { background-color: red; }
+	100% { background-color: transparent; }
+}
+@keyframes Q_errorFlash {
+	0%   { background-color: red; }
+	100% { background-color: transparent; }
+}
+.Q_errorFlash {
+	background-image: none !important;
+	animation: Q_errorFlash 2s ease-in-out;
+}
+
+@-webkit-keyframes Q_live {
+	0%   { background-color: rgba(150, 150, 150, 0); }
+	50% { background-color: rgba(150, 150, 150, 0.5); }
+}
+@keyframes Q_live {
+	0%   { background-color: rgba(150, 150, 150, 0); }
+	50% { background-color: rgba(150, 150, 150, 0.5); }
+}
+.Q_live {
+	background-image:none !important;
+	animation: Q_live 2s ease-in-out infinite;
+}
+
+#notices_slot {
+	width: 100%;
+	z-index: 999999999;
+}
+#notices_slot ul:empty {
+	display: none;
+}
+#notices_slot ul li {
+	position: relative;
+	text-align: left;
+	overflow: hidden;
+	padding: 0 10px;
+}
+#notices_slot ul li[data-local] {
+	max-height: 0;
+	transition: max-height .5s ease-in-out 0s;
+}
+#notices_slot ul li.Q_common_notice {
+}
+#notices_slot ul li.Q_error_notice {
+	background-color: #ebb;
+	color: #500;
+}
+#notices_slot ul li span {
+	display: inline-block;
+	width: 100%;
+}
+#notices_slot ul .Q_hidden_notice {
+	transition: all .5s;
+	max-height: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+#notices_slot ul li.Q_show_notice {
+	transition: all .5s;
+	opacity: 1;
+	max-height: 100px;
+	display: block;
+}
+#notices_slot ul li .Q_more_notices {
+	margin-left: 5px;
+}
+#notices_slot ul li .Q_more_notices span {
+	display: inline-block;
+	width: 16px;
+	height: 16px;
+	line-height: 14px;
+	text-align: center;
+	color: #FFFFE5;
+	font-weight: bold;
+	background: url(../img/ui/circle_trans_small.png) no-repeat;
+}
+#notices_slot ul li .Q_close {
+	position: absolute;
+	right: 0;
+	top: 0;
+	display: block;
+	width: 26px;
+	height: 26px;
+	cursor: pointer;
+	background: url(../img/icons/basic16.png) 5px -477px no-repeat;
+	-webkit-tap-highlight-color: rgba(255, 255, 255, 0);
+}
+#notices_slot ul li a:link,
+#notices_slot ul li a:visited,
+#notices_slot ul li a:hover,
+#notices_slot ul li a:active {
+	color: #00f;
+}
+
+.Q_appear {
+	transition: transform .25s!important;
+	transform: scale(1)!important;
+}
+.Q_disappear {
+	transition: transform .25s!important;
+	transform: scale(0)!important;
+}
+.Q_touchlabel {
+	position: absolute;
+	z-index: 99999999;
+	left: 0;
+	top: 0;
+	padding: 10px;
+	white-space: nowrap;
+	background: rgba(0, 0, 0, 0.8);
+	color: white;
+	border-radius: 5px;
+	box-shadow: 0 0 0 rgba(50, 50, 50, 0.4);
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 1s linear;
+}
+.Q_touchlabel_show {
+	opacity: 1;
+	transition: opacity 0.01s linear;
+	z-index:9999999999;
+}
+.Q_notTouchscreen .Q_touchlabel {
+	transition: opacity 0.01s linear;
+}
+.Q_disabled {
+	background-color: rgba(120, 120, 120, 0.5);
+	background-image: linear-gradient(45deg, #c2c2c2 25%, #ebebeb 25%, #ebebeb 50%, #c2c2c2 50%, #c2c2c2 75%, #ebebeb 75%, #ebebeb 100%);
+	background-size: 5.66px 5.66px;
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=80)";
+	filter: alpha(opacity=80) blur(1px);
+	-moz-opacity: 0.5;
+	opacity: 0.5;
+	pointer-events: none;
+	transition: all 300ms linear;
+}
+.Q_disabled_2 {
+	-ms-filter: "progid:DXImageTransform.Microsoft.Alpha(Opacity=30)";
+	-moz-opacity: 0.3;
+	opacity: 0.3;
+	filter: grayscale(100%);
+	pointer-events: none;
+	transition: all 300ms linear;
+}
+
+html body .Q_columns_containsExpanded {
+	overflow: visible !important;
+	z-index: 100 !important;
+}
+.Q_errors #content {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+}
+.Q_errors #content span.url {
+	padding: 0 1em;
+}
+#content.Q_columns_containsExpanded {
+	padding: 0;
+}
+.Q_columns_siblingContainsExpanded:not(#notices_slot):not(.Q_contextual):not(.Q_floatAboveDocument):not(.Q_mask):not(.Q_overlay):not(.Q_dialog) {
+	z-index: 0 !important;
+}
+#status_background {
+	width: 100%;
+	position: fixed;
+}
+.Q_statusBarOverlapped #status_background { display: block !important; }
+.Q_notCordova #status_background { display: none; }
+
+input[type=file] {
+	zoom: 1.5;
+	line-height: 40px;
+}
+
+input[type=text],
+input[type=password] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+}
+
+html.Q_dialog_shown #page,
+html.Q_dialog_shown #dashboard_slot {
+	filter:blur(5px);
+	-o-filter:blur(5px);
+	-ms-filter:blur(5px);
+	-moz-filter:blur(5px);
+	-webkit-filter:blur(5px);
+}
+
+@keyframes Q_showAfterLoaded {
+	0% {
+		opacity: 0;
+	}
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes Q_placeholder_shimmer {
+    0%{
+        background-position: -468px 0
+    }
+    100%{
+        background-position: 468px 0
+    }
+}
+
+.Q_placeholder_shimmer {
+	background: rgba(247, 247, 247, 0.75);
+}
+
+.Q_placeholder_shimmer * {
+    animation-duration: 1s;
+    animation-fill-mode: forwards;
+    animation-iteration-count: infinite;
+    animation-name: Q_placeholder_shimmer;
+    animation-timing-function: linear;
+    background: rgba(247, 247, 247, 0.75);
+    background: linear-gradient(to right, #e6e6e6 5%, #cccccc 25%, #e6e6e6 35%);
+    background-size: 1000px 100%;
+    position: relative;
+}
+
+.Q_hint {
+	border-radius: 50%;
+	box-shadow: 0 0 50px rgba(0, 0, 0, 0.35);
+	text-align: center;
+	z-index: 1000000002;
+}
+.Q_hint_tooltip {
+	border-radius: 10px;
+	background: rgba(225, 225, 225, 0.8);
+	border: solid 1px rgba(150, 150, 150, 0.5);
+	color: black;
+	font-weight: bold;
+	padding: 10px;
+	text-align: center;
+	box-shadow: 2px 2px 10px rgba(0, 0, 0, .5);
+	backdrop-filter: blur(2px);
+	-webkit-backdrop-filter: blur(2px);
+	z-index: 1000000001;
+}
+
+.Q_thought {
+	display:flex;
+	background-color:#fff;
+	padding:20px;
+	border-radius:30px;
+	min-width:40px;
+	max-width:220px;
+	min-height:40px;
+	margin:20px;
+	position:relative;
+	align-items:center;
+	justify-content:center;
+	text-align:center;
+  }
+  .Q_thought:before,
+  .Q_thought:after {
+	content:"";
+	background-color:#fff;
+	border-radius:50%;
+	display:block;
+	position:absolute;
+	z-index:-1;
+  }
+  .Q_thought:before {
+	width:44px;
+	height:44px;
+	top:-12px;
+	left:28px;
+	box-shadow:-50px 30px 0 -12px #fff;
+  }
+  .Q_thought:after {
+	bottom:-10px;
+	right:26px;
+	width:30px;
+	height:30px;
+	box-shadow:40px -34px 0 0 #fff,
+			   -28px -6px 0 -2px #fff,
+			   -24px 17px 0 -6px #fff,
+			   -5px 25px 0 -10px #fff;
+	
+  }
+
+.Q_shadow_round {
+    position:relative;
+    box-shadow: 0 2px 1px rgba(0, 0, 0, 0.1);
+	z-index: 0;
+}
+.Q_shadow_round:after{
+    content:"";
+    position:absolute;
+    z-index:-1;
+    box-shadow:0 0 40px rgba(0,0,0,0.8);
+    bottom:0;
+    left:10%;
+    right:10%;
+    width:80%;
+    height:50%;
+    border-radius:100%;
+}
+
+html.Q_layout_widebar {
+
+}
+
+html.Q_layout_sidebar {
+	height: 100%;
+}
+/* <Q tabs> */
+.Q_tabbing_tabs {
+	white-space: nowrap;
+	text-align: center;
+}
+.Q_tabbing_tabs .Q_tabbing_tab {
+	display: inline-block;
+	white-space: nowrap;
+	padding: 3px;
+	font-size: 14px;
+	cursor: pointer;
+	margin: 0 5px 0 0;
+}
+.Q_tabbing_tabs .Q_tabbing_tab:last-of-type {
+	margin-right: 0;
+}
+.Q_tabbing_tabs .Q_tabbing_tab.Q_current {
+	border: 1px solid #777;
+	border-bottom: solid 1px transparent;
+	border-top-left-radius: 5px;
+	border-top-right-radius: 5px;
+	background-color: #fff;
+	color: #000;
+}
+.Q_tabbing_container {
+	margin-top: -1px;
+	border: 1px solid #777;
+	background: white;
+}
+.Q_tabbing_container .Q_tabbing_item.Q_tabs_switchingTo,
+.Q_tabbing_container .Q_tabbing_item.Q_current:not(.Q_tabs_switchingFrom) {
+	background-color: white;
+}
+.Q_tabbing_container .Q_tabbing_item {
+	display: none;
+	padding: 10px 5px 5px 5px;
+}
+.Q_tabbing_container > .Q_tabbing_item.Q_current {
+	display: block;
+}
+/* </Q tabs> */
+
+.Q_dialog_imagepicker .Q_viewport {
+	display: block;
+}
+body.Q_columns_animationFX { 
+	margin: 0;
+	transform: scale(1);
+}
+.Q_dialogs_animationFX .Q_overlay {
+	transform: scale(0.8);
+	opacity: 0.5;
+	min-width: 200px;
+	transition: transform 200ms, opacity 200ms;
+}
+.Q_dialogs_animationFX .Q_overlay.Q_overlay_open {
+	opacity: 1;
+	transform: scale(1);
+}
+
+@media (prefers-color-scheme: dark) {
+	.Q_overlay, .Q_fullscreen_dialog {
+		background: url(../img/bg/overlay-dark.png);
+		color: white;
+		fill: white;
+	}
+	.Q_overlay a, .Q_fullscreen_dialog a {
+		color: white;
+		fill: white;
+	}
+	.Q_overlay select,
+	.Q_overlay input,
+	.Q_overlay textarea,
+	.Q_fullscreen_dialog select,
+	.Q_fullscreen_dialog input,
+	.Q_fullscreen_dialog textarea {
+		color: white;
+		background-color: rgba(0, 0, 0, 0.2);
+		border: solid 1px rgba(255, 255, 255, 0.2);
+	}
+	.Q_overlay input::placeholder,
+	.Q_fullscreen_dialog input::placeholder,
+	.Q_overlay textarea::placeholder,
+	.Q_fullscreen_dialog textarea::placeholder {
+		color: rgba(255, 255, 255, 0.5);
+	}
+}

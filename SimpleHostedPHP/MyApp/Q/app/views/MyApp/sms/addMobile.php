@@ -1,0 +1,1 @@
+<?php echo Q::interpolate($addMobile['ClickHere'], array(Q_Uri::url($link))) ?>

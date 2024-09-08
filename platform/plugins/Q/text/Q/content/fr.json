@@ -1,0 +1,158 @@
+{
+    "request": {
+        "error": "Erreur {{status}} lors de la requête",
+        "canceled": "Demande annulée",
+        "500": "Erreur interne du serveur",
+        "404": "Non trouvé : {{url}}",
+        "501": "Demande interrompue",
+        "401": "Non autorisé",
+        "403": "Interdit"
+    },
+    "nonce": {
+        "sameDomain": "La session a expiré. Actualisez la page et réessayez.",
+        "otherDomain": "Requête interdomaine bloquée vers un domaine étranger à {{baseUrl}}"
+    },
+    "words": {
+        "tap": "touche",
+        "click": "Cliquez sur",
+        "yes": "Oui",
+        "no": "non",
+        "Tap": "Touche",
+        "Click": "Cliquez sur",
+        "Yes": "Oui",
+        "No": "Non",
+        "OK": "D&#39;ACCORD",
+        "Alert": "Alerte",
+        "Confirm": "Confirmation",
+        "Prompt": "Entrez du texte"
+    },
+    "months": {
+        "1": "janvier",
+        "2": "février",
+        "3": "Mars",
+        "4": "avril",
+        "5": "Peut",
+        "6": "juin",
+        "7": "juillet",
+        "8": "août",
+        "9": "septembre",
+        "10": "octobre",
+        "11": "novembre",
+        "12": "décembre"
+    },
+    "durations": {
+        "second": "seconde",
+        "seconds": "secondes",
+        "minute": "minute",
+        "minutes": "minutes",
+        "hour": "les heures",
+        "day": "journée",
+        "days": "jours",
+        "week": "la semaine",
+        "weeks": "semaines",
+        "month": "mois",
+        "months": "mois",
+        "year": "an",
+        "years": "ans",
+        "decade": "décennie",
+        "decades": "décennies",
+        "century": "siècle",
+        "centuries": "des siècles"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Veuillez autoriser l&#39;accès à votre microphone",
+        "record": "Enregistrement",
+        "recording": "Enregistrement",
+        "remains": "restes",
+        "maximum": "maximum",
+        "playing": "En jouant",
+        "recorded": "Enregistré",
+        "clip": "agrafe",
+        "discard": "Jeter",
+        "encoding": "Codage"
+    },
+    "video": {
+        "clip": "agrafe",
+        "errorNoSource": "Aucune source vidéo",
+        "SkipAfter": "Passer après",
+        "Skip": "Sauter"
+    },
+    "pdf": {
+        "clip": "agrafe",
+        "errorNoSource": "Pas de source pdf"
+    },
+    "clip": {
+        "SetClipStart": "Définir le début du clip",
+        "ClipStart": "Début du clip",
+        "SetClipEnd": "Définir la fin du clip",
+        "ClipEnd": "Fin du clip",
+        "StartMoreEnd": "La position de début ne peut pas être supérieure à la position de fin",
+        "EndLessStart": "La position de fin ne peut pas être inférieure à la position de début",
+        "WhichInvalid": "Argument &#39;qui&#39; invalide"
+    },
+    "alert": {
+        "title": "Avis"
+    },
+    "confirm": {
+        "title": "Confirmer",
+        "ok": "Oui",
+        "cancel": "Non"
+    },
+    "prompt": {
+        "title": "Entrez du texte",
+        "ok": "D&#39;ACCORD"
+    },
+    "tabs": {
+        "more": "Suite",
+        "Menu": "Menu"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Erreur lors de la lecture du fichier",
+        "errorType": "Désolé, mais ce type de fichier n&#39;est pas pris en charge",
+        "cameraCommands": {
+            "prompt": "Qu&#39;est-ce que tu aimerais faire?",
+            "photo": "Prendre une nouvelle photo",
+            "library": "Sélectionnez dans la bibliothèque"
+        },
+        "tooSmall": "Veuillez choisir une image plus grande.",
+        "cropping": {
+            "title": "Ajuster la taille et la position",
+            "touchscreen": "Utilisez vos doigts pour zoomer et faire glisser",
+            "notTouchscreen": "Utilisez votre souris et votre molette pour zoomer et faire glisser"
+        }
+    },
+    "timestamp": {
+        "lastNight": "la nuit dernière",
+        "lastEvening": "dernier soir",
+        "yesterday": "hier",
+        "thisMorning": "ce matin",
+        "today": "aujourd&#39;hui",
+        "tonight": "ce soir",
+        "tomorrowMorning": "demain matin",
+        "tomorrow": "demain",
+        "hoursAgo": "il y a {{h}} heures",
+        "hourAgo": "Il y a {{h}} heure",
+        "minuteAgo": "il y a {{m}} minute",
+        "minutesAgo": "il y a {{m}} minutes",
+        "secondAgo": "il y a {{s}} seconde",
+        "secondsAgo": "Il y a {{s}} secondes",
+        "fewSecondsAgo": "il y a quelques instants",
+        "rightNow": "à l&#39;heure actuelle",
+        "inSecond": "en {{s}} seconde",
+        "inSeconds": "en {{s}} secondes",
+        "inMinute": "dans {{m}} minutes",
+        "inMinutes": "dans {{m}} minutes",
+        "inHour": "dans {{h}} heure",
+        "inHours": "dans {{h}} heures",
+        "inUnderMinute": "en moins d&#39;1 minute"
+    },
+    "browser": {
+        "insecureContext": "Vous devez naviguer dans un contexte sécurisé pour que cela fonctionne"
+    },
+    "scan": {
+        "QR": "Scannez les codes QR"
+    },
+    "input": {
+        "Placeholder": "Commencer à écrire..."
+    }
+}

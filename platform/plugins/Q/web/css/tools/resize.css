@@ -1,0 +1,25 @@
+.Q_resize_tool {
+    pointer-events: all;
+}
+.Q_resize_resize-handler {
+    position: absolute;
+    bottom: 0;
+    cursor: nesw-resize;
+    width: 10%;
+    height: 10%;
+    z-index: 3;
+}
+
+/*
+.Q_resize_snapped_top{
+    top: 0 !important;
+}
+.Q_resize_snapped_left{
+    left: 0 !important;
+}
+.Q_resize_snapped_right{
+    right: 0 !important;
+}
+.Q_resize_snapped_bottom{
+    bottom: 0 !important;
+}*/

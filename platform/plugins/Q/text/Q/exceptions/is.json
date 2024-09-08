@@ -1,0 +1,5 @@
+{
+    "MissingFile": "vantar skrá {{filename}}",
+    "InvalidLanguage": "ógilt tungumál {{language}}",
+    "RequiredField": "{{field}} þarf"
+}

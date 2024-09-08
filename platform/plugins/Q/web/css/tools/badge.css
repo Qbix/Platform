@@ -1,0 +1,28 @@
+.Q_badge {
+	position: absolute;
+	content: "\00a0";
+	background-repeat: no-repeat;
+	background-size: contain;
+	text-align: center;
+	pointer-events: none;
+	overflow: hidden;
+	display: none;
+}
+.Q_badge img {
+	display: inline-block;
+	width: 100%;
+	vertical-align: unset;
+}
+.Q_badge_parent_overlapped {
+	overflow: clip !important;
+	overflow-clip-margin: 25px;
+}
+.Q_badge_positioned {
+	display: block;
+}
+
+/* since Safari doesn't support the above, at least apply it to dashboard */
+
+#dashboard_slot .Q_badge_parent_overlapped {
+	overflow: visible !important;
+}

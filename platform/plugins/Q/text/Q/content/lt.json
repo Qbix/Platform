@@ -1,0 +1,158 @@
+{
+    "request": {
+        "error": "Klaida {{status}} teikiant užklausą",
+        "canceled": "Užklausa atšaukta",
+        "500": "Vidinė serverio klaida",
+        "404": "Nerasta: {{url}}",
+        "501": "Prašymas nutrauktas",
+        "401": "Neleistina",
+        "403": "Draudžiama"
+    },
+    "nonce": {
+        "sameDomain": "Sesija pasibaigė. Atnaujinkite puslapį ir bandykite dar kartą.",
+        "otherDomain": "Užblokuota kelių domenų užklausa užsienio domenui adresu {{baseUrl}}"
+    },
+    "words": {
+        "tap": "bakstelėkite",
+        "click": "spustelėkite",
+        "yes": "taip",
+        "no": "ne",
+        "Tap": "Palieskite",
+        "Click": "Spustelėkite",
+        "Yes": "Taip",
+        "No": "Nr",
+        "OK": "Gerai",
+        "Alert": "Budrus",
+        "Confirm": "Patvirtinimas",
+        "Prompt": "Įveskite tekstą"
+    },
+    "months": {
+        "1": "sausio mėn",
+        "2": "vasario mėn",
+        "3": "Kovas",
+        "4": "Balandis",
+        "5": "Gegužė",
+        "6": "birželio mėn",
+        "7": "liepos mėn",
+        "8": "Rugpjūtis",
+        "9": "rugsėjis",
+        "10": "Spalio mėn",
+        "11": "lapkritis",
+        "12": "gruodį"
+    },
+    "durations": {
+        "second": "antra",
+        "seconds": "sekundžių",
+        "minute": "minutė",
+        "minutes": "minučių",
+        "hour": "valandų",
+        "day": "dieną",
+        "days": "dienų",
+        "week": "savaitę",
+        "weeks": "savaites",
+        "month": "mėnuo",
+        "months": "mėnesių",
+        "year": "metų",
+        "years": "metų",
+        "decade": "dešimtmetis",
+        "decades": "dešimtmečius",
+        "century": "amžiaus",
+        "centuries": "šimtmečius"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Leiskite pasiekti mikrofoną",
+        "record": "Įrašas",
+        "recording": "Įrašymas",
+        "remains": "lieka",
+        "maximum": "maksimalus",
+        "playing": "Žaidžia",
+        "recorded": "Įrašyta",
+        "clip": "klipas",
+        "discard": "Išmesti",
+        "encoding": "Kodavimas"
+    },
+    "video": {
+        "clip": "klipas",
+        "errorNoSource": "Nėra vaizdo šaltinio",
+        "SkipAfter": "Praleisti po",
+        "Skip": "Praleisti"
+    },
+    "pdf": {
+        "clip": "klipas",
+        "errorNoSource": "Nėra pdf šaltinio"
+    },
+    "clip": {
+        "SetClipStart": "Nustatyti Clip Start",
+        "ClipStart": "Klipo pradžia",
+        "SetClipEnd": "Nustatyti klipo pabaigą",
+        "ClipEnd": "Klipo pabaiga",
+        "StartMoreEnd": "Pradinė padėtis negali būti didesnė už galutinę padėtį",
+        "EndLessStart": "Galutinė padėtis negali būti mažesnė už pradinę padėtį",
+        "WhichInvalid": "Argumentas „kuris“ negalioja"
+    },
+    "alert": {
+        "title": "Pastebėti"
+    },
+    "confirm": {
+        "title": "Patvirtinti",
+        "ok": "Taip",
+        "cancel": "Nr"
+    },
+    "prompt": {
+        "title": "Įveskite tekstą",
+        "ok": "Gerai"
+    },
+    "tabs": {
+        "more": "daugiau",
+        "Menu": "Meniu"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Klaida skaitant failą",
+        "errorType": "Atsiprašome, bet šis failo tipas nepalaikomas",
+        "cameraCommands": {
+            "prompt": "Ką tu norėtum veikti?",
+            "photo": "Padaryti naują nuotrauką",
+            "library": "Pasirinkite iš bibliotekos"
+        },
+        "tooSmall": "Pasirinkite didesnį vaizdą.",
+        "cropping": {
+            "title": "Sureguliuokite dydį ir padėtį",
+            "touchscreen": "Pirštais priartinkite ir vilkite",
+            "notTouchscreen": "Naudokite pelę ir ratuką, kad padidintumėte mastelį ir vilkite"
+        }
+    },
+    "timestamp": {
+        "lastNight": "praeita naktis",
+        "lastEvening": "praėjusią išvakarę",
+        "yesterday": "vakar",
+        "thisMorning": "šį rytą",
+        "today": "šiandien",
+        "tonight": "šį vakarą",
+        "tomorrowMorning": "tomas rytas",
+        "tomorrow": "rytoj",
+        "hoursAgo": "Prieš {{h}} val",
+        "hourAgo": "Prieš {{h}} valandą",
+        "minuteAgo": "Prieš {{m}} minutę",
+        "minutesAgo": "Prieš {{m}} min",
+        "secondAgo": "Prieš {{s}} sekundę",
+        "secondsAgo": "prieš {{s}} sek",
+        "fewSecondsAgo": "prieš sekundes",
+        "rightNow": "dabar",
+        "inSecond": "per {{s}} sekundę",
+        "inSeconds": "per {{s}} sek",
+        "inMinute": "per {{m}} minutę",
+        "inMinutes": "per {{m}} min",
+        "inHour": "per {{h}} val",
+        "inHours": "per {{h}} val",
+        "inUnderMinute": "mažiau nei per 1 minutę"
+    },
+    "browser": {
+        "insecureContext": "Kad tai veiktų, turite naršyti saugiame kontekste"
+    },
+    "scan": {
+        "QR": "Nuskaitykite QR kodus"
+    },
+    "input": {
+        "Placeholder": "Pradėti rašyti..."
+    }
+}

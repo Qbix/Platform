@@ -1,0 +1,160 @@
+{
+    "request": {
+        "error": "Chyba {{status}} během požadavku",
+        "canceled": "Žádost byla zrušena",
+        "500": "Interní chyba serveru",
+        "404": "Nenalezeno: {{url}}",
+        "501": "Žádost byla přerušena",
+        "401": "Neoprávněný",
+        "403": "Zakázáno"
+    },
+    "nonce": {
+        "sameDomain": "Relace vypršela. Obnovte stránku a zkuste to znovu.",
+        "otherDomain": "Zablokován požadavek z více domén na zahraniční doménu na adrese {{baseUrl}}"
+    },
+    "words": {
+        "tap": "dotek",
+        "click": "klikněte",
+        "yes": "Ano",
+        "no": "Ne",
+        "Tap": "Dotek",
+        "Click": "Klikněte",
+        "Yes": "Ano",
+        "No": "Ne",
+        "OK": "OK",
+        "Alert": "Upozornění",
+        "Confirm": "potvrzení",
+        "Prompt": "Zadejte text"
+    },
+    "months": {
+        "1": "leden",
+        "2": "Únor",
+        "3": "březen",
+        "4": "duben",
+        "5": "Smět",
+        "6": "červen",
+        "7": "červenec",
+        "8": "srpen",
+        "9": "září",
+        "10": "říjen",
+        "11": "listopad",
+        "12": "prosinec"
+    },
+    "audio": {
+        "allowMicrophoneAccess": "Povolte přístup ke svému mikrofonu",
+        "record": "Záznam",
+        "recording": "Záznam",
+        "remains": "Zůstává",
+        "maximum": "maximum",
+        "playing": "Hraní",
+        "recorded": "Zaznamenáno",
+        "clip": "klip",
+        "orupload": "Nebo Nahrát",
+        "usethis": "Použij toto",
+        "discard": "Vyřadit",
+        "encoding": "Kódování"
+    },
+    "alert": {
+        "title": "Oznámení"
+    },
+    "confirm": {
+        "title": "Potvrdit",
+        "ok": "Ano",
+        "cancel": "Ne"
+    },
+    "prompt": {
+        "title": "Zadejte text",
+        "ok": "OK"
+    },
+    "imagepicker": {
+        "errorReadingFile": "Chyba při čtení souboru",
+        "cameraCommands": {
+            "prompt": "Co bys rád dělal?",
+            "photo": "Pořídit novou fotku",
+            "library": "Vyberte z knihovny"
+        },
+        "tooSmall": "Vyberte prosím větší obrázek.",
+        "cropping": {
+            "title": "Upravte velikost a polohu",
+            "touchscreen": "K přiblížení a přetažení použijte prsty",
+            "notTouchscreen": "Pomocí myši a kolečka můžete přibližovat a táhnout"
+        },
+        "errorType": "Omlouváme se, ale tento typ souboru není podporován"
+    },
+    "timestamp": {
+        "lastNight": "minulou noc",
+        "lastEvening": "poslední večer",
+        "yesterday": "včera",
+        "thisMorning": "dnes ráno",
+        "today": "dnes",
+        "tonight": "dnes večer",
+        "tomorrowMorning": "ráno",
+        "tomorrow": "zítra",
+        "hoursAgo": "před {{h}} hodinami",
+        "hourAgo": "před {{h}} hodinou",
+        "minuteAgo": "před {{m}} minutou",
+        "minutesAgo": "před {{m}} minutami",
+        "secondAgo": "před {{s}} sekundou",
+        "secondsAgo": "před {{s}} sekundami",
+        "fewSecondsAgo": "před sekundami",
+        "rightNow": "právě teď",
+        "inSecond": "za {{s}} sekundu",
+        "inSeconds": "za {{s}} sekund",
+        "inMinute": "za {{m}} minutu",
+        "inMinutes": "za {{m}} minut",
+        "inHour": "za {{h}} hodinu",
+        "inHours": "za {{h}} hodin",
+        "inUnderMinute": "za méně než 1 minutu"
+    },
+    "tabs": {
+        "more": "více",
+        "Menu": "Jídelní lístek"
+    },
+    "video": {
+        "clip": "klip",
+        "errorNoSource": "Žádný zdroj videa",
+        "SkipAfter": "Přeskočit za",
+        "Skip": "Přeskočit"
+    },
+    "pdf": {
+        "clip": "klip",
+        "errorNoSource": "Žádný zdroj pdf"
+    },
+    "clip": {
+        "SetClipStart": "Nastavte Spuštění klipu",
+        "ClipStart": "Start klipu",
+        "SetClipEnd": "Nastavit konec klipu",
+        "ClipEnd": "Konec klipu",
+        "StartMoreEnd": "Počáteční pozice nemůže být větší než koncová pozice",
+        "EndLessStart": "Koncová poloha nemůže být menší než počáteční poloha",
+        "WhichInvalid": "Argument &#39;který&#39; je neplatný"
+    },
+    "durations": {
+        "second": "druhý",
+        "seconds": "sekundy",
+        "minute": "minuta",
+        "minutes": "minut",
+        "hour": "hodin",
+        "day": "den",
+        "days": "dní",
+        "week": "týden",
+        "weeks": "týdnů",
+        "month": "Měsíc",
+        "months": "měsíce",
+        "year": "rok",
+        "years": "let",
+        "decade": "desetiletí",
+        "decades": "dekády",
+        "century": "století",
+        "centuries": "století"
+    },
+    "browser": {
+        "insecureContext": "Aby to fungovalo, musíte procházet v zabezpečeném kontextu"
+    },
+    "scan": {
+        "QR": "Naskenujte QR kódy"
+    },
+    "input": {
+        "Placeholder": "Začněte psát..."
+    }
+}
