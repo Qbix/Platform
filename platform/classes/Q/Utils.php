@@ -1126,6 +1126,18 @@ class Q_Utils
 			$url .= '?' . $parts['query'];
 		}
 
+		if (Q::isAssociative($header)) {
+			$temp = array();
+			foreach ($header as $k => $v) {
+				$parts = explode('-', $k);
+				$parts = array_map('strtolower', $parts);
+				$parts = array_map('ucfirst', $parts);
+				$k = implode('-', $parts);
+				$temp[] = "$k: $v";
+			}
+			$header = $temp;
+		}
+
 		// NOTE: this works for http(s) only
 		$headers = array("Host: ".$host);
         
