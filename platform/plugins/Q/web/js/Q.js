@@ -12841,7 +12841,7 @@ function _listenForVisibilityChange() {
 	var _isDocumentHidden = null;
 	Q.addEventListener(document, [visibilityChange, 'pause', 'resume', 'resign', 'active'],
 	function (event) {
-		if (event.type !== 'visibilityChange' && _isDocumentHidden === null) {
+		if (event.type.toLowerCase() !== 'visibilitychange') {
 			_isDocumentHidden = Q.isDocumentHidden(event);
 			setTimeout(function () {
 				_isDocumentHidden = null;
