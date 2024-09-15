@@ -12839,6 +12839,12 @@ function _listenForVisibilityChange() {
 		}
 	});
 	var _isDocumentHidden = null;
+	var _handleOnVisibilityChange = Q.debounce(function (event) {
+		if (_isDocumentHidden === null) {
+			_isDocumentHidden = Q.isDocumentHidden();
+		}
+		Q.onVisibilityChange.handle.call(document, !_isDocumentHidden, event);
+	}, 10);
 	Q.addEventListener(document, [visibilityChange, 'pause', 'resume', 'resign', 'active'],
 	function (event) {
 		if (event.type.toLowerCase() !== 'visibilitychange') {
@@ -12847,12 +12853,7 @@ function _listenForVisibilityChange() {
 				_isDocumentHidden = null;
 			}, 100);
 		}
-		Q.debounce(function (event) {
-			if (_isDocumentHidden === null) {
-				_isDocumentHidden = Q.isDocumentHidden();
-			}
-			Q.onVisibilityChange.handle.call(document, !_isDocumentHidden, event);
-		}, 10)(event);
+		_handleOnVisibilityChange(event);
 	}, false);
 }
 _listenForVisibilityChange();
