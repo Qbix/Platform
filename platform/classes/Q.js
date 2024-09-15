@@ -1022,10 +1022,10 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 		});
 		if (!found) {
 			if (callbackIndex instanceof Array) {
-				callbackIndex[0] && (args[callbackIndex[0]] = function _onResolve(value) {
+				(0 in callbackIndex) && (args[callbackIndex[0]] = function _onResolve(value) {
 					return resolve(value);
 				});
-				callbackIndex[1] && (args[callbackIndex[1]] = function _onReject(value) {
+				(1 in callbackIndex) && (args[callbackIndex[1]] = function _onReject(value) {
 					return reject(value);
 				});
 			} else {
