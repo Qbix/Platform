@@ -15236,6 +15236,7 @@ Q.Dialogs.push.options = {
  * @param {String} message The only required parameter, this specifies text of the alert.
  * @param {Object} [options] An optional hash of options for Q.Dialogs.push and also:
  *   @param {String} [options.title="Alert"] Optional parameter to override alert dialog title. Defaults to 'Alert'.
+ *   @param {String} [options.className] additional class name added to dialog element
  *   @param {Q.Event} [options.onClose] Optional, occurs when dialog is closed
 * @return {HTMLElement} The HTML element of the dialog that was just pushed.
  */
@@ -15248,7 +15249,7 @@ Q.alert = function(message, options) {
 	return Q.Dialogs.push(Q.extend({
 		'title': options.title,
 		'content': '<div class="Q_messagebox Q_big_prompt"><p>' + message + '</p></div>',
-		'className': 'Q_alert',
+		'className': 'Q_alert' + (options.className ? ' ' + options.className : ''),
 		'onClose': options.onClose || undefined,
 		'fullscreen': false,
 		'hidePrevious': true
@@ -15276,6 +15277,7 @@ Q.extend(Q.alert.options, Q.text.Q.alert);
  * @param {String} [options.title='Confirm'] to override confirm dialog title.
  * @param {String} [options.ok='Yes'] to override confirm dialog 'Yes' button label, e.g. 'OK'.
  * @param {String} [options.cancel='No'] to override confirm dialog 'No' button label, e.g. 'Cancel'.
+ * @param {String} [options.className] additional class name added to dialog element
  * @param {boolean} [options.noClose=true] set to false to show a close button
  * @param {Q.Event} [options.onClose] Optional, occurs when dialog is closed
 * @return {HTMLElement} The HTML element of the dialog that was just pushed.
@@ -15292,7 +15294,7 @@ Q.confirm = function(message, callback, options) {
 				$('<button class="Q_button" />').html(o.cancel)
 			)
 		),
-		'className': 'Q_confirm',
+		'className': 'Q_confirm' + (options.className ? ' ' + options.className : ''),
 		'noClose': o.noClose,
 		'onClose': {'Q.confirm': function() {
 			if (!buttonClicked) Q.handle(callback, this, [null]);
@@ -15369,7 +15371,7 @@ Q.prompt = function(message, callback, options) {
 	o.autocomplete && (attr.autocomplete = o.autocomplete);
 	o.type && (attr.type = o.type);
 
-	options.className = 'Q_prompt ' + (options.className || '');
+	options.className = 'Q_prompt' + (options.className ? ' ' + options.className : '');
 	var dialog = Q.Dialogs.push(Q.extend({
 		'title': o.title,
 		'content': $('<div class="Q_messagebox Q_big_prompt" />').append(
