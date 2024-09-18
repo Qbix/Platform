@@ -1142,12 +1142,15 @@ class Q_Utils
 		$headers = array("Host: ".$host);
         
         $found = false;
-        foreach ($header as $h) {
-            if (Q::startsWith($h, 'Content-Type:') && $h == 'Content-Type: multipart/form-data') {
-                $found = true;
-                break;
-            }
-        }
+        if (is_array($header)) {
+			foreach ($header as $h) {
+				if (Q::startsWith($h, 'Content-Type:') && $h == 'Content-Type: multipart/form-data') {
+					$found = true;
+					break;
+				}
+			}
+		}
+
         if (isset($header) and is_array($header) and $found) {
             // let curl build query
             $dataContent = $data;
