@@ -1795,7 +1795,7 @@ class Q_Utils
 			}
 			if (is_dir($link)) {
 				rmdir($link);
-			} else if (is_link($link)) {
+			} else {
 				unlink($link);
 			}
 		}
