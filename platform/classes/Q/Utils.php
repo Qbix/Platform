@@ -1665,8 +1665,7 @@ class Q_Utils
 		if (strpos($path, "../") === false
 		and strpos($path, "..".DS) === false) {
 			foreach ($paths as $p) {
-				$len = strlen($p);
-				if (strncmp($path, $p, $len) === 0) {
+				if (Q::startsWith(str_replace('\\', '/', $path), str_replace('\\', '/', $p))) {
 					// we can write to this path
 					if (!file_exists($path)) {
 						$mask = is_string($mkdirIfMissing)
