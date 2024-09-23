@@ -1142,12 +1142,15 @@ class Q_Utils
 		$headers = array("Host: ".$host);
         
         $found = false;
-        foreach ($header as $h) {
-            if (Q::startsWith($h, 'Content-Type:') && $h == 'Content-Type: multipart/form-data') {
-                $found = true;
-                break;
-            }
-        }
+        if (is_array($header)) {
+			foreach ($header as $h) {
+				if (Q::startsWith($h, 'Content-Type:') && $h == 'Content-Type: multipart/form-data') {
+					$found = true;
+					break;
+				}
+			}
+		}
+
         if (isset($header) and is_array($header) and $found) {
             // let curl build query
             $dataContent = $data;
@@ -1662,8 +1665,7 @@ class Q_Utils
 		if (strpos($path, "../") === false
 		and strpos($path, "..".DS) === false) {
 			foreach ($paths as $p) {
-				$len = strlen($p);
-				if (strncmp($path, $p, $len) === 0) {
+				if (Q::startsWith(str_replace('\\', '/', $path), str_replace('\\', '/', $p))) {
 					// we can write to this path
 					if (!file_exists($path)) {
 						$mask = is_string($mkdirIfMissing)
