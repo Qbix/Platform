@@ -46,7 +46,7 @@ class Q_Uri
 		
 		if (is_string($source)) {
 			if (Q_Valid::url($source)) {
-				if ($source === self::serviceWorkerURL()) {
+				if ($source === Q_Request::serviceWorkerURL()) {
 					return false;
 				}
 				return self::fromUrl($source, $route);
