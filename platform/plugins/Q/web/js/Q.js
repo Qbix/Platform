@@ -15294,7 +15294,7 @@ Q.confirm = function(message, callback, options) {
 				$('<button class="Q_button" />').html(o.cancel)
 			)
 		),
-		'className': 'Q_confirm' + (options.className ? ' ' + options.className : ''),
+		'className': 'Q_confirm' + (o.className ? ' ' + o.className : ''),
 		'noClose': o.noClose,
 		'onClose': {'Q.confirm': function() {
 			if (!buttonClicked) Q.handle(callback, this, [null]);
@@ -15371,7 +15371,7 @@ Q.prompt = function(message, callback, options) {
 	o.autocomplete && (attr.autocomplete = o.autocomplete);
 	o.type && (attr.type = o.type);
 
-	options.className = 'Q_prompt' + (options.className ? ' ' + options.className : '');
+	options.className = 'Q_prompt' + (o.className ? ' ' + o.className : '');
 	var dialog = Q.Dialogs.push(Q.extend({
 		'title': o.title,
 		'content': $('<div class="Q_messagebox Q_big_prompt" />').append(
