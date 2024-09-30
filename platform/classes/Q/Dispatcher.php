@@ -141,6 +141,14 @@ class Q_Dispatcher
 			$check = array('accessible');
 		}
 
+		// if the Q service worker is requested, generate and serve it
+		if (Q_Request::isServiceWorker()) {
+			Q::event('Q/serviceWorker/response');
+			self::result("Service Worker served");
+			self::$served = 'serviceWorker';
+			return true;
+		}
+
 		if (isset($uri)) {
 			if (in_array('accessible', $check)) {
 				if (! Q_Uri::url($uri)) {
@@ -198,13 +206,6 @@ class Q_Dispatcher
 		
 		Q_Text::setLanguageFromRequest();
 
-		// if the Q service worker is requested, generate and serve it
-		if (Q_Request::isServiceWorker()) {
-			Q::event('Q/serviceWorker/response');
-			self::result("Service Worker served");
-			self::$served = 'serviceWorker';
-			return true;
-		}
 		Q_Request::mergeCookieJS();
 
 		// potentially redirect to a static file
