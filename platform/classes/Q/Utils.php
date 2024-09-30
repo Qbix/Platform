@@ -1791,13 +1791,11 @@ class Q_Utils
 			return;
 		}
 
-		if (file_exists($link)) {
+		if (is_link($link)) {
 			if ($skipIfExists) {
 				return false;
 			}
-			if (is_dir($link)) {
-				rmdir($link);
-			} else if (is_link($link)) {
+			if (!rmdir($link)) {
 				unlink($link);
 			}
 		}
