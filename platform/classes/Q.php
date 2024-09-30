@@ -763,6 +763,10 @@ class Q
 						}
 					}
 				}
+				if (!class_exists($className)
+				and ($aliasName = Q_Config::get('Q', 'classAliases', $className, null))) {
+					class_alias($className, $aliasName);
+				}
 			} catch (Q_Exception_MissingFile $e) {
 				// the file doesn't exist
 				// and you will get an error if you try to use the class
