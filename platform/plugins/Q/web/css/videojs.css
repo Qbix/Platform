@@ -385,13 +385,13 @@
     height: 0;
 }
 
-/*.video-js.vjs-16-9 {
+.video-js.vjs-16-9 {
     padding-top: 56.25%;
 }
 
 .video-js.vjs-4-3 {
-    padding-top: 75%;
-}*/
+    padding-top: 56.25%;
+}
 
 .video-js.vjs-fill {
     width: 100%;
