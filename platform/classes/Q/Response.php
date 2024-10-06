@@ -585,6 +585,40 @@ class Q_Response
 	}
 
 	/**
+	 * Sets some common metas like "title", "description", etc
+	 * @method setCommonMetas
+	 * @static
+	 * @param {array} $metas
+	 * @param {string} [$metas.title] Title to display in the summary
+	 * @param {string} [$metas.description] Description to display for summary
+	 * @param {string} [$metas.keywords] Keywords for indexing
+	 * @param {string} [$metas.image] The image to use for the summary
+	 * @param {string} [$metas.url] The canonical URL of the page
+	 * @param {string} [$metas.card] Used by Twitter, Telegram etc, defaults to "summary_large_image"
+	 */
+	static function setCommonMetas($metas)
+	{
+		foreach (array(
+			'title', 'description', 'keywords', 'image', 'url'
+		) as $k) {
+			if (!isset($metas[$k])) {
+				continue;
+			}
+			$k = $metas[$k];
+			$arr = array();
+			if ($k === 'url') {
+				Q_Response::addLink('canonical', $v);
+			} else {
+				Q_Response::setMeta(array('name' => 'name', 'value' => $k, 'content' => $v));
+			}
+			Q_Response::setMeta(array('name' => 'property', 'value' => "og:$k", 'content' => $v));
+			Q_Response::setMeta(array('name' => 'property', 'value' => "twitter:$k", 'content' => $v));
+		}
+		$card = Q::ifset($metas, 'card', 'summary_large_image');
+		Q_Response::setMeta(array('name' => 'property', 'value' => 'twitter:card', 'content' => $card));
+	}
+
+	/**
 	 * Return the array of metas added so far
 	 * @method metasArray
 	 * @static
