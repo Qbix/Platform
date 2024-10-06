@@ -12,7 +12,8 @@ Q.setObject('Q.text.Q.imagepicker', {
 		title: 'Adjust size and position',
 		touchscreen: 'Use your fingers to zoom and drag',
 		notTouchscreen: 'Use your mouse & wheel to zoom and drag'
-	}
+	},
+	errorType: "Sorry, but this file type not supported"
 }, Q.getObject('Q.text.Q.imagepicker'));
 
 var qtqi = Q.text.Q.imagepicker;
