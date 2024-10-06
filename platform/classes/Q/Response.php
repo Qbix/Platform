@@ -600,11 +600,11 @@ class Q_Response
 	{
 		foreach (array(
 			'title', 'description', 'keywords', 'image', 'url'
-		) as $k => $v) {
+		) as $k) {
 			if (!isset($metas[$k])) {
 				continue;
 			}
-			$k = $metas[$k];
+			$v = $metas[$k];
 			$arr = array();
 			if ($k === 'url') {
 				Q_Response::addLink('canonical', $v);
