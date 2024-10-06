@@ -614,8 +614,10 @@ class Q_Response
 			Q_Response::setMeta(array('name' => 'property', 'value' => "og:$k", 'content' => $v));
 			Q_Response::setMeta(array('name' => 'property', 'value' => "twitter:$k", 'content' => $v));
 		}
-		$card = Q::ifset($metas, 'card', 'summary_large_image');
-		Q_Response::setMeta(array('name' => 'property', 'value' => 'twitter:card', 'content' => $card));
+		if (isset($metas['image'])) {
+			$card = Q::ifset($metas, 'card', 'summary_large_image');
+			Q_Response::setMeta(array('name' => 'property', 'value' => 'twitter:card', 'content' => $card));
+		}
 	}
 
 	/**
