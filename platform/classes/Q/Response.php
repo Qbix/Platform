@@ -600,7 +600,7 @@ class Q_Response
 	{
 		foreach (array(
 			'title', 'description', 'keywords', 'image', 'url'
-		) as $k) {
+		) as $k => $v) {
 			if (!isset($metas[$k])) {
 				continue;
 			}
