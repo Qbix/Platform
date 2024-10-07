@@ -132,8 +132,10 @@ body { position: relative; margin: 0; }
 	cursor: wait;
 }
 .Q_uploading {
+	pointer-events: none;
 	opacity: 0.5;
 	animation: Q_uploading 1s ease-in-out infinite alternate;
+	cursor: wait;
 }
 .Q_removing {
 	opacity: 0.5;
