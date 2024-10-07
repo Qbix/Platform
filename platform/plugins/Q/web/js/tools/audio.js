@@ -936,6 +936,8 @@ Q.Tool.define("Q/audio", function (options) {
 			if (this.metrics) {
 				this.metrics.stop();
 			}
+
+			this.pause();
 		}
 	}
 });
