@@ -193,7 +193,7 @@ class   Q_Translate_Google {
 			// $content = Q_Utils::multipartFormData($postFields);
 			$json = Q_Utils::post($url, $postFields, null, array(), array(
 				'Expect: 100-Continue',
-				'Content-Type: multipart/form-data'
+				'Content-Type: application/json'
 			));
 			$response = json_decode($json, true);
 			if (!$response) {
