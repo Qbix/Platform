@@ -1025,25 +1025,11 @@ class Q_Utils
 		curl_multi_setopt($mh, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
 		$handles = array();
 		foreach ($paramsArray as $k => $params) {
-			$c = count($params);
-			if ($c == 2) {
-				$params[$c++] = null;
-			}
-			if ($c == 3) {
-				$params[$c++] = null;
-			}
-			if ($c == 4) {
-				$params[$c++] = array();
-			}
-			if ($c == 5) {
-				$params[$c++] = null;
-			}
-			if ($c == 6) {
-				$params[$c++] = Q_UTILS_CONNECTION_TIMEOUT;
-			}
-			if ($c == 7) {
-				$params[$c++] = null;
-			}
+			$params = $params + array(
+				null, null, 
+				null, null, array(), 
+				null, Q_UTILS_CONNECTION_TIMEOUT, null
+			);
 			$params[] = $mh;
 			$handles[$k] = $ch = call_user_func_array(array('Q_Utils', 'request'), $params);
 			curl_multi_add_handle($mh, $ch);
@@ -1144,7 +1130,7 @@ class Q_Utils
         $found = false;
         if (is_array($header)) {
 			foreach ($header as $h) {
-				if (Q::startsWith($h, 'Content-Type:') && $h == 'Content-Type: multipart/form-data') {
+				if ($h == 'Content-Type: multipart/form-data') {
 					$found = true;
 					break;
 				}
