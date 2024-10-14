@@ -1128,18 +1128,24 @@ class Q_Utils
 		$headers = array("Host: ".$host);
         
         $found = false;
+		$h = null;
         if (is_array($header)) {
 			foreach ($header as $h) {
-				if ($h == 'Content-Type: multipart/form-data') {
+				if (Q::startsWith($h, 'Content-Type:')) {
 					$found = true;
 					break;
 				}
 			}
 		}
 
-        if (isset($header) and is_array($header) and $found) {
-            // let curl build query
-            $dataContent = $data;
+        if (isset($header) and is_array($header)
+		and $h === 'Content-Type: multipart/form-data') {
+			if (function_exists('curl_init')) {
+				// let curl build query
+				$dataContent = $data;
+			} else {
+				$dataContent = self::multipartFormData($data);
+			}
         } else {
             if (is_array($data)) {
                 $dataContent = http_build_query($data, '', '&');
@@ -1169,25 +1175,18 @@ class Q_Utils
 				if ($method === 'GET') {
 					$url = Q_Uri::fixUrl("$url?$data");
 				} else {
-					$found = false;
-					foreach ($header as $h) {
-						if (Q::startsWith($h, 'Content-Type:')) {
-							$found = true;
-							break;
-						}
-					}
 					if (!$found) {
 						$headers[] = "Content-Type: application/x-www-form-urlencoded";
 					} else if ($h === 'Content-Type: application/json') {
 						$dataContent = json_encode($data);
 					}
-					$found = false;
+					$foundContentLengthHeader = false;
 					foreach ($header as $h) {
 						if (Q::startsWith($h, 'Content-Length:')) {
-							$found = true;
+							$foundContentLengthHeader = true;
 						}
 					}
-					if (!$found) {
+					if (!$foundContentLengthHeader and is_string($dataContent)) {
 						$headers[] = "Content-Length: " . strlen($dataContent);
 					}
 				}
@@ -1221,29 +1220,21 @@ class Q_Utils
 				CURLOPT_MAXREDIRS	  => 10,	   // stop after 10 redirects
 			);
 			curl_setopt_array($ch, $curl_opts);
+			$method = strtoupper($method);
 			switch ($method) {
-				case 'POST':
-					curl_setopt_array($ch, array(
-						CURLOPT_URL => $url,
-						CURLOPT_POST => true,
-						CURLOPT_POSTFIELDS => $dataContent
-					));
-					break;
 				case 'GET':
 					// default method for cURL
 					curl_setopt($ch, CURLOPT_URL, $url);
 					break;
-				case 'PUT':
-					curl_setopt_array($ch, array(
+				default:
+					$o = ($method === 'POST')
+						? array(CURLOPT_POST => true)
+						: array(CURLOPT_CUSTOMREQUEST => $method);
+					curl_setopt_array($ch, $o + array(
 						CURLOPT_URL => $url,
-						CURLOPT_POSTFIELDS => $dataContent,
-						CURLOPT_CUSTOMREQUEST => 'PUT'
+						CURLOPT_POSTFIELDS => $dataContent
 					));
 					break;
-				case 'DELETE':
-					// not supported
-				default:
-					throw new Q_Exception("Unknown request method '$method'");
 			}
 			if (!empty($headers)) {
 				curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
@@ -1284,6 +1275,65 @@ class Q_Utils
 			}
 		}
 		return $result;
+	}
+
+	/**
+	 * Generates multipart/form-data content, for
+	 * non-curl-based calls to Q::request() variants
+	 * @method multipartFormData
+	 * @static
+	 * @param {array} $postfields
+	 * @return {string}
+	 */
+	static function multipartFormData($postfields)
+	{
+		$algos = hash_algos();
+		$hashAlgo = null;
+		foreach (array('sha1', 'md5') as $preferred) {
+			if (in_array($preferred, $algos)) {
+				$hashAlgo = $preferred;
+				break;
+			}
+		}
+		if ($hashAlgo === null) {
+			list($hashAlgo) = $algos;
+		}
+		$boundary =
+			'----------------------------' .
+			substr(hash($hashAlgo, 'cURL-php-multiple-value-same-key-support' . microtime()), 0, 12);
+		$body = array();
+		$crlf = "\r\n";
+		$fields = array();
+		foreach ($postfields as $key => $value) {
+			if (is_array($value)) {
+				foreach ($value as $v) {
+					$fields[] = array($key, $v);
+				}
+			} else {
+				$fields[] = array($key, $value);
+			}
+		}
+		foreach ($fields as $field) {
+			list($key, $value) = $field;
+			if (strpos($value, '@') === 0) {
+				preg_match('/^@(.*?)$/', $value, $matches);
+				list($dummy, $filename) = $matches;
+				$body[] = '--' . $boundary;
+				$body[] = 'Content-Disposition: form-data; name="' . $key . '"; filename="' . basename($filename) . '"';
+				$body[] = 'Content-Type: application/octet-stream';
+				$body[] = '';
+				$body[] = file_get_contents($filename);
+			} else {
+				$body[] = '--' . $boundary;
+				$body[] = 'Content-Disposition: form-data; name="' . $key . '"';
+				$body[] = '';
+				$body[] = $value;
+			}
+		}
+		$body[] = '--' . $boundary . '--';
+		$body[] = '';
+		$contentType = 'multipart/form-data; boundary=' . $boundary;
+		return join($crlf, $body);
 	}
 
 	/**

@@ -183,11 +183,18 @@ class   Q_Translate_Google {
 				return $item['value'];
 			}, $chunk);
 			print "Requesting google translation api\n";
-			$ch = curl_init('https://translation.googleapis.com/language/translate/v2?key=' . $this->apiKey);
-			$postFields = array("q" => $qArr, "source" => $fromLang, "target" => $toLang, "format" => $this->parent->options['google-format']);
-			$this->curlSetoptCustomPostfields($ch, $postFields);
-			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-			$json = curl_exec($ch);
+			$url = 'https://translation.googleapis.com/language/translate/v2?key=' . $this->apiKey;
+			$postFields = array(
+				"q" => $qArr, 
+				"source" => $fromLang, 
+				"target" => $toLang, 
+				"format" => $this->parent->options['google-format']
+			);
+			// $content = Q_Utils::multipartFormData($postFields);
+			$json = Q_Utils::post($url, $postFields, null, array(), array(
+				'Expect: 100-Continue',
+				'Content-Type: multipart/form-data'
+			));
 			$response = json_decode($json, true);
 			if (!$response) {
 				throw new Q_Exception ("Bad translation response");
@@ -204,7 +211,6 @@ class   Q_Translate_Google {
 			$count += sizeof($chunk);
 			echo "Translated " . $count . " queries of " . $toLang . "\n";
 			$translations = array_merge($translations, $response['data']['translations']);
-			curl_close($ch);
 		}
 		foreach ($in2 as $n => $d) {
 			$originalKey = $d['originalKey'];
@@ -212,64 +218,6 @@ class   Q_Translate_Google {
 			$res[$originalKey]['value'] = $translations[$n]['translatedText'];
 		}
 		return $this->revertTags($res);
-	}
-
-	private function curlSetoptCustomPostfields($ch, $postfields)
-	{
-		$algos = hash_algos();
-		$hashAlgo = null;
-		foreach (array('sha1', 'md5') as $preferred) {
-			if (in_array($preferred, $algos)) {
-				$hashAlgo = $preferred;
-				break;
-			}
-		}
-		if ($hashAlgo === null) {
-			list($hashAlgo) = $algos;
-		}
-		$boundary =
-			'----------------------------' .
-			substr(hash($hashAlgo, 'cURL-php-multiple-value-same-key-support' . microtime()), 0, 12);
-		$body = array();
-		$crlf = "\r\n";
-		$fields = array();
-		foreach ($postfields as $key => $value) {
-			if (is_array($value)) {
-				foreach ($value as $v) {
-					$fields[] = array($key, $v);
-				}
-			} else {
-				$fields[] = array($key, $value);
-			}
-		}
-		foreach ($fields as $field) {
-			list($key, $value) = $field;
-			if (strpos($value, '@') === 0) {
-				preg_match('/^@(.*?)$/', $value, $matches);
-				list($dummy, $filename) = $matches;
-				$body[] = '--' . $boundary;
-				$body[] = 'Content-Disposition: form-data; name="' . $key . '"; filename="' . basename($filename) . '"';
-				$body[] = 'Content-Type: application/octet-stream';
-				$body[] = '';
-				$body[] = file_get_contents($filename);
-			} else {
-				$body[] = '--' . $boundary;
-				$body[] = 'Content-Disposition: form-data; name="' . $key . '"';
-				$body[] = '';
-				$body[] = $value;
-			}
-		}
-		$body[] = '--' . $boundary . '--';
-		$body[] = '';
-		$contentType = 'multipart/form-data; boundary=' . $boundary;
-		$content = join($crlf, $body);
-		$contentLength = strlen($content);
-		curl_setopt($ch, CURLOPT_HTTPHEADER, array(
-			'Content-Length: ' . $contentLength,
-			'Expect: 100-continue',
-			'Content-Type: ' . $contentType,
-		));
-		curl_setopt($ch, CURLOPT_POSTFIELDS, $content);
 	}
 
 	public $apiKey;
