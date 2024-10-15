@@ -232,6 +232,11 @@ class Q_Utils
 		}
 		return implode('', $arr);
 	}
+
+	static function toSnakeCase($camelCase)
+	{
+		return strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $camelCase));
+	}
 	
 	static function explodeEscaped($delimiter, $str, $escapeChar = '\\')
 	{
@@ -1156,8 +1161,8 @@ class Q_Utils
 
 		if (is_array($header)) {
 			// try to guard against some injections
-			foreach ($header as $h) {
-				if  (preg_match("/[^._ :;.,\/\"'?!(){}[\]@<>=\-+*#$&`|~\\^%a-zA-Z0-9]/", $h)) {
+			foreach ($header as $h2) {
+				if  (preg_match("/[^._ :;.,\/\"'?!(){}[\]@<>=\-+*#$&`|~\\^%a-zA-Z0-9]/", $h2)) {
 					throw new Q_Exception_WrongType(array(
 						'field' => 'header',
 						'type' => 'valid HTTP header'
