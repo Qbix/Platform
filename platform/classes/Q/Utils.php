@@ -1182,7 +1182,8 @@ class Q_Utils
 				} else {
 					if (!$found) {
 						$headers[] = "Content-Type: application/x-www-form-urlencoded";
-					} else if ($h === 'Content-Type: application/json') {
+					} else if ($h === 'Content-Type: application/json'
+					and is_array($data)) {
 						$dataContent = json_encode($data);
 					}
 					$foundContentLengthHeader = false;
