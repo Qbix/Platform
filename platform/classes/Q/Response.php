@@ -2424,6 +2424,28 @@ class Q_Response
 	}
 
 	/**
+	 * Flush a full HTTP response early to the client,
+	 * and then you can continue processing in the background.
+	 * Make sure you also call ignore_user_abort()
+	 * @method flushEarly
+	 * @static
+	 * @param {string} [$content='Success']]
+	 * @param {string} [$header='HTTP/1.1 200 OK']
+	 */
+	static function flushEarly($content = 'Success', $header = 'HTTP/1.1 200 OK')
+	{
+		ob_end_clean();
+		header('HTTP/1.1 200 OK');
+		ignore_user_abort();
+		ob_start();
+		echo ($content);
+		$size = ob_get_length();
+		header("Content-Length: $size");
+		ob_end_flush();
+		flush();
+	}
+
+	/**
 	 * @property $batch
 	 * @type boolean
 	 * @static
