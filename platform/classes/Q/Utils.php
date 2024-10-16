@@ -2166,6 +2166,22 @@ class Q_Utils
 	}
 
 	/**
+	 * Converts seconds to hh:mm:ss format
+	 * @method secondsToHMS
+	 * @static
+	 * @param {integer} $seconds
+	 */
+	static function secondsToHMS($seconds)
+	{
+		$s = floor($seconds);
+		$h = floor($s / 3600);
+		$s -= $h * 3600;
+		$m = floor($s / 60);
+		$s -= $m * 60;
+		return sprintf("%02d:%02d:%02d", $h, $m, $s);
+	}
+
+	/**
 	 * Call this function to attempt garbage collection
 	 * @method garbageCollect
 	 * @static
