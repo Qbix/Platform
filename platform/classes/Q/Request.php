@@ -1254,6 +1254,11 @@ class Q_Request
 	 */
 	static function handleInput()
 	{
+		static $called = false;
+		if ($called) {
+			return;
+		}
+		$called = true;
 		$contentType = Q::ifset($_SERVER, 'CONTENT_TYPE', null);
 		if ($contentType
 		&& strpos($contentType, 'application/json') !== false) {
