@@ -802,6 +802,7 @@ EOT;
 
 		$app_dir = APP_DIR;
 		$plugin_dir = Q_PLUGINS_DIR.DS.$plugin_name;
+		$plugin_web_dir = $plugin_dir.DS.'web';
 		$plugin_text_dir = $plugin_dir.DS.'text'.DS.$plugin_name;
 		$app_web_plugins_dir = APP_WEB_DIR.DS.'Q'.DS.'plugins';
 		$app_web_text_dir = APP_WEB_DIR.DS.'Q'.DS.'text';
@@ -894,10 +895,11 @@ EOT;
 
 		// Symbolic links
 		$pluginsPrefix = 'Q'.DS.'plugins'.DS;
-		if (!file_exists($app_web_plugins_dir.DS.$plugin_name)) {
+		if (!file_exists($app_web_plugins_dir.DS.$plugin_name)
+		and file_exists($plugin_web_dir)) {
 			$p = $app_web_plugins_dir.DS.$plugin_name;
+			Q_Utils::symlink($plugin_web_dir, $p);
 			echo 'created symlink: web/Q/plugins/'.$plugin_name.PHP_EOL;
-			Q_Utils::symlink($plugin_dir.DS.'web', $p);
 		}
 		
 		if (!file_exists($app_text_plugin_dir)
