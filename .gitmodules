@@ -61,3 +61,6 @@
 [submodule "platform/plugins/AI"]
 	path = platform/plugins/AI
 	url = https://github.com/Qbix/AI
+[submodule "platform/plugins/Twitter"]
+	path = platform/plugins/Twitter
+	url = https://github.com/Qbix/Twitter
