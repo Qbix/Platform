@@ -1224,7 +1224,7 @@ Q.elementById = function (element) {
 	if (!element) {
 		return null;
 	}
-	return element.isConnected
+	return document.contains(element)
 		? element 
 		: (element.id ? document.getElementById(element.id) : null) || null;
 };
