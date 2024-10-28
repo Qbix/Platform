@@ -16432,7 +16432,7 @@ function _addHandlebarsHelpers() {
 				for (var k in hash) {
 					if (k === 'class') {
 						className = hash[k];
-					} else {
+					} else if (!Q.isInteger(k)) {
 						Q.setObject(k, hash[k], o, '-');
 					}
 				}
