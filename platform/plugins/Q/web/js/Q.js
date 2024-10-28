@@ -11418,7 +11418,6 @@ function _activateTools(toolElement, options, shared) {
 				// support re-entrancy of Q.activate
 				var tool = Q.getObject(['Q', 'tools', toolName], element);
 				if (this.activating || this.activated || tool) {
-					tool = tool || this;
 					return _activateTools.alreadyActivated;
 				}
 				this.activating = true
