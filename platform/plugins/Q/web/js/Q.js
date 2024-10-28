@@ -11462,6 +11462,8 @@ function _activateTools(toolElement, options, shared) {
 						args.push(req);
 					});
 					toolConstructor.apply(this, args);
+					this.activating = false;
+					this.activated = true;
 					_activateToolHandlers[""] &&
 					_activateToolHandlers[""].handle.call(this, this.options);
 					_activateToolHandlers[normalizedName] &&
