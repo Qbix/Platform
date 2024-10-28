@@ -3,7 +3,7 @@
 .Q_video_tool {
     font-size: 0;
     position: relative;
-    min-height: 250px;
+    min-height: 50px;
 }
 .Q_video_composer {
     padding: 10px;
