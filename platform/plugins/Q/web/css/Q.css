@@ -546,7 +546,7 @@ div.Q_placeholder { pointer-events: none; }
 	display: inline-block !important;
 }
 .Q_textfill_resized {
-	overflow: auto;
+	overflow: hidden;
 }
 .Q_lazy_load { opacity: 0; }
 .Q_lazy_loaded { opacity: 1; }

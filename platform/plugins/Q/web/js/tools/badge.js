@@ -179,7 +179,7 @@
 							style.top = badgeStyle.top;
 							delete style.bottom;
 						} else {
-							style.bottom = badgeStyle.bottom || -defaultPos;
+							style.bottom = badgeStyle.bottom || defaultPos;
 						}
 
 						if (badgeStyle.left) {
@@ -231,7 +231,7 @@
 				}
 
 				if (badgeStyle.content) {
-					$badgeElement.html(badgeStyle.content);
+					$badgeElement.html(badgeStyle.content).activate();
 				}
 
 				// remove old styles and apply new
@@ -270,7 +270,6 @@
 		Q: {
 			beforeRemove: function () {
 				var interval = Q.getObject(["state", "interval"], this);
-
 				interval && clearInterval(interval);
 
 				if (!this.state.skipOverlapped) {
