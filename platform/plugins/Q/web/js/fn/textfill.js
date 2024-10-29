@@ -45,18 +45,27 @@ Q.Tool.jQuery('Q/textfill',
 	{
 		refresh: function (options) {
 			var o = Q.extend({}, this.state('Q/textfill'), options);
-			var ourElement, ourText = "";
+			var $e, ourText = "";
 			this.children(':visible').each(function () {
 				var $t = $(this);
 				if ($t.text().length > ourText.length) {
-					ourElement = $t;
+					$t.addClass('Q_textfill_child');
+					$e = $t;
 					ourText = $t.text();
 				}
 			});
-			if (!ourElement) {
-				ourElement = this;
-			}
 			var $this = $(this);
+			var $child = null;
+			if (!$e) {
+				$child = $e = $('<div />').appendTo(this).css('visibility', 'hidden');
+				var cn = $this[0].childNodes;
+				for (var i=0; i < cn.length; ++i) {
+					if (cn[i].nodeType === 3) { // text node
+						$child.append(cn[i]);
+						break;
+					}
+				}
+			}
 			var fontSize = o.maxFontPixels || ($this.height() + 10);
 			var lastGoodFontSize = 0, lastBadFontSize = fontSize, jump;
 			var $c = o.fillParent ? $this.parent() : $this;
@@ -67,11 +76,11 @@ Q.Tool.jQuery('Q/textfill',
 			var maxWidth = Math.round(o.fillPadding ? $c.innerWidth() : $c.width());
 			var lineHeight = parseInt(document.defaultView.getComputedStyle($c[0], null).getPropertyValue("line-height"));
 			var textHeight, textWidth, lines, tooBig;
-			ourElement.addClass('Q_textfill_resizing');
+			$e.addClass('Q_textfill_resizing');
 			for (var i=0; i<100; ++i) {
-				ourElement.css('font-size', fontSize + 'px');
-				textHeight = Math.round(ourElement.outerHeight(true));
-				textWidth = Math.round(ourElement.outerWidth(true));
+				$e.css('font-size', fontSize + 'px');
+				textHeight = Math.round($e.outerHeight(true));
+				textWidth = Math.round($e.outerWidth(true));
 				if (o.maxLines) {
 					lines = Math.round(textHeight/lineHeight);
 				}
@@ -94,8 +103,18 @@ Q.Tool.jQuery('Q/textfill',
 				}
 			}
 			lastGoodFontSize = Math.max(o.minFontPixels, lastGoodFontSize);
-			ourElement.add(this).css('font-size', lastGoodFontSize + 'px');
-			ourElement.removeClass('Q_textfill_resizing').addClass('Q_textfill_resized');
+			$e.add(this).css('font-size', lastGoodFontSize + 'px');
+			$e.removeClass('Q_textfill_resizing').addClass('Q_textfill_resized');
+			if ($child) {
+				var cn = $child[0].childNodes;
+				for (var i=0; i < cn.length; ++i) {
+					if (cn[i].nodeType === 3) { // text node
+						$this.append(cn[i]);
+						break;
+					}
+				}
+				$child.remove();
+			}
 			return this;
 		},
 		

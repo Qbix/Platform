@@ -1224,7 +1224,7 @@ Q.elementById = function (element) {
 	if (!element) {
 		return null;
 	}
-	return document.contains(element)
+	return element.isConnected
 		? element 
 		: (element.id ? document.getElementById(element.id) : null) || null;
 };
@@ -10666,7 +10666,7 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 			element: elem, options: options, tools: shared.tools
 		});
 		delete elem.Q_activating;
-		Q.handle(Q.onActivate, tool, [elem, options, shared.tools]);
+		Q.handle(Q.onActivate, tool, [elem, shared.tools, options]);
 	}
 };
 
@@ -13008,7 +13008,7 @@ Q.jQueryPluginPlugin = function _Q_jQueryPluginPlugin() {
 	 *  This will get called for each element that has been completely activated.
 	 *  That is, after files for each of its tools, if any,
 	 *  have been loaded and all their constructors have run.
-	 *  It receives (elem, options, tools) as arguments, and the last tool to be
+	 *  It receives (elem, tools, options) as arguments, and the last tool to be
 	 *  activated as "this".
 	 */
 	$.fn.activate = function _jQuery_fn_activate(options, callback, internal) {

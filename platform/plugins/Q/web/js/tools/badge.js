@@ -108,15 +108,14 @@
 			var corners = ['tl', 'tr', 'br', 'bl'];
 
 			Q.each(corners, function(i, corner){
-				var badgeStyle = Q.getObject(corner, state);
-				var $badgeElement = Q.getObject(corner, tool);
+				var badgeStyle = state[corner];
+				var $badgeElement = tool[corner];
 
 				// if empty corner - remove this badge
 				if (Q.typeOf(badgeStyle) !== "object") {
-					if ($badgeElement instanceof jQuery) {
+					if ($badgeElement) {
 						$badgeElement.removeClass('Q_badge').remove();
 					}
-
 					return;
 				}
 
@@ -229,6 +228,8 @@
 					// execute onCreate event every time element created
 					Q.handle(badgeStyle.onCreate, tool, [$badgeElement, corner, style]);
 				}
+
+				tool.badge = $badgeElement[0];
 
 				if (badgeStyle.content) {
 					$badgeElement.html(badgeStyle.content).activate();
