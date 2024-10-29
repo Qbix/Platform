@@ -20,6 +20,27 @@ class Q_Request
 	}
 
 	/**
+	 * Find out whether the request is coming from inside the computer,
+	 * rather than over HTTP(s).
+	 * Invocations from a cron job, or a command-line command, return true.
+	 * Invocations over HTTP(s) return false even if from a local client.
+	 * @method isInternal
+	 * @static
+	 * @return {boolean}
+	 */
+	static function isInternal()
+	{
+		if (defined('STDIN')
+		or php_sapi_name() === 'cli'
+		or array_key_exists('SHELL', $_ENV)
+		or empty($_SERVER['REMOTE_ADDR']) and !isset($_SERVER['HTTP_USER_AGENT']) and count($_SERVER['argv']) > 0
+		or !array_key_exists('REQUEST_METHOD', $_SERVER) ) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Converts the specified fields from underscores
 	 * @param {array} $fieldNames An array of field names
 	 * @param {array} [$source=$_REQUEST] The source array

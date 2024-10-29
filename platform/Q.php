@@ -134,7 +134,7 @@ if (defined('APP_WEB_DIR')) {
 }
 $clearCache = Q_Request::special('clearCache');
 
-if (isset($clearCache)) {
+if (isset($clearCache) or Q_Request::isInternal()) {
 	if ($clearCache == Q_Config::get('Q', 'cache', 'secret', '')) {
 		Q_Cache::clear(true);
 	}
