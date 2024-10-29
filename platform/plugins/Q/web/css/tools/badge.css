@@ -13,7 +13,7 @@
 	width: 100%;
 	vertical-align: unset;
 }
-.Q_badge_parent_overlapped {
+.Q_badge_parent_overlapped:not(.Q_badge_parent_clip) {
 	overflow: clip !important;
 	overflow-clip-margin: 25px;
 }

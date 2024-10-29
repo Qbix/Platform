@@ -278,5 +278,18 @@
 				}
 			}
 		}
+	});
+
+	if (Q.info.browser.name === 'safari'
+	&& Q.info.browser.mainVersion < 18
+	) {
+		// overflow-clip doesn't work so this is a fallback:
+		document.head.appendChild(Q.element('style', {
+			'type': 'text/css'
+		}, '.Q_badge_parent_overlapped:not(.Q_badge_parent_clip) {'
+			+ ' overflow: visible !important; '
+			+ '}'
+		));
 	}
-)})(Q, Q.jQuery);
+
+})(Q, Q.jQuery);
