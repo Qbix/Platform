@@ -385,7 +385,7 @@ class Q_Utils
 
 		$output = call_user_func(
 			$algo, 
-			$opad.pack($pack, call_user_func($algo, $ipad.$data))
+			$opad.pack($pack, hash($algo, $ipad.$data))
 		);
 
 		return ($raw_output) ? pack($pack, $output) : $output;
