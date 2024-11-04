@@ -3708,9 +3708,6 @@ Q.onLayout = function (element) {
 	return debouncedEvent;
 }
 Q.onLayout.debounce = 100;
-Q.onLayout().set(function () {
-	Q.Masks.update();
-}, 'Q');
 
 /**
  * This event is convenient for doing stuff when the window scrolls
@@ -16110,6 +16107,10 @@ Q.Masks.show.options = {
 		ease: 'easeInExpo'
 	}
 };
+
+Q.onLayout().set(function () {
+	Q.Masks.update();
+}, 'Q');
 
 Q.addEventListener(window, Q.Pointer.start, _Q_PointerStartHandler, false, true);
 
