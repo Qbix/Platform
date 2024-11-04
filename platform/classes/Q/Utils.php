@@ -271,14 +271,15 @@ class Q_Utils
 	/**
 	 * Serializes a (potentially multi-dimensional) array into a string.
 	 * @param {array} $data
+	 * @param {string} [$separator='&']
 	 * @return {string}
 	 */
-	static function serialize(array $data)
+	static function serialize(array $data, $separator = '&')
 	{
 		self::ksort($data);
 		return str_replace(
 			'+', '%20', 
-			http_build_query($data, '', '&', PHP_QUERY_RFC3986)
+			http_build_query($data, '', $separator, PHP_QUERY_RFC3986)
 		);
 	}
 
@@ -352,43 +353,6 @@ class Q_Utils
 		unset($ref[$ef]);
 		$ref[$ef] = Q_Utils::signature($data, $secret);
 		return $data;
-	}
-	
-	/**
-	 * Calculates hmac
-	 * @method hmac
-	 * @static
-	 * @param {string} $algo
-	 * @param {string} $data
-	 * @param {string} $key
-	 * @param {boolean} [$raw_output=false]
-	 * @return {string}
-	 */
-	static function hmac($algo, $data, $key, $raw_output = false)
-	{
-		$algo = strtolower($algo);
-		$pack = 'H'.strlen(hash($algo, 'test'));
-		$size = 64;
-		$opad = str_repeat(chr(0x5C), $size);
-		$ipad = str_repeat(chr(0x36), $size);
-
-		if (strlen($key) > $size) {
-			$key = str_pad(pack($pack, hash($algo, $key)), $size, chr(0x00));
-		} else {
-			$key = str_pad($key, $size, chr(0x00));
-		}
-
-		for ($i = 0; $i < strlen($key) - 1; $i++) {
-			$opad[$i] = $opad[$i] ^ $key[$i];
-			$ipad[$i] = $ipad[$i] ^ $key[$i];
-		}
-
-		$output = hash(
-			$algo, 
-			$opad.pack($pack, hash($algo, $ipad.$data))
-		);
-
-		return ($raw_output) ? pack($pack, $output) : $output;
 	}
 
 	/**
