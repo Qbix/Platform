@@ -515,7 +515,7 @@ class Q_Response
 	 * @method setMeta
 	 * @static
 	 * @param {array} $params
-	 * @param {string} [$params.name=name] Attribute name of the meta tag
+	 * @param {string} [$params.name="name"] Attribute name of the meta tag
 	 * @param {string} [$params.value] Attribute value of the meta tag
 	 * @param {mixed} [$params.content=null] The content of the meta tag
 	 * @param {string} [$slotName=null]

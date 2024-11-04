@@ -265,6 +265,32 @@ class Q_Valid
 	}
 
 	/**
+	 * Given a timestamp, determines whether it expired
+	 * @static
+	 * @method verifyExpiration
+	 * @param {integer} $timestamp
+	 * @param {boolean} [$throwIfExpired=false] If true, throws Telegram_Exception_Expired if expired
+	 * @param {string} [$durationKey="Q"] Pass the durationKey under "Q"/"expirations" config
+	 * @throws {Telegram_Exception_Expired}
+	 * @return {boolean}
+	 */
+	static function expiration($timestamp = null, $throwIfExpired = false, $durationKey = 'Q')
+	{
+		if (!$timestamp) {
+			return false;
+		}
+		$duration = time() - $timestamp;
+		$max = Q_Config::get('Q', 'expirations', $durationsKey, 600);		
+		if ($duration > $max) {
+			if ($throwIfExpired) {
+				throw new Telegram_Exception_Expired(compact('duration'));
+			}
+			return false;
+		}
+		return true;
+	}
+
+	/**
 	 * Use this for validating the nonce
 	 * @method nonce
 	 * @static

@@ -304,6 +304,9 @@
 			"facebook": null,
 			"google": null
 		},
+		"expirations": {
+			"Q": 600
+		},
 		"video": {
 			"cloud": {
 				"upload": {

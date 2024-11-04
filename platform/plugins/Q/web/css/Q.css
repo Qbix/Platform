@@ -252,6 +252,10 @@ body.Q_preventScroll {
 	background: transparent;
 	border: none;
 }
+.Q_fullscreen_dialog .Q_title_slot *,
+.Q_overlay .Q_title_slot * {
+	color: unset;
+}
 .Q_dialog_title {
 	padding: 0 10px;
 	vertical-align: middle;
