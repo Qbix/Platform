@@ -7097,9 +7097,11 @@ Cp.each = function _Q_Cache_prototype_each(args, callback, options) {
 			}
 		}
 		// also the key itself
-		var item = Q_Cache_get(this, rawKey);
-		if (item !== undefined) {
-			callback.call(this, rawKey, item);
+		if (!(rawKey in localStorageKeys)) {
+			var item = Q_Cache_get(this, rawKey);
+			if (item !== undefined) {
+				callback.call(this, rawKey, item);
+			}
 		}
 		return;
 	}
