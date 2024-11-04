@@ -373,7 +373,7 @@ class Q_Utils
 		$ipad = str_repeat(chr(0x36), $size);
 
 		if (strlen($key) > $size) {
-			$key = str_pad(pack($pack, call_user_func($algo, $key)), $size, chr(0x00));
+			$key = str_pad(pack($pack, hash($algo, $key)), $size, chr(0x00));
 		} else {
 			$key = str_pad($key, $size, chr(0x00));
 		}
@@ -383,7 +383,7 @@ class Q_Utils
 			$ipad[$i] = $ipad[$i] ^ $key[$i];
 		}
 
-		$output = call_user_func(
+		$output = hash(
 			$algo, 
 			$opad.pack($pack, hash($algo, $ipad.$data))
 		);
