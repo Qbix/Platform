@@ -13204,7 +13204,7 @@ Q.info = {
 			&& (maxVersion == undefined || maxVersion >= Q.info.browser.mainVersion);
 	}
 };
-setTimeout(function () {
+function _setNotch() {
 	var proceed = false;
 	var div = document.createElement('div');
 	var CSS = window.CSS || null;
@@ -13232,7 +13232,12 @@ setTimeout(function () {
 		}
 	}
 	Q.info.hasNotch = false;
-}, 0);
+}
+if (document.readyState === "complete") {
+	_setNotch();
+} else {
+	document.addEventListener("DOMContentLoaded", _setNotch);
+}
 Q.info.isAndroidStock = !!(Q.info.platform === 'android'
 	&& navigator.userAgent.match(/Android .*Version\/[\d]+\.[\d]+/i));
 Q.info.isMobile = Q.info.isTouchscreen && !Q.info.isTablet;
