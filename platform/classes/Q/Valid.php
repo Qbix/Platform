@@ -283,7 +283,7 @@ class Q_Valid
 		$max = Q_Config::get('Q', 'expirations', $durationsKey, 600);		
 		if ($duration > $max) {
 			if ($throwIfExpired) {
-				throw new Telegram_Exception_Expired(compact('duration'));
+				throw new Q_Exception_Expired(compact('duration'));
 			}
 			return false;
 		}
