@@ -367,7 +367,7 @@ class Q_Utils
 	static function hmac($algo, $data, $key, $raw_output = false)
 	{
 		$algo = strtolower($algo);
-		$pack = 'H'.strlen(call_user_func($algo, 'test'));
+		$pack = 'H'.strlen(hash($algo, 'test'));
 		$size = 64;
 		$opad = str_repeat(chr(0x5C), $size);
 		$ipad = str_repeat(chr(0x36), $size);
