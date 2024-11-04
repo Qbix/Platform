@@ -13202,37 +13202,37 @@ Q.info = {
 			&& (maxHeight == undefined || maxHeight >= Q.Visual.windowHeight())	
 			&& (minVersion == undefined || minVersion <= Q.info.browser.mainVersion)
 			&& (maxVersion == undefined || maxVersion >= Q.info.browser.mainVersion);
-	},
-	hasNotch: (function () {
-	    var proceed = false;
-	    var div = document.createElement('div');
-		var CSS = window.CSS || null;
-	    if (CSS && CSS.supports('padding-top: env(safe-area-inset-top)')) {
-	        div.style.paddingTop = 'env(safe-area-inset-top)';
-	        proceed = true;
-	    } else if (CSS && CSS.supports('padding-top: constant(safe-area-inset-top)')) {
-	        div.style.paddingTop = 'constant(safe-area-inset-top)';
-	        proceed = true;
-	    }
-	    if (CSS && CSS.supports('padding-bottom: env(safe-area-inset-bottom)')) {
-	        div.style.paddingBottom = 'env(safe-area-inset-bottom)';
-	        proceed = true;
-	    } else if (CSS && CSS.supports('padding-bottom: constant(safe-area-inset-bottom)')) {
-	        div.style.paddingBottom = 'constant(safe-area-inset-bottom)';
-	        proceed = true;
-	    }
-	    if (proceed) {
-	        document.body.appendChild(div);
-	        var calculatedPadding = parseInt(div.computedStyle('padding-top'))
-				+ parseInt(div.computedStyle('padding-bottom'));
-	        document.body.removeChild(div);
-	        if (calculatedPadding > 40) {
-	            return true;
-	        }
-	    }
-		return false;
-	})()
+	}
 };
+setTimeout(function () {
+	var proceed = false;
+	var div = document.createElement('div');
+	var CSS = window.CSS || null;
+	if (CSS && CSS.supports('padding-top: env(safe-area-inset-top)')) {
+		div.style.paddingTop = 'env(safe-area-inset-top)';
+		proceed = true;
+	} else if (CSS && CSS.supports('padding-top: constant(safe-area-inset-top)')) {
+		div.style.paddingTop = 'constant(safe-area-inset-top)';
+		proceed = true;
+	}
+	if (CSS && CSS.supports('padding-bottom: env(safe-area-inset-bottom)')) {
+		div.style.paddingBottom = 'env(safe-area-inset-bottom)';
+		proceed = true;
+	} else if (CSS && CSS.supports('padding-bottom: constant(safe-area-inset-bottom)')) {
+		div.style.paddingBottom = 'constant(safe-area-inset-bottom)';
+		proceed = true;
+	}
+	if (proceed) {
+		document.body.appendChild(div);
+		var calculatedPadding = parseInt(div.computedStyle('padding-top'))
+			+ parseInt(div.computedStyle('padding-bottom'));
+		document.body.removeChild(div);
+		if (calculatedPadding > 40) {
+			Q.info.hasNotch = true;
+		}
+	}
+	Q.info.hasNotch = false;
+}, 0);
 Q.info.isAndroidStock = !!(Q.info.platform === 'android'
 	&& navigator.userAgent.match(/Android .*Version\/[\d]+\.[\d]+/i));
 Q.info.isMobile = Q.info.isTouchscreen && !Q.info.isTablet;
