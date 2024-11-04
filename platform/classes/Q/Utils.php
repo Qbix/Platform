@@ -315,7 +315,7 @@ class Q_Utils
 		if (is_array($data)) {
 			$data = self::serialize($data);
 		}
-		return self::hmac('sha1', $data, $secret);
+		return hash_hmac('sha1', $data, $secret);
 	}
 
 	/**
