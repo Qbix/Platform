@@ -212,7 +212,7 @@ Q.Tool.define("Q/tabs", function(options) {
 			ignorePage: tool.isInDialog(),
 			ignoreHistory: tool.isInDialog(),
 			slotContainer: slotContainer,
-			beforeTransition: beforeTransition,
+			beforeFillSlots: beforeFillSlots,
 			loader: loader,
 			handler: handler
 		}, 10, state.loaderOptions, 10, loaderOptions);
@@ -235,7 +235,7 @@ Q.Tool.define("Q/tabs", function(options) {
 			return container || document.getElementById(slotName+"_slot");
 		}
 		
-		function beforeTransition(response, url, options) {
+		function beforeFillSlots(response, url, options) {
 			// retain contents of existing slots
 			if (state.retain === true
 			|| (state.retain && state.retain[fromTabName])) {

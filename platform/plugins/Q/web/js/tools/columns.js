@@ -635,8 +635,7 @@ Q.Tool.define("Q/columns", function(options) {
 						hide[k] = parseFloat(show.height) * parseInt(hide[k]) / 100;
 					}
 				}
-				$div.hide()
-				.css('position', 'relative');
+				$div.css('position', 'relative');
 			}
 
 			var lastShow = $div.data(dataKey_lastShow);
