@@ -245,18 +245,29 @@ class Q_Session
 	 *   going to make, and return the exception to the client.
 	 *   The session may be missing, for example, if we had recently deleted it.
 	 *   Sessions
-	 * @param {string} [$setId] You can specify a valid session ID string here,
-	 *   otherwise it will be read from the $_COOKIE superglobal, or if it's not there
-	 *   then the $_GET superglobal (which is checked after cookies to avoid malicious GET
-	 *   changing an existing session surreptitiously).
+	 * @param {string} [$setId] 
+	 *   If left is empty, the sessionId will be read from the $_COOKIE superglobal,
+	 *   or if it's not there then the $_GET superglobal (which is checked after cookies
+	 *   to avoid malicious GET changing an existing session surreptitiously).
 	 *   If neither is there then we check whether a cookie with the Q_Session::name()
 	 *   was set by the currently executing script, and use that. If none of these
-	 *   contain a valid ID, then we start a new session.
+	 *   contain a valid ID, then we call generateId(true, prefixType) and start a new session.
+	 *   You can specify a valid session ID string in this parameter,
+	 *   to access an existing session. But be careful, because this can allow malicious
+	 *   actors specify an existing sessionId! If you're trying to set a
+	 *   deterministically-generated sessionId, you MUST use prefixType = 'internal',
+	 *   both when generating it with Q_Session::generateId(), and also in Q_Session::start()!
 	 * @param {string} [$prefixType=""]
-	 *   specify a different key from Q/session/id/prefixes config such as "authenticated"
+	 *   Specify a different key from Q/session/id/prefixes config such as "authenticated",
+	 *   to be used if a session ID has to be generated.
+	 *   If you are specifying setId for an internal sessionId, you must set this to "internal",
+	 *   otherwise the function would throw Q_Exception_SessionHijacked
+	 * @param {string} [$set] 
 	 * @return {boolean} Whether a new session was started or not.
+	 * @throws {Q_Exception_SessionHijacked}
+	 * @throws {Q_Exception_FailedValidation}
 	 */
-	static function start($throwIfMissingOrInvalid = false, $setId = null, $prefixType = '')
+	static function start($throwIfMissingOrInvalid = false, $setId = null, $prefixType = '', )
 	{
 		if (self::id() and !$setId) {
 			// Session has already started
@@ -285,15 +296,23 @@ class Q_Session
 		}
 		self::init();
 		$name = Q_Session::name();
-		$id = $setId
-			? $setId
-			: (!empty($_COOKIE[$name])
+		if ($setId) {
+			$internalSessionIdPrefix = Q_Config::get(
+				'Q', 'session', 'id', 'prefixes', 'internal', 'sessionId_internal_'
+			);
+			if (Q::startsWith($sessionId, $internalSessionIdPrefix)
+			and $prefixType !== 'internal') {
+				throw new Q_Exception_SessionHijacked();
+			}
+			$id = $setId;
+		} else {
+			$id = !empty($_COOKIE[$name])
 				? $_COOKIE[$name]
 				: (!empty($_GET[$name])
 					? $_GET[$name]
 					: Q_Response::cookie($name)
-				)
 			);
+		}
 
 		$isNew = false;
 		if (!self::isValidId($id)) {
@@ -1155,7 +1174,7 @@ class Q_Session
 	 * so that the web server won't have to deal with session ids we haven't issued.
 	 * @param {string} [$seed] Pass true here to try to obtain the seed from a hash
 	 *   of the publicKey found in the Q_Users_sig, if it is provided.
-	 *   Or pass a string here, to set your own seed.
+	 *   Or pass a string here, to set your own deterministic seed for the session ID.
 	 *   Otherwise, the seed will be a string of 32 random bytes.
 	 * @param {string} [$prefixType=""]
 	 *   specify a different key from Q/session/id/prefixes config such as "authenticated"

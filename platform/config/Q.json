@@ -182,7 +182,8 @@
 			"id": {
 				"prefixes": {
 					"": "sessionId_",
-					"authenticated": "sessionId_authenticated_"
+					"authenticated": "sessionId_authenticated_",
+					"internal": "sessionId_internal_"
 				}
 			},
 			"startBefore": "Q/objects",
