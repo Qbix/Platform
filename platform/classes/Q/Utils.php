@@ -29,7 +29,10 @@ class Q_Utils
 	}
 	
 	/**
-	 * Generates random letter sequence
+	 * Generates cryptographically random letter sequence.
+	 * The reason the platform doesn't provide an equivalent function on the client side
+	 * is because servers don't trust client input anyway, so we discourage clients from
+	 * generating any sort of random secrets, in case trust in theim would be misplaced.
 	 * @method randomString
 	 * @static
 	 * @param {integer} [$len=8]

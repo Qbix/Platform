@@ -1369,7 +1369,8 @@ class Q
 	}
 	
 	/**
-	 * Determine whether a PHP array if associative or not
+	 * Determine whether a PHP array if associative or not.
+	 * Returns false for empty arrays.
 	 * Might be slow as it has to iterate through the array
 	 * @param {array} $array
 	 */
