@@ -553,7 +553,7 @@ class Q_Response
 		if (!isset($params['content'])) {
 			$params['content'] = '';
 		}
-		$params['content'] = preg_replace("/\r|\n/", "", strip_tags($params['content']));
+		$params['content'] = preg_replace("/\r|\n/", " ", strip_tags($params['content']));
 
 		if ($params['value'] == 'og:image') {
 			$filename = Q_Uri::filenameFromUrl($params['content']);
