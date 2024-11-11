@@ -117,18 +117,19 @@ class Q_Session
 
 	/**
 	 * The ID of the session that came with the request in $_COOKIE.
+	 * @param {boolean} [$fallbackToGet]
 	 * @param {boolean} [$fallbackToServerId]
-	 * @param {boolean} [$firstCheckGET]
 	 */
-	static function requestedId($fallbackToServerId = false, $firstCheckGET = false)
+	static function requestedId($fallbackToGet = false, $fallbackToServerId = false)
 	{
 		$name = Q_Config::get('Q', 'session', 'name', 'Q_sessionId');
-		return $firstCheckGET && !empty($_GET[$name])
-			? $_GET[$name]
-			: (!empty($_COOKIE[$name])
-				? $_COOKIE[$name] // cookie that client sent
-				: ($fallbackToServerId ? Q_Response::cookie($name) : null) // cookie that server set
-			);
+		return (!empty($_COOKIE[$name])
+			? $_COOKIE[$name] // cookie that client sent
+			: ($fallbackToGet and !empty($_GET[$name])
+				? $_GET[$name]
+				: ($fallbackToServerId ? Q_Response::cookie($name) : null)
+			) // cookie that server set
+		);
 	}
 
 	/**
@@ -267,7 +268,7 @@ class Q_Session
 	 * @throws {Q_Exception_SessionHijacked}
 	 * @throws {Q_Exception_FailedValidation}
 	 */
-	static function start($throwIfMissingOrInvalid = false, $setId = null, $prefixType = '', )
+	static function start($throwIfMissingOrInvalid = false, $setId = null, $prefixType = '')
 	{
 		if (self::id() and !$setId) {
 			// Session has already started
@@ -306,12 +307,7 @@ class Q_Session
 			}
 			$id = $setId;
 		} else {
-			$id = !empty($_COOKIE[$name])
-				? $_COOKIE[$name]
-				: (!empty($_GET[$name])
-					? $_GET[$name]
-					: Q_Response::cookie($name)
-			);
+			$id = self::requestedId(true, true);
 		}
 
 		$isNew = false;
