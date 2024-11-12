@@ -863,6 +863,9 @@ class Q_Request
 	 */
 	static function platform()
 	{
+		if ($result = Q::event('Q/Request/platform', array(), 'before')) {
+			return $result;
+		}
 		if (!isset($_SERVER['HTTP_USER_AGENT'])) {
 			return null;
 		}

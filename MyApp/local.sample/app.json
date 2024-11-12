@@ -124,6 +124,7 @@
 			},
 			"telegram": {
 				"MyApp": {
+					"botUsername": "PUT BOT USERNAME HERE",
 					"token": "PUT TOKEN HERE",
 					"secret": "PUT SECRET HERE",
 					"cert": "/path/to/certificate.pem"

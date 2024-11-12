@@ -301,7 +301,7 @@ class Q_Session
 			$internalSessionIdPrefix = Q_Config::get(
 				'Q', 'session', 'id', 'prefixes', 'internal', 'sessionId_internal_'
 			);
-			if (Q::startsWith($sessionId, $internalSessionIdPrefix)
+			if (Q::startsWith($setId, $internalSessionIdPrefix)
 			and $prefixType !== 'internal') {
 				throw new Q_Exception_SessionHijacked();
 			}

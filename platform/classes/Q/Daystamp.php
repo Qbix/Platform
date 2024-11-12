@@ -85,6 +85,7 @@ class Q_Daystamp
     static function toDateTime($daystamp)
     {
         $epoch = new DateTimeImmutable("0000-01-01 00:00:00");
+        $daystamp = round($daystamp);
         $dti = $epoch->modify("$daystamp day");
         return $dti->format('Y-m-d H:i:s');
     }
@@ -99,6 +100,7 @@ class Q_Daystamp
     static function toYMD(int $daystamp)
     {
         $epoch = new DateTimeImmutable("0000-01-01 00:00:00");
+        $daystamp = round($daystamp);
         $dti = $epoch->modify("$daystamp day");
         return array(
             (int)$dti->format('Y'),
@@ -118,6 +120,8 @@ class Q_Daystamp
     static function age(int $daystampBirth, int $daystampNow)
     {
         $epoch = new DateTimeImmutable("0000-01-01 00:00:00");
+        $daystampBirth = round($daystampBirth);
+        $daystampNow = round($daystampNow);
         $dtiBirth = $epoch->modify("$daystampBirth day");
         $dtiNow = $epoch->modify("$daystampNow day");
         return (int)$dtiBirth->diff($dtiNow)->format("%y");
