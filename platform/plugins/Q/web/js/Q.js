@@ -10373,57 +10373,62 @@ function _startCachingWithServiceWorker() {
  * @param {String} [options.domain] the domain to set cookie. If you leave it blank,
  *  then the cookie will be set as a host-only cookie, meaning that subdomains won't get it.
  * @param {String} [options.path] path to set cookie. Defaults to path from Q.baseUrl()
- * @return {String|null}
+ * @return {String|null|false}
  *   If only name was passed, returns the stored value of the cookie, or null.
+ *   Returns false if cookie operations are blocked (e.g. exception is thrown by the browser)
  */
 Q.cookie = function _Q_cookie(name, value, options) {
-	var parts;
-	options = options || {};
-	if (typeof value != 'undefined') {
-		var path, domain = '';
-		parts = Q.baseUrl().split('://');
-		if ('path' in options) {
-			path = ';path='+options.path;
-		} else if (parts[1]) {
-			path = ';path=/' + parts[1].split('/').slice(1).join('/');
-		} else {
+	try {
+		var parts;
+		options = options || {};
+		if (typeof value != 'undefined') {
+			var path, domain = '';
+			parts = Q.baseUrl().split('://');
+			if ('path' in options) {
+				path = ';path='+options.path;
+			} else if (parts[1]) {
+				path = ';path=/' + parts[1].split('/').slice(1).join('/');
+			} else {
+				return null;
+			}
+			if ('domain' in options) {
+				domain = ';domain='+options.domain;
+			} else {
+				// remove any possibly conflicting cookies from .hostname, with same path
+				var o = Q.copy(options);
+				var hostname = parts[1].split('/').shift();
+				o.domain = '.'+hostname;
+				Q.cookie(name, null, o);
+				domain = ''; //';domain=' + hostname;
+			}
+			if (value === null) {
+				document.cookie = encodeURIComponent(name)+'=;expires=Thu, 01-Jan-1970 00:00:01 GMT'+path+domain;
+				return null;
+			}
+			var expires = '';
+			if (options.expires) {
+				expires = new Date();
+				expires.setTime((new Date()).getTime() + options.expires);
+				expires = ';expires='+expires.toGMTString();
+			}
+			document.cookie = encodeURIComponent(name)+'='+encodeURIComponent(value)+expires+path+domain;
 			return null;
 		}
-		if ('domain' in options) {
-			domain = ';domain='+options.domain;
-		} else {
-			// remove any possibly conflicting cookies from .hostname, with same path
-			var o = Q.copy(options);
-			var hostname = parts[1].split('/').shift();
-			o.domain = '.'+hostname;
-			Q.cookie(name, null, o);
-			domain = ''; //';domain=' + hostname;
+	
+		// Otherwise, return the value
+		var cookies = document.cookie.split(';'), result;
+		for (var i=0; i<cookies.length; ++i) {
+			parts = cookies[i].split('=');
+			result = parts.splice(0, 1);
+			result.push(parts.join('='));
+			if (decodeURIComponent(result[0].trim()) === name) {
+				return result.length < 2 ? null : decodeURIComponent(result[1]);
+			}
 		}
-		if (value === null) {
-			document.cookie = encodeURIComponent(name)+'=;expires=Thu, 01-Jan-1970 00:00:01 GMT'+path+domain;
-			return null;
-		}
-		var expires = '';
-		if (options.expires) {
-			expires = new Date();
-			expires.setTime((new Date()).getTime() + options.expires);
-			expires = ';expires='+expires.toGMTString();
-		}
-		document.cookie = encodeURIComponent(name)+'='+encodeURIComponent(value)+expires+path+domain;
 		return null;
+	} catch (e) {
+		return false;
 	}
-
-	// Otherwise, return the value
-	var cookies = document.cookie.split(';'), result;
-	for (var i=0; i<cookies.length; ++i) {
-		parts = cookies[i].split('=');
-		result = parts.splice(0, 1);
-		result.push(parts.join('='));
-		if (decodeURIComponent(result[0].trim()) === name) {
-			return result.length < 2 ? null : decodeURIComponent(result[1]);
-		}
-	}
-	return null;
 };
 
 /**
