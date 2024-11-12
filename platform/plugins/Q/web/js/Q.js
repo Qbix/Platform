@@ -9659,7 +9659,9 @@ Q.formPost.counter = 0;
  */
 Q.updateUrls = function(callback) {
 	var timestamp, earliest, url, json, ut = Q.cookie('Q_ut');
-	var lut = localStorage.getItem(Q.updateUrls.timestampKey);
+	try {
+		var lut = localStorage.getItem(Q.updateUrls.timestampKey);
+	} catch (e) {}
 	if (ut && !lut) {
 		Q.request('Q/urls/urls/latest.json', [], function (err, result) {
 			Q.updateUrls.urls = result;
@@ -9687,7 +9689,9 @@ Q.updateUrls = function(callback) {
 				_update(result);
 			}
 			function _update(result) {
-				var urls = JSON.parse(localStorage.getItem('Q.updateUrls.urls'));
+				try {
+					var urls = JSON.parse(localStorage.getItem('Q.updateUrls.urls'));
+				} catch (e) {}
 				if (!Q.isEmpty(urls)) {
 					Q.updateUrls.urls = urls;
 					Q.extend(Q.updateUrls.urls, 100, result);
@@ -9712,7 +9716,9 @@ Q.updateUrls = function(callback) {
 Q.updateUrls.urlsKey = 'Q.updateUrls.urls';
 Q.updateUrls.earliestKey = 'Q.updateUrls.earliest';
 Q.updateUrls.timestampKey = 'Q.updateUrls.timestamp';
-Q.updateUrls.urls = JSON.parse(localStorage.getItem(Q.updateUrls.urlsKey) || "{}");
+try {
+	Q.updateUrls.urls = JSON.parse(localStorage.getItem(Q.updateUrls.urlsKey) || "{}");
+} catch (e) {}
 
 /**
  * Adds a reference to a javascript, if it's not already there
