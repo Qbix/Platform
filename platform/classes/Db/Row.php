@@ -1801,22 +1801,16 @@ class Db_Row
 		
 		$callback = array($this, "beforeSave");
 		if (is_callable($callback)) {
-			$modifiedFields = call_user_func(
+			$result = call_user_func(
 				$callback, $modifiedFields, $onDuplicateKeyUpdate, $commit,
 				$reallyModifiedFields
 			);
-		}
-		if (! isset($modifiedFields) or $modifiedFields === false) {
-			return false;
-		}
-		if ($modifiedFields instanceof Db_Query) {
-			return $modifiedFields;
-		}
-		if (! is_array($modifiedFields)) {
-			throw new Exception(
-				"$this_class::beforeSave() must return the array of (modified) fields to save!", 
-				-1000
-			);
+			if ($result === false) {
+				return false;
+			}
+			if ($result instanceof Db_Query) {
+				return $result;
+			}
 		}
 
 		$fieldsToSave = array();
