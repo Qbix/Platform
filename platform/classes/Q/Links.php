@@ -127,7 +127,7 @@ class Q_Links
             return 'tg://' . $command . '?' . implode('&', $urlParams);
         }
 
-        $where = ($to[0] === '@' ? 'domain=' : 'phone=') . $to;
+        $where = ($to[0] === '@' ? 'domain=' . substr($to, 1) : 'phone=' . $to);
 
         if (!empty($options['action'])) {
             $v = !empty($options['actionValue']) ? ('=' . urlencode($options['actionValue'])) : '';

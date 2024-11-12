@@ -3753,9 +3753,9 @@ Q.ensure = function _Q_ensure(property, callback) {
 	}
 	Q.onInit.addOnce(function () {
 		if (typeof loader === 'string') {
-			if (loader.substr(-3) === '.js') {
+			if (loader.substring(loader.length-3) === '.js') {
 				Q.require(loader, callback);
-			} else if (loader.substr(-5) === '.json') {
+			} else if (loader.substring(loader.length-5) === '.json') {
 				Q.request(loader, function (err, value) {
 					Q.setObject(property, value);
 					callback && callback(value);
@@ -6218,7 +6218,7 @@ Q.Links = {
 			}
 			return 'tg://' + command + '?' + urlParams.join('&');
 		}
-		var where = (to[0] === '@' ? 'domain=' : 'phone=') + to;
+		var where = (to[0] === '@' ? 'domain=' + to.substring(1) : 'phone=' + to);
 		if (options.action) {
 			var v = options.actionValue ? ('=' + options.actionValue) : '';
 			return 'tg://resolve?' + where + '&' + options.action + v;

@@ -76,8 +76,8 @@ var P = function(selector, q) {
 			var p1n = p1[p1.length-1];
 			var id, elem, e = /[^a-z0-9-_]/i.exec(p1n);
 			if (e) {
-				id = p1n.substr(0, e.index);
-				selector = p1n.substr(e.index);
+				id = p1n.substring(0, e.index);
+				selector = p1n.substring(e.index);
 			} else {
 				id = p1n;
 				selector = '';
@@ -270,7 +270,7 @@ P.fn = {
 						};
 					}(k);
 				} else {
-					var uc = k.substr(0, 1).toUpperCase() + k.substr(1);
+					var uc = k.substring(0, 1).toUpperCase() + k.substring(1);
 					this['get'+uc] = function(uc, k) {
 						return function() {
 							var target, keys, i, j, kj;

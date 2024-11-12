@@ -14,7 +14,7 @@ var m = Math,
 		for ( ; i < l; i++ ) {
 			t = vendors[i] + 'ransform';
 			if ( t in dummyStyle ) {
-				return vendors[i].substr(0, vendors[i].length - 1);
+				return vendors[i].substring(0, vendors[i].length - 1);
 			}
 		}
 
@@ -1093,7 +1093,7 @@ iScroll.prototype = {
 function prefixStyle (style) {
 	if ( vendor === '' ) return style;
 
-	style = style.charAt(0).toUpperCase() + style.substr(1);
+	style = style.charAt(0).toUpperCase() + style.substring(1);
 	return vendor + style;
 }
 

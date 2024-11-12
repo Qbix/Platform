@@ -19,7 +19,7 @@ Q.Color = function _Q_Color(input) {
 
     // strip any leading #
     if (color_string.charAt(0) == '#') { // remove # if any
-        color_string = color_string.substr(1,6);
+        color_string = color_string.substring(1,7);
     }
 
     color_string = color_string.replace(/ /g,'');
