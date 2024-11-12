@@ -10309,7 +10309,7 @@ Q.ServiceWorker = {
 	}
 }
 try {
-	Q.ServiceWorker.isSupported = !!navigator.serviceWorker,
+	Q.ServiceWorker.isSupported = !!navigator.serviceWorker;
 } catch (e) {
 	Q.ServiceWorker.isSupported = false;
 }
