@@ -10262,7 +10262,6 @@ Q.findStylesheet = function (href) {
  * @class
  */
 Q.ServiceWorker = {
-	isSupported: !!navigator.serviceWorker,
 	start: function(callback, options) {
 		options = options || {};
 		if (!'serviceWorker' in navigator) {
@@ -10308,6 +10307,11 @@ Q.ServiceWorker = {
 			});
 		});
 	}
+}
+try {
+	Q.ServiceWorker.isSupported = !!navigator.serviceWorker,
+} catch (e) {
+	Q.ServiceWorker.isSupported = false;
 }
 Q.ServiceWorker.onActive = new Q.Event();
 Q.ServiceWorker.onUpdateFound = new Q.Event();
