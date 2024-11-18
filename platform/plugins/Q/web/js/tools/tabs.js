@@ -743,7 +743,7 @@ function _copyClassToOverflow(tool) {
 	var currentClass = null;
 	Q.each(classNames, function (i, className) {
 		className = className.trim();
-		if (className.substr(0, 6) === 'Q_tab_') {
+		if (className.substring(0, 6) === 'Q_tab_') {
 			currentClass = className;
 			return false;
 		}

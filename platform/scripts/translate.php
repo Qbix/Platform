@@ -79,7 +79,7 @@ if (isset($options['help'])) {
 	exit;
 }
 
-Q_Cache::clear(true, false, 'Q_Text::get');
+Q_Cache::clear('Q_Text::get', true);
 
 if (empty($options['source'])) {
 	$options['source'] = 'en';

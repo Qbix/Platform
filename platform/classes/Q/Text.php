@@ -145,7 +145,8 @@ class Q_Text
 		}
 		$filename = "text/$name/$basename.json";
 
-		if (!file_exists(Q::realPath($filename))) {
+		$realpath = Q::realPath($filename);
+		if (!$realpath or !file_exists($realpath)) {
 			$filename = "text/$name/en.json"; // English by default
 		}
 		$config = Q_Config::get('Q', 'text', '*', array());

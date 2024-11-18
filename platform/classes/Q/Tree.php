@@ -352,8 +352,8 @@ class Q_Tree
 		// update class cache as it is not set
 		$exclude = Q::startsWith($filename, APP_LOCAL_DIR); // SECURITY reasons
 		if (!$exclude && !$ignoreCache) {
-			$arr = Q_Cache::get("Q_Tree\t$filename2", null, $fetched);
-			if ($fetched) {
+			$arr = Q_Cache::get("Q_Tree\t$filename2", null, $found);
+			if ($found) {
 				self::$cache[$filename2] = $arr;
 				$this->merge($arr);
 				return $this;
@@ -386,6 +386,8 @@ class Q_Tree
 				$arr = Q::json_decode($json, true);
 			} catch (Exception $e) {
 				$arr = null;
+				// stop caching badly formatted files
+				Q_Cache::clear("Q::readFile\t$filename2");
 			}
 		}
 		if (!isset($arr)) {

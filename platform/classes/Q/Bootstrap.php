@@ -191,6 +191,33 @@ class Q_Bootstrap
 			date_default_timezone_set($script_tz);
 		}
 	}
+
+	/**
+	 * Cache clearing logic
+	 * @method handleClearCache
+	 * @static
+	 * @return {boolean} Whether the cache was cleared
+	 */
+	static function handleClearCache()
+	{
+		if (!Q_Request::isInternal()) {
+			$clearCache = Q_Request::special('clearCache');	
+			if (!isset($clearCache)) {
+				return false;
+			}
+			$filename = APP_LOCAL_DIR . 'cache.json';
+			if (file_exists($filename)) {
+				$json = file_get_contents(APP_LOCAL_DIR . 'cache.json');
+				$arr = Q::json_decode($json, true);
+				if (!empty($arr['clearCacheSecret']) && $clearCache !== $arr['clearCacheSecret']) {
+					return false;
+				}
+			}
+		}
+		Q_Cache::clear(true);
+		return true;
+		
+	}
 	
 	/**
 	 * Loads the configuration and plugins in the right order

@@ -101,6 +101,7 @@ require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Config.php');
 Q_Bootstrap::registerShutdownFunction();
 Q_Bootstrap::setIncludePath();
 Q_Bootstrap::defineFunctions();
+require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Request.php');
 require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Text.php');
 require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Exception.php');
 require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Exception'.DS.'PHPError.php');
@@ -117,6 +118,7 @@ require_once(Q_CLASSES_DIR.DS.'RandomCompat'.DS.'random.php');
 // Set things up
 //
 Q_Bootstrap::setDefaultTimezone();
+Q_Bootstrap::handleClearCache();
 Q_Bootstrap::configure();
 Q_Bootstrap::registerAutoload();
 Q_Bootstrap::registerExceptionHandler();
@@ -131,13 +133,6 @@ Q_Response::setIgnoreUserAbort();
 if (defined('APP_WEB_DIR')) {
 	Q_Bootstrap::addAlias();
 	Q_Request::baseUrl();
-}
-$clearCache = Q_Request::special('clearCache');
-
-if (isset($clearCache) or Q_Request::isInternal()) {
-	if ($clearCache == Q_Config::get('Q', 'cache', 'secret', '')) {
-		Q_Cache::clear(true);
-	}
 }
 Q::$bootstrapped = true;
 

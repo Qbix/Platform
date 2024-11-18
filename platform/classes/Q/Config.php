@@ -204,8 +204,8 @@ class Q_Config
 		if ($cs = self::serverInfo()) {
 			// check Q_Cache and if set - use it
 			// update class cache as it is not set
-			$arr = Q_Cache::get("Q_Config\t$filename", null, $fetched);
-			if ($fetched) {
+			$arr = Q_Cache::get("Q_Config\t$filename", null, $found);
+			if ($found) {
 				$tree = new Q_Tree();
 				$tree->merge($arr);
 				return $tree->getAll();

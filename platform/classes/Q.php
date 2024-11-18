@@ -505,8 +505,8 @@ class Q
 		}
 		if (!$ignoreCache) {
 			// Try the native cache mechanism
-			$result = Q_Cache::get("Q::realPath\t$filename", null, $fetched);
-			if ($fetched) {
+			$result = Q_Cache::get("Q::realPath\t$filename", null, $found);
+			if ($found) {
 				return $result;
 			}
 		}
@@ -667,8 +667,8 @@ class Q
 		if (!$exclude) {
 			$key = "Q::readFile\t$filename";
 			if (empty($options['ignoreCache'])) {
-				$result = Q_Cache::get($key, null, $fetched);
-				if (!$fetched) {
+				$result = Q_Cache::get($key, null, $found);
+				if (!$found) {
 					$result = null;
 				}
 			}

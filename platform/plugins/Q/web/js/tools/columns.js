@@ -631,7 +631,7 @@ Q.Tool.define("Q/columns", function(options) {
 				show.height = tool.element.clientHeight;
 				for (var k in hide) {
 					var str = hide[k].toString();
-					if (str.substr(str.length-1) === '%') {
+					if (str.substring(str.length-1) === '%') {
 						hide[k] = parseFloat(show.height) * parseInt(hide[k]) / 100;
 					}
 				}

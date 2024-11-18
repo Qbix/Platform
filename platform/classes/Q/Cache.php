@@ -58,7 +58,8 @@ class Q_Cache
 	 *   Defaults to duration from config "Q"/"cache"/"durations"
 	 * @return {boolean} Whether cache was fetched (if not, it will attempt to be saved at script shutdown)
 	 */
-	static function set($key, $value, $duration = null) {
+	static function set($key, $value, $duration = null)
+	{
 		if (!isset($duration)) {
 			$duration = Q_Config::get('Q', 'cache', 'duration', 600);
 		}
@@ -74,9 +75,10 @@ class Q_Cache
 	 * @method exists
 	 * @static
 	 * @param {string} $key The key of cache entry
+	 * @param {boolean} [&$fetched] Filled with whether the cache store itself was fetched
 	 * @return {boolean} Whether it exists
 	 */
-	static function exists($key)
+	static function exists($key, &$fetched = null)
 	{
 		if (self::$ignore) {
 			return false;
@@ -87,9 +89,8 @@ class Q_Cache
 		} else if (is_callable('apc_fetch')) {
 			$store = apc_fetch($name, $fetched);
 		} else {
-			$store = array_key_exists($key, $store);
+			$store = self::fetchStore($fetched);
 		}
-		$store = self::fetchStore();
 		return array_key_exists($key, $store);
 	}
 
@@ -99,23 +100,28 @@ class Q_Cache
 	 * @static
 	 * @param {string} $key The key of cache entry
 	 * @param {mixed} [$default=null] In case the entry isn't there
+	 * @param {boolean} [&$found] Whether the key was found in the cache
 	 * @return {mixed} The value of Q_Cache entry, or null on failure
 	 */
-	static function get($key, $default = null, &$fetched = null)
+	static function get($key, $default = null, &$found = null)
 	{
 		if (self::$ignore) {
 			return $default;
 		}
-		$store = self::fetchStore();
-		if (!array_key_exists($key, $store)) {
+		$store = &self::fetchStore();
+		if (array_key_exists($key, $store)) {
+			$found = !empty(self::$found[self::$namespace][$key]);
+		} else {
+			$found = false;
 			$name = "Q_Cache\t".self::$namespace."\t$key";
-			$fetched = false;
 			if (is_callable('apcu_fetch')) {
-				$value = apcu_fetch($name, $fetched);
+				$value = apcu_fetch($name, $found);
 			} else if (is_callable('apc_fetch')) {
-				$value = apc_fetch($name, $fetched);
+				$value = apc_fetch($name, $found);
 			}
-			$store[$key] = $fetched ? $value : $default; // no such $key is stored in cache
+			// no such $key was stored in cache until now
+			$store[$key] = $found ? $value : $default;
+			self::$found[self::$namespace][$key] = $found;
 		}
 		return $store[$key];
 	}
@@ -132,7 +138,7 @@ class Q_Cache
 	static function clear($key, $prefix = false)
 	{
 		$namespace = self::$namespace;
-		$store = self::fetchStore($fetched);
+		$store = &self::fetchStore($fetched);
 		if (!isset($key) or $key === true) {
 			if ($key === true) {
 				if (is_callable('apcu_clear_cache')) {
@@ -145,7 +151,9 @@ class Q_Cache
 			if (is_callable('opcode_reset')) {
 				opcache_reset(); // also reset all the PHP cached files
 			}
-			return $store;
+			self::$changed = array();
+			self::$found[self::$namespace] = array(); // reset all cache entries to not found
+			return $fetched;
 		}
 		if (array_key_exists($key, $store)) {
 			if ($prefix) {
@@ -159,6 +167,7 @@ class Q_Cache
 				unset($store[$key]);
 			}
 			self::$changed[$namespace][$key] = true; // it will be saved at shutdown
+			self::$found[self::$namespace][$key] = false; // mark cache entry as not found in cache
 		}
 		return $fetched;
 	}
@@ -175,8 +184,10 @@ class Q_Cache
 	protected static function &fetchStore(&$fetched = null)
 	{
 		if (!isset(self::$stores[self::$namespace])) {
+			$fetched = false;
 			return self::$stores[self::$namespace] = array();
 		}
+		$fetched = true;
 		return self::$stores[self::$namespace];
 	}
 
@@ -197,10 +208,19 @@ class Q_Cache
 			foreach (self::$changed[$namespace] as $key => $value) {
 				$name = "Q_Cache\t$namespace\t$key";
 				$duration = Q::ifset(self::$durations, $key, $d);
-				if (is_callable('apcu_store')) {
-					$success = apcu_store($name, self::$stores[$namespace][$key], $duration);
-				} else if (is_callable('apc_store')) {
-					$success = apc_store($name, self::$stores[$namespace][$key], $duration);
+				$store = self::$stores[$namespace];
+				if (array_key_exists($key, $store)) {
+					if (is_callable('apcu_store')) {
+						apcu_store($name, $store[$key], $duration);
+					} else if (is_callable('apc_store')) {
+						apc_store($name, $store[$key], $duration);
+					}
+				} else {
+					if (is_callable('apcu_delete')) {
+						apcu_delete($name, $store[$key]);
+					} else if (is_callable('apc_delete')) {
+						apc_delete($name, $store[$key]);
+					}
 				}
 			}
 		}
@@ -228,6 +248,12 @@ class Q_Cache
 	 * @type array
 	 */
 	protected static $stores = array();
+	/**
+	 * @property $found
+	 * @protected
+	 * @type array
+	 */
+	protected static $found = array();
 	/**
 	 * @property $durations
 	 * @protected
