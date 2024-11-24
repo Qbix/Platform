@@ -268,7 +268,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 				if (empty($this->clauses['SELECT'])) {
 					// VALUES
 					if (!isset($this->clauses['VALUES']))
-					throw new Exception("Missing VALUES clause in DB query.", -3);
+						throw new Exception("Missing VALUES clause in DB query.", -3);
 					$values = $this->clauses['VALUES'];
 					$afterValues = !isset($this->after['VALUES']) ? '' : "\n".$this->after['VALUES'];
 					if (empty($this->clauses['ON DUPLICATE KEY UPDATE']))
@@ -636,13 +636,17 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					'count' => 0,
 					'keys' => array(),
 					'connections' => array(),
-					'backtraces' => array()
+					'backtraces' => array(),
+					'shardNames' => array(),
+					'pdos' => array()
 				);
 			}
 			$ntc = & $nt['count'];
 			$ntk = & $nt['keys'];
 			$ntct = & $nt['connections'];
 			$ntbt = & $nt['backtraces'];
+			$ntsn = & $nt['shardNames'];
+			$ntp = & $nt['pdos'];
 
 			if (empty(self::$setTimezoneDone[$dsn])) {
 				self::$setTimezoneDone[$dsn] = true;
@@ -656,6 +660,8 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 				if (!empty($query->clauses["BEGIN"])) {
 					$ntk[] = isset($query->transactionKey) ? $query->transactionKey : null;
 					$ntct[] = $connection;
+					$ntsn[] = $shardName;
+					$ntp[] = $pdo;
 					//$ntbt[] = Q::b();
 					if (++$ntc == 1) {
 						$pdo->beginTransaction();
@@ -664,6 +670,8 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					$pdo->rollBack();
 					$ntc = 0;
 					$ntk = array();
+					$ntsn = array();
+					$ntp = array();
 				}
 
 				if ($query->type !== Db_Query::TYPE_ROLLBACK) {
@@ -721,6 +729,8 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 								"forgot to resolve transaction with key $lastTransactionKey"
 							);
 						}
+						array_pop($ntsn);
+						array_pop($ntp);
 						array_pop($ntct);
 						array_pop($ntbt);
 						if (--$ntc == 0) {
@@ -732,6 +742,8 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 				if ($ntc) {
 					$pdo->rollBack();
 					$ntk = array();
+					$ntsn = array();
+					$ntp = array();
 					$ntc = 0;
 				}
 				break;
@@ -845,15 +857,34 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	static function shutdownFunction()
 	{
 		$connections = 0;
-		foreach (self::$nestedTransactions as $nt) {
-			if (!empty($nt['count'])) {
+		foreach (self::$nestedTransactions as $t) {
+			if (!empty($t['count'])) {
 				++$connections;
 			}
 		}
 		if ($connections) {
 			if (class_exists('Q')) {
-				Q::log("WARNING: Forgot to resolve transactions on $connections connections");
+				Q::log("WARNING: Forgot to resolve transactions on $connections connections."
+					. "\nRolling them back:");
+				$pdos = array();
 				foreach (self::$nestedTransactions as $t) {
+					if ($t['pdos']) {
+						foreach ($t['pdos'] as $pdo) {
+							$found = false;
+							foreach ($pdos as $p) {
+								if ($p === $pdo) {
+									$found = true;
+									break;
+								}
+							}
+							if (!$found) {
+								$pdos = array();
+								try {
+									$pdo->rollBack();
+								} catch (Exception $e) {}
+							}
+						}
+					}
 					Q::log($t['connections']);
 					Q::log($t['backtraces']);
 				}
@@ -1129,6 +1160,20 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		} else {
 			$this->clauses['NOT EXISTS'] = true;
 		}
+		return $this;
+	}
+
+	/**
+	 * Adds an IGNORE clause to certain queries
+	 * @method ignore
+	 * @return {Db_Query_Mysql} The resulting object implementing Db_Query_Interface
+	 * @throws {Exception} If WHERE clause does not belong to context
+	 */
+	function ignore ()
+	{
+		reset($this->clauses);
+		$firstClause = key($this->clauses);
+		$this->clauses[$firstClause] = 'IGNORE ' . $this->clauses[$firstClause];
 		return $this;
 	}
 
@@ -1763,7 +1808,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	 * @return {Db_Query_Mysql} The resulting object implementing Db_Query_Interface
 	 * $chainable
 	 */
-	function onDuplicateKeyUpdate ($updates)
+	function onDuplicateKeyUpdate ($updates = array())
 	{
 		$updates = $this->onDuplicateKeyUpdate_internal($updates);
 
