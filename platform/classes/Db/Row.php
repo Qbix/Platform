@@ -977,7 +977,7 @@ class Db_Row
 			list ($name_internal, $value) = call_user_func($callback, $value);
 		}
 
-		if (!isset($this->fieldsOriginal[$name_internal])) {
+		if (!array_key_exists($name_internal, $this->fieldsOriginal)) {
 			$this->fieldsOriginal[$name_internal] = isset($this->fields[$name_internal])
 				? $this->fields[$name_internal]
 				: null;

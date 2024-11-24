@@ -146,6 +146,15 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	public $parameters = array();
 
 	/**
+	 * Sometimes tells the build() function not to quote the value,
+	 * e.g. if it is numeric
+	 * @property $dontQuote
+	 * @type array
+	 * @default array()
+	 */
+	public $dontQuote = array();
+
+	/**
 	 * If this query is prepared, this would point to the
 	 * PDOStatement object
 	 * @property $statement
@@ -417,7 +426,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			$value = $this->parameters[$key];
 			if (!isset($value)) {
 				$value2 = "NULL";
-			} else if ($value instanceof Db_Expression) {
+			} else if ($value instanceof Db_Expression or !empty($this->dontQuote[$key])) {
 				$value2 = $value;
 			} else {
 				$value2 = $this->reallyConnect()->quote($value);
