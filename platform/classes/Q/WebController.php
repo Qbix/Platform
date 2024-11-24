@@ -51,6 +51,9 @@ class Q_WebController
 				$dispatchResult = 'Ran dispatcher';
 			}
 			$uri = Q_Request::uri();
+			if ($uri === false) {
+				return Q::log('ServiceWorker');
+			}
 			$module = $uri->module;
 			$action = $uri->action;
 			if (in_array(Q_Dispatcher::$served, array('file', 'dir'))) {

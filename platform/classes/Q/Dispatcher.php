@@ -251,7 +251,7 @@ class Q_Dispatcher
 					$staticWebUrl = Q_Response::staticWebUrl();
 					$redirectUrl = "$staticWebUrl/$normalized$qsname$redirectSuffix";
 					$filename = Q_Html::themedFilename($redirectUrl);
-					$mtime = filemtime($filename);
+					$mtime = file_exists($filename) ? filemtime($filename) : null;
 					$noRedirect = !$mtime;
 					$duration = Q_Config::get('Q', 'static', 'duration', 0);
 					if ($mtime and $duration) {
@@ -389,9 +389,9 @@ class Q_Dispatcher
 				}
 
 				$eventName = 'Q/errors';
-				self::startSessionBeforeEvent($eventName);
 				if (!isset(self::$skip[$eventName])) {
-					// Check if any errors accumulated
+					// Check if any errors accumulated during validation
+					self::startSessionBeforeEvent($eventName);
 					if (Q_Response::getErrors()) {
 						// There were validation errors -- render a response
 						self::result('Validation errors');
@@ -422,9 +422,9 @@ class Q_Dispatcher
 				}
 				
 				$eventName = 'Q/errors';
-				self::startSessionBeforeEvent($eventName);
 				if (!isset(self::$skip[$eventName])) {
-					// Check if any errors accumulated
+					// Check if any errors accumulated during Q/method
+					self::startSessionBeforeEvent($eventName);
 					if (Q_Response::getErrors()) {
 						// There were processing errors -- render a response
 						self::result('Processing errors');
@@ -432,6 +432,20 @@ class Q_Dispatcher
 						self::errors(null, $module, null);
 						return false;
 					}
+				}
+
+				// If we got this far, then this event can be by various plugins
+				// to persist various payment & micropayment transactions to the database.
+				$eventName = 'Q/payments';
+				self::startSessionBeforeEvent($eventName);
+				if (!isset(self::$skip[$eventName])) {
+					/**
+					 * Gives the app a chance to persist payments transactions to the database.
+					 * the request.
+					 * @event Q/payments
+					 * @param {array} $routed
+					 */
+					Q::event($eventName, self::$routed, true);
 				}
 
 				// You can gather some metrics here, and store them somewhere
@@ -598,6 +612,9 @@ class Q_Dispatcher
 		}
 		if (self::$startedResponse) {
 			return false; // too late to start a session
+		}
+		if (!empty($GLOBALS['Q_skipAutoSessionStart'])){
+			return false; // don't start session automatically
 		}
 		// start the session and set a nonce
 		if (!empty($_SERVER['HTTP_HOST'])
