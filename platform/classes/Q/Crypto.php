@@ -21,7 +21,7 @@ use Mdanter\Ecc\Serializer\Signature\DerSignatureSerializer;
 class Q_Crypto {
     /**
      * Verify a signature on a payload serialized into a canonical string,
-     * using P-384 ECDSA curve.
+     * using P-256 ECDSA curve.
      * @method verify
      * @static
      * @param {string} $serialized the serialized data
