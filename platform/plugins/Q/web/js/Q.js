@@ -16292,6 +16292,10 @@ Q.Tool.define({
 		js: "{{Q}}/js/tools/badge.js",
 		css: "{{Q}}/css/tools/badge.css"
 	},
+	"Q/coverflow": {
+		js: "{{Q}}/js/tools/coverflow.js",
+		css: "{{Q}}/css/tools/coverflow.css"
+	},
 	"Q/resize": "{{Q}}/js/tools/resize.js",
 	"Q/layouts": "{{Q}}/js/tools/layouts.js",
 	"Q/carousel": "{{Q}}/js/tools/carousel.js",

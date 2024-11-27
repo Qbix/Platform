@@ -1973,7 +1973,9 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 							$this->parameters, $value->parameters
 						);
 					}
-					$criteria_list[] = preg_match('/\W/', substr($expr, -1))
+					$lastChar = substr($expr, -1);
+					$expr = substr($expr, 0, -1) . ' REGEXP BINARY '; // mysql version of SQL
+					$criteria_list[] = preg_match('/\W/', $lastChar)
 						? "$expr ($value)"
 						: self::column($expr)." = ($value)";
 				} else if (is_array($value)) {
