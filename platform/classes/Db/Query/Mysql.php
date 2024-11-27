@@ -1974,7 +1974,9 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 						);
 					}
 					$lastChar = substr($expr, -1);
-					$expr = substr($expr, 0, -1) . ' REGEXP BINARY '; // mysql version of SQL
+					if ($lastChar === '~') {
+						$expr = substr($expr, 0, -1) . ' REGEXP BINARY '; // mysql version of SQL
+					}
 					$criteria_list[] = preg_match('/\W/', $lastChar)
 						? "$expr ($value)"
 						: self::column($expr)." = ($value)";
