@@ -129,7 +129,7 @@ class Q_Response
 		 * @param {string} slotName
 		 * @return {string}
 		 */
-		return Q::event(
+		return self::$slots[$slotName] = Q::event(
 			"Q/response/$default_slotName",
 			@compact('slotName')
 		);
