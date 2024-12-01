@@ -1,7 +1,7 @@
 #!/usr/bin/env php
 <?php
 
-define("CONFIGURE_ORIGINAL_APP_NAME", "CoolApp");
+define("CONFIGURE_ORIGINAL_APP_NAME", "MyApp");
 
 include dirname(__FILE__).'/../Q.inc.php';
 

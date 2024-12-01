@@ -14,7 +14,7 @@ if (!file_exists($paths_filename)) {
 	Q_configure_copy(APP_DIR.DS.'local.sample', APP_DIR.DS.'local');
 }
 
-define("CONFIGURE_ORIGINAL_APP_NAME", "CoolApp");
+define("CONFIGURE_ORIGINAL_APP_NAME", "MyApp");
 
 include dirname(__FILE__).'/../Q.inc.php';
 include Q_SCRIPTS_DIR.DS.'configure.php';

@@ -4,15 +4,15 @@ syntax: regexp
 \.DS_Store$
 ^\.git$
 ^\.idea/
-^local/
-^files/Q/
-^files/MyApp/uploads/Users/(?!.dir).+
-^files/MyApp/uploads/Streams/(?!.dir).+
-^text/(?!MyApp)
-^web/Q/uploads
-^web/Q/plugins
-^web/Q/text
-^web/Q/views
+^Q/app/local/
+^Q/app/files/Q/
+^Q/app/files/MyApp/uploads/Users/(?!.dir).+
+^Q/app/files/MyApp/uploads/Streams/(?!.dir).+
+^Q/app//text/(?!MyApp)
+^Q/uploads
+^Q/plugins
+^Q/text
+^Q/views
 ^config/Q/urls/
 
 syntax: glob
