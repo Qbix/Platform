@@ -573,12 +573,12 @@ class Q_Plugin
 	 * @param {boolean} [$ask=true]
 	 * @return {boolean}
 	 */
-	static private function checkTree($root, $filemode, $dirmode, $gid = false, $ask = true) {
+	static private function fixPermissionsRecursive($root, $filemode, $dirmode, $gid = false, $ask = true) {
 		// fix permissions for current folder
 		$ask = self::fixPermissions($root, $dirmode, $gid, $ask);
 		foreach (glob($root.'*', GLOB_MARK) as $path) {
 			if ($path[strlen($path)-1] == DS) {
-				$ask = self::checkTree($path, $filemode, $dirmode, $gid, $ask);
+				$ask = self::fixPermissionsRecursive($path, $filemode, $dirmode, $gid, $ask);
 			} else {
 				$ask = self::fixPermissions($path, $filemode, $gid, $ask);
 			}
@@ -627,17 +627,22 @@ class Q_Plugin
 	}
 
 	/**
-	 * @method checkPermissions
+	 * @method checkAndFixPermissions
 	 * @static
 	 * @private
 	 * @param {string} $files_dir
 	 * @param {array} $options
+	 * @param {integer} $options.dirmode
+	 * @param {integer} $options.filemode
 	 */
-	static function checkPermissions($files_dir, $options) {
+	static function checkAndFixPermissions($files_dir, $options = array()) {
+		$dirmode = Q::ifset($options, 'dirmode', 0777);
+		$filemode = Q::ifset($filemode, 'dirmode', 0777);
+
 		// Check and fix permissions
 		if(!file_exists($files_dir)) {
 			$mask = umask(Q_Config::get('Q', 'internal', 'umask', 0000));
-			mkdir($files_dir, $options['dirmode'], true);
+			mkdir($files_dir, $dirmode, true);
 			umask($mask);
 		}
 
@@ -652,10 +657,12 @@ class Q_Plugin
 			$group = false;
 		}
 
+		$ask = Q::ifset($options, 'ask', false);
+
 		if (isset($options['deep'])) {
-			self::checkTree($files_dir, $options['filemode'], $options['dirmode'], $group);
+			self::fixPermissionsRecursive($files_dir, $filemode, $dirmode, $group, $ask);
 		} else {
-			self::fixPermissions($files_dir, $options['dirmode'], $group);
+			self::fixPermissions($files_dir, $dirmode, $group, $ask);
 		}
 	}
 
@@ -732,7 +739,7 @@ class Q_Plugin
 		}
 
 		// Check and fix permissions
-		self::checkPermissions(APP_FILES_DIR, $options);
+		self::checkAndFixPermissions(APP_FILES_DIR, $options);
 
 		// Use package managers
 		self::npmInstall(APP_DIR, !empty($options['npm']));
@@ -882,10 +889,10 @@ EOT;
 		}
 
 		// Check and fix permissions
-		self::checkPermissions($files_dir, $options);
+		self::checkAndFixPermissions($files_dir, $options);
 		if (isset($plugin_conf['permissions'])) {
 			foreach ($plugin_conf['permissions'] as $perm) {
-				self::checkPermissions($files_dir.DS.$perm, $options);
+				self::checkAndFixPermissions($files_dir.DS.$perm, $options);
 			}
 		}
 

@@ -343,10 +343,13 @@ class Q_Bootstrap
 			return; // let the configurarion happen without the alert
 		}
 		$app = Q_Config::get('Q', 'app', null);
-		$prefix = $app ? "$app/" : '';
+		$basename = basename(DOCROOT_DIR);
 		if (Q_Config::get('Q', 'localNotYetConfigured', null)) {
 			Q_Cache::clear(true); // user will want to reload it again soon
-			throw new Q_Exception("Please edit local config in {$prefix}local/app.json");
+			$paths_filename = file_exists(APP_DIR.DS."local".DS."app.json.php")
+				? "$basename/Q/app/local/app.json.php"
+				: "$basename/local/app.json";
+			throw new Q_Exception("Please edit local config in $paths_filename");
 		}
 	}
 	

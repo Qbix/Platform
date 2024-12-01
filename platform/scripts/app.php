@@ -235,7 +235,7 @@ if ($auto_plugins) {
 }
 
 if (in_array('Q', $plugins) !== false) {
-	Q_Plugin::checkPermissions(Q_FILES_DIR, $options);
+	Q_Plugin::checkAndFixPermissions(Q_FILES_DIR, $options);
 	Q_Plugin::npmInstall(Q_DIR, !empty($options['npm']));
 	Q_Plugin::composerInstall(Q_DIR, !empty($options['composer']));
 }

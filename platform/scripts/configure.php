@@ -138,7 +138,7 @@ if ($Desired !== CONFIGURE_ORIGINAL_APP_NAME) {
 	}
 }
 
-chmod(APP_FILES_DIR, 0777);
+Q_Plugin::checkAndFixPermissions(APP_FILES_DIR, array('deep' => true));
 
 echo "Application configured. The next steps are:
 1) edit the config in $basename/local/app.json

@@ -74,6 +74,8 @@ if (defined('APP_DIR')) {
 		define('APP_TEXT_DIR', APP_DIR.DS.'text');
 	if (!defined('APP_WEB_DIR'))
 		define('APP_WEB_DIR', APP_DIR.DS.'web');
+	if (!defined('DOCROOT_DIR'))
+		define ('DOCROOT_DIR', APP_WEB_DIR);
 	if (!defined('APP_TESTS_DIR'))
 		define('APP_TESTS_DIR', APP_DIR.DS.'tests');
 	if (!defined('APP_ROOT_DIR')) {
