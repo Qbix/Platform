@@ -10,7 +10,8 @@
  * @class Q coverflow
  * @constructor
  * @param {array}   [$options] Override various options for this tool
- *  @param {array}  [$options.elements=null] Indicate the elements, if not already part of the container
+ *  @param {array}  [$options.elements=null] Indicate the elements, if not already part of the container.
+ *    The "title", "tag" and "content" keys have special meaning here.
  *  @param {Array} [$options.titles=null] Indicate the titles corresponding to the elements.
  *  @param {boolean} [options.dontSnapScroll] Set to true to stop snapping the scroll to each item
  *  @param {boolean} [options.forceMainThread] Force animation to happen on the main thread

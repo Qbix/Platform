@@ -9,7 +9,8 @@
  * @class Q coverflow
  * @constructor
  * @param {Object}   [options] Override various options for this tool
- *  @param {Array} [options.elements=null] Indicate the HTML elements
+ *  @param {Array} [options.elements=null] Indicate the HTML elements. The elements may have a "title"
+ *    attribute, in which case it is used unless the titles option is specified.
  *  @param {Array} [options.titles=null] Indicate the titles corresponding to the elements.
  *  @param {Boolean} [options.dontSnapScroll] Set to true to stop snapping the scroll to each item
  *  @param {Boolean} [options.forceMainThread] Force animation to happen on the main thread
@@ -31,7 +32,7 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
         });
         var titles = state.titles || [];
         Q.each(state.elements, function (i) {
-            var title = titles[i];
+            var title = titles[i] || this.title || this.getAttribute('title');
             covers.appendChild(Q.element('li', {title: title}, [this]));
         });
         tool.element.appendChild(covers);
