@@ -866,8 +866,9 @@ class Q
 	}
 
 	/**
-	 * Instantiates a particular tool.
-	 * Also generates javascript around it.
+	 * Instantiates a particular tool. The tool may have a PHP handler with its name followed by /tool
+	 * which might return the content of the tool (if any), and call Q_Response::setToolOptions().
+	 * On the client side, Q.activate() could load Javascript for the tool and activate it.
 	 * @method tool
 	 * @static
 	 * @param {string} $name
@@ -901,14 +902,6 @@ class Q
 	 * @param {boolean} [$extra.lazyload]
 	 *    Pass true to allow the tool to be lazy-loaded by a Q/lazyload tool if it is
 	 *    activated on one of its containers.
-	 * @param {boolean} [$extra.merge=false]
-	 *    If true, the element for this tool is merged with the element of the tool
-	 *    already being rendered when this function is called (if any),
-	 *    producing one element with markup for both tools and their options.
-	 *    This can be used more than once, merging multiple tools in one element
-	 *    through nested function calls.
-	 *    As part of the merge, the content this tool (if any) is prepended
-	 *    to the content of the tool which is already being rendered.
 	 * @throws {Q_Exception_WrongType}
 	 * @throws {Q_Exception_MissingFile}
 	 */
