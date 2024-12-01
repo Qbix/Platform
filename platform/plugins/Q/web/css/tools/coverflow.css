@@ -12,7 +12,7 @@
     font-size: 40px;
     width: 100%;
     text-align: center;
-    bottom: 0;
+    bottom: 20px;
     vertical-align: middle;
     font-weight: bold;
 }
@@ -61,11 +61,11 @@
 
 		.Q_coverflow_covers > * {
 			display: inline-block;
-			width: var(--Q-coverflow-cover-size);
-			height: var(--Q-coverflow-cover-size);
+			/* width: var(--Q-coverflow-cover-size);
+			height: var(--Q-coverflow-cover-size); */
 		}
 
-		.Q_coverflow_covers>*>img {
+		.Q_coverflow_covers>*>* {
 			display: block;
 			/*width: var(--Q-coverflow-cover-size);*/
 			height: var(--Q-coverflow-cover-size);
