@@ -90,6 +90,7 @@ table { table-layout: fixed; }
 	position: absolute;
 }
 
+.Q_layout_sidebar #dashboard { flex-direction: column; }
 .Q_layout_widebar #dashboard { display: flex; justify-content: space-between; }
 .Q_notMobile #dashboard { padding: 5px; }
 
@@ -105,10 +106,17 @@ table { table-layout: fixed; }
 .Q_mobile #dashboard_slot .MyApp_dashboard_logo h1 {
 	display: none;
 }
-.Q_layout_sidebar #dashboard_slot .MyApp_dashboard_logo {
+.Q_layout_sidebar #dashboard_slot .Artists_dashboard_logo {
 	width: 100%;
+	height: auto;
+	padding-top: 100%;
+	aspect-ratio: 1;
+	background-size: contain;
+	overflow: visible;
 }
-
+.Q_layout_sidebar #dashboard_slot .MyApp_dashboard_logo h1 {
+	text-align: center;
+}
 /* Notices contents */
 #notices_slot { text-align: center; margin: auto; padding: 0; z-index: 5000; }
 #notices { margin: auto; }
@@ -214,7 +222,7 @@ input.email,
 input.tel,
 input.password,
 input.number,
-textarea { border: 1px solid #ccc; border-bottom: 1px solid #aaa; background-color: #fefefe; cursor: text; font-family: "Trebuchet MS"; }
+textarea { border: 1px solid #ccc; border-bottom: 1px solid #aaa; cursor: text; font-family: "Trebuchet MS"; }
 input[type=text]:focus,
 input[type=email]:focus,
 input[type=tel]:focus,
@@ -225,7 +233,7 @@ input.email:focus,
 input.tell:focus,
 input.password:focus,
 input.number:focus,
-textarea:focus { background: white; box-shadow: 0 1px 10px rgba(0,0,0,.15); -webkit-box-shadow: 0 1px 4px rgba(0,0,100,.15); -moz-box-shadow: 0 1px 4px rgba(0,0,100,.15); }
+textarea:focus { box-shadow: 0 1px 10px rgba(0,0,0,.15); -webkit-box-shadow: 0 1px 4px rgba(0,0,100,.15); -moz-box-shadow: 0 1px 4px rgba(0,0,100,.15); }
 input.placeholder,
 textarea.placeholder { color: #aaa; font-style: italic; }
 select:focus { outline: dotted 1px #779; }

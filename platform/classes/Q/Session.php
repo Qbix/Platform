@@ -349,7 +349,9 @@ class Q_Session
 				self::id($id);
 				self::savePath();
 				session_start();
-				header_remove("Set-Cookie"); // we will set it ourselves, thank you
+				if (!Q_Request::isInternal()) {
+					header_remove("Set-Cookie"); // we will set it ourselves, thank you
+				}
 				$started = true;
 				if (!self::$sessionExists) {
 					if ($throwIfMissingOrInvalid) {

@@ -33,7 +33,7 @@ class Q_Request
 		if (defined('STDIN')
 		or php_sapi_name() === 'cli'
 		or array_key_exists('SHELL', $_ENV)
-		or empty($_SERVER['REMOTE_ADDR']) and !isset($_SERVER['HTTP_USER_AGENT']) and count($_SERVER['argv']) > 0
+		or (empty($_SERVER['REMOTE_ADDR']) and !isset($_SERVER['HTTP_USER_AGENT']) and count($_SERVER['argv']) > 0)
 		or !array_key_exists('REQUEST_METHOD', $_SERVER) ) {
 			return true;
 		}
