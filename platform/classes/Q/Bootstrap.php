@@ -200,23 +200,22 @@ class Q_Bootstrap
 	 */
 	static function handleClearCache()
 	{
-		if (!Q_Request::isInternal()) {
-			$clearCache = Q_Request::special('clearCache');	
-			if (!isset($clearCache)) {
+		if (Q_Request::isInternal()) {
+			Q_Cache::clear(true);
+			return true;
+		}
+		$clearCache = Q_Request::special('clearCache');	
+		if (!isset($clearCache)) {
+			return false;
+		}
+		$filename = APP_LOCAL_DIR . 'cache.json';
+		if (file_exists($filename)) {
+			$json = file_get_contents(APP_LOCAL_DIR . 'cache.json');
+			$arr = Q::json_decode($json, true);
+			if (!empty($arr['clearCacheSecret']) && $clearCache !== $arr['clearCacheSecret']) {
 				return false;
 			}
-			$filename = APP_LOCAL_DIR . 'cache.json';
-			if (file_exists($filename)) {
-				$json = file_get_contents(APP_LOCAL_DIR . 'cache.json');
-				$arr = Q::json_decode($json, true);
-				if (!empty($arr['clearCacheSecret']) && $clearCache !== $arr['clearCacheSecret']) {
-					return false;
-				}
-			}
 		}
-		Q_Cache::clear(true);
-		return true;
-		
 	}
 	
 	/**
@@ -346,6 +345,7 @@ class Q_Bootstrap
 		$app = Q_Config::get('Q', 'app', null);
 		$prefix = $app ? "$app/" : '';
 		if (Q_Config::get('Q', 'localNotYetConfigured', null)) {
+			Q_Cache::clear(true); // user will want to reload it again soon
 			throw new Q_Exception("Please edit local config in {$prefix}local/app.json");
 		}
 	}

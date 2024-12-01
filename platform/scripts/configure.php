@@ -138,6 +138,8 @@ if ($Desired !== CONFIGURE_ORIGINAL_APP_NAME) {
 	}
 }
 
+chmod(APP_FILES_DIR, 0777);
+
 echo "Application configured. The next steps are:
 1) edit the config in $basename/local/app.json
 2) run $basename/scripts/Q/install.php --all
