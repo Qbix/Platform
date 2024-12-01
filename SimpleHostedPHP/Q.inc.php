@@ -36,7 +36,10 @@ if (!defined('Q_DIR')) {
 
 $Q_filename = realpath(Q_DIR.DIRECTORY_SEPARATOR.'Q.php');
 if (!file_exists($Q_filename)) {
-	die("Please edit $basename/local/paths.json to look like " .
+	$paths_filename = file_exists("$basename/local/paths.json.php")
+		? "$basename/local/paths.json.php"
+		: "$basename/local/paths.json";
+	die("Please edit $paths_filename to contain " .
 		'{"platform": "path/to/Q/platform"}' .
 		" then run configure.php again\n");
 }
