@@ -46,6 +46,12 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
         tool.element.appendChild(caption);
     }
     _updateCaption();
+    var ival = setInterval(function () {
+        if (_updateCaption()) {
+            clearInterval(ival);
+        }
+    }, 100);
+    setTimeout(_updateCaption, 100);
     covers.addEventListener('scroll', _updateCaption);
     function _updateCaption() {
         var rect = covers.getBoundingClientRect();
@@ -56,7 +62,7 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
         var li = element.closest('li');
         var title;
         if (!li) {
-            return; // probably because nothing has rendered yet
+            return false; // probably because nothing has rendered yet
         }
         if (title = li.getAttribute('title')) {
             caption.innerText = title;
@@ -64,6 +70,7 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
         } else {
             caption.style.display = 'none';
         }
+        return true;
     }
 }, 
 

@@ -1,6 +1,5 @@
 .Q_coverflow_tool {
 	position: relative; /* can override this to be absolute or fixed */
-	outline: 1px solid #333;
 	background: black;
 	color: white;
 }
