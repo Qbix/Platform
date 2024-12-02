@@ -14,8 +14,8 @@
  *    The "title", "tag" and "content" keys have special meaning here.
  *  @param {Array} [$options.titles=null] Indicate the titles corresponding to the elements.
  *  @param {boolean} [options.dontSnapScroll] Set to true to stop snapping the scroll to each item
- *  @param {boolean} [options.forceMainThread] Force animation to happen on the main thread
  *  @param {integer}  [options.index] You can specify an index of the item to bring to the front first
+ *  @param {float} [options.scrollOnMouseMove=0] Scroll factor between 0 and 1 when mousemove happens if (not touchscreen)
  * @return {Q.Tool}
  */
 function Q_coverflow_tool($options)

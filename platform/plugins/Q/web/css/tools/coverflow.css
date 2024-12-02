@@ -31,13 +31,13 @@
 
 		@media (max-width: 1024px) {
 			:root {
-				--Q-coverflow-cover-size: 9rem;
+				--Q-coverflow-cover-size: 10rem;
 			}
 		}
 
 		@media (max-width: 600px) {
 			:root {
-				--Q-coverflow-cover-size: 6rem;
+				--Q-coverflow-cover-size: 8rem;
 			}
 		}
 
@@ -69,7 +69,7 @@
 			/*width: var(--Q-coverflow-cover-size);*/
 			height: var(--Q-coverflow-cover-size);
 
-			-webkit-box-reflect: below 0.5em
+			-webkit-box-reflect: below 0.1em
 				linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.25));
 		}
 
