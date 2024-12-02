@@ -55,6 +55,9 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
         );
         var li = element.closest('li');
         var title;
+        if (!li) {
+            return; // probably because nothing has rendered yet
+        }
         if (title = li.getAttribute('title')) {
             caption.innerText = title;
             caption.style.display = 'block';
