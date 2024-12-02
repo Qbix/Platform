@@ -475,20 +475,29 @@ Q.Tool.define("Q/tabs", function(options) {
 		} else {
 			url = Q.url(url);
 		}
+		var urls = [url], uri;
+		if (Q.info.urls && Q.info.uriString) {
+			if (uri = Q.info.urls[Q.info.uriString]) {
+				var uriMainPart = uri.split(/\s+/)[0];
+				urls.push(Q.info.urls[uriMainPart]);	
+			}
+		}
 		var defaultTab = null;
 		if (!tab) {
 			$tabs.each(function (k, t) {
 				var tdn = tool.getName(t);
 				var tu = tool.getUrl(t);
 
-				if ((tdn && tdn === name)
-				|| (!name && (
-					tu === url
-					|| tu === url.split('?')[0]
-					|| url.startsWith(tu)))
-				) {
-					tab = t;
-					return false;
+				for (var i=0; i<urls.length; ++i) {
+					var url = urls[i];
+					if ((tdn && tdn === name)
+					|| (!name && (
+						tu === url
+						|| tu === url.split('?')[0]))
+					) {
+						tab = t;
+						return false;
+					}
 				}
 				if (state.defaultTabName === tdn) {
 					defaultTab = t;
