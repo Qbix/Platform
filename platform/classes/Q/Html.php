@@ -1648,6 +1648,64 @@ class Q_Html
 	}
 
 	/**
+	 * Remove all element attributes and elements which are not
+	 * in the provided whitelist (but keeping their allowed children).
+	 * This function is great to use for HTML input before saving it
+	 * in the database.
+	 * Note that the HTML is parsed in HTML4 mode.
+	 * @method sanitize
+	 * @static
+	 * @param {string|DOMDocument|DOMElement} $html Would be modified in-place if DOMDocument
+	 * @param {array} $whitelist Array of [tagName => [attribute => true]]
+	 *  Examples of tagName can be "#text" for text nodes,
+	 *  "html", "head", "body", "div", "img", "p", etc.
+	 * @return {string} The HTML as a string.
+	 */
+	static function sanitize($html, array $whitelist)
+	{
+		libxml_use_internal_errors(true) AND libxml_clear_errors();
+		if (is_string($html)) {
+			if (empty($html)) {
+				return '';
+			}
+			$html = Q_Utils::removeInvisibleCharacters($html);
+			$dom = new DOMDocument('1.0', 'utf-8');
+			if ($dom->loadHTML($html)) {
+				self::sanitize($dom->documentElement, $whitelist);
+				return preg_replace('~<!DOCTYPE[^>]*>\s*~i', '', $dom->saveHTML());
+			}
+			return '';
+		}
+		$obj = $html;
+		if ($obj instanceof DOMDocument) {
+			$obj = $obj->documentElement;
+		}
+		if ($obj->hasChildNodes()) {
+			foreach (range($obj->childNodes->length - 1, 0) as $i) {
+				self::sanitize($obj->childNodes->item($i), $whitelist);
+			}
+		}
+		if (!isset($whitelist[$obj->nodeName])) {
+			$fragment = $obj->ownerDocument->createDocumentFragment();
+			while ($obj->childNodes->length > 0) {
+			    $fragment->appendChild($obj->childNodes->item(0));
+			}
+			return $obj->parentNode->replaceChild($fragment, $obj);
+		}
+		$whitelistAttributes = $whitelist[$obj->nodeName];
+		if (!is_callable($obj, 'getAttributeNames')) {
+			return;
+		}
+		$attributeNames = $obj->getAttributeNames();
+		foreach ($attributeNames as $attributeName) {
+			if (empty($whitelistAttributes[$attributeName])
+			or strpos($obj->getAttribute($attributeName), 'javascript:') !== false) {
+				$obj->removeAttribute($attributeName);
+			}	
+		}
+	}
+
+	/**
 	 * Set to true to use native HTML for lazyloading images instead of JS.
 	 * Works in most modern browsers.
 	 * @property $lazyloadWithoutJavascript

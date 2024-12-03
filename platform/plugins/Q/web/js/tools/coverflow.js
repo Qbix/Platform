@@ -16,6 +16,7 @@
  *  @param {integer}  [options.index] You can specify an index of the item to bring to the front first
  *  @param {Number} [options.scrollOnMouseMove=0] Scroll factor between 0 and 1 when mousemove happens if (not touchscreen)
  *  @param {Number}  [options.index] You can specify an index of the item to bring to the front first
+ *  @param {Q.Event} [options.onInvoke] Triggered when the middle item was clicked
  * @return {Q.Tool}
  */
 Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
@@ -102,7 +103,8 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
     dontSnapScroll: false,
     index: null,
     scrollOnMouseMove: 0,
-    scrollerOnMouseMove: false
+    scrollerOnMouseMove: false,
+    onInvoke: new Q.Event()
 }
 
 );

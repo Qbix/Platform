@@ -14,6 +14,14 @@
     bottom: 20px;
     vertical-align: middle;
     font-weight: bold;
+	padding: 2px;
+}
+.Q_notMobile .Q_coverflow_tool .Q_coverflow_caption {
+	padding: 10px;
+}
+.Q_mobile .Q_coverflow_tool .Q_coverflow_caption {
+	bottom: 0px;
+	line-height: 20px;
 }
 
 @layer Q_coverflow_demo {

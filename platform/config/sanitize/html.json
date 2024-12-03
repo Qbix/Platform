@@ -1,0 +1,100 @@
+{
+    "sanitize": {
+        "whitelist": {
+            "#text": true,
+            "a": {
+                "href": true,
+                "title": true,
+                "target": true,
+                "rel": true
+            },
+            "area": {
+                "shape": true,
+                "coords": true,
+                "href": true,
+                "alt": true,
+                "target": true,
+                "rel": true
+            },
+            "article": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "aside": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "b": {},
+            "div": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "figcaption": {},
+            "figure": {},
+            "footer": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "header": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "img": {
+                "src": true,
+                "alt": true,
+                "title": true,
+                "width": true,
+                "height": true,
+                "usemap": true
+            },
+            "main": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "map": {
+                "name": true
+            },
+            "nav": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "picture": {},
+            "section": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "source": {
+                "src": true,
+                "srcset": true,
+                "media": true,
+                "type": true
+            },
+            "span": {
+                "class": true,
+                "id": true,
+                "style": true
+            },
+            "time": {
+                "datetime": true
+            },
+            "video": {
+                "src": true,
+                "controls": true,
+                "autoplay": true,
+                "loop": true,
+                "muted": true,
+                "poster": true,
+                "width": true,
+                "height": true
+            }
+        }             
+    }
+}

@@ -745,6 +745,19 @@ class Q_Utils
 	}
 
 	/**
+	 * Removes invisible UNICODE characters from text
+	 * @method removeInvisibleCharacters
+	 * @static
+	 * @param {string} $input
+	 * @return {string}
+	 */
+	static function removeInvisibleCharacters($input)
+	{
+		$pattern = '/[\x{200B}\x{200C}\x{200D}\x{2060}\x{202E}\x{202D}\x{202A}\x{202B}\x{202C}\x{2066}\x{2067}\x{2068}\x{2069}\x{FEFF}\x{00AD}]/u';
+		return preg_replace($pattern, '', $input);
+	}
+
+	/**
 	 * Generates a Universally Unique IDentifier, version 4.
 	 * This function generates a truly random UUID.
 	 * @method uuid
@@ -1804,7 +1817,7 @@ class Q_Utils
 			if ($skipIfExists) {
 				return false;
 			}
-			if (!rmdir($link)) {
+			if (!@rmdir($link)) {
 				unlink($link);
 			}
 		}
