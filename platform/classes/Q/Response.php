@@ -319,6 +319,12 @@ class Q_Response
 					Q_Response::addContentSecurityPolicy($type, "'sha256-$hash'");
 				}
 			}
+			if ($nodeUrl = Q_Config::get('Q', 'node', 'url', null)) {
+				if (substr($nodeUrl, -1) !== '/') {
+					$nodeUrl .= '/';
+				}
+				Q_Response::addContentSecurityPolicy('script', $nodeUrl);
+			}
 			// set the meta-tag for content security policy
 			Q_Response::setMeta(array(
 				'name' => 'http-equiv',
