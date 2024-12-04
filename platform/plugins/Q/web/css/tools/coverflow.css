@@ -331,6 +331,8 @@
     will-change: z-index;
 
     user-select: none;
+
+	padding: 20px;
 }
 
 .Q_coverflow_covers > * > img {
