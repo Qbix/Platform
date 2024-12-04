@@ -1999,18 +1999,28 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 						$criteria_list[] = self::column($expr) . " IN ($value_list)";
 					}
 				} else if ($value instanceof Db_Range) {
-					if (isset($value->min)) {
-						$c_min = $value->includeMin ? '>=' : '>';
-						$criteria_list[] = self::column($expr) . " $c_min :_where_$i";
-						$this->parameters["_where_$i"] = $value->min;
-						++ $i;
+					$ranges = array_merge(array($value), $value->additionalRanges);
+					$rangeCriteria = [];
+					foreach ($ranges as $range) {
+						$rc = '';
+						if (isset($range->min)) {
+							$c_min = $range->includeMin ? '>=' : '>';
+							$rc = self::column($expr) . " $c_min :_where_$i";
+							$this->parameters["_where_$i"] = $range->min;
+							++ $i;
+						}
+						if (isset($range->max)) {
+							$c_max = $range->includeMax ? '<=' : '<';
+							$rc = ($rc ? "$rc AND " : '') .
+								self::column($expr) . " $c_max :_where_$i";
+							$this->parameters["_where_$i"] = $range->max;
+							++ $i;
+						}
+						if ($rc) {
+							$rangeCriteria[] = "($rc)";
+						}
 					}
-					if (isset($value->max)) {
-						$c_max = $value->includeMax ? '<=' : '<';
-						$criteria_list[] = self::column($expr) . " $c_max :_where_$i";
-						$this->parameters["_where_$i"] = $value->max;
-						++ $i;
-					}
+					$criteria_list[] = '(' . implode("\n\t OR ", $rangeCriteria) . ')';
 				} else {
 					$eq = preg_match('/\W/', substr($expr, -1)) ? '' : ' = ';
 					$criteria_list[] = self::column($expr) . "$eq:_where_$i";

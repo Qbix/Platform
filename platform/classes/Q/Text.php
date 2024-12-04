@@ -275,6 +275,23 @@ class Q_Text
 		}
 		return $info;
 	}
+
+	/**
+	 * Ranges for a given language
+	 * @static
+	 * @param {string} $lang Two-letter language code, e.g. "en"
+	 * @return {array} An array of arrays representing ranges,
+	 *  each containing a starting and ending ordinal of the UNICODE code point
+	 */
+	static function languageRanges($lang)
+	{
+		static $ranges = array();
+		if (empty($ranges[$lang])) {
+			$tree = Q_Tree::createAndLoad(Q_FILES_DIR.DS.'Q'.DS.'languageRanges.json');
+			$ranges[$lang] = $tree->get($lang, 'ranges', false);
+		}
+		return $ranges[$lang];
+	}	
 	
 	protected static $get = array();
 	protected static $override = array();

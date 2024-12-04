@@ -34,14 +34,50 @@ class Db_Range
 	
 	function __toString ()
 	{
+		$str = $this->renderAsString();
+		$results = $str ? array($str) : array();
+		foreach ($this->additionalRanges as $range) {
+			$results[] = $range->renderAsString();
+		}
+		return implode(" OR ", $results);
+	}
+
+	private function renderAsString()
+	{
 		$min = $this->min;
 		$max = $this->max;
 		$includeMin = $this->includeMin;
 		$includeMax = $this->includeMax;
 		$firstPart = isset($min) ? ($includeMin ? "$min <=" : "$min <") : '';
 		$secondPart = isset($max) ? ($includeMax ? "<= $max" : "< $max") : '';
-		return "$firstPart ... $secondPart";
+		return ($firstPart or $secondPart) ? "$firstPart ... $secondPart" : '';
 	}
+
+	/**
+	 * Get new Db_Range
+	 * @method unicode
+	 * @static
+	 * @param {string} [$lang='en'] Two-letter language code
+	 */
+	static function unicode($lang = 'en')
+	{
+		$ranges = ($lang === 'en')
+			? [[ord('A'), ord('Z')], [ord('a'), ord('z')]]
+			: Q_Text::languageRanges($lang);
+		if (!$ranges) {
+			throw new Q_Exception_MissingName(array(
+				'name' => "$language in languageRanges"
+			));
+		}
+		$result = new Db_Range(null, false, false, null);
+		foreach ($ranges as $range) {
+			$start = reset($range);
+			$end = end($range);
+			$result->additionalRanges[] = new Db_Range(mb_chr($start), true, false, mb_chr($end+1));
+		}
+		return $result;
+	}
+
 	/**
 	 * Minimal value of the range
 	 * @property $min
@@ -53,14 +89,19 @@ class Db_Range
 	 * @type mixed
 	 */
 	/**
-	 * Wheather maximum value shall be included to the range
+	 * Whether maximum value should be included to the range
 	 * @property $includeMax
 	 * @type boolean
 	 */
 	/**
-	 * Wheather minimum value shall be included to the range
+	 * Whether minimum value should be included to the range
 	 * @property $includeMin
 	 * @type boolean
 	 */
-	public $min, $max, $includeMin, $includeMax;
+	/**
+	 * Any ranges to unite with this range, using OR clauses
+	 * @property $additionalRanges
+	 * @type array
+	 */
+	public $min, $max, $includeMin, $includeMax, $additionalRanges;
 }
