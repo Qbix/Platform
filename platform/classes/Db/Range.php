@@ -54,10 +54,30 @@ class Db_Range
 	}
 
 	/**
+	 * Get a Db_Range for matching only strings that begin with a capital letter
+	 * @method capitalized
+	 * @static
+	 * @param {string} [$lang='en'] Two-letter language code
+	 * @return {Db_Range}
+	 */
+	static function capitalized($lang = 'en')
+	{
+		if ($lang != 'en') {
+			throw new Q_Exception_NotImplemented(array(
+				'functionality' => 'Db_Range::capitalized for non-English languages'
+			));
+		}
+		$start = 'A';
+		$end = 'Z';
+		return new Db_Range($start, true, false, mb_chr(mb_ord($end)+1));
+	}
+
+	/**
 	 * Get new Db_Range
 	 * @method unicode
 	 * @static
 	 * @param {string} [$lang='en'] Two-letter language code
+	 * @return {Db_Range}
 	 */
 	static function unicode($lang = 'en')
 	{
