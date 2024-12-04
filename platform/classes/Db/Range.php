@@ -123,5 +123,5 @@ class Db_Range
 	 * @property $additionalRanges
 	 * @type array
 	 */
-	public $min, $max, $includeMin, $includeMax, $additionalRanges;
+	public $min, $max, $includeMin, $includeMax, $additionalRanges = array();
 }
