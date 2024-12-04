@@ -822,6 +822,9 @@ class Q_Uri
 	 */
 	static function proxySource($url)
 	{
+		if (!$url) {
+			return $url;
+		}
 		$url = self::fixUrl($url);
 		$proxies = Q_Config::get('Q', 'proxies', array());
 		foreach ($proxies as $dest_url => $src_info) {

@@ -127,6 +127,7 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 				$this.plugin('Q/imagepicker', 'doUpload', this.result);
 			} else {
 				Q.alert(Q.text.Q.imagepicker.errorType);
+				$this.removeClass('Q_uploading');
 			}
 
 		};

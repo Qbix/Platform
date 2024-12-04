@@ -11659,7 +11659,7 @@ Q.nodeUrl = function _Q_node(where) {
 			return result;
 		}
 	}
-	return Q.info.nodeUrl.replace(Q.info.baseUrl, Q.baseUrl());
+	return Q.info.nodeUrl && Q.info.nodeUrl.replace(Q.info.baseUrl, Q.baseUrl());
 };
 Q.nodeUrl.routers = []; // functions returning a custom url
 
