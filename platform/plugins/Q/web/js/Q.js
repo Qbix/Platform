@@ -7237,6 +7237,9 @@ Q.IndexedDB.open = Q.promisify(function (dbName, storeName, params, callback) {
 			}
 		}
 	};
+	open.onversionchange = function () {
+		db.close();
+	};
 	open.onerror = function (error) {
 		callback && callback.call(Q.IndexedDB, error);
 	};
@@ -10092,6 +10095,8 @@ var _exports = {};
  *  Do not use together with container option.
  * @param {HTMLElement} [options.container] An element to which the stylesheet should be appended (unless it already exists in the document)
  *  Although this won't result in valid HTML, all browsers support it, and it enables the CSS to later be easily removed at runtime.
+ * @param {Boolean} [options.ignoreLoadingErrors=false] If true, ignores any errors in loading scripts.
+ * @param {Boolean} [options.querystringMatters] if true, then different querystring is considered as different, even if duplicate option is false
  * @param {Boolean} [options.skipIntegrity] if true, skips adding "integrity" attribute even if one can be calculated
  * @param {Boolean} [options.returnAll=false] If true, returns all the link elements instead of just the new ones
  * @return {Array} Returns an aray of LINK elements
@@ -10114,6 +10119,30 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		onload2.executed = true;
 	}
 
+	function onerror2(e) {
+		if (o.ignoreLoadingErrors) {
+			return onload2(e);
+		}
+		if (onerror2.executed) {
+			return;
+		}
+		var cb;
+		Q.addStylesheet.loaded[href2] = false;
+		if (Q.addScript.onErrorCallbacks[href2]) {
+			while ((cb = Q.addScript.onErrorCallbacks[href2].shift())) {
+				cb.call(this);
+			}
+		}
+		onerror2.executed = true;
+	}
+
+	function _onload() {
+		Q.addStylesheet.loaded[href2] = true;
+		onload();
+	}
+
+	var o = Q.extend({}, Q.addScript.options, options);
+
 	if (typeof media === 'function') {
 		options = onload; onload = media; media = undefined;
 	} else if (Q.isPlainObject(media) && !(media instanceof Q.Event)) {
@@ -10121,7 +10150,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 	}
 	options = options || {};
 	if (!onload) {
-		onload = function _onload() { };
+		onload = function () { };
 	}
 	if (Q.isArrayLike(href)) {
 		var pipe, ret = [];
@@ -10148,16 +10177,17 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 	}
 	options.info = {};
 	href = Q.url(href, null, options);
-	if (Q.addStylesheet.loaded[href]) {
-		onload();
-		return options.returnAll ? null : false;
+	var href2 = href.split('?')[0];
+	
+	if (!o.querystringMatters && Q.addStylesheet.loaded[href2]) {
+		_onload();
+		return o.returnAll ? null : false;
 	}
 	if (!media) {
 		media = 'screen,print';
 	}
 	var elements = document.querySelectorAll('link[rel=stylesheet],style[data-slot]');
 	var i, e, h, m;
-	var href2 = href.split('?')[0];
 	for (i=0; i<elements.length; ++i) {
 		e = elements[i];
 		m = e.getAttribute('media');
@@ -10190,11 +10220,23 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		} else {
 			Q.addStylesheet.onLoadCallbacks[href] = [onload];
 		}
-		if (Q.info.isAndroidStock) {
-			onload2.call(e); // it doesn't support onload
-		} else {
-			e.onload = onload2;
-			e.onreadystatechange = onload2; // for IE8
+		Q.addStylesheet.added[href2] = true;
+		Q.addStylesheet.onLoadCallbacks[href2] = [_onload];
+		Q.addStylesheet.onErrorCallbacks[href2] = [];
+		if (o.onError) {
+			Q.addStylesheet.onErrorCallbacks[href2].push(o.onError);
+		}
+		if (!e.wasProcessedByQ) {
+			if (Q.info.isAndroidStock) {
+				setTimeout(function () { // it doesn't support onload
+					onload2.call(e); // let's simulate onload optimistically
+				}, 100);
+			} else {
+				Q.addEventListener(e, 'load', onload2);
+				Q.addEventListener(e, 'error', onerror2);
+				e.onreadystatechange = onload2; // for IE8
+			}
+			e.wasProcessedByQ = true;
 		}
 		return options.returnAll ? e : false; // don't add
 	}
@@ -10240,6 +10282,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 
 
 Q.addStylesheet.onLoadCallbacks = {};
+Q.addStylesheet.onErrorCallbacks = {};
 Q.addStylesheet.added = {};
 Q.addStylesheet.loaded = {};
 
