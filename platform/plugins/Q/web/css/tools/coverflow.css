@@ -24,263 +24,77 @@
 	line-height: 20px;
 }
 
-@layer Q_coverflow_demo {
-	@layer Q_coverflow_base {
-		.Qbix_coverflow_tool .Q_coverflow_covers,
-        .Qbix_coverflow_tool .Q_coverflow_covers * {
-			box-sizing: border-box;
-			padding: 0;
-			margin: 0;
-		}
+.Q_coverflow_covers,
+.Q_coverflow_covers * {
+	box-sizing: border-box;
+	padding: 0;
+	margin: 0;
+}
 
-		:root {
-			--Q-coverflow-cover-size: 12rem;
-		}
+:root {
+	--Q-coverflow-cover-size: 12rem;
+}
 
-		@media (max-width: 1024px) {
-			:root {
-				--Q-coverflow-cover-size: 10rem;
-			}
-		}
-
-		@media (max-width: 600px) {
-			:root {
-				--Q-coverflow-cover-size: 8rem;
-			}
-		}
-
-		.Q_coverflow_covers {
-			list-style: none;
-			overflow-x: scroll;
-			width: 100%;
-			white-space: nowrap;
-		}
-
-		@layer Q_coverflow_scroll_snapping {
-			/* only enable snapping when not dragging round*/
-            .Q_coverflow_tool.Q_coverflow_snapping .Q_coverflow_covers {
-				scroll-snap-type: x mandatory;
-			}
-			.Q_coverflow_tool.Q_coverflow_snapping .Q_coverflow_covers > * {
-				scroll-snap-align: center;
-			}
-		}
-
-		.Q_coverflow_covers > * {
-			display: inline-block;
-			/* width: var(--Q-coverflow-cover-size);
-			height: var(--Q-coverflow-cover-size); */
-		}
-
-		.Q_coverflow_covers>*>* {
-			display: block;
-			/*width: var(--Q-coverflow-cover-size);*/
-			height: var(--Q-coverflow-cover-size);
-
-			-webkit-box-reflect: below 0.1em
-				linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.25));
-		}
-
-		.Q_coverflow_covers {
-			--size: 6;
-			min-height: calc(var(--Q-coverflow-cover-size) * 2.5);
-			/* width: calc(var(--Q-coverflow-cover-size) * var(--size)); */
-			margin: 0 auto;
-			padding: calc(var(--Q-coverflow-cover-size) / 3 * 2) 0;
-			position: relative;
-			max-width: 90vw;
-		}
-
-		/* Because the total size is 6, with 1 cover in the middle, there’s space for 5 left … so 2.5 on each side */
-		/* Didn’t work (on the right): `calc(50% - (var(--Q-coverflow-cover-size) / 2));` */
-		.Q_coverflow_covers li:first-of-type {
-			margin-left: calc(50% - (var(--Q-coverflow-cover-size) / 2));
-		}
-		.Q_coverflow_covers li:last-of-type {
-			margin-right: calc(50% - (var(--Q-coverflow-cover-size) / 2));
-		}
+@media (max-width: 1024px) {
+	:root {
+		--Q-coverflow-cover-size: 10rem;
 	}
 }
 
-
-
-@layer Q_coverflow_demo, Q_coverflow_meta;
-
-@font-face {
-  font-family: 'Monaspace';
-  src: 
-    url('/shared/MonaspaceKrypton-SyntaxHighlighter-Regular.woff2') 
-    format('woff2')
-  ;
-}
-
-@font-palette-values --kung-fury {
-  font-family: "Monaspace";
-  override-colors:
-    0 hsl(225 100% 40%), /* curlies and tags */
-    1 hsl(250 100% 80%), /* ? */
-    2 hsl(225 100% 40%), /* function */
-    3 hsl(225 100% 40%), /* ? */
-    4 hsl(270 50% 40%),  /* () */
-    5 hsl(210 40% 2%),   /* property name */ 
-    6 hsl(210 10% 30%),  /* ? */
-    7 hsl(327 100% 54%)  /* numbers */
-  ;
-}
-
-@layer Q_coverflow_meta {
-	@layer Q_coverflow_metabox {
-		.Q_coverflow_metabox {
-			position: fixed;
-			bottom: 1rem;
-			right: 1rem;
-
-			display: flex;
-			flex-direction: column;
-			gap: 1rem;
-			font-size: 1.2rem;
-			z-index: 2147483647;
-		}
-
-		/* Hide all but infobox when embedded */
-		.Q_coverflow_metabox :is(button, .button) {
-			font-size: 2.5rem;
-			line-height: 1;
-			display: block;
-
-			border: 0;
-			background: transparent;
-			padding: 0;
-			cursor: pointer;
-
-			opacity: 0.7;
-			transition: opacity 0.25s ease-in-out;
-			border-radius: 0.25rem;
-			text-decoration: none;
-		}
-
-		.Q_coverflow_metabox :is(button, .button):active,
-		.Q_coverflow_metabox :is(button, .button):focus {
-			outline: 2px dashed rgb(0 0 0 / 0.5);
-			outline-offset: 0.25rem;
-		}
-
-		.Q_coverflow_metabox  >  :is(button, .button):hover {
-			opacity: 1 !important;
-		}
-
-		@keyframes pulsate {
-			80% {
-				opacity: 1;
-			}
-			85% {
-				opacity: 1;
-			}
-			90% {
-				opacity: 0;
-			}
-			95% {
-				opacity: 1;
-			}
-			100% {
-				opacity: 0;
-			}
-		}
-
-		.Q_coverflow_metabox  >  button.animated {
-			animation: 5s pulsate ease-in alternate infinite;
-		}
-
-		.Q_coverflow_metabox  >  button.animated:hover,
-		.Q_coverflow_metabox  >  button.animated:focus,
-		.Q_coverflow_metabox:has(dialog[open])  >  button.animated {
-			animation: none;
-		}
-
-		.Q_coverflow_metabox  >  button[disabled] {
-			cursor: not-allowed;
-			outline: none !important;
-		}
-	}
-
-	@layer Q_coverflow_infobox {
-		@layer Q_coverflow_ui {
-			.Q_coverflow_infobox[open] {
-				box-sizing: border-box;
-				margin: 10vh auto;
-				width: 80vw;
-				max-width: 90ch;
-				max-height: 80vh;
-				padding: 2rem;
-				overscroll-behavior: contain;
-
-				background: #eee;
-				border: 0.25rem solid lightblue;
-				overflow: auto;
-
-				position: fixed;
-			}
-
-			.Q_coverflow_infobox::backdrop {
-				background-color: rgb(0 0 0 / 0.5);
-			}
-
-			.Q_coverflow_infobox  >  :first-child {
-				margin-top: 0;
-			}
-			.Q_coverflow_infobox  >  :last-child {
-				margin-bottom: 0;
-			}
-
-			.Q_coverflow_infobox-close {
-				/* Also inherits from `.Q_coverflow_metabox  >  button` */
-				position: absolute;
-				right: 0.5rem;
-				top: 0.5rem;
-
-				filter: grayscale();
-			}
-			.Q_coverflow_infobox-close:hover,
-			.Q_coverflow_infobox-close:focus {
-				filter: none;
-			}
-		}
-
-		@layer Q_coverflow_code {
-			.Q_coverflow_infobox pre {
-				border: 1px solid #dedede;
-				padding: 1em;
-				background: #f7f7f7;
-				font-family: "Monaspace", monospace;
-			  font-palette: --kung-fury;
-				overflow-x: auto;
-				border-left: 0.4em solid cornflowerblue;
-				tab-size: 2;
-			}
-
-			.Q_coverflow_infobox code {
-				font-family: "Monaspace", monospace;
-			  font-palette: --kung-fury;
-			}
-
-			.Q_coverflow_infobox code:not(pre code),
-			.Q_coverflow_infobox output:not(code:has(output) output) {
-				background: #f7f7f7;
-				border: 1px solid rgb(0 0 0 / 0.2);
-				padding: 0.1rem 0.3rem;
-				margin: 0.1rem 0;
-				border-radius: 0.2rem;
-				display: inline-block;
-			}
-		}
+@media (max-width: 600px) {
+	:root {
+		--Q-coverflow-cover-size: 8rem;
 	}
 }
 
+.Q_coverflow_covers {
+	list-style: none;
+	overflow-x: scroll;
+	width: 100%;
+	white-space: nowrap;
+}
 
+/* only enable snapping when not dragging round*/
+.Q_coverflow_tool.Q_coverflow_snapping .Q_coverflow_covers {
+    scroll-snap-type: x mandatory;
+}
+.Q_coverflow_tool.Q_coverflow_snapping .Q_coverflow_covers > * {
+    scroll-snap-align: center;
+}
 
+.Q_coverflow_covers > * {
+	display: inline-block;
+	/* width: var(--Q-coverflow-cover-size);
+	height: var(--Q-coverflow-cover-size); */
+}
 
+.Q_coverflow_covers>*>* {
+	display: block;
+	/*width: var(--Q-coverflow-cover-size);*/
+	height: var(--Q-coverflow-cover-size);
 
-@layer Q_coverflow_demo.base, Q_coverflow_demo.components;
+	-webkit-box-reflect: below 0.1em
+		linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.25));
+}
+
+.Q_coverflow_covers {
+	--size: 6;
+	min-height: calc(var(--Q-coverflow-cover-size) * 2.5);
+	width: 100%;
+	margin: 0 auto;
+	padding: calc(var(--Q-coverflow-cover-size) / 3 * 2) 0;
+	position: relative;
+	max-width: 90vw;
+}
+
+/* Because the total size is 6, with 1 cover in the middle, there’s space for 5 left … so 2.5 on each side */
+/* Didn’t work (on the right): `calc(50% - (var(--Q-coverflow-cover-size) / 2));` */
+.Q_coverflow_covers li:first-of-type {
+	margin-left: calc(50% - (var(--Q-coverflow-cover-size) / 2));
+}
+.Q_coverflow_covers li:last-of-type {
+	margin-right: calc(50% - (var(--Q-coverflow-cover-size) / 2));
+}
 
 /* Animation bumps up the z-index, to make sure it’s on top */
 @keyframes Q-coverflow-adjust-z-index {
@@ -314,14 +128,14 @@
     }
 }
 
-.Q_coverflow_covers > * {
+.Q_coverflow_covers li {
     /* Track this element as it intersects the scrollport */
-    view-timeline-name: --li-in-and-out-of-view;
+    view-timeline-name: --Q-coverflow-li-in-and-out-of-view;
     view-timeline-axis: inline;
 
     /* Link an animation to the established view-timeline and have it run during the contain phase */
     animation: linear Q-coverflow-adjust-z-index both;
-    animation-timeline: --li-in-and-out-of-view;
+    animation-timeline: --Q-coverflow-li-in-and-out-of-view;
 
     /* Make the 3D stuff work… */
     perspective: 40em;
@@ -331,14 +145,12 @@
     will-change: z-index;
 
     user-select: none;
-
-	padding: 20px;
 }
 
-.Q_coverflow_covers > * > img {
+.Q_coverflow_covers * > img {
     /* Link an animation to the established view-timeline (of the parent li) and have it run during the contain phase */
-    animation: linear rotate-cover both;
-    animation-timeline: --li-in-and-out-of-view;
+    animation: 1s linear Q-coverflow-rotate-cover both;
+    animation-timeline: --Q-coverflow-li-in-and-out-of-view;
 
     /* Prevent FOUC */
     transform: translateX(-100%) rotateY(-45deg);
@@ -346,24 +158,6 @@
     will-change: transform;
 }
 
-/* Animation that rotates the cover */
-@keyframes Q-coverflow-rotate-cover--mt {
-    0% {
-        transform: translateX(-100%) rotateY(-45deg);
-    }
-    35% {
-        transform: translateX(0) rotateY(-45deg);
-    }
-    50% {
-        transform: rotateY(0deg) translateZ(1em) scale(1.5);
-    }
-    65% {
-        transform: translateX(0) rotateY(45deg);
-    }
-    100% {
-        transform: translateX(100%) rotateY(45deg);
-    }
-}
 .Q_coverflow_tool .Q_coverflow_covers > * > img {
-    animation-name: Q-coverflow-rotate-cover--mt;
+    animation-name: Q-coverflow-rotate-cover;
 }

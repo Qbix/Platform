@@ -12,6 +12,7 @@
  *  @param {Array} [options.elements=null] Indicate the HTML elements. The elements may have a "title"
  *    attribute, in which case it is used unless the titles option is specified.
  *  @param {Array} [options.titles=null] Indicate the titles corresponding to the elements.
+
  *  @param {Boolean} [options.dontSnapScroll] Set to true to stop snapping the scroll to each item
  *  @param {integer}  [options.index] You can specify an index of the item to bring to the front first
  *  @param {Number} [options.scrollOnMouseMove=0] Scroll factor between 0 and 1 when mousemove happens if (not touchscreen)
@@ -26,6 +27,8 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
     if (!state.dontSnapScroll) {
         tool.element.addClass('Q_coverflow_snapping');
     }
+
+    Q.addScript('{{Q}}/js/polyfills/ScrollTimeline.min.js');
 
     var covers = tool.element.querySelector('.Q_coverflow_covers');
     if (!covers) {
@@ -82,6 +85,9 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
             rect.left + rect.width / 2,
             rect.top + rect.height / 2
         );
+        if (!element) {
+            return;
+        }
         var li = element.closest('li');
         var title;
         if (!li) {
@@ -96,12 +102,43 @@ Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
         $(caption).plugin('Q/textfill', 'refresh');
         return true;
     }
+    if (!state.dragScrollOnlyOnTouchscreens) {
+        // The JS below is so you can click and drag to scroll on desktop
+        // @source https://codepen.io/thenutz/pen/VwYeYEE
+        var slider = tool.element.querySelector(".Q_coverflow_covers");
+        var isDown = false;
+        var startX;
+        var scrollLeft;
+    
+        slider.addEventListener("pointerdown", (e) => {
+            isDown = true;
+            slider.classList.add("active");
+            startX = e.pageX - slider.offsetLeft;
+            scrollLeft = slider.scrollLeft;
+        });
+        slider.addEventListener("pointerleave", () => {
+            isDown = false;
+            slider.classList.remove("active");
+        });
+        slider.addEventListener("pointerup", () => {
+            isDown = false;
+            slider.classList.remove("active");
+        });
+        slider.addEventListener("pointermove", (e) => {
+            if (!isDown) return;
+            e.preventDefault();
+            var x = e.pageX - slider.offsetLeft;
+            var walk = (x - startX) * 3; //scroll-fast
+            slider.scrollLeft = scrollLeft - walk;
+        });
+    }
 }, 
 
 {
     elements: [],
     dontSnapScroll: false,
     index: null,
+    dragScrollOnlyOnTouchscreens: false,
     scrollOnMouseMove: 0,
     scrollerOnMouseMove: false,
     onInvoke: new Q.Event()
