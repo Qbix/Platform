@@ -10028,7 +10028,8 @@ Q.currentScript = function (stackLevels) {
 };
 
 /**
- * Exports one or more variables from a javascript file.
+ * Exports one or more variables from a javascript file,
+ * which works with Q.require() a bit similarly to Node.js.
  * The arguments you pass to this function will be passed
  * as arguments to the callback of Q.require() whenever it requires
  * the file in which this is called. They will also be saved,
@@ -10042,6 +10043,8 @@ Q.exports = function () {
 };
 
 /**
+ * This is an alternative to the Q.import() function,
+ * which works with Q.exports() a bit similarly to Node.js.
  * Loads the Javascript file and then executes the callback,
  * The code in the file is supposed to synchronously call Q.exports()
  * and pass arguments to it which are then passed as arguments
@@ -10049,7 +10052,7 @@ Q.exports = function () {
  * already called, then the callback is called with saved arguments.
  * @method require
  * @static
- * @param {String} src The src of the script to load
+ * @param {String} src The src of the script to load, will be processed by Q.url()
  * @param {Function} callback Called after the script loads
  * @param {Boolean} synchronously Whether to call the callback synchronously when src was already loaded
  * @param {Boolean} memoized Set to true, to memoize return value and re-use it instead of calling it again
@@ -10079,6 +10082,22 @@ Q.require = function (src, callback, synchronously, once) {
 		Q.handle(callback, Q, value || []);
 	});
 };
+
+/**
+ * Used to load a module, using the built-in import() function.
+ * This wrapper is here so we can more easily log and trace where
+ * files have been imported from.
+ * @method import
+ * @static
+ * @param {String} src The src of the module to load, will be processed by Q.url()
+ * @return {Promise} A promise that resolves to whatever was exported by the module
+ */
+Q.import = function (src) {
+	Q.handle(Q.import.onCall, Q, [src]);
+	return this.import(Q.url(src));
+};
+
+Q.import.onCall = new Q.Event();
 
 var _exports = {};
 
