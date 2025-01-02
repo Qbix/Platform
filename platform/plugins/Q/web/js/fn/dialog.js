@@ -147,7 +147,8 @@ Q.Tool.jQuery('Q/overlay',
 						// no longer in DOM
 						return;
 					}
-					var isInput = $(document.activeElement).is(":input");
+					var da = document.activeElement;
+					var isInput = da && (da.tagName === 'INPUT' || da.tagName === 'TEXTAREA');
 					if (isInput && !$this.is(":visible")) {
 						// keyboard is visible or not applicable, do nothing for now
 						setTimeout(_fixBody, 300);
@@ -449,8 +450,8 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 			$this.addClass('Q_fullscreen_dialog');
 			o.className && $this.addClass(o.className);
 			$this.css({
-				'width': Q.Visual.windowWidth() + 'px',
-				'height': Q.Visual.windowHeight() + 'px'
+				'width': '100dw',
+				'height': '100dvh'
 			});
 
 			$this.hide();
@@ -465,8 +466,8 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 					var topZ = Q.zIndexTopmost();
 					$this.css('z-index', topZ + 1);
 					$this.css({
-						'width': Q.Visual.windowWidth() + 'px',
-						'height': Q.Visual.windowHeight() + 'px'
+						'width': '100dvw',
+						'height': '100dvh'
 					});
 					for (var i = 0; i < hiddenChildren.length; i++) {
 						hiddenChildren[i].removeClass('Q_hide');
@@ -644,7 +645,8 @@ function _handlePosAndScroll(o)
 	_adjustPosition();
 
 	function _adjustPosition() {
-		var isInput = $(document.activeElement).is(":input");
+		var da = document.activeElement;
+		var isInput = da && (da.tagName === 'INPUT' || da.tagName === 'TEXTAREA');
 		if (isInput) {
 			inputWasFocused = true;
 			setTimeout(function () {
