@@ -10,7 +10,7 @@
 (function _Q_setup(undefined, dontSetGlobals) {
 
 var root = this;
-var $ = Q.jQuery = root.jQuery;
+var $ = Q.jQuery = root.jQuery || window.$;
 
 // fallback for old Javascript versions
 try {
@@ -1777,7 +1777,7 @@ Q.isInteger = function _Q_isInteger(value, strictComparison) {
  *	Whether it is an array
  */
 Q.isArrayLike = function _Q_isArrayLike(value) {
-	return (Q.typeOf(value) === 'array') || (window.$ && value instanceof $);
+	return (Q.typeOf(value) === 'array') || ($ && value instanceof $);
 };
 
 /**
@@ -13024,7 +13024,7 @@ Q.jQueryPluginPlugin = function _Q_jQueryPluginPlugin() {
 			var pn = Q.normalize.memoized(pluginName);
 			results[pn] = pluginName;
 			if ($.fn[pn]) return;
-			var src = ($.fn.plugin[pn] || 'Q/plugins/' + parts[0] + '/js/fn'+parts[1]+'.js');
+			var src = ($.fn.plugin[pn] || 'Q/plugins/' + parts[0] + '/js/fn/'+parts[1]+'.js');
 			if (typeof src === 'string') {
 				srcs.push(src);
 			}
@@ -15372,7 +15372,8 @@ Q.confirm = function(message, callback, options) {
 		'content': $('<div class="Q_messagebox Q_big_prompt" />').append(
 			$('<p />').html(message),
 			$('<div class="Q_buttons" />').append(
-				$('<button class="Q_button" />').html(o.ok), ' ',
+				$('<button class="Q_button" />').html(o.ok),
+				document.createTextNode(' '),
 				$('<button class="Q_button" />').html(o.cancel)
 			)
 		),
@@ -15459,7 +15460,8 @@ Q.prompt = function(message, callback, options) {
 		'content': $('<div class="Q_messagebox Q_big_prompt" />').append(
 			$('<p />').html(message),
 			$('<div class="Q_buttons" />').append(
-				$('<input type="text" enterkeyhint="done" />').attr(attr), ' ',
+				$('<input type="text" enterkeyhint="done" />').attr(attr),
+				document.createTextNode(' '),
 				$('<button class="Q_messagebox_done Q_button" />').html(o.ok)
 			)
 		),
