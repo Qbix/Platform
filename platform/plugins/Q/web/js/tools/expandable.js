@@ -89,7 +89,7 @@ Q.Tool.define('Q/expandable', function (options) {
 	 *  @param {Boolean} [options.autoCollapseSiblings] Whether, when expanding an expandable,
 	 *  @param {Boolean} [options.scrollContainer] Whether to scroll a parent container
 	 *  @param {Boolean} [options.scrollToElement] Can be used to specify another element to scroll to when expanding. Defaults to the title element of the expandable.
- *  @param {Number} [options.spaceAbove] How many pixels of space to leave above at the end of the scrolling animation
+ 	 *  @param {Number} [options.spaceAbove] How many pixels of space to leave above at the end of the scrolling animation
 	 * @param {Function} [callback] the function to call once the expanding has completed
 	 */
 	expand: function (options, callback) {

@@ -1118,6 +1118,11 @@ body.Q_columns_animationFX {
 	transform: scale(1);
 }
 
+.Q_flex_wrap {
+    flex-basis: 100%;
+    height: 0;
+}
+
 @media (prefers-color-scheme: dark) {
 	.Q_overlay, .Q_fullscreen_dialog {
 		background: url(../img/bg/overlay-dark.png);
