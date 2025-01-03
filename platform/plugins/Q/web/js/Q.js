@@ -3257,7 +3257,9 @@ Evp.stop = function _Q_Event_prototype_stop(removeAllHandlers) {
 };
 
 /**
- * Make a copy of this event, with all the keys and handlers
+ * Make a copy of this event, with all current keys and handlers.
+ * If you instead want to chain events, consider doing
+ * event.add(otherEvent.handle).
  * @method copy
  * @return {Q.Event}
  */
@@ -14200,6 +14202,8 @@ Q.Visual = Q.Pointer = {
 	 * @param {Integer} [options.hide.after=null] Set an integer here to hide the hint animation after the specified number of milliseconds
 	 * @param {Integer} [options.hide.duration=500] The duration of the hint hide animation
 	 * @param {Function} [options.hide.ease=Q.Animation.ease.smooth]
+	 * @param {Q.Event} [options.onShow] Event triggered for every image shown for the hint
+     * @param {Q.Event} [options.onHide] Event triggered for every image hidden for the hint
 	 * @return {HTMLElement|IntersectionObserver} img1 - Hint image element, or an intersection observer if waitUntilVisible is true
 	 */
 	hint: function (targets, options) {
@@ -14382,6 +14386,8 @@ Q.Visual = Q.Pointer = {
 							tooltip.style.left = tleft + 'px';
 							tooltip.style.top = ttop + 'px';
 						}
+						img.hintOptions = options;
+                        Q.handle(options.onShow, img, [targets, options]);
                         Q.Animation.play(function (x, y) {
                             if (options.styles) {
                                 Q.extend(img.style, options.styles);
@@ -14798,6 +14804,10 @@ function _stopHint(img, container) {
 			}
 		}
 	});
+	if (img.hintOptions && img.hintOptions.onHide) {
+        var ho = img.hintOptions;
+        Q.handle(ho.onHide, img, [img.targets, ho]);
+    }
 	return null;
 }
 
@@ -14854,7 +14864,9 @@ Q.Visual.hint.options = {
 		delay: 300,
 		duration: 300,
 		ease: Q.Animation.ease.linear
-	}
+	},
+	onShow: new Q.Event(),
+    onHide: new Q.Event()
 };
 Q.Visual.hint.imgs = [];
 
@@ -16380,7 +16392,8 @@ Q.Tool.define({
 	},
 	"Q/image": "{{Q}}/js/tools/image.js",
 	"Q/clip": "{{Q}}/js/tools/clip.js",
-	"Q/floating": "{{Q}}/js/tools/floating.js"
+	"Q/floating": "{{Q}}/js/tools/floating.js",
+	"Q/htmleditor": "{{Q}}/js/tools/htmleditor.js"
 });
 
 Q.Tool.jQuery({
