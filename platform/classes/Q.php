@@ -1734,7 +1734,7 @@ class Q
 				), array(), $code);
 			}
 		} else if (!isset($result) and strtolower(trim($args[0])) !== 'null') {
-			throw new Q_Exception_JsonEncode(array(
+			throw new Q_Exception_JsonDecode(array(
 				'message' => 'Invalid JSON'
 			), null, -1);
 		}
