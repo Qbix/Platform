@@ -7557,7 +7557,7 @@ Q.init = function _Q_init(options) {
 		if (checks.indexOf("device") < 0) {
 			return;
 		}
-		function _Q_init_deviceready_handler() {
+		var _Q_init_deviceready_handler = Q.once(function() {
 			if (!Q.info) Q.info = {};
 			Q.info.isCordova = true;
 			// avoid opening external urls in app window
@@ -7572,11 +7572,17 @@ Q.init = function _Q_init(options) {
 				} while ((t = t.parentElement));
 			});
 			p.fill("device")();
-		}
+		});
 		if (root.device) {
 			_Q_init_deviceready_handler();
 		} else {
 			Q.addEventListener(document, 'deviceready', _Q_init_deviceready_handler, false);
+            let ival = setInterval(function () {
+                if (window.device) {
+                    _Q_init_deviceready_handler();
+                    clearInterval(ival);
+                }
+            }, 100);
 		}
 	}
 
@@ -9016,6 +9022,7 @@ Q.req = function _Q_req(uri, slotNames, callback, options) {
  * @param {Object} [options.fields] optional fields to pass with any method other than "get"
  * @param {Object} [options.formdata] if set, instead of fields, submits the formdata (including multipart form-data such as files, etc.) 
  * @param {HTMLElement} [options.form] if specified, then the request is made by submitting this form, temporarily extending it with any fields passed in options.fields, and possibly overriding its method with whatever is passed to options.method .
+ * @param {Boolean} [options.dontTransformUrl] pass true to just use the passed URL without transforming it
  * @param {String} [options.resultFunction="result"] The path to the function to handle inside the
  *  contentWindow of the resulting iframe, e.g. "Foo.result". 
  *  Your document is supposed to define this function if it wants to return results to the
@@ -9057,7 +9064,6 @@ Q.request = function (url, slotNames, callback, options) {
 		delim = (url.indexOf('?') < 0) ? '?' : '&';
 		url += delim + Q.queryString(fields);
 	}
-	url = Q.url(url, null, options);
 	if (typeof slotNames === 'function') {
 		options = callback;
 		callback = slotNames;
@@ -9066,6 +9072,9 @@ Q.request = function (url, slotNames, callback, options) {
 		slotNames = slotNames.split(',');
 	}
 	var o = Q.extend({}, Q.request.options, options);
+	if (!o.dontTransformUrl) {
+		url = Q.url(url, null, options);
+	}
 	var request = new Q.Request(url, slotNames, callback, o);
 	if (o.skipNonce) {
 		_Q_Response_makeRequest.call(this, url, slotNames, callback, o);
@@ -9280,7 +9289,7 @@ Q.request = function (url, slotNames, callback, options) {
 						+ encodeURIComponent(o.callbackName) + '='
 						+ encodeURIComponent('Q.request.callbacks['+i+']');
 				} else {
-					url2 = (o.extend === false)
+					url2 = (o.extend === false || o.dontTransformUrl)
 						? url
 						: Q.ajaxExtend(url, slotNames, Q.extend(o, {
 							callback: 'Q.request.callbacks['+i+']'
@@ -10762,6 +10771,7 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
  * An hash of options to pass to the loader, and can also include options for loadUrl itself:
  * @param {Function} [options.loader=Q.request] can be used to override the actual function to request the URL. See Q.request documentation for more options.
  * @param {Function} [options.handler] the function to handle the returned data. Defaults to a function that fills the corresponding slot containers correctly.
+ * @param {Boolean} [options.dontTransformUrl] pass true to just use the passed URL without transforming it
  * @param {boolean} [options.ignoreHistory=false] if true, does not push the url onto the history stack
  * @param {boolean} [options.ignorePage=false] if true, does not process the links / stylesheets / script data in the response, and doesn't trigger deactivation of current page and activation of the new page
  * @param {boolean} [options.ignoreLoadingErrors=false] If true, ignores any errors in loading scripts.
@@ -10794,9 +10804,7 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
  * @return {Q.Promise} Returns a promise with an extra .cancel() method to cancel the action
  */
 Q.loadUrl = function _Q_loadUrl(url, options) {
-	url = Q.url(url);
 	var o = Q.extend({}, Q.loadUrl.options, options);
-
 	var handler = o.handler;
 	var slotNames = o.slotNames || (Q.info && Q.info.slotNames);
 	if (typeof slotNames === 'string') {
@@ -14185,7 +14193,7 @@ Q.Visual = Q.Pointer = {
 	 * @param {boolean} [options.tooltip] Can be used to show a tooltip with some html
 	 * @param {boolean} [options.tooltip.text] Use to put text in the tooltip
 	 * @param {boolean} [options.tooltip.html] Use to put text in the tooltip (overrides text)
-	 * @param {boolean} [options.tooltip.index=0] The index of the image to which to attach the tooltip
+	 * @param {boolean} [options.tooltip.index] Specify the index of the image to which to attach the tooltip, defaults to the last hint image
 	 * @param {boolean} [options.tooltip.className='Q_pulsate'] You can override the additional class name / animation effect
 	 * @param {boolean} [options.tooltip.margin=10] The margin to put around the tooltip if it gets too close to the edges
 	 * @param {Object} [options.speak] Can be used to speak some text. See Q.Audio.speak()
@@ -14349,7 +14357,7 @@ Q.Visual = Q.Pointer = {
                         var height = parseInt(img.style.height);
 						var tooltip = null;
 						if (options.tooltip
-						&& (options.tooltip.index || 0) == i
+						&& (options.tooltip.index || imgs.length-1) == i
 						&& !img.tooltip) {
 							tooltip = img.tooltip = img.tooltip || document.createElement('div');
 							var className = ('className' in options.tooltip) ? options.tooltip.className : 'Q_pulsate';
@@ -14364,6 +14372,7 @@ Q.Visual = Q.Pointer = {
 							} else if (options.tooltip.text) {
 								tooltip.innerHTML = options.tooltip.text.encodeHTML();
 							}
+							tooltip.style.zIndex = img.style.zIndex + 100;
 							Q.extend(tooltip.style, {
 								display: 'inline-block',
 								position: 'absolute',
@@ -16699,10 +16708,15 @@ Q.request.options = {
 	parse: 'json',
 	timeout: 5000,
 	onRedirect: new Q.Event(function (url) {
-		Q.handle(url, {
-			target: '_self',
-			quiet: true
-		});
+		if (!url.startsWith(Q.baseUrl())) {
+			location.href = url; // just redirect to another site
+		} else {
+			Q.loadUrl(url, {
+				target: '_self',
+				quiet: true,
+				dontTransformUrl: true
+			});
+		}
 	}, "Q"),
 	resultFunction: "result",
 	beforeRequest: [],
@@ -16873,7 +16887,7 @@ Q.Camera = {
 				var $closeIcon = $('<a href="#" class="Q_scanning_close">')
 					.on(Q.Pointer.fastclick, _close)
 					.appendTo("body");
-				Q.addEventListener(document, 'deviceready', function () {
+				Q.onReady.add(function () {
 					QRScanner.prepare(function(err, status){
 						if (err) {
 							Q.handle(_close, $closeIcon);

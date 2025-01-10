@@ -100,7 +100,8 @@ function Q_response($params)
 					);
 				}
 			} catch (Exception $e) {
-				if (!($e instanceof Q_Exception_MissingSlot)
+				if (!($e instanceof Q_Exception_MissingSlot
+				   or $e instanceof Q_Exception_NotFound)
 				or !Q_Response::$redirected) {
 					throw $e; // otherwise, just ignore missing slots, since we are redirecting anyway
 				}
