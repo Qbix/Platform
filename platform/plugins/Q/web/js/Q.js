@@ -6016,19 +6016,9 @@ function _loadToolScript(toolElement, callback, shared, parentId, options) {
 			waitFor.push('js');
 			Q.addScript(toolConstructor.js, pipe.fill('js'));
 		}
-		if (toolConstructor.css) {
-			waitFor.push('css');
-			Q.addStylesheet(toolConstructor.css, pipe.fill('css'));
-		}
 		if (toolConstructor.html) {
 			waitFor.push('html');
 			Q.request.once(toolConstructor.html, pipe.fill('html'), { extend: false, parse: false });
-		}
-		var n = Q.normalize.memoized(toolName);
-		var text = Q.Text.addedFor('Q.Tool.define', n, toolConstructor);
-		if (text) {
-			waitFor.push('text');
-			Q.Text.get(text, pipe.fill('text'));
 		}
 		pipe.add(waitFor, 1, _loadToolScript_loaded).run();
 
@@ -9780,7 +9770,7 @@ Q.addScript = function _Q_addScript(src, onload, options) {
 		} else if (onload2.executed) {
 			return;
 		}
-		var targetsrc = e.target.getAttribute('src').split('?')[0];
+		var targetsrc = src.split('?')[0];
 		Q.addScript.loaded[targetsrc] = true;
 		while ((cb = Q.addScript.onLoadCallbacks[targetsrc].shift())) {
 			Q.nonce = Q.nonce || Q.cookie('Q_nonce');
@@ -9813,7 +9803,7 @@ Q.addScript = function _Q_addScript(src, onload, options) {
 			Q.onJQuery.handle(jQuery, [jQuery]);
 		}
 		Q.jQueryPluginPlugin();
-		onload();
+		onload(script);
 	}
 
 	if (!onload) {
@@ -9828,7 +9818,7 @@ Q.addScript = function _Q_addScript(src, onload, options) {
 			srcs.push((src && src.src) ? src.src : src);
 		});
 		if (Q.isEmpty(srcs)) {
-			onload();
+			onload(script);
 			return [];
 		}
 		pipe = new Q.Pipe(srcs, onload);
@@ -9896,13 +9886,13 @@ Q.addScript = function _Q_addScript(src, onload, options) {
 			// the script already exists in the document
 			if (Q.addScript.loaded[src2] || Q.addScript.loaded[src2]) {
 				// the script was already loaded successfully
-				_onload();
+				_onload(script);
 				return o.returnAll ? script : false;
 			}
 			if (Q.addScript.loaded[src2] === false) {
 				// the script had an error when loading
 				if (o.ignoreLoadingErrors) {
-					_onload();
+					_onload(script);
 				} else if (o.onError) {
 					o.onError.call(script);
 				}
@@ -10133,7 +10123,7 @@ var _exports = {};
  */
 Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 
-	function onload2() {
+	function onload2(e) {
 		if (onload2.executed) {
 			return;
 		}
@@ -10141,9 +10131,10 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 			(this.readyState !== 'complete' && this.readyState !== 'loaded')) {
 			return;
 		}
-		Q.addStylesheet.loaded[href] = true;
+		var targethref = href.split('?')[0];
+		Q.addStylesheet.loaded[targethref] = true;
 		var cb;
-		while ((cb = Q.addStylesheet.onLoadCallbacks[href].shift())) {
+		while ((cb = Q.addStylesheet.onLoadCallbacks[targethref].shift())) {
 			cb.call(this);
 		}
 		onload2.executed = true;
@@ -10168,7 +10159,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 
 	function _onload() {
 		Q.addStylesheet.loaded[href2] = true;
-		onload();
+		onload(link);
 	}
 
 	var o = Q.extend({}, Q.addScript.options, options);
@@ -10190,7 +10181,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 			hrefs.push((href && href.href) ? href.href : href);
 		});
 		if (Q.isEmpty(hrefs)) {
-			onload();
+			onload(link);
 			return [];
 		}
 		pipe = new Q.Pipe(hrefs, 1, onload);
@@ -10210,7 +10201,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 	var href2 = href.split('?')[0];
 	
 	if (!o.querystringMatters && Q.addStylesheet.loaded[href2]) {
-		_onload();
+		_onload(link);
 		return o.returnAll ? null : false;
 	}
 	if (!media) {
@@ -10239,20 +10230,30 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		if (outside) {
 			container.appendChild(e);
 		}
+		if (!Q.addStylesheet.added[href2]
+		&& !e.wasProcessedByQ
+		&& (!('readyState' in e)
+		|| (e.readyState !== 'complete'
+		|| e.readyState !== 'loaded'))) {
+			// the stylesheet was added by someone else (and hopefully loaded)
+			// we can't always know whether to call the error handler
+			// if we got here, we might as well call onload
+			_onload();
+			return o.returnAll ? e : false;
+		}
 		if (Q.addStylesheet.loaded[href]
 		|| Q.addStylesheet.loaded[href2]
-		|| !Q.addStylesheet.added[href]) {
-			onload();
+		|| !Q.addStylesheet.added[href2]) {
+			onload(link);
 			return options.returnAll ? e : false;
 		}
-		if (Q.addStylesheet.onLoadCallbacks[href]) {
-			Q.addStylesheet.onLoadCallbacks[href].push(onload);
-		} else {
-			Q.addStylesheet.onLoadCallbacks[href] = [onload];
+		if (!Q.addStylesheet.onLoadCallbacks[href2]) {
+			Q.addStylesheet.onLoadCallbacks[href2] = [];
 		}
-		Q.addStylesheet.added[href2] = true;
-		Q.addStylesheet.onLoadCallbacks[href2] = [_onload];
-		Q.addStylesheet.onErrorCallbacks[href2] = [];
+		if (!Q.addStylesheet.onErrorCallbacks[href2]) {
+			Q.addStylesheet.onErrorCallbacks[href2] = [];
+		}
+		Q.addStylesheet.onLoadCallbacks[href2].push(onload);
 		if (o.onError) {
 			Q.addStylesheet.onErrorCallbacks[href2].push(o.onError);
 		}
