@@ -10294,7 +10294,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		}
 	}
 	Q.addStylesheet.added[href] = true;
-	Q.addStylesheet.onLoadCallbacks[href] = [onload];
+	Q.addStylesheet.onLoadCallbacks[href2] = [onload];
 	link.onload = onload2;
 	link.onreadystatechange = onload2; // for IE
 	link.setAttribute('href', href);
