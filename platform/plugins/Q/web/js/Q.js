@@ -6020,6 +6020,17 @@ function _loadToolScript(toolElement, callback, shared, parentId, options) {
 			waitFor.push('html');
 			Q.request.once(toolConstructor.html, pipe.fill('html'), { extend: false, parse: false });
 		}
+		// start loading css and text at the same time as the js and html
+		if (toolConstructor.css) {
+			waitFor.push('css');
+			Q.addStylesheet(toolConstructor.css, pipe.fill('css'));
+		}
+		var n = Q.normalize.memoized(toolName);
+		var text = Q.Text.addedFor('Q.Tool.define', n, toolConstructor);
+		if (text) {
+			waitFor.push('text');
+			Q.Text.get(text, pipe.fill('text'));
+		}
 		pipe.add(waitFor, 1, _loadToolScript_loaded).run();
 
 		function _handleMissingConstructor(requireFunction) {
@@ -9803,7 +9814,7 @@ Q.addScript = function _Q_addScript(src, onload, options) {
 			Q.onJQuery.handle(jQuery, [jQuery]);
 		}
 		Q.jQueryPluginPlugin();
-		onload(script);
+		onload();
 	}
 
 	if (!onload) {
@@ -9818,7 +9829,7 @@ Q.addScript = function _Q_addScript(src, onload, options) {
 			srcs.push((src && src.src) ? src.src : src);
 		});
 		if (Q.isEmpty(srcs)) {
-			onload(script);
+			onload();
 			return [];
 		}
 		pipe = new Q.Pipe(srcs, onload);
@@ -10159,7 +10170,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 
 	function _onload() {
 		Q.addStylesheet.loaded[href2] = true;
-		onload(link);
+		onload();
 	}
 
 	var o = Q.extend({}, Q.addScript.options, options);
@@ -10181,7 +10192,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 			hrefs.push((href && href.href) ? href.href : href);
 		});
 		if (Q.isEmpty(hrefs)) {
-			onload(link);
+			onload();
 			return [];
 		}
 		pipe = new Q.Pipe(hrefs, 1, onload);
@@ -10244,7 +10255,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		if (Q.addStylesheet.loaded[href]
 		|| Q.addStylesheet.loaded[href2]
 		|| !Q.addStylesheet.added[href2]) {
-			onload(link);
+			onload();
 			return options.returnAll ? e : false;
 		}
 		if (!Q.addStylesheet.onLoadCallbacks[href2]) {
