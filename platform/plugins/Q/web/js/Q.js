@@ -7886,7 +7886,7 @@ Q.removeElement = function _Q_removeElement(element, removeTools) {
 	}
 	if (element.tagName === 'LINK' && element.href) {
 		// unlike scripts, when we yank the css, it should be marked as removed
-		var href2 = href.split('?')[0];
+		var href2 = element.href.split('?')[0];
 		delete Q.addStylesheet.loaded[href2];
 	}
 	for (var i=0, l=_layoutElements.length; i<l; ++i) {
