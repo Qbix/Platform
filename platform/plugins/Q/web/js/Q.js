@@ -7884,6 +7884,11 @@ Q.removeElement = function _Q_removeElement(element, removeTools) {
 	if (removeTools) {
 		Q.Tool.remove(element);
 	}
+	if (element.tagName === 'LINK' && element.href) {
+		// unlike scripts, when we yank the css, it should be marked as removed
+		var href2 = element.href.split('?')[0];
+		delete Q.addStylesheet.loaded[href2];
+	}
 	for (var i=0, l=_layoutElements.length; i<l; ++i) {
 		var p = _layoutElements[i];
 		do {
@@ -10212,7 +10217,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 	var href2 = href.split('?')[0];
 	
 	if (!o.querystringMatters && Q.addStylesheet.loaded[href2]) {
-		_onload(link);
+		_onload();
 		return o.returnAll ? null : false;
 	}
 	if (!media) {
