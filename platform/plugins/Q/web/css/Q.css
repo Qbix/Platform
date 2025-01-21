@@ -988,7 +988,7 @@ html.Q_dialog_shown #dashboard_slot {
 	box-shadow: 2px 2px 10px rgba(0, 0, 0, .5);
 	backdrop-filter: blur(2px);
 	-webkit-backdrop-filter: blur(2px);
-	z-index: 1000000001;
+	z-index: 1000000003;
 }
 
 .Q_thought {
