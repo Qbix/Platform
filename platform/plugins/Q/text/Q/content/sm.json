@@ -4,7 +4,9 @@
         "canceled": "Talosaga ua faaleaogaina",
         "500": "Sese server i totonu",
         "404": "Le maua: {{url}}",
-        "501": "Talosaga ua motusia"
+        "501": "Talosaga ua motusia",
+        "401": "Le fa&#39;atagaina",
+        "403": "Fa&#39;asa"
     },
     "nonce": {
         "sameDomain": "Ua uma le sauniga. Toe faafou le itulau ma toe taumafai.",
@@ -18,7 +20,11 @@
         "Tap": "Tap",
         "Click": "Kiliki",
         "Yes": "ioe",
-        "No": "leai"
+        "No": "leai",
+        "OK": "Ua lelei",
+        "Alert": "Lapata&#39;i",
+        "Confirm": "Faamaonia",
+        "Prompt": "Fa&#39;anatinati"
     },
     "months": {
         "1": "Ianuari",
@@ -139,5 +145,14 @@
         "inHour": "i {{h}} itula",
         "inHours": "i {{h}} itula",
         "inUnderMinute": "i lalo ole 1 minute"
+    },
+    "browser": {
+        "insecureContext": "E mana&#39;omia lou su&#39;esu&#39;e i totonu ose fa&#39;asinomaga fa&#39;amautu mo lenei mea e fa&#39;atino"
+    },
+    "scan": {
+        "QR": "Su&#39;e le QR code"
+    },
+    "input": {
+        "Placeholder": "Amata taina..."
     }
 }

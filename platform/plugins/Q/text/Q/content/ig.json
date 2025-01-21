@@ -4,7 +4,9 @@
         "canceled": "Akagbuola arịrịọ",
         "500": "Mperi Sava Ime",
         "404": "Achọtaghị: {{url}}",
-        "501": "Akwụsịla arịrịọ"
+        "501": "Akwụsịla arịrịọ",
+        "401": "Enweghị ikike",
+        "403": "Amachibidoro"
     },
     "nonce": {
         "sameDomain": "Oge agwụla. Megharịa ibe ahụ wee nwaa ọzọ.",
@@ -18,7 +20,11 @@
         "Tap": "Kpatụ",
         "Click": "Pịa",
         "Yes": "Ee",
-        "No": "Mba"
+        "No": "Mba",
+        "OK": "Ọ DỊ MMA",
+        "Alert": "Njikere",
+        "Confirm": "Kwenye",
+        "Prompt": "Ngwa ngwa"
     },
     "months": {
         "1": "Jenụwarị",
@@ -139,5 +145,14 @@
         "inHour": "n&#39;awa {{h}}",
         "inHours": "n&#39;awa {{h}}",
         "inUnderMinute": "n&#39;okpuru 1 nkeji"
+    },
+    "browser": {
+        "insecureContext": "Ịkwesịrị ịchọgharị na ọnọdụ echekwara ka nke a rụọ ọrụ"
+    },
+    "scan": {
+        "QR": "Nyochaa koodu QR"
+    },
+    "input": {
+        "Placeholder": "Malite pịnye..."
     }
 }

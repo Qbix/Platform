@@ -4,7 +4,9 @@
         "canceled": "Gikansela ang hangyo",
         "500": "Sayop sa internal nga server",
         "404": "Wala makit-an: {{url}}",
-        "501": "Nabalda ang hangyo"
+        "501": "Nabalda ang hangyo",
+        "401": "Dili awtorisado",
+        "403": "Gidili"
     },
     "nonce": {
         "sameDomain": "Nag-expire ang sesyon. I-refresh ang panid ug sulayi pag-usab.",
@@ -18,7 +20,11 @@
         "Tap": "Tapik",
         "Click": "Pag-klik",
         "Yes": "Oo",
-        "No": "Dili"
+        "No": "Dili",
+        "OK": "OK ra",
+        "Alert": "Alerto",
+        "Confirm": "Confirm",
+        "Prompt": "Giaghat"
     },
     "months": {
         "1": "Enero",
@@ -141,5 +147,14 @@
         "decades": "mga dekada",
         "century": "siglo",
         "centuries": "mga siglo"
+    },
+    "browser": {
+        "insecureContext": "Kinahanglan ka nga mag-browse sa usa ka luwas nga konteksto aron kini molihok"
+    },
+    "scan": {
+        "QR": "I-scan ang mga QR code"
+    },
+    "input": {
+        "Placeholder": "Pagsugod sa pag-type..."
     }
 }

@@ -4,7 +4,9 @@
         "canceled": "Codsiga waa la joojiyay",
         "500": "Cilad gudaha server-ka",
         "404": "Lama helin: {{url}}",
-        "501": "Codsiga waa la joojiyay"
+        "501": "Codsiga waa la joojiyay",
+        "401": "Aan la fasaxin",
+        "403": "mamnuuc"
     },
     "nonce": {
         "sameDomain": "Fadhigu wuu dhacay Dib u cusboonaysii bogga oo isku day mar kale.",
@@ -18,7 +20,11 @@
         "Tap": "Taabo",
         "Click": "Guji",
         "Yes": "Haa",
-        "No": "Maya"
+        "No": "Maya",
+        "OK": "OK",
+        "Alert": "Digniin",
+        "Confirm": "Xaqiiji",
+        "Prompt": "degdeg"
     },
     "months": {
         "1": "Janaayo",
@@ -139,5 +145,14 @@
         "inHour": "gudaha {{h}} saac",
         "inHours": "gudaha {{h}} saacadood",
         "inUnderMinute": "in ka yar 1 daqiiqo"
+    },
+    "browser": {
+        "insecureContext": "Waxaad u baahan tahay inaad ku dhex baadho xaalad sugan si ay tani u shaqeyso"
+    },
+    "scan": {
+        "QR": "Sawir koodka QR"
+    },
+    "input": {
+        "Placeholder": "Bilow teeb..."
     }
 }

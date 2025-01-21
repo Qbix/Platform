@@ -4,7 +4,9 @@
         "canceled": "Paménta dibolaykeun",
         "500": "Kasalahan Sérver Internal",
         "404": "Teu kapanggih: {{url}}",
-        "501": "Paménta diganggu"
+        "501": "Paménta diganggu",
+        "401": "Teu sah",
+        "403": "Dilarang"
     },
     "nonce": {
         "sameDomain": "Sési kadaluwarsa. Refresh kaca sareng cobian deui.",
@@ -18,7 +20,11 @@
         "Tap": "Ketok",
         "Click": "Pencét",
         "Yes": "Sumuhun",
-        "No": "No"
+        "No": "No",
+        "OK": "OKÉ",
+        "Alert": "Waspada",
+        "Confirm": "Konfirmasi",
+        "Prompt": "Ajakan"
     },
     "months": {
         "1": "Januari",
@@ -139,5 +145,14 @@
         "inHour": "dina {{h}} jam",
         "inHours": "dina {{h}} jam",
         "inUnderMinute": "dina sahandapeun 1 menit"
+    },
+    "browser": {
+        "insecureContext": "Anjeun kedah ngotéktak dina kontéks anu aman pikeun ieu jalan"
+    },
+    "scan": {
+        "QR": "Nyeken kodeu QR"
+    },
+    "input": {
+        "Placeholder": "Mimitian ngetik..."
     }
 }

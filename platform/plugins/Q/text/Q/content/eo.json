@@ -4,7 +4,9 @@
         "canceled": "Peto nuligita",
         "500": "Interna servila eraro",
         "404": "Ne trovita: {{url}}",
-        "501": "Peto interrompita"
+        "501": "Peto interrompita",
+        "401": "Neaŭtorizita",
+        "403": "Malpermesite"
     },
     "nonce": {
         "sameDomain": "Sesio eksvalidiĝis. Refreŝigu la paĝon kaj provu denove.",
@@ -18,7 +20,11 @@
         "Tap": "Frapu",
         "Click": "Klaku",
         "Yes": "Jes",
-        "No": "Ne"
+        "No": "Ne",
+        "OK": "Bone",
+        "Alert": "Atentigo",
+        "Confirm": "Konfirmu",
+        "Prompt": "Prompto"
     },
     "months": {
         "1": "januaro",
@@ -139,5 +145,14 @@
         "inHour": "en {{h}} horo",
         "inHours": "en {{h}} horoj",
         "inUnderMinute": "en malpli ol 1 minuto"
+    },
+    "browser": {
+        "insecureContext": "Por ke tio funkciu, vi devas foliumi en sekura kunteksto"
+    },
+    "scan": {
+        "QR": "Skanu QR-kodojn"
+    },
+    "input": {
+        "Placeholder": "Komencu tajpi..."
     }
 }

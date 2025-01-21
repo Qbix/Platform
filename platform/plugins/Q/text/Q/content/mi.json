@@ -4,7 +4,9 @@
         "canceled": "Kua whakakorehia te tono",
         "500": "Hapa tūmau ā-roto",
         "404": "Kāore i kitea: {{url}}",
-        "501": "I haukotia te tono"
+        "501": "I haukotia te tono",
+        "401": "Kare i mana",
+        "403": "Kua rāhuitia"
     },
     "nonce": {
         "sameDomain": "Kua pau te wahanga. Tāmatahia te whārangi ka ngana anō.",
@@ -18,7 +20,11 @@
         "Tap": "Tap",
         "Click": "Pāwhiri",
         "Yes": "Ae",
-        "No": "Kao"
+        "No": "Kao",
+        "OK": "pai",
+        "Alert": "Matohi",
+        "Confirm": "Whakaū",
+        "Prompt": "Whakatairanga"
     },
     "months": {
         "1": "Hanuere",
@@ -139,5 +145,14 @@
         "inHour": "i {{h}} haora",
         "inHours": "i {{h}} haora",
         "inUnderMinute": "i raro i te 1 meneti"
+    },
+    "browser": {
+        "insecureContext": "Me tirotiro koe i roto i te horopaki haumaru mo tenei mahi"
+    },
+    "scan": {
+        "QR": "Matawai waehere QR"
+    },
+    "input": {
+        "Placeholder": "Tīmatahia te pato..."
     }
 }

@@ -4,7 +4,9 @@
         "canceled": "Daxwaz hat betal kirin",
         "500": "Çewtiya servera navxweyî",
         "404": "nehat dîtin: {{url}}",
-        "501": "Daxwaz qut bû"
+        "501": "Daxwaz qut bû",
+        "401": "Bêmaf",
+        "403": "Qedexekirî"
     },
     "nonce": {
         "sameDomain": "Rûniştin qediya. Rûpelê nûve bikin û dîsa biceribînin.",
@@ -18,7 +20,11 @@
         "Tap": "Dîk",
         "Click": "Bikirtînin",
         "Yes": "Erê",
-        "No": "Na"
+        "No": "Na",
+        "OK": "OK",
+        "Alert": "Hişyar",
+        "Confirm": "Tesdîqkirin",
+        "Prompt": "Derhal"
     },
     "months": {
         "1": "Rêbendan",
@@ -139,5 +145,14 @@
         "inHour": "di {{h}} saetê de",
         "inHours": "di {{h}} saetan de",
         "inUnderMinute": "di bin 1 deqîqe"
+    },
+    "browser": {
+        "insecureContext": "Pêdivî ye ku hûn di çarçoveyek ewledar de bigerin da ku ev kar bike"
+    },
+    "scan": {
+        "QR": "Kodên QR bişopînin"
+    },
+    "input": {
+        "Placeholder": "Dest bi nivîsandinê bike..."
     }
 }

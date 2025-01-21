@@ -4,7 +4,9 @@
         "canceled": "Isicelo sirhoxisiwe",
         "500": "Impazamo yeSeva yangaphakathi",
         "404": "Ayifunyenwanga: {{url}}",
-        "501": "Isicelo siphazamisekile"
+        "501": "Isicelo siphazamisekile",
+        "401": "Ukungagunyaziswanga",
+        "403": "Akuvumelekanga"
     },
     "nonce": {
         "sameDomain": "Iseshoni iphelelwe lixesha. Hlaziya eli phepha uze uzame kwakhona.",
@@ -18,7 +20,11 @@
         "Tap": "Thepha",
         "Click": "Cofa",
         "Yes": "Ewe",
-        "No": "Hayi"
+        "No": "Hayi",
+        "OK": "KULUNGILE",
+        "Alert": "Isilumkiso",
+        "Confirm": "Qinisekisa",
+        "Prompt": "Ngokukhawuleza"
     },
     "months": {
         "1": "EyoMqungu",
@@ -139,5 +145,14 @@
         "inHour": "kwi {{h}} iyure",
         "inHours": "kwii {{h}} iiyure",
         "inUnderMinute": "ngaphantsi komzuzu omnye"
+    },
+    "browser": {
+        "insecureContext": "Kufuneka ukhangele kumxholo okhuselekileyo ukuze oku kusebenze"
+    },
+    "scan": {
+        "QR": "Skena iikhowudi zeQR"
+    },
+    "input": {
+        "Placeholder": "Qalisa ukuchwetheza..."
     }
 }

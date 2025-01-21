@@ -4,7 +4,9 @@
         "canceled": "Zahtjev je otkazan",
         "500": "Interna greška servera",
         "404": "Nije pronađeno: {{url}}",
-        "501": "Zahtjev je prekinut"
+        "501": "Zahtjev je prekinut",
+        "401": "Neovlašteno",
+        "403": "Zabranjeno"
     },
     "nonce": {
         "sameDomain": "Sesija je istekla. Osvježite stranicu i pokušajte ponovo.",
@@ -18,7 +20,11 @@
         "Tap": "Dodirnite",
         "Click": "Kliknite",
         "Yes": "Da",
-        "No": "br"
+        "No": "br",
+        "OK": "OK",
+        "Alert": "Alert",
+        "Confirm": "Potvrdi",
+        "Prompt": "Prompt"
     },
     "months": {
         "1": "Januar",
@@ -141,5 +147,14 @@
         "decades": "decenijama",
         "century": "veka",
         "centuries": "stoljeća"
+    },
+    "browser": {
+        "insecureContext": "Morate pretraživati u sigurnom kontekstu da bi ovo funkcioniralo"
+    },
+    "scan": {
+        "QR": "Skenirajte QR kodove"
+    },
+    "input": {
+        "Placeholder": "Počnite kucati..."
     }
 }

@@ -4,7 +4,9 @@
         "canceled": "Ti fagilee ibeere",
         "500": "Asa",
         "404": "Ko ri: {{url}}",
-        "501": "Ibere ti daduro"
+        "501": "Ibere ti daduro",
+        "401": "Laigba aṣẹ",
+        "403": "Eewọ"
     },
     "nonce": {
         "sameDomain": "Akoko ti pari. Tun oju-iwe naa sọ ki o tun gbiyanju lẹẹkansi.",
@@ -18,7 +20,11 @@
         "Tap": "Fọwọ ba",
         "Click": "Tẹ",
         "Yes": "Bẹẹni",
-        "No": "Rara"
+        "No": "Rara",
+        "OK": "O DARA",
+        "Alert": "Itaniji",
+        "Confirm": "Jẹrisi",
+        "Prompt": "Ni kiakia"
     },
     "months": {
         "1": "Oṣu Kini",
@@ -139,5 +145,14 @@
         "inHour": "ni wakati {999}",
         "inHours": "ni {999} wakati",
         "inUnderMinute": "labẹ 1 iṣẹju"
+    },
+    "browser": {
+        "insecureContext": "O nilo lati lọ kiri ni aaye to ni aabo fun eyi lati ṣiṣẹ"
+    },
+    "scan": {
+        "QR": "Ṣayẹwo awọn koodu QR"
+    },
+    "input": {
+        "Placeholder": "Bẹrẹ titẹ..."
     }
 }

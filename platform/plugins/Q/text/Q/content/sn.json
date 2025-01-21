@@ -4,7 +4,9 @@
         "canceled": "Chikumbiro chakanzurwa",
         "500": "Internal server error",
         "404": "Haina kuwanikwa: {{url}}",
-        "501": "Chikumbiro chavhiringwa"
+        "501": "Chikumbiro chavhiringwa",
+        "401": "Zvisina mvumo",
+        "403": "Kurambidzwa"
     },
     "nonce": {
         "sameDomain": "Session yapera. Gadzirisa peji uye edza zvakare.",
@@ -18,7 +20,11 @@
         "Tap": "Tap",
         "Click": "Dzvanya",
         "Yes": "Ehe",
-        "No": "Aihwa"
+        "No": "Aihwa",
+        "OK": "OK",
+        "Alert": "Alert",
+        "Confirm": "Confirm",
+        "Prompt": "Prompt"
     },
     "months": {
         "1": "Ndira",
@@ -139,5 +145,14 @@
         "inHour": "mu {{h}} awa",
         "inHours": "mu {{h}} maawa",
         "inUnderMinute": "mukati meminiti 1"
+    },
+    "browser": {
+        "insecureContext": "Iwe unofanirwa kutarisa mune yakachengeteka mamiriro kuti izvi zvishande"
+    },
+    "scan": {
+        "QR": "Scan QR macode"
+    },
+    "input": {
+        "Placeholder": "Tanga kutaipa..."
     }
 }

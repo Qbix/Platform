@@ -4,7 +4,9 @@
         "canceled": "Permintaan dibatalkan",
         "500": "Kesalahan server dari dalam",
         "404": "Tidak ditemukan: {{url}}",
-        "501": "Permintaan terputus"
+        "501": "Permintaan terputus",
+        "401": "Tidak sah",
+        "403": "Terlarang"
     },
     "nonce": {
         "sameDomain": "Sesi berakhir. Segarkan halaman dan coba lagi.",
@@ -18,7 +20,11 @@
         "Tap": "Mengetuk",
         "Click": "Klik",
         "Yes": "Ya",
-        "No": "Tidak"
+        "No": "Tidak",
+        "OK": "OKE",
+        "Alert": "Peringatan",
+        "Confirm": "Mengonfirmasi",
+        "Prompt": "Mengingatkan"
     },
     "months": {
         "1": "Januari",
@@ -139,5 +145,14 @@
         "inHour": "dalam {{h}} jam",
         "inHours": "dalam {{h}} jam",
         "inUnderMinute": "dalam waktu kurang dari 1 menit"
+    },
+    "browser": {
+        "insecureContext": "Anda perlu menjelajah dalam konteks aman agar ini berfungsi"
+    },
+    "scan": {
+        "QR": "Pindai kode QR"
+    },
+    "input": {
+        "Placeholder": "Mulai mengetik..."
     }
 }

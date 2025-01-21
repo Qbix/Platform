@@ -4,7 +4,9 @@
         "canceled": "Iarrtas air a chur dheth",
         "500": "Mearachd an fhrithealaiche a-staigh",
         "404": "Cha deach a lorg: {{url}}",
-        "501": "Iarrtas air a bhriseadh"
+        "501": "Iarrtas air a bhriseadh",
+        "401": "Gun chead",
+        "403": "Toirmisgte"
     },
     "nonce": {
         "sameDomain": "Thàinig an seisean gu crìch. Ùraich an duilleag is feuch ris a-rithist.",
@@ -18,7 +20,11 @@
         "Tap": "Tap",
         "Click": "Cliog",
         "Yes": "tha",
-        "No": "Chan eil"
+        "No": "Chan eil",
+        "OK": "ceart gu leòr",
+        "Alert": "Rabhadh",
+        "Confirm": "Dearbhaich",
+        "Prompt": "Brosnaich"
     },
     "months": {
         "1": "Am Faoilleach",
@@ -139,5 +145,14 @@
         "inHour": "ann an {{h}} uair",
         "inHours": "ann an {{h}} uairean",
         "inUnderMinute": "ann an nas lugha na 1 mhionaid"
+    },
+    "browser": {
+        "insecureContext": "Feumaidh tu brobhsadh ann an co-theacs tèarainte gus an obraich seo"
+    },
+    "scan": {
+        "QR": "Sgan còdan QR"
+    },
+    "input": {
+        "Placeholder": "Tòisich a’ sgrìobhadh..."
     }
 }

@@ -4,7 +4,9 @@
         "canceled": "Ufro annuléiert",
         "500": "Interne Serverfehler",
         "404": "Net fonnt: {{url}}",
-        "501": "Demande ënnerbrach"
+        "501": "Demande ënnerbrach",
+        "401": "Onerlaabt",
+        "403": "Verbueden"
     },
     "nonce": {
         "sameDomain": "Sessioun ofgelaaf. Erfrëscht d&#39;Säit a probéiert nach eng Kéier.",
@@ -18,7 +20,11 @@
         "Tap": "Tap",
         "Click": "Klickt",
         "Yes": "jo",
-        "No": "Nee"
+        "No": "Nee",
+        "OK": "OK",
+        "Alert": "Alarm",
+        "Confirm": "Confirméieren",
+        "Prompt": "Prompt"
     },
     "months": {
         "1": "Januar",
@@ -139,5 +145,14 @@
         "inHour": "an {{h}} Stonn",
         "inHours": "an {{h}} Stonnen",
         "inUnderMinute": "an ënner 1 Minutt"
+    },
+    "browser": {
+        "insecureContext": "Dir musst an engem séchere Kontext surfen fir datt dëst funktionnéiert"
+    },
+    "scan": {
+        "QR": "Scan QR Coden"
+    },
+    "input": {
+        "Placeholder": "Fänkt un ze tippen ..."
     }
 }

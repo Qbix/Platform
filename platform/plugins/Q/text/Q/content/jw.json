@@ -4,7 +4,9 @@
         "canceled": "Panjaluk dibatalake",
         "500": "kesalahan server internal",
         "404": "Ora ditemokake: {{url}}",
-        "501": "Panjaluk diselani"
+        "501": "Panjaluk diselani",
+        "401": "ora sah",
+        "403": "Dilarang"
     },
     "nonce": {
         "sameDomain": "Sesi kadaluwarsa. Refresh kaca lan coba maneh.",
@@ -18,7 +20,11 @@
         "Tap": "Tutul",
         "Click": "Klik",
         "Yes": "ya wis",
-        "No": "Ora"
+        "No": "Ora",
+        "OK": "OK",
+        "Alert": "Tandha",
+        "Confirm": "Konfirmasi",
+        "Prompt": "Prompt"
     },
     "months": {
         "1": "Januari",
@@ -139,5 +145,14 @@
         "inHour": "ing {{h}} jam",
         "inHours": "ing {{h}} jam",
         "inUnderMinute": "ing ngisor 1 menit"
+    },
+    "browser": {
+        "insecureContext": "Sampeyan kudu browsing ing konteks aman kanggo iki bisa"
+    },
+    "scan": {
+        "QR": "Pindai kode QR"
+    },
+    "input": {
+        "Placeholder": "Mulai ngetik..."
     }
 }

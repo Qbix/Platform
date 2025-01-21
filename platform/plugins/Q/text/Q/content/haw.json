@@ -4,7 +4,9 @@
         "canceled": "Ua kāpae ʻia ke noi",
         "500": "Kuʻia kikowaena kikowaena",
         "404": "ʻAʻole i loaʻa: {{url}}",
-        "501": "Hoʻopau ʻia ke noi"
+        "501": "Hoʻopau ʻia ke noi",
+        "401": "ʻAʻole ʻae ʻia",
+        "403": "Papa ʻia"
     },
     "nonce": {
         "sameDomain": "Ua pau ke kau. Hoʻohou i ka ʻaoʻao a hoʻāʻo hou.",
@@ -18,7 +20,11 @@
         "Tap": "Piʻi",
         "Click": "Kaomi",
         "Yes": "ae",
-        "No": "Aʻole"
+        "No": "Aʻole",
+        "OK": "OK",
+        "Alert": "Makaʻala",
+        "Confirm": "E hōʻoia",
+        "Prompt": "Hoʻomaka"
     },
     "months": {
         "1": "Ianuali",
@@ -139,5 +145,14 @@
         "inHour": "i ka hola {{h}}.",
         "inHours": "i loko o {{h}} hola",
         "inUnderMinute": "ma lalo o 1 minuke"
+    },
+    "browser": {
+        "insecureContext": "Pono ʻoe e mākaʻikaʻi ma kahi pōʻaiapili paʻa no kēia hana"
+    },
+    "scan": {
+        "QR": "E ʻimi i nā code QR"
+    },
+    "input": {
+        "Placeholder": "E hoʻomaka e paʻi..."
     }
 }

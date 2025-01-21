@@ -4,7 +4,9 @@
         "canceled": "Request cancellatam",
         "500": "Internus servo errore",
         "404": "Non inveni: {{url}}",
-        "501": "Petitio interrumpitur"
+        "501": "Petitio interrumpitur",
+        "401": "cu",
+        "403": "vetitum"
     },
     "nonce": {
         "sameDomain": "Periodus finit. Renova pagina et iterum conare.",
@@ -18,7 +20,11 @@
         "Tap": "Tap",
         "Click": "Click",
         "Yes": "Ita",
-        "No": "No"
+        "No": "No",
+        "OK": "OK",
+        "Alert": "Alert",
+        "Confirm": "Confirm",
+        "Prompt": "promptus"
     },
     "months": {
         "1": "Ianuarii",
@@ -139,5 +145,14 @@
         "inHour": "in {{h}} hora",
         "inHours": "in {{h}} horas",
         "inUnderMinute": "in sub I momento"
+    },
+    "browser": {
+        "insecureContext": "Opus est ut in contextu securo percurrere hoc ad opus"
+    },
+    "scan": {
+        "QR": "QR code Scan"
+    },
+    "input": {
+        "Placeholder": "Satus typing..."
     }
 }

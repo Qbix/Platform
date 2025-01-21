@@ -4,7 +4,9 @@
         "canceled": "So‘rov bekor qilindi",
         "500": "Serverdagi ichki xatolik",
         "404": "Topilmadi: {{url}}",
-        "501": "Soʻrov uzildi"
+        "501": "Soʻrov uzildi",
+        "401": "Ruxsatsiz",
+        "403": "Taqiqlangan"
     },
     "nonce": {
         "sameDomain": "Seans muddati tugadi. Sahifani yangilang va qaytadan urinib ko&#39;ring.",
@@ -18,7 +20,11 @@
         "Tap": "ga teging",
         "Click": "bosing",
         "Yes": "Ha",
-        "No": "Yo&#39;q"
+        "No": "Yo&#39;q",
+        "OK": "KELISHDIKMI",
+        "Alert": "Ogohlantirish",
+        "Confirm": "Tasdiqlang",
+        "Prompt": "Tezkor"
     },
     "months": {
         "1": "Yanvar",
@@ -139,5 +145,14 @@
         "inHour": "{{h}} soatdan keyin",
         "inHours": "{{h}} soatdan keyin",
         "inUnderMinute": "1 daqiqa ichida"
+    },
+    "browser": {
+        "insecureContext": "Buning ishlashi uchun xavfsiz kontekstda ko&#39;rib chiqishingiz kerak"
+    },
+    "scan": {
+        "QR": "QR kodlarini skanerlang"
+    },
+    "input": {
+        "Placeholder": "Yozishni boshlang..."
     }
 }

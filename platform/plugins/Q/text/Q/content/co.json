@@ -4,7 +4,9 @@
         "canceled": "A dumanda annullata",
         "500": "Errore di u servitore internu",
         "404": "Ùn trovu: {{url}}",
-        "501": "A dumanda hè interrotta"
+        "501": "A dumanda hè interrotta",
+        "401": "Senza autorizazione",
+        "403": "Pruibitu"
     },
     "nonce": {
         "sameDomain": "A sessione hè scaduta. Refresh a pagina è pruvate di novu.",
@@ -18,7 +20,11 @@
         "Tap": "Tap",
         "Click": "Cliccate",
         "Yes": "Iè",
-        "No": "Innò"
+        "No": "Innò",
+        "OK": "OK",
+        "Alert": "Alerta",
+        "Confirm": "Cunfirmà",
+        "Prompt": "Prompt"
     },
     "months": {
         "1": "Ghjinnaghju",
@@ -141,5 +147,14 @@
         "decades": "decennii",
         "century": "seculu",
         "centuries": "seculi"
+    },
+    "browser": {
+        "insecureContext": "Avete bisognu di navigà in un cuntestu sicuru per questu per travaglià"
+    },
+    "scan": {
+        "QR": "Scansà i codici QR"
+    },
+    "input": {
+        "Placeholder": "Cumincià à scrive..."
     }
 }

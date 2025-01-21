@@ -4,7 +4,9 @@
         "canceled": "Forespørsel kansellert",
         "500": "Intern server feil",
         "404": "Ikke funnet: {{url}}",
-        "501": "Forespørselen ble avbrutt"
+        "501": "Forespørselen ble avbrutt",
+        "401": "Uautorisert",
+        "403": "Forbudt"
     },
     "nonce": {
         "sameDomain": "Sesjon utløpt. Oppdater siden og prøv igjen.",
@@ -18,7 +20,11 @@
         "Tap": "Trykk på",
         "Click": "Klikk",
         "Yes": "Ja",
-        "No": "Nei"
+        "No": "Nei",
+        "OK": "OK",
+        "Alert": "Varsle",
+        "Confirm": "Bekrefte",
+        "Prompt": "Spør"
     },
     "months": {
         "1": "januar",
@@ -139,5 +145,14 @@
         "inHour": "om {{h}} time",
         "inHours": "om {{h}} timer",
         "inUnderMinute": "på under 1 minutt"
+    },
+    "browser": {
+        "insecureContext": "Du må surfe i en sikker kontekst for at dette skal fungere"
+    },
+    "scan": {
+        "QR": "Skann QR-koder"
+    },
+    "input": {
+        "Placeholder": "Begynn å skrive..."
     }
 }

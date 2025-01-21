@@ -4,7 +4,9 @@
         "canceled": "Demann anile",
         "500": "Erè sèvè entèn",
         "404": "Pa jwenn: {{url}}",
-        "501": "Demann entèwonp"
+        "501": "Demann entèwonp",
+        "401": "San otorizasyon",
+        "403": "Entèdi"
     },
     "nonce": {
         "sameDomain": "Sesyon ekspire. Rafrechi paj la epi eseye ankò.",
@@ -18,7 +20,11 @@
         "Tap": "Tape",
         "Click": "Klike sou",
         "Yes": "Wi",
-        "No": "Non"
+        "No": "Non",
+        "OK": "OK",
+        "Alert": "Alèt",
+        "Confirm": "Konfime",
+        "Prompt": "Èd memwa"
     },
     "months": {
         "1": "Janvye",
@@ -139,5 +145,14 @@
         "inHour": "nan {{h}} èdtan",
         "inHours": "nan {{h}} èdtan",
         "inUnderMinute": "nan mwens pase 1 minit"
+    },
+    "browser": {
+        "insecureContext": "Ou bezwen browse nan yon kontèks an sekirite pou sa a travay"
+    },
+    "scan": {
+        "QR": "Eskane kòd QR"
+    },
+    "input": {
+        "Placeholder": "Kòmanse tape..."
     }
 }

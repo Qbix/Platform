@@ -4,7 +4,9 @@
         "canceled": "Nofoanana ny fangatahana",
         "500": "Olana amin&#39;ny servera anatiny",
         "404": "Tsy hita: {{url}}",
-        "501": "Tapaka ny fangatahana"
+        "501": "Tapaka ny fangatahana",
+        "401": "tsy nahazoan-dalana",
+        "403": "Voarara"
     },
     "nonce": {
         "sameDomain": "Tapitra ny fotoam-pivoriana. Havaozy ny pejy ary andramo indray.",
@@ -18,7 +20,11 @@
         "Tap": "paompy",
         "Click": "tsindrio",
         "Yes": "ENY",
-        "No": "tsy misy"
+        "No": "tsy misy",
+        "OK": "OK",
+        "Alert": "Fanairana",
+        "Confirm": "Manamarina",
+        "Prompt": "avy hatrany"
     },
     "months": {
         "1": "Janoary",
@@ -139,5 +145,14 @@
         "inHour": "ao anatin&#39;ny {{h}} ora",
         "inHours": "ao anatin&#39;ny {{h}} ora",
         "inUnderMinute": "ao anatin&#39;ny 1 minitra"
+    },
+    "browser": {
+        "insecureContext": "Mila mikaroka ao anatin&#39;ny contexte azo antoka ianao vao miasa"
+    },
+    "scan": {
+        "QR": "Scan QR codes"
+    },
+    "input": {
+        "Placeholder": "Manomboka manoratra..."
     }
 }

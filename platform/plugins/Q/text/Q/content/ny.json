@@ -4,7 +4,9 @@
         "canceled": "Pempho lathetsedwa",
         "500": "Cholakwika Cham&#39;kati Chaseva",
         "404": "Sanapezeke: {{url}}",
-        "501": "Pempho lasokonezedwa"
+        "501": "Pempho lasokonezedwa",
+        "401": "Zosaloledwa",
+        "403": "Zoletsedwa"
     },
     "nonce": {
         "sameDomain": "Gawo latha. Tsitsaninso tsambali ndikuyesanso.",
@@ -18,7 +20,11 @@
         "Tap": "Dinani",
         "Click": "Dinani",
         "Yes": "Inde",
-        "No": "Ayi"
+        "No": "Ayi",
+        "OK": "Chabwino",
+        "Alert": "Chenjezo",
+        "Confirm": "Tsimikizani",
+        "Prompt": "Mwachangu"
     },
     "months": {
         "1": "Januwale",
@@ -139,5 +145,14 @@
         "inHour": "mu {{h}} ola",
         "inHours": "mu {{h}} maola",
         "inUnderMinute": "mkati mwa miniti imodzi"
+    },
+    "browser": {
+        "insecureContext": "Muyenera kusakatula m&#39;malo otetezeka kuti izi zitheke"
+    },
+    "scan": {
+        "QR": "Jambulani manambala a QR"
+    },
+    "input": {
+        "Placeholder": "Yambani kulemba..."
     }
 }

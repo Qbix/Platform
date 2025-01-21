@@ -4,7 +4,9 @@
         "canceled": "An soke nema",
         "500": "Kuskuren na Cikin Saba",
         "404": "Ba a samo shi ba: {{url}}",
-        "501": "An katse buƙatar"
+        "501": "An katse buƙatar",
+        "401": "Ba tare da izini ba",
+        "403": "An haramta"
     },
     "nonce": {
         "sameDomain": "Zaman ya kare. Sake sabunta shafin kuma a sake gwadawa.",
@@ -18,7 +20,11 @@
         "Tap": "Taɓa",
         "Click": "Danna",
         "Yes": "Ee",
-        "No": "A&#39;a"
+        "No": "A&#39;a",
+        "OK": "KO",
+        "Alert": "Fadakarwa",
+        "Confirm": "Tabbatar",
+        "Prompt": "Da sauri"
     },
     "months": {
         "1": "Janairu",
@@ -139,5 +145,14 @@
         "inHour": "a cikin sa&#39;a {{h}}",
         "inHours": "a cikin sa&#39;o&#39;i {{h}}",
         "inUnderMinute": "a kasa da minti 1"
+    },
+    "browser": {
+        "insecureContext": "Kuna buƙatar bincika cikin mahallin amintacce don wannan ya yi aiki"
+    },
+    "scan": {
+        "QR": "Duba lambobin QR"
+    },
+    "input": {
+        "Placeholder": "Fara bugawa..."
     }
 }
