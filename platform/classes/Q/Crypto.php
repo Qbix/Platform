@@ -1,6 +1,6 @@
 <?php
 
-require Q_PLUGIN_DIR.DS.'vendor'.DS.'autoload.php';
+require_once Q_PLUGIN_DIR.DS.'vendor'.DS.'autoload.php';
 
 use Mdanter\Ecc\Crypto\Signature\SignHasher;
 use Mdanter\Ecc\EccFactory;
