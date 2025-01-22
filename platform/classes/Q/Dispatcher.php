@@ -641,7 +641,11 @@ class Q_Dispatcher
 		self::$errorsOccurred = true;
 		$startedResponse = self::$startedResponse;
 		if (!$startedResponse) {
-			Q_Response::sendCookieHeaders();
+			// Don't send any cookie headers, there were errors
+			// so we don't want to change any cookies, as
+			// various transactions may have been rolled back
+			// and database rows weren't actually inserted, etc.
+			// Q_Response::sendCookieHeaders();
 		}
 		$errors = Q_Response::getErrors();
 		Q::$toolWasRendered = array();
