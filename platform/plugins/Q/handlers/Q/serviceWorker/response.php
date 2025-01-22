@@ -15,6 +15,15 @@ var Q = {
 	info: {
 		baseUrl: $baseUrl_json,
 		serviceWorkerUrl: $serviceWorkerUrl_json
+	},
+	Cache: {
+		clearAll: function () {
+			caches.keys().then(function(names) {
+				for (var name of names) {
+					caches.delete(name);
+				}
+			});
+		}
 	}
 };
 (function () {
@@ -23,6 +32,10 @@ var Q = {
 	// Cookie-JS request headers, and Set-Cookie-JS response headers.
 
 	var cookies = $cookies_json;
+
+	self.addEventListener('clearCache', function (event) {
+		Q.Cache.clearAll();
+	});
 
 	self.addEventListener('fetch', function (event) {
 		// if request is not for same origin, then just send it
