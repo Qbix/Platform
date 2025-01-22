@@ -12,7 +12,7 @@
  *   @param {Q.Event} [options.onSubmit] This event triggers On form submit
  *   @param {Q.Event} [options.onResponse] This event triggers after getting some response from from url request
  *   @param {Q.Event} [options.onSuccess] This event triggers if response returned with 200 success code , and if there are no HTTP errors in response headers
- *   @param {Boolean} [options.ignoreRedirects] Pass true to not follow redirects returned from the server, and only call onResponse / onSuccess
+ *   @param {Boolean} [options.ignoreRedirect] Pass true to not follow redirects returned from the server, and only call onResponse / onSuccess
  *   @param {String} [options.slotsToRequest='form'] Slot names for Q.request
  *   @param {Object} [options.contentElements] An Object of {slotName: Element} pairs to replace their content.
  *     Otherwise, by default, after a response with no errors, we replace the content in the tool's container element,
@@ -24,6 +24,8 @@
  *      @param {String} [options.loader.slots] Slot Names
  *      @param {Function} [options.loader.callback] Callback function after request
  *      @param {Function} [options.loader.options] Options for the request
+ * 	 @param {Boolean} [options.ignorePage] set to true to skip processing any script data, scripts, stylesheets, metas, etc. 
+ *      from the response passed as the second parameter to the loader callback
  *
 */
 Q.Tool.define('Q/form', function(options) {
@@ -39,13 +41,19 @@ Q.Tool.define('Q/form', function(options) {
 	onSuccess: new Q.Event(),
 	slotsToRequest: 'form',
 	contentElements: {},
+	ignorePage: false,
+	ignoreRedirect: true,
+	ignoreDialogs: true,
 	loader: function (url, method, form, slots, callback, options) {
+		var func = this.state.ignorePage ? Q.request : Q.loadUrl.request;
 		if (method.toUpperCase() === 'GET') {
-			Q.request(url, slots, callback, options);
+			func(url, slots, callback, options);
 		} else {
-			Q.request(url, slots, callback, Q.extend(options, {
+			func(url, slots, callback, Q.extend(options, {
 				method: method,
-				formdata: new FormData(form)
+				formdata: new FormData(form),
+				ignorePage: false,
+				ignoreRedirect: this.state.ignoreRedirect
 			}));
 		}
 	},
@@ -79,7 +87,7 @@ Q.Tool.define('Q/form', function(options) {
 		if (!$form.length) return;
 		if ($form.data('Q/form tool')) return;
 		$form.on('submit.Q_form', function(event) {
-			function onResponse(err, data, wasJSONP) {
+			function onResponse(err, response, redirected) {
 				$form.removeClass('Q_working').removeAttr('disabled');
 				document.activeElement = tool.activeElement;
 				if (false === Q.handle(state.onResponse, tool, arguments)) {
@@ -92,11 +100,11 @@ Q.Tool.define('Q/form', function(options) {
 				}
 				$('div.Q_form_undermessagebubble', $te).empty();
 				$('tr.Q_error', $te).removeClass('Q_error');
-				if ('errors' in data) {
-					tool.applyErrors(data.errors);
+				if ('errors' in response) {
+					tool.applyErrors(response.errors);
 					$('tr.Q_error').eq(0).prev().find(':input:visible').eq(0).focus();
-					if (data.scriptLines && data.scriptLines.form) {
-						eval(data.scriptLines.form);
+					if (response.scriptLines && response.scriptLines.form) {
+						eval(response.scriptLines.form);
 					}
 					return;
 				}
@@ -107,7 +115,6 @@ Q.Tool.define('Q/form', function(options) {
 						if (err) {
 							return Q.handle(redirectUrl);
 						}
-
 						_handleResult(data2);
 					});
 				} else {
@@ -165,7 +172,7 @@ Q.Tool.define('Q/form', function(options) {
 				state.ignoreCache = false;
 				state.loader.forget(action, method, $form.serialize(), state.slotsToRequest);
 			}
-			state.loader(action, method, $form[0], state.slotsToRequest, onResponse, state.loader.options);
+			state.loader.call(tool, action, method, $form[0], state.slotsToRequest, onResponse, state.loader.options);
 		});
 		$('input', $form).add('select', $form).on('input', function () {
 			if ($form.state('Q/validator')) {

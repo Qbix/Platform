@@ -9048,8 +9048,9 @@ Q.req = function _Q_req(uri, slotNames, callback, options) {
  * @param {boolean} [options.duplicate=true] you can set it to false in order not to fetch the same url again
  * @param {boolean} [options.quiet=true] this option is just passed to your onLoadStart/onLoadEnd handlers in case they want to respect it.
  * @param {boolean} [options.timestamp] whether to include a timestamp (e.g. as a cache-breaker)
- * @param {Function|null} [options.onRedirect=Q.handle] if set and response data.redirect.url is not empty, automatically call this function. Set to null to block redirecting.
  * @param {boolean} [options.timeout=5000] milliseconds to wait for response, before showing cancel button and triggering onTimeout event, if any, passed to the options
+ * @param {boolean} [options.ignoreRedirect=false] if true, doesn't honor redirects and tries to process the scripts, css, etc. from the response
+ * @param {Function|null} [options.onRedirect=Q.handle] if set and response data.redirect.url is not empty, automatically call this function. Set to null to block redirecting.
  * @param {Array} [options.beforeRequest] array of handlers to call before the request, they receive url, slotNames, options, callback and must call the callback passing (possibly altered) url, slotNames, options
  * @param {Q.Event} [options.onTimeout] handler to call when timeout is reached. First argument is a function which can be called to cancel loading.
  * @param {Q.Event} [options.onResponse] handler to call when the response comes back but before it is processed
@@ -9122,7 +9123,7 @@ Q.request = function (url, slotNames, callback, options) {
 			if (ret === false) {
 				return; // don't redirect
 			}
-			if (response && response.redirect && response.redirect.url) {
+			if (!o.ignoreRedirect && response && response.redirect && response.redirect.url) {
 				Q.handle(o.onRedirect, Q, [response.redirect.url]);
 			}
 		};
@@ -10791,6 +10792,7 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
  * @param {Boolean} [options.dontTransformUrl] pass true to just use the passed URL without transforming it
  * @param {boolean} [options.ignoreHistory=false] if true, does not push the url onto the history stack
  * @param {boolean} [options.ignorePage=false] if true, does not process the links / stylesheets / script data in the response, and doesn't trigger deactivation of current page and activation of the new page
+ * @param {boolean} [options.ignoreRedirect=false] if true, doesn't honor redirects and tries to process the scripts, css, etc. from the response
  * @param {boolean} [options.ignoreLoadingErrors=false] If true, ignores any errors in loading scripts.
  * @param {boolean} [options.ignoreHash=false] if true, does not navigate to the hash part of the URL in browsers that can support it
  * @param {Object} [options.fields] additional fields to pass via the querystring
@@ -10881,7 +10883,7 @@ Q.loadUrl = function _Q_loadUrl(url, options) {
 		}
 		var loadingUrlObject = Q.loadUrl.loading[o.key];
 		delete Q.loadUrl.loading[o.key]; // it's loaded
-		if (redirected) {
+		if (redirected && !o.ignoreRedirect) {
 			_resolve && _resolve(response);
 			return; // it was just a redirect
 		}
@@ -11189,11 +11191,16 @@ Q.loadUrl.request = function (url, slotNames, callback, options) {
 	return Q.loadUrl(url, Q.extend({
 		ignoreHistory: true,
 		ignorePage: true,
+		ignoreDialogs: true,
+		ignoreRedirect: true,
 		ignoreLoadingErrors: true,
 		ignoreHash: true,
 		dontReload: true,
 		handler: function doNothing () { return null; },
 		slotNames: slotNames,
+		onError: function (err) {
+			Q.handle(callback, this, [err]);
+		},
 		onRequestProcessed: function (err, response) {
 			Q.handle(callback, this, [null, response]);
 		}
