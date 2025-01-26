@@ -2746,7 +2746,7 @@ Q.element = function (tagName, attributes, elementsToAppend) {
 			for (var i=0, l=elementsToAppend.length; i<l; ++i) {
 				var e = elementsToAppend[i];
 				if (e) {
-					if (typeof(e)) {
+					if (typeof(e) === 'string') {
 						element.innerHTML += e; // append as HTML, not text
 					} else {
 						element.append(e);
