@@ -33,7 +33,7 @@
 	*  	@param {string}  [options.tr.onClick] Badge click event handler.
 	*  	@param {string}  [options.tr.className] Name of class to add to element
 	*  	@param {string}  [options.tr.display] css "display" style for corner element.
-	*		@param {Q.Event} [options.tr.onCreate] Event executed every time badge element created. Get tool as context and badge element, corner, style as arguments.
+	*	@param {Q.Event} [options.tr.onCreate] Event executed every time badge element created. Get tool as context and badge element, corner, style as arguments.
 	*  @param {string}  [options.br] settings for bottom right badge. If == null - badge remove.
 	*  	@param {string}  [options.br.icon] Badge icon. Can be "{{Q}}/img/..." or "../img/...". If icon=null - badge remove.
 	*  	@param {string}  [options.br.size=options.size] Badge width.
@@ -46,7 +46,7 @@
 	*  	@param {string}  [options.br.onClick] Badge click event handler.
 	*  	@param {string}  [options.br.className] Name of class to add to element
 	*  	@param {string}  [options.br.display] css "display" style for corner element.
-	*		@param {Q.Event} [options.br.onCreate] Event executed every time badge element created. Get tool as context and badge element, corner, style as arguments.
+	*	@param {Q.Event} [options.br.onCreate] Event executed every time badge element created. Get tool as context and badge element, corner, style as arguments.
 	*  @param {string}  [options.bl] settings for bottom left badge
 	*  	@param {string}  [options.bl.icon] Badge icon. Can be "{{Q}}/img/..." or "../img/...". If icon=null - badge remove.
 	*  	@param {string}  [options.bl.size=options.size] Badge width.
@@ -59,14 +59,13 @@
 	*  	@param {string}  [options.bl.onClick] Badge click event handler.
 	*  	@param {string}  [options.bl.className] Name of class to add to element
 	*  	@param {string}  [options.bl.display] css "display" style for corner element.
-	*		@param {Q.Event} [options.bl.onCreate] Event executed every time badge element created. Get tool as context and badge element, corner, style as arguments.
+	*	@param {Q.Event} [options.bl.onCreate] Event executed every time badge element created. Get tool as context and badge element, corner, style as arguments.
 	*  @param {string}  [options.size="15px"] Default badge size.
 	*  @param {boolean} [skipOverlapped=false] If true skip overflow:'clip' parents
 	* @return {Q.Tool}
 	*/
 Q.Tool.define("Q/badge", function () {
 	var tool = this;
-	var state = this.state;
 	var $te = $(tool.element);
 
 	// if position of tool element "static" - need to change to "relative"
@@ -90,7 +89,11 @@ Q.Tool.define("Q/badge", function () {
 				}
 			});
 		});
-	})).observe(tool.element, { attributes: true, childList: true, characterData: true });
+	})).observe(tool.element, { 
+		attributes: true, 
+		childList: true, 
+		characterData: true 
+	});
 },
 {
 	tl: null,
@@ -267,6 +270,12 @@ Q.Tool.define("Q/badge", function () {
 				$this.remove();
 			}
 		}).addClass('Q_badge_positioned');
+
+		if (!state.interval) {
+			state.interval = setInterval(function () {
+
+			});
+		}
 	},
 	Q: {
 		beforeRemove: function () {
@@ -280,9 +289,7 @@ Q.Tool.define("Q/badge", function () {
 	}
 });
 
-if (Q.info.browser.name === 'safari'
-&& Q.info.browser.mainVersion < 18
-) {
+if (Q.info.browser.name === 'safari') {
 	// overflow-clip doesn't work so this is a fallback:
 	document.head.appendChild(Q.element('style', {
 		'type': 'text/css'
