@@ -8,9 +8,12 @@
 
 .Q_tabs_tabs .Q_tabs_tab .Q_tabs_overflowGlyph { display: inline-block; margin: 0 5px; font-size: 100%; text-indent: 0; }
 
+.Q_tabs_compact .Q_tabs_tab span,
+.Q_tabs_compact .Q_tabs_tab::before { display: flex; align-items: center; }
+
 .Q_tabs_compact { white-space: nowrap; }
 
-.Q_tabs_compact .Q_tabs_overflowGlyph { float: right; }
+.Q_tabs_compact .Q_tabs_overflowGlyph { position: absolute; right: 3%; top: 50%; transform: translate(0, -50%); }
 
 .Q_tabs_overflow { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
