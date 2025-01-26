@@ -2744,8 +2744,13 @@ Q.element = function (tagName, attributes, elementsToAppend) {
 			element.innerHTML = elementsToAppend
 		} else {
 			for (var i=0, l=elementsToAppend.length; i<l; ++i) {
-				if (elementsToAppend[i]) {
-					element.append(elementsToAppend[i]);
+				var e = elementsToAppend[i];
+				if (e) {
+					if (typeof(e)) {
+						element.innerHTML += e; // append as HTML, not text
+					} else {
+						element.append(e);
+					}
 				}
 			}
 		}

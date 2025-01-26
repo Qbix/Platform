@@ -9,8 +9,8 @@
  * @class Q expandable
  * @constructor
  * @param {Object} [options] Override various options for this tool
- *  @param {String|Element} [options.title] Required. The title for the expandable.
- *  @param {String|Element|Array} [options.content] Required. The content. Can be a string, an element, array of elements.
+ *  @param {String|Element} [options.title] Required. The title for the expandable, as HTML or Element.
+ *  @param {String|Element|Array} [options.content] Required. The content. Can be an HTML string, an element, array of elements.
  *  @param {Number} [options.count] A number, if any, to display when collapsed.
  *  @param {Number} [options.spaceAbove] How many pixels of space to leave above at the end of the scrolling animation
  *  @param {Boolean} [options.expanded] Whether it should start out expanded
