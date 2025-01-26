@@ -97,7 +97,8 @@ table { table-layout: fixed; }
 .Q_notMobile #dashboard_slot .MyApp_dashboard_logo {
 	overflow: hidden;
 	background: url(../img/icon/310.png) no-repeat;
-	background-size: contain;
+	background-size: 90%;
+	background-position: center;
 }
 .Q_mobile #dashboard_slot .MyApp_dashboard_logo {
 	display: inline-block; width: var(--dashboard-mobile-height); height: var(--dashboard-mobile-height); float: left;
@@ -202,7 +203,6 @@ html.MyApp_terms #content {
 #dashboard .Q_tabs_tab { text-decoration: none; color: white; }
 .Q_notTouchscreen #dashboard .Q_tabs_tab:not(.Q_current):hover { background: rgba(100, 100, 100, 0.5); }
 #dashboard .Q_tabs_tab img { margin-right: 10px; width: 30px; }
-#dashboard .Q_tabs_tab span { display: inline; text-align: left; }
 .Q_notMobile #dashboard .Q_tabs_tab.Q_current { background-color: #eeeeee; background-image: url(../Q/plugins/Q/img/bg/stucco.png); color: black !important; }
 #dashboard .Q_tabs_tab.Q_current * { color: black; }
 #dashboard .Q_tabs_tab svg.Q_overflow_glyph_svg { fill: white; width: 28px; height: 28px; }
