@@ -2,7 +2,14 @@
 /**
  * This CSS is just to get you started.
  * Feel free to modify any of it for your own app.
+ * Include @font-face with an inline font here
+ * to prevent Flash of Unstyled Content.
  */
+
+
+html.Q_hideUntilLoaded body {
+	opacity: 1; transition: 300ms;
+}
 
 * { 
 	font-family: 'Anton', sans-serif;
@@ -12,14 +19,18 @@
 }
 a { text-decoration: none; color: #0055ff; }
 a:visited { color: #aa88cc; }
-html { background: #f2f2f2; height: 100%; box-sizing: border-box; }
-body { height: 100%; overflow: auto; touch-action: none; }
+html { background: #f2f2f2; box-sizing: border-box; }
+body { overflow: auto; touch-action: none; }
 h2 { margin: 0; }
 *, *::before, *::after { box-sizing: inherit; }
 table { table-layout: fixed; }
 
 :root {
 	--dashboard-main-color: rgba(255, 255, 255, 1.0);
+	--chat-to-me-bg-color: #cccccc;
+	--chat-to-me-text-color: black;
+	--chat-from-me-bg-color: #2D2D72;
+	--chat-from-me-text-color: #fff;
 }
 
 /* The various slot containers */
@@ -80,7 +91,7 @@ table { table-layout: fixed; }
 }
 
 .Q_layout_sidebar #dashboard { flex-direction: column; }
-.Q_layout_widebar #dashboard { display: flex; justify-content: space-between; }
+.Q_layout_widebar #dashboard { display: flex; justify-content: space-between; gap: 3px; }
 .Q_notMobile #dashboard { padding: 5px; }
 
 .Q_notMobile #dashboard_slot .MyApp_dashboard_logo {
@@ -89,8 +100,9 @@ table { table-layout: fixed; }
 	background-size: contain;
 }
 .Q_mobile #dashboard_slot .MyApp_dashboard_logo {
-	display: inline-block; width: 40px; height: 40px; float: left;
+	display: inline-block; width: var(--dashboard-mobile-height); height: var(--dashboard-mobile-height); float: left;
 	background: url(../img/icon/40.png) no-repeat;
+	background-position: center;
 }
 .Q_mobile #dashboard_slot .MyApp_dashboard_logo h1 {
 	display: none;
@@ -106,7 +118,6 @@ table { table-layout: fixed; }
 .Q_layout_sidebar #dashboard_slot .MyApp_dashboard_logo h1 {
 	text-align: center;
 }
-
 /* Notices contents */
 #notices_slot { text-align: center; margin: auto; padding: 0; z-index: 5000; }
 #notices { margin: auto; }
@@ -140,6 +151,10 @@ table { table-layout: fixed; }
 
 .Q_columns_tool {
 	z-index: 99999;
+}
+
+html.MyApp_terms #content {
+	padding: 20px;
 }
 
 /* Dashboard contents */
@@ -191,7 +206,7 @@ table { table-layout: fixed; }
 .Q_notMobile #dashboard .Q_tabs_tab.Q_current { background-color: #eeeeee; background-image: url(../Q/plugins/Q/img/bg/stucco.png); color: black !important; }
 #dashboard .Q_tabs_tab.Q_current * { color: black; }
 #dashboard .Q_tabs_tab svg.Q_overflow_glyph_svg { fill: white; width: 28px; height: 28px; }
-.Q_mobile #dashboard .Q_tabs_tool { height: 40px; width: 80%; max-width: 80%; overflow: hidden; }
+.Q_mobile #dashboard .Q_tabs_tool { flex-grow: 2; height: 40px; max-width: 80%; overflow: hidden; }
 .Q_notMobile.Q_layout_widebar #dashboard .Q_tabs_tool { height: 40px; display: inherit; }
 .Q_layout_sidebar #dashboard .Q_tabs_tab { padding: 5px; }
 body .Q_tabs_contextual .Q_listing li { text-align: left; }
