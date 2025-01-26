@@ -599,10 +599,10 @@ function HTMLeditor(el,options) {
         var periousSibling = _element.previousSibling;
         if(_element.previousSibling!=3) {
             var node = _element.previousSibling;
-            while(node.nodeType != 1 && node.previousSibling) {
+            while(node && node.nodeType != 1 && node.previousSibling) {
                 node=node.previousSibling;
             }
-            if(node.nodeType == 1) periousSibling = node;
+            if(node && node.nodeType == 1) periousSibling = node;
         }
 
         if(self.area.parentNode) {
