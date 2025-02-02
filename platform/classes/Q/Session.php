@@ -283,14 +283,7 @@ class Q_Session
 			return false;
 		}
 		if (Q_Config::get('Q', 'session', 'custom', true)) {
-			session_set_save_handler(
-				array(__CLASS__, 'openHandler'),
-				array(__CLASS__, 'closeHandler'),
-				array(__CLASS__, 'readHandler'),
-				array(__CLASS__, 'writeHandler'),
-				array(__CLASS__, 'destroyHandler'),
-				array(__CLASS__, 'gcHandler')
-			);
+			self::setSessionHandlers();
 		}
 		if (!empty($_SESSION)) {
 			$pre_SESSION = $_SESSION;
@@ -508,14 +501,7 @@ class Q_Session
 
 		// we have to re-set all the handlers, due to a bug in PHP 5.2
 		if (Q_Config::get('Q', 'session', 'custom', true)) {
-			session_set_save_handler(
-				array(__CLASS__, 'openHandler'),
-				array(__CLASS__, 'closeHandler'),
-				array(__CLASS__, 'readHandler'),
-				array(__CLASS__, 'writeHandler'),
-				array(__CLASS__, 'destroyHandler'),
-				array(__CLASS__, 'gcHandler')
-			);
+			self::setSessionHandlers();
 		}
 		session_id($sid = self::generateId(null, $prefixType)); // generate a new session id
 		session_start(); // start a new session
@@ -1293,6 +1279,22 @@ class Q_Session
                 throw new Exception("Unsupported session.serialize_handler: " . $method . ". Supported: php, php_binary");
         }
     }
+
+	static function setSessionHandlers()
+	{
+		if (version_compare(PHP_VERSION, '7.0.0', '<')) {
+			session_set_save_handler(
+				array(__CLASS__, 'openHandler'),
+				array(__CLASS__, 'closeHandler'),
+				array(__CLASS__, 'readHandler'),
+				array(__CLASS__, 'writeHandler'),
+				array(__CLASS__, 'destroyHandler'),
+				array(__CLASS__, 'gcHandler')
+			);
+		} else {
+			session_set_save_handler(new Q_Session_Handlers());
+		}
+	}
 
     protected static function unserialize_php($session_data) {
         $return_data = array();
