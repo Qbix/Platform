@@ -69,6 +69,8 @@ table { table-layout: fixed; }
 #dashboard_slot input,
 #dashboard_slot textarea { color: black; }
 .Q_layout_widebar #page { position: absolute; width: 100%; top:50px; bottom: 0; left: 50%; transform: translate(-50%, 0); }
+.Q_layout_widebar[dir=rtl] #page,
+.Q_layout_widebar [dir=rtl] #page { left: 0; right: 50%; transform: translate(50%, 0); }
 .Q_mobile #page { overflow: auto; -webkit-overflow-scrolling: touch; z-index: 0; }
 #dashboard_slot .Q_inplace_tool .Q_hover .Q_inplace_tool_static,
 #dashboard_slot .Q_inplace_tool .Q_hover .Q_inplace_tool_blockstatic { 
