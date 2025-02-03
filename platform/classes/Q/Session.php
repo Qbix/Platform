@@ -1291,8 +1291,10 @@ class Q_Session
 				array(__CLASS__, 'destroyHandler'),
 				array(__CLASS__, 'gcHandler')
 			);
-		} else {
+		} else if (version_compare(PHP_VERSION, '8.0.0', '<')) {
 			session_set_save_handler(new Q_Session_Handlers());
+		} else {
+			session_set_save_handler(new Q_Session_Handlers8());
 		}
 	}
 
