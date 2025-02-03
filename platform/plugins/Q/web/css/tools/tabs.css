@@ -20,7 +20,7 @@
 
 .Q_tabs_compact .Q_tabs_overflowGlyph { position: absolute; right: 3%; top: 50%; transform: translate(0, -50%); }
 .Q_tabs_compact .Q_tabs_tab  { padding: 50px 0; }
-.Q_tabs_compact .Q_tabs_tab .Q_tabs_copiedTitle { mask-image: linear-gradient(90deg, #000 69%, transparent); }
+.Q_tabs_compact .Q_tabs_tab .Q_tabs_copiedTitle.Q_overflowed { mask-image: linear-gradient(90deg, #000 69%, transparent); }
 [dir=rtl] .Q_tabs_compact .Q_tabs_overflowGlyph  { left: 3%; right: auto; }
 
 .Q_tabs_overflow { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }

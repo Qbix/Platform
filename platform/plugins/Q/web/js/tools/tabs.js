@@ -700,6 +700,12 @@ Q.Tool.define("Q/tabs", function(options) {
 			$overflow.addClass('Q_current');
 		}
 		tool.overflowIndex = index;
+		setTimeout(function () {
+			var $ct = $te.find('.Q_tabs_tab .Q_tabs_copiedTitle');
+			if ($ct.length) {
+				$ct[0].setClassIf($ct[0].isOverflowed(), 'Q_overflowed');
+			}
+		});
 		// if (tool.$overflow
 		// && (
 		// 	!tool.$overflow.data('contextual')
