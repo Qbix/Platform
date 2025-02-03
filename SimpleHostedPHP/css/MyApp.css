@@ -256,7 +256,7 @@ html .Q_inplace_tool_fieldinput { padding: 0px; }
 
 #notices_slot { position: fixed; }
 .Q_mobile #dashboard_slot,
-.Q_mobile #notices_slot { width: 100%; left: 0; }
+.Q_mobile #notices_slot { width: 100%; left: 0; right: 0; }
 .Q_mobile #dashboard>h2 { display: none; }
 .Q_mobile #dashboard .Q_tabs_tab {
 	border-radius: 5px;
