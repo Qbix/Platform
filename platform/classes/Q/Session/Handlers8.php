@@ -1,5 +1,6 @@
 <?php
-class Q_Session_Handlers extends SessionHandler
+
+class Q_Session_Handlers8 extends SessionHandler
 {
     public function open(string $save_path, string $session_name): bool
     {
