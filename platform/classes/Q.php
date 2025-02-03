@@ -1463,6 +1463,7 @@ class Q
 		if (!($realPath = Q::realPath($path))
 		and !($realPath = Q::realPath($path, true))) {
 			if (!@mkdir($path, 0777, true)) {
+				require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Exception'.DS.'FilePermissions.php');
 				throw new Q_Exception_FilePermissions(array('action' => 'create', 'filename' => $path, 'recommendation' => ' Please set the app files directory to be writable.'));
 			}
 			$realPath = Q::realPath($path, true);
