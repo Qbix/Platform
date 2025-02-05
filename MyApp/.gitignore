@@ -2,6 +2,7 @@
 .DS_Store 
 .hg/
 .idea/
+.vscode/
 local/*
 files/*
 !files/MyApp

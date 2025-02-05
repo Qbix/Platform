@@ -4,6 +4,7 @@ syntax: regexp
 \.DS_Store$
 ^\.git$
 ^\.idea/
+^\.vscode/
 ^Q/app/local/
 ^Q/app/files/Q/
 ^Q/app/files/MyApp/uploads/Users/(?!.dir).+
