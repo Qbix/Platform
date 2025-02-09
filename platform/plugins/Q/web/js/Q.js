@@ -10,7 +10,7 @@
 (function _Q_setup(undefined, dontSetGlobals) {
 
 var root = this;
-var $ = Q.jQuery = root.jQuery || window.$;
+var $ = Q.jQuery = root.jQuery || root.$;
 
 // fallback for old Javascript versions
 try {
@@ -547,7 +547,6 @@ Sp.splitId = function(lengths, delimiter) {
 };
 /**
  * Used to match string content to certain types of data
- * Consider using Amazon S3 or another service for uploading files in production.
  * @method matchTypes
  * @param {String|Array} [types] type or types to detect. Can be "url", "email", "phone", "twitter".
  *  If omitted, all types are processed.
@@ -1777,7 +1776,7 @@ Q.isInteger = function _Q_isInteger(value, strictComparison) {
  *	Whether it is an array
  */
 Q.isArrayLike = function _Q_isArrayLike(value) {
-	return (Q.typeOf(value) === 'array') || ($ && value instanceof $);
+	return (Q.typeOf(value) === 'array') || (root.$ && value instanceof $);
 };
 
 /**
@@ -3020,7 +3019,7 @@ Q.Event.jQueryForPage = [];
 /**
  * Define an event on a target, and give it a type
  * @param {Object} target 
- * @param {String} name 
+ * @param {String} type 
  * @return Q.Event
  */
 Q.Event.define = function (target, type) {
@@ -6377,8 +6376,7 @@ Q.Method.onLoad = new Q.Event();
  */
 Q.Method.define = function (o, prefix, closure) {
 	if (!prefix) {
-		prefix = Q.currentScript().src.split('/').slice(0, -1).join('/')
-			+'/'+Q.Method.define.options.siblingFolder;
+		prefix = Q.currentScriptPath()+'/'+Q.Method.define.options.siblingFolder;
 	}
 	Q.each(o, function (k) {
 		if (!o.hasOwnProperty(k) || !(o[k] instanceof Q.Method)) {
@@ -7461,6 +7459,7 @@ Q.page = function _Q_page(page, handler, key) {
  * @param {Object} options
  * @param {boolean} [options.isLocalFile] set this to true if you are calling Q.init from local file:/// context.
  * @param {boolean} [options.isCordova] set this to true if you're loading this inside a Cordova environment
+ * @return {boolean} returns false if init was already called
  */
 Q.init = function _Q_init(options) {
 	if (Q.init.called) {
@@ -8739,7 +8738,7 @@ Q.url = function _Q_url(what, fields, options) {
 	}
 	var baseUrl = (options && options.baseUrl) || Q.baseUrl() || "";
 	what3 = Q.interpolateUrl(what2);
-	if (what3.startsWith(baseUrl)) {
+	if (baseUrl && what3.startsWith(baseUrl)) {
 		tail = what3.substring(baseUrl.length+1);
 		tail = tail.split('?')[0];
 		info = Q.getObject(tail, Q.updateUrls.urls, '/');
@@ -10015,7 +10014,7 @@ Q.findScript = function (src) {
 };
 
 /**
- * Gets information about the currently running script.
+ * Gets URL of the currently running script.
  * Only works when called synchronously when the script loads.
  * Returns script src without "?querystring"
  * @method currentScript
@@ -10048,6 +10047,21 @@ Q.currentScript = function (stackLevels) {
 		path: parts[2],
 		file: parts[3]
 	};
+};
+
+/**
+ * Gets path of the currently running script.
+ * Only works when called synchronously when the script loads.
+ * @method currentScriptPath
+ * @static
+ * @param {String} [subpath] Anything to append after path + '/'
+ * @param {Number} [stackLevels=0] If called within a function
+ *  that was called inside a script, put 1, if deeper put 2, etc.
+ * @return {Object} object with properties "src", "path" and "file"
+ */
+Q.currentScriptPath = function (subpath, stackLevels) {
+	return Q.currentScript(stackLevels).src.split('/').slice(0, -1).join('/')
+		+ (subpath ? '/' + subpath : '');
 };
 
 /**
@@ -13228,7 +13242,8 @@ Q.jQueryPluginPlugin = function _Q_jQueryPluginPlugin() {
 				Q.Event.jQueryForPage.push([off, this, args[0], af2]);
 				added = 'page';
 			} else if (Q.typeOf(args[f-1]) === 'Q.Tool') {
-				var tool = args[f-1], key = tool.id;
+				var tool = args[f-1];
+				var key = Q.calculateKey(tool);
 				if (!Q.Event.jQueryForTool[key]) {
 					Q.Event.jQueryForTool[key] = [];
 				}
@@ -15692,65 +15707,15 @@ Aup.onCanPlay = new Q.Event();
 Aup.onCanPlayThrough = new Q.Event();
 Aup.onEnded = new Q.Event();
 
-/**
- * Loads an audio file and calls the callback when it's ready to play
- * @static
- * @method audio
- * @param {String} url 
- * @param {Function} handler A function to run after the audio is ready to play
- * @param {Object} [options={}] Can be one of the following options
- * @param {boolean} [options.canPlayThrough=true] Whether to wait until the audio can play all the way through before calling the handler.
- */
-Q.Audio.load = Q.getter(function _Q_audio(url, handler, options) {
-	url = Q.url(url);
-	var audio = Q.Audio.collection[url] || new Q.Audio(url);
-	if (options && options.canPlayThrough === false) {
-		audio.onCanPlay.add(handler);
-	} else {
-		audio.onCanPlayThrough.add(handler);
-	}
-}, {
-	cache: Q.Cache.document('Q.audio', 100)
+Q.Audio.load = new Q.Method();
+Q.Audio.loadVoices = new Q.Method();
+Q.Audio.play = new Q.Method();
+Q.Audio.speak = new Q.Method();
+
+Q.Method.define(Q.Audio, "{{Q}}/js/methods/Q/Audio", function() {
+	return [Q, root];
 });
 
-/**
- * @method play
- * Plays the audio as soon as it is available
- * @param {number} [from] The time, in seconds, from which to start.
- * @param {number} [until] The time, in seconds, until which to play.
- * @param {boolean} [removeAfterPlaying=false]
- */
-Aup.play = function (from, until, removeAfterPlaying) {
-	var t = this;
-	var a = t.audio;
-	from = from || 0;
-	if (from > until) {
-		throw new Q.Error("Audio.prototype.play: from can't be greater than until");
-	}
-	if (!a.readyState) {
-		return false;
-	}
-	if (removeAfterPlaying) {
-		t.onEnded.set(function () {
-			delete Q.Audio.collection[t.src];
-			container.removeChild(t.audio);
-			t.onEnded.remove('Q.Audio');
-		}, 'Q.Audio');
-	}
-	t.playing = true;
-	t.paused = false;
-	if (a.currentTime != from) {
-		a.currentTime = from;
-	}
-	if (until) {
-		setTimeout(function Q_Audio_play_pause() {
-			a.pause();
-		}, (until-from)*1000);
-	}
-	a.play();
-	Q.handle(Q.Audio.onPlay, this);
-	return t;
-};
 /**
  * @method recorderInit
  * Set recorder class
@@ -15798,185 +15763,8 @@ Aup.pause = function () {
 	return t;
 };
 
-/**
- * @method pause
- * Pauses all the audio that is playing
- */
-Q.Audio.pauseAll = function () {
-	for (var url in Q.Audio.collection) {
-		var audio = Q.Audio.collection[url];
-		audio.pause && audio.pause();
-	}
-};
 
-/**
- * Can call this to preload data about voices, locales, genders, etc.
- * for common voices, so it can be ready to go when Q.Audio.speak() is called.
- * @method loadVoices
- * @static
- * @param {Function} callback Receives err, data
- */
-Q.Audio.loadVoices = Q.getter(function (callback) {
-	Q.request('{{Q}}/js/speech/voices.json', [], function (err, voices) {
-		var msg = Q.firstErrorMessage(err, voices);
-		if (msg) {
-			throw new Q.Error(msg);
-		}
-		if (typeof voices !== "object") {
-			callback.call(this, "Q.Audio.speak: could not get the known voices list", null);
-		}
-		for (var languageLocale in voices) {
-			var lang = languageLocale.split('-')[0];
-			if (!voices[lang]) {
-				voices[lang] = voices[languageLocale];
-			}
-		}
-		callback.call(this, err, voices);
-	}, {skipNonce: true});
-}, {
-	cache: Q.Cache.document('Q.Audio.speak.loadVoices', 1)
-});
 
-/**
- * Speak text in various browsers.
- * @method speak
- * @static
- * @param {String|Array} text Pass the string of text to speak, or an array of
- *  [textSource, pathArray] to the string loaded with Q.Text.get() 
- * @param {Object} [options] An optional hash of options for Q.Audio.speak:
- * @param {String} [options.gender="female"] the voice in which will be speech the text.
- * @param {Number} [options.rate=1] the speaking rate of the SpeechSynthesizer object, from 0.1 to 1.
- * @param {Number} [options.pitch=1] the speaking pitch of the SpeechSynthesizer object, from 0.1 to 1.9.
- * @param {Number} [options.volume=1] the volume height of speech (0.1 - 1).
- * @param {Number} [options.locale="en-US"] a 5 character code that specifies the language that should be used to synthesize the text.
- * @param {Q.Event|function} [options.onStart] This gets called when the speaking has begun
- * @param {Q.Event|function} [options.onEnd] This gets called when the speaking has finished
- * @param {Q.Event|function} [options.onSpeak] This gets called when the system called speak(), whether or not it worked
- */
-Q.Audio.speak = function (text, options) {
-	var TTS = root.TTS; // cordova
-	var SS = root.speechSynthesis; //browsers
-	var o = Q.extend({}, Q.Audio.speak.options, 10, options);
-
-	if (o.mute) {
-		return;
-	}
-
-	o.locale = o.locale ||  Q.Text.languageLocale;
-	if (Q.isArrayLike(text)) {
-		var source = text[0];
-		var pathArray = text[1];
-		Q.Text.get(source, function (err, content) {
-			var text = Q.getObject(pathArray, content);
-			if (text) {
-				_proceed(text);
-			}
-		});
-	} else {
-		_proceed(text);
-	}
-	function _chooseVoice(text, voicesList, knownVoices) {
-		var language = o.locale.split('-')[0].toLowerCase();
-		var gender = o.gender;
-		var voice = null;
-		var toggled = false;
-		function _switchGender(gender) {
-			return (gender == "female") ? "male" : "female"
-		}
-		function _search() {
-			var result = null;
-			var av = Q.getObject([gender, o.locale], knownVoices)
-				|| Q.getObject([gender, language], knownVoices);
-			if (!av) {
-				var prefix = language + '-';
-				Q.each(knownVoices[gender], function (key) {
-					if (key.toLowerCase().startsWith(prefix)) {
-						av = this;
-						return false;
-					}
-				});
-			}
-			av = av || [];
-			if (typeof av !== "object" || !av.length){
-				return {error: "Q.Audio.speak: no such known voice"};
-			}
-			for (var i = 0; i < av.length; i++){
-				for (var j = 0; j < voicesList.length; j++){
-					if (av[i] == voicesList[j].name){
-						result = j;
-						break;
-					}
-				}
-				if (typeof result === "number") {
-					break;
-				}
-			}
-			if (result === null && toggled){
-				return {error: "Q.Audio.speak: no voice support in this device for this language"};
-			} else if (result === null) {
-				var previousGender = gender;
-				gender = _switchGender(gender);
-				toggled = true;
-				console.info("%cQ.Audio.speak: no '%s' voice found for this device, switches to '%s'", 'color: Green', previousGender.toUpperCase(), gender.toUpperCase());
-				return _search();
-			} else {
-				return result;
-			}
-		}
-		if (gender != "male" && gender != "female") {
-			gender = o.gender = "female";
-		}
-		voice = _search();
-		if (typeof voice !== 'number'){
-			var voiceError = Q.getObject("error", voice);
-			console.warn(voiceError);
-			return false;
-		}
-		return voice;
-	}
-	function _proceed(text) {
-		if (typeof text !== "string") {
-			throw new Q.Error("Q.Audio.speak: the text for speech must be a string");
-		}
-		text = text.interpolate(Q.text);
-
-		if (root.TTS) {
-			TTS.speak({
-				text: text,
-				locale: o.locale,
-				rate: o.rate
-			}).then(function () {
-				// Text succesfully spoken
-			}, function (reason) {
-				console.warn("Q.Audio.speak: " + reason);
-			});
-		} else if (SS) {
-			if (SS.speaking) {
-				SS.cancel();
-			}
-			Q.Audio.loadVoices(function (err, voices) {
-				var u = new SpeechSynthesisUtterance(text.replace(/<[^>]+>/g, ''));
-				var voicesList = SS.getVoices();
-				var chosenVoice = _chooseVoice(u.text, voicesList, voices);
-				if (chosenVoice === false) {
-					return;
-				}
-				u.voice = voicesList[chosenVoice];
-				u.rate = o.rate;
-				u.pitch = o.pitch;
-				u.volume = o.volume;
-				u.onstart = function () {
-					Q.handle(o.onStart, [u]);
-				};
-				u.onend = function () {
-					Q.handle(o.onEnd, [u]);
-				};
-				SS.speak(u);
-				Q.handle(o.onSpeak);
-			});
-		}
-	}
-};
 Q.Audio.speak.options = {
 	gender: "female",
 	rate: 1,
@@ -16471,7 +16259,7 @@ Q.onJQuery.add(function ($) {
 		document.documentElement.addClass('Q_loaded');
 	}, 'Q');
 	
-	if ($ && $.tools && $.tools.validator && $.tools.validator.conf) {
+	if (root.$ && $.tools && $.tools.validator && $.tools.validator.conf) {
 		$.tools.validator.conf.formEvent = null; // form validator's handler irresponsibly sets event.target to a jquery!
 	}
 		
@@ -17424,6 +17212,14 @@ Q.removeCurrentScript = function() {
 
 var _udid = location.search.queryField('Q.udid');
 var _appId = location.search.queryField('Q.appId');
+
+setTimeout(function () {
+    // After all synchronous scripts have loaded
+    if (!root.Handlebars) {
+        Q.addScript(Q.currentScriptPath('handlebars-v4.0.10.min.js'));
+    }
+    Q.init();
+}, 0);
 
 // [
 //     Object,
