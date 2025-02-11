@@ -36,7 +36,7 @@ function Socket (server, options) {
 	}
 
 	this.io.of('/Q').use(function (client, next) {
-		var permissions = Q.Config.get(['Users', 'socket', 'permissions'], []);
+		var permissions = Q.Config.get(['Q', 'socket', 'permissions'], []);
 		var found = false;
 		var capability = Q.getObject('handshake.auth.capability', client);
 		capability = capability && JSON.parse(capability);
