@@ -15761,7 +15761,16 @@ Aup.pause = function () {
 	return t;
 };
 
-
+/**
+ * @method pauseAll
+ * Pauses all the audio that is playing
+ */
+Q.Audio.pauseAll = function () {
+	for (var url in Q.Audio.collection) {
+		var audio = Q.Audio.collection[url];
+		audio.pause && audio.pause();
+	}
+};
 
 Q.Audio.speak.options = {
 	gender: "female",
