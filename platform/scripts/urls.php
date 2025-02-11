@@ -193,6 +193,19 @@ function Q_script_urls_glob(
 
 function Q_script_urls_diffs($tree, $urls_dir, $diffs_dir, $time)
 {
+	// Clear out previous files from diffs directory
+	// in case files were deleted from urls directory.
+	// Client handles missing diff files by loading latest.json,
+	// but we must avoid stale diff files, which can happen if
+	// someone deleted files from urls directory and then ran urls.php
+	$files = glob("$diffs_dir/*");
+	foreach ($files as $file) {
+		if(is_file($file)) {
+			unlink($file);
+		}
+	}
+
+	// Now, generate the diffs from the existing urls files
 	$i = 0;
 	$filenames = glob($urls_dir.DS.'*');
 	$n = count($filenames)-1;
