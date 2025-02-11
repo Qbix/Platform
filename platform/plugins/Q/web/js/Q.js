@@ -17211,13 +17211,13 @@ Q.removeCurrentScript = function() {
 var _udid = location.search.queryField('Q.udid');
 var _appId = location.search.queryField('Q.appId');
 
-setTimeout(function () {
+document.addEventListener("DOMContentLoaded", function () {
     // After all synchronous scripts have loaded
     if (!root.Handlebars) {
         Q.addScript(Q.currentScriptPath('handlebars-v4.0.10.min.js'));
     }
     Q.init();
-}, 0);
+});
 
 // [
 //     Object,
