@@ -1833,6 +1833,7 @@ Q.instanceOf = function (testing, Constructor) {
  * or levels > 0, it recursively calls that method to copy the property.
  * @static
  * @method copy
+ * @param {Object} x The object to copy
  * @param {Array} [fields=null]
  *  Optional array of fields to copy. Otherwise copy all that we can.
  * @param levels {number}
@@ -3191,7 +3192,7 @@ Evp.addOnce = function _Q_Event_prototype_addOnce(handler, key, prepend) {
  * @method remove
  * @param {String} key
  *  The key of the handler to remove.
- *  Pass a Q.Tool object here to remove the handler, if any, associated with this tool.
+ *  Pass a Q.Tool object here to remove the handlers, if any, associated with this tool.
  */
 Evp.remove = function _Q_Event_prototype_remove(key) {
 	// Only available in the front-end Q.js: {
@@ -3232,9 +3233,6 @@ Evp.remove = function _Q_Event_prototype_remove(key) {
 /**
  * Removes all handlers for this event
  * @method removeAllHandlers
- * @param {String} key
- *  The key of the handler to remove.
- *  Pass a Q.Tool object here to remove the handler, if any, associated with this tool.
  */
 Evp.removeAllHandlers = function _Q_Event_prototype_removeAllHandlers() {
 	this.handlers = {};
@@ -3730,6 +3728,57 @@ Q.onVisibilityChange = new Q.Event();
  * @event beforeReplace
  */
 Q.beforeReplace = new Q.Event();
+
+/**
+ * Gets URL of the currently running script.
+ * Only works when called synchronously when the script loads.
+ * Returns script src without "?querystring"
+ * @method currentScript
+ * @static
+ * @param {Number} [stackLevels=0] If called within a function
+ *  that was called inside a script, put 1, if deeper put 2, etc.
+ * @return {Object} object with properties "src", "path" and "file"
+ */
+Q.currentScript = function (stackLevels) {
+	var src = window._Q_currentScript_src || Q.getObject('document.currentScript.src');
+	if (!src) {
+		var index = 0, lines, i, l;
+		try {
+			throw new Error();
+		} catch (e) {
+			lines = e.stack.split('\n');
+		}
+		for (i=0, l=lines.length; i<l; ++i) {
+			if (lines[i].match(/http[s]?:\/\//)) {
+				index = i + 1 + (stackLevels || 0);
+				break;
+			}
+		}
+		src = lines[index];
+	}
+	var parts = src.match(/((http[s]?:\/\/.+\/|file:\/\/\/.+\/)([^\/]+\.(?:js|html)[^:]*))/);
+	return {
+		src: parts[1].split('?')[0],
+		srcWithQuerystring: parts[1],
+		path: parts[2],
+		file: parts[3]
+	};
+};
+
+/**
+ * Gets path of the currently running script.
+ * Only works when called synchronously when the script loads.
+ * @method currentScriptPath
+ * @static
+ * @param {String} [subpath] Anything to append after path + '/'
+ * @param {Number} [stackLevels=0] If called within a function
+ *  that was called inside a script, put 1, if deeper put 2, etc.
+ * @return {Object} object with properties "src", "path" and "file"
+ */
+Q.currentScriptPath = function (subpath, stackLevels) {
+	return Q.currentScript(stackLevels).src.split('/').slice(0, -1).join('/')
+		+ (subpath ? '/' + subpath : '');
+};
 
 /**
  * Use this to ensure that a property exists before running some javascript code.
@@ -10011,57 +10060,6 @@ Q.findScript = function (src) {
 		}
 	}
 	return null;
-};
-
-/**
- * Gets URL of the currently running script.
- * Only works when called synchronously when the script loads.
- * Returns script src without "?querystring"
- * @method currentScript
- * @static
- * @param {Number} [stackLevels=0] If called within a function
- *  that was called inside a script, put 1, if deeper put 2, etc.
- * @return {Object} object with properties "src", "path" and "file"
- */
-Q.currentScript = function (stackLevels) {
-	var src = window._Q_currentScript_src || Q.getObject('document.currentScript.src');
-	if (!src) {
-		var index = 0, lines, i, l;
-		try {
-			throw new Error();
-		} catch (e) {
-			lines = e.stack.split('\n');
-		}
-		for (i=0, l=lines.length; i<l; ++i) {
-			if (lines[i].match(/http[s]?:\/\//)) {
-				index = i + 1 + (stackLevels || 0);
-				break;
-			}
-		}
-		src = lines[index];
-	}
-	var parts = src.match(/((http[s]?:\/\/.+\/|file:\/\/\/.+\/)([^\/]+\.(?:js|html)[^:]*))/);
-	return {
-		src: parts[1].split('?')[0],
-		srcWithQuerystring: parts[1],
-		path: parts[2],
-		file: parts[3]
-	};
-};
-
-/**
- * Gets path of the currently running script.
- * Only works when called synchronously when the script loads.
- * @method currentScriptPath
- * @static
- * @param {String} [subpath] Anything to append after path + '/'
- * @param {Number} [stackLevels=0] If called within a function
- *  that was called inside a script, put 1, if deeper put 2, etc.
- * @return {Object} object with properties "src", "path" and "file"
- */
-Q.currentScriptPath = function (subpath, stackLevels) {
-	return Q.currentScript(stackLevels).src.split('/').slice(0, -1).join('/')
-		+ (subpath ? '/' + subpath : '');
 };
 
 /**
