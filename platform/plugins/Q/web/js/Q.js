@@ -1672,7 +1672,8 @@ Q.largestSize = function (sizes, useHeight, options) {
 };
 
 /**
- * Returns a container with the items in the first parameter that are not in the others
+ * Returns a container with the items in the first parameter that are not in the others.
+ * Note that this traverses both objects to look for values, even if both are objects.
  * @static
  * @method diff
  * @param {Array|Object} container to subtract items from to form the result
@@ -1692,6 +1693,8 @@ Q.diff = function _Q_diff(container1, container2 /*, ... comparator */) {
 			return v1 === v2 && (ipo ? (k == j) : true);
 		}
 		++len;
+	} else {
+		comparator = null;
 	}
 	var isArr = Q.isArrayLike(container1);
 	var result = isArr ? [] : {};
