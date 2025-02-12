@@ -44,8 +44,6 @@ table { table-layout: fixed; }
 	overflow-x: auto;
 	background: #fff;
 	box-shadow: #aaa 0 0 4px;
-	-webkit-box-shadow: #aaa 0 0 4px;
-	-moz-box-shadow: #aaa 0 0 4px;
 }
 #dashboard_slot {
 	position: fixed;
@@ -59,10 +57,10 @@ table { table-layout: fixed; }
 	text-align: left;
 	cursor: default; 
 	touch-action: manipulation;
-    box-shadow: var(--dashboard-bg-color) 0 0 4px; -webkit-box-shadow: #555 0 0 4px; -moz-box-shadow: #555 0 0 4px;
+	box-shadow: #555 0 0 4px;
 	background: linear-gradient(to bottom,  var(--dashboard-bg-color),  var(--dashboard-bg-color-to));
 }
-#dashboard_slot * { color: white; font-size: 24px; font-family: Arial, sans-serif; }
+#dashboard_slot * { color: var(--dashboard-main-color); font-size: 24px; font-family: Arial, sans-serif; }
 #dashboard_slot input,
 #dashboard_slot textarea { color: black; }
 .Q_layout_widebar #page { position: absolute; width: 100%; top:50px; bottom: 0; left: 50%; transform: translate(-50%, 0); }
@@ -122,7 +120,7 @@ table { table-layout: fixed; }
 #notices_slot { text-align: center; margin: auto; padding: 0; z-index: 5000; }
 #notices { margin: auto; }
 #notices_slot div.container { overflow: hidden; overflow-y: auto; }
-#notices_slot ul { list-style-type: none; padding: 0; margin: auto; width: 700px; max-width: 100%; border: solid 1px #555; border-top: solid 1px #aaa; box-shadow: 0 0 5px #222; -moz-box-shadow: 0 0 5px #222; -webkit-box-shadow: 0 0 5px #222; cursor: pointer; }
+#notices_slot ul { list-style-type: none; padding: 0; margin: auto; width: 700px; max-width: 100%; border: solid 1px #555; border-top: solid 1px #aaa; box-shadow: 0 0 5px #222; cursor: pointer; }
 #notices_slot li { list-style-type: none; padding: 0; margin: 0; text-align: center; background: #ffd4aa; border: 0; border-bottom: solid 1px #aaa; line-height: 30px; min-height: 30px; }
 #notices_slot ul.Q_errors * { background-color: #ebb; color: #500; }
 #notices_slot ul.Q_errors li { text-align: left; padding: 0 10px 0 10px; }
@@ -170,14 +168,13 @@ html.MyApp_terms #content {
 #dashboard td { vertical-align: middle; }
 #dashboard table { width: 100%; padding: 0; margin: 0; }
 #dashboard .Q_dashboard_logo { padding: 0; }
-#dashboard .Q_dashboard_logo a { padding: 5px; border-radius: 5px; -moz-border-radius: 5px; -webkit-border-radius: 5px; }
+#dashboard .Q_dashboard_logo a { padding: 5px; border-radius: 5px; }
 #dashboard .Q_dashboard_logo img { height: 40px; border-radius: 5px; }
 #dashboard .Q_dashboard_search { padding: 8px 10px 8px 10px; font-weight: bold; text-align: left; }
 #dashboard .Q_dashboard_search input {
 	width: 104px;
 	margin-right: 4px;
 	border-radius: 2em;
-	-moz-border-radius: 2em;
 	padding-left: 27px;
 	padding-right: 17px;
 	border: none;
@@ -188,7 +185,7 @@ html.MyApp_terms #content {
 
 /* Dashboard tabs */
 #dashboard .Q_tabs_tabs { border: 0; width: 100%; margin: auto; text-align: left; }
-#dashboard .Q_tabs_tab { margin: 0px; cursor: pointer; width: auto; border-radius: 5px; -moz-border-radius: 5px; -webkit-border-radius: 5px; background-color: #f8f8f8; background: none; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: left; }
+#dashboard .Q_tabs_tab { margin: 0px; cursor: pointer; width: auto; border-radius: 5px; background-color: #f8f8f8; background: none; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; text-align: left; }
 #dashboard .Q_tabs_tab.Streams_preview_tool { padding-left: 10px; }
 #dashboard .Q_tabs_compact.Q_tabs_horizontal { margin: 0; }
 #dashboard .Q_tabs_compact.Q_tabs_horizontal .Q_tabs_tab { padding: 5px 10px; background-color: #222; color: white; width: 100%; }
@@ -233,7 +230,7 @@ input.email:focus,
 input.tell:focus,
 input.password:focus,
 input.number:focus,
-textarea:focus { box-shadow: 0 1px 10px rgba(0,0,0,.15); -webkit-box-shadow: 0 1px 4px rgba(0,0,100,.15); -moz-box-shadow: 0 1px 4px rgba(0,0,100,.15); }
+textarea:focus { box-shadow: 0 1px 10px rgba(0,0,0,.15); -webkit-box-shadow: 0 1px 4px rgba(0,0,100,.15); }
 input.placeholder,
 textarea.placeholder { color: #aaa; font-style: italic; }
 select:focus { outline: dotted 1px #779; }
@@ -248,7 +245,7 @@ input.email,
 input.tel,
 input.password,
 input.number,
-textarea { border-radius: 3px; -moz-border-radius:3px; -webkit-border-radius:3px; padding: 0px 4px 0px 4px; }
+textarea { border-radius: 3px; padding: 0px 4px 0px 4px; }
 input[type=checkbox],
 input[type=radio] { margin-right: 5px; }
 html .Q_inplace_tool_fieldinput { padding: 0px; }
@@ -259,8 +256,6 @@ html .Q_inplace_tool_fieldinput { padding: 0px; }
 .Q_mobile #dashboard>h2 { display: none; }
 .Q_mobile #dashboard .Q_tabs_tab {
 	border-radius: 5px;
-	-moz-border-radius: 5px;
-	-webkit-border-radius: 5px;
 }
 .Q_mobile .Q_overlay { width: 90%; }
 
@@ -293,7 +288,7 @@ html .Q_inplace_tool_fieldinput { padding: 0px; }
 }
 
 /* The following lines are for a flatter look */
-html .Q_listing li { font-size: 18px; padding: 0 10px; line-height: 40px; text-align: left; border-top: solid 1px white; border-bottom: solid 1px #CCC; background: #f2f2f2; -webkit-touch-callout: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0); -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; -o-user-select: none; user-select: none; white-space: nowrap; overflow: hidden;
+html .Q_listing li { font-size: 18px; padding: 0 10px; line-height: 40px; text-align: left; border-top: solid 1px white; border-bottom: solid 1px #CCC; background: #f2f2f2; -webkit-touch-callout: none; -webkit-tap-highlight-color: rgba(0, 0, 0, 0);white-space: nowrap; overflow: hidden;
 }
 .Q_dialog_title { background: #444; background: linear-gradient(to bottom, var(--dialog-title-bg-color), var(--dialog-title-bg-color-to));
 }
