@@ -1088,13 +1088,13 @@ function presentColumn(tool, $column, fullscreen, recalculateHeights) {
 
 	var hideTitle = $column.hasClass('Q_columns_hideTitle');
 	var $cs = $('.Q_column_slot', $column);
-	var titleOuterHeight = $ct.outerHeight();
+	var titleOuterHeight = $ct.outerHeight(true);
 	if (hideTitle) {
 		$cs.css('top', '-' + titleOuterHeight + 'px');
 	}
 	var $controls = $column.find('.Q_controls_slot');
-	var cth = $ct.is(":visible") && !hideTitle ? $ct.outerHeight() : 0;
-	var controlsh = $controls.is(":visible") ? $controls.outerHeight() : 0;
+	var cth = $ct.is(":visible") && !hideTitle ? $ct.outerHeight(true) : 0;
+	var controlsh = $controls.is(":visible") ? $controls.outerHeight(true) : 0;
 	var index = parseInt($column.attr('data-index'));
 	var heightToBottom;
 	if (Q.info.isMobile) {
@@ -1151,7 +1151,7 @@ function presentColumn(tool, $column, fullscreen, recalculateHeights) {
 	}
 	$ct.css('position', 'fixed');
 	$ct.css('top', $(tool.element).offset().top + 'px');
-	var paddingTop = $ct.outerHeight();
+	var paddingTop = $ct.outerHeight(true);
 	$cs.css('padding-top', paddingTop);
 	if (Q.info.isMobile) {
 		heightToBottom = Q.Pointer.windowHeight()

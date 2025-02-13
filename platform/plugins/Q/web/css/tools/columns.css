@@ -181,7 +181,7 @@ html.Q_ios.Q_standalone .Q_columns_title {
 html.Q_mobile .Q_columns_column.Q_columns_hasControls .Q_controls_slot {
 	padding-left: 2%;
 	padding-right: 2%;
-	padding-bottom: calc(env(safe-area-inset-bottom));
+	margin-bottom: calc(env(safe-area-inset-bottom));
 }
 
 .Q_columns_loading .Q_controls_slot { display: none; }
