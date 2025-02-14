@@ -187,4 +187,30 @@ class Q_Links
 	{
 		return 'googlechrome://navigate?url=' . $url; // note: don't encode
 	}
+
+	/**
+	 * Extends Q_Links with custom method names, e.g. named after an external platform or app
+	 * @static
+	 * @method __callStatic
+	 * @param {string} $name Key found under Q/Links/ config.
+	 *   The config under this could be either "method": ["MyClass", "myMethod"] or "pattern": "myapp://foo?{{bar}}=baz"
+	 * @param {array} [$arguments] The first argument can be an array of named parameters,
+	 *   to either pass to the method, or interpolate into the pattern
+	 * @return {string}
+	 */
+	static function __callStatic ($name, $arguments)
+	{
+		$params = $arguments ? reset($arguments) : $arguments;
+		$method = Q_Config::get('Q', 'Links', $name, 'method', null);
+		if (!$method) {
+			$template = Q_Config::expect('Q', 'Links', $name, 'pattern');
+			return Q::interpolate($template, $params);
+		}
+		if (!is_callable($method)) {
+			throw new Q_Exception_MissingFunction(array(
+				'function_name' => $method
+			));
+			return call_user_func($method, $params);
+		}
+	}
 }
