@@ -9,7 +9,7 @@ Q.exports(function (Q) {
     /**
      * Loads an audio file and calls the callback when it's ready to play
      * @static
-     * @method audio
+     * @method load
      * @param {String} url 
      * @param {Function} handler A function to run after the audio is ready to play
      * @param {Object} [options={}] Can be one of the following options
