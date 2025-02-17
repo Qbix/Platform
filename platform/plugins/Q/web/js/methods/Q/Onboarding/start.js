@@ -22,6 +22,7 @@ Q.exports(function (Q) {
         Q.each(instructions, function (k) {
             var instr = instructions[k];
             events[k] = new Q.Event(function (targets, k) {
+                var lsk = Q.Onboarding.prefix + k;
                 if (localStorage[lsk]) {
                     events[k].stop(); // mark it as already happened
                 } else {

@@ -14777,7 +14777,9 @@ Q.Visual = Q.Pointer = {
 Q.Onboarding = {
 	start: new Q.Method(),
 	stop: new Q.Method(),
-	processes: {}
+	processes: {},
+	prefix: 'Q.Onboarding: ',
+	interval: { frequency: 100 }
 };
 Q.Method.define(Q.Onboarding, "{{Q}}/js/methods/Q/Onboarding", function() {
 	return [Q, root];

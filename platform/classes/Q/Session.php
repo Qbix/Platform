@@ -935,6 +935,7 @@ class Q_Session
 		if ($proceed) {
 			self::gc($max_duration);
 		}
+		return true;
 	}
 
 	/**
