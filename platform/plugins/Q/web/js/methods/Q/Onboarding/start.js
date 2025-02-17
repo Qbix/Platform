@@ -22,7 +22,12 @@ Q.exports(function (Q) {
         Q.each(instructions, function (k) {
             var instr = instructions[k];
             events[k] = new Q.Event(function (targets, k) {
-                Q.Visual.hint(targets, instr.options);
+                if (localStorage[lsk]) {
+                    events[k].stop(); // mark it as already happened
+                } else {
+                    Q.Visual.hint(targets, instr.options);
+                    localStorage[lsk] = 1;
+                }
             }, 'Q.hint');
             selectors[k] = { appear: instr.appear };
             if (instr.untilDisappear) {

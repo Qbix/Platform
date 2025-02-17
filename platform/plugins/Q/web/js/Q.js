@@ -4764,7 +4764,7 @@ Q.Tool = function _Q_Tool(element, options) {
 		 * @event onStateChanged
 		 * @param name {String} The name of the field. Can be "" to listen on all fields.
 		 */
-		onStateChanged: new Q.Event.factory({}, "")
+		onStateChanged: new Q.Event.factory({}, [""])
 	}, this.Q);
 	
 	return this;
