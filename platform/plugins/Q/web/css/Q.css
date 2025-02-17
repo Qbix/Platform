@@ -941,6 +941,8 @@ html.Q_dialog_shown #dashboard_slot {
 .Q_notMobile #dashboard_slot * { color: var(--dashboard-main-color); font-size: 20px; }
 .Q_mobile #dashboard_slot * { color: var(--dashboard-mobile-color, var(--dashboard-main-color)); }
 
+.Q_notMobile.Q_layout_widebar #dashboard .Q_tabs_tab { display: block; text-align: center; }
+
 @keyframes Q_showAfterLoaded {
 	0% {
 		opacity: 0;

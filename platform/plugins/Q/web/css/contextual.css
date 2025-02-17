@@ -30,7 +30,7 @@
 .Q_listing li:first-child { border-top: none !important; }
 .Q_listing li:last-child { border-bottom: none; }
 .Q_listing li .Q_listing_item_text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.Q_contextual { position: fixed; z-index: 10000; transform: translateZ(100em); -webkit-transform: translateZ(100em); display: none; top: 0; left: 0; min-width: 250px; max-width: 90vw; padding: 7px; background-color: black; border-radius: 5px 5px 5px 5px; -moz-border-radius: 5px 5px 5px 5px; -webkit-border-radius: 5px 5px 5px 5px; box-shadow: black 0 0 4px; -webkit-box-shadow: black 0 0 4px; -moz-box-shadow: black 0 0 4px; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; -o-user-select: none; user-select: none; filter: none !important; }
+.Q_contextual { position: fixed; transform: translateZ(100em); -webkit-transform: translateZ(100em); display: none; top: 0; left: 0; min-width: 250px; max-width: 90vw; padding: 7px; background-color: black; border-radius: 5px; box-shadow: 0 0 10px 4px rgba(0, 0, 0, 0.9); user-select: none; filter: none !important; }
 
 .Q_contextual_preview
 {
@@ -40,11 +40,15 @@
 .Q_contextual .Q_listing li, .Q_selectable_listing li
 {
 	cursor: pointer;
+	display: flex;
+	align-items: center;
 }
 
 .Q_contextual .Q_listing li img
 {
 	margin-right: 10px;
+	max-width: 40px;
+	max-height: 40px;
 }
 
 .Q_contextual .Q_listing .Q_permanently_selected,
@@ -144,10 +148,6 @@
 .Q_contextual .Q_scroll_indicator
 {
 	z-index: 10001;
-}
-
-.Q_contextual {
-	z-index: 8675309;
 }
 
 .Q_contextual .Q_listing_wrapper {
