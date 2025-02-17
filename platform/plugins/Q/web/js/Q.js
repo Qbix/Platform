@@ -3846,28 +3846,7 @@ Q.ensure.loaders = {
 	'Handlebars': '{{Q}}/js/handlebars-v4.0.10.min.js',
 	'jQuery': '{{Q}}/js/jquery-3.2.1.min.js',
 	'Q.PHPJS': "{{Q}}/js/phpjs.js",
-	'Q.info.baseUrl': Q.onInit,
-	'IntersectionObserver': function (property, callback) {
-		if ('IntersectionObserver' in window
-		&& 'IntersectionObserverEntry' in window
-		&& 'intersectionRatio' in window.IntersectionObserverEntry.prototype) {
-			// Minimal polyfill for Edge 15's lack of `isIntersecting`
-			// See: https://github.com/w3c/IntersectionObserver/issues/211
-			if (!('isIntersecting' in window.IntersectionObserverEntry.prototype)) {
-   				  Object.defineProperty(window.IntersectionObserverEntry.prototype,
-   					  'isIntersecting', {
-   						  get: function () {
-   							  return this.intersectionRatio > 0;
-   						  }
-   					  }
-   				  );
-			}
-			return callback && callback(property);
-	 	}
-		Q.addScript('{{Q}}/js/polyfills/IntersectionObserver.js', function () {
-			callback && callback(property);
-		});
-	}
+	'Q.info.baseUrl': Q.onInit
 };
 
 /**
@@ -14290,7 +14269,6 @@ Q.Visual = Q.Pointer = {
 			});
 		}
 
-		var args = Array.prototype.slice.call(arguments, 0);
 		var img, img1, i, l;
 		var imageEvent = options.imageEvent || new Q.Event();
 		var audioEvent = options.audioEvent || new Q.Event();
@@ -14417,7 +14395,7 @@ Q.Visual = Q.Pointer = {
 							} else if (options.tooltip.text) {
 								tooltip.innerHTML = options.tooltip.text.encodeHTML();
 							}
-							tooltip.style.zIndex = img.style.zIndex + 100;
+							tooltip.style.zIndex = img.computedStyle().zIndex + 100;
 							Q.extend(tooltip.style, {
 								display: 'inline-block',
 								position: 'absolute',
@@ -14796,6 +14774,15 @@ Q.Visual = Q.Pointer = {
 	}
 };
 
+Q.Onboarding = {
+	start: new Q.Method(),
+	stop: new Q.Method(),
+	processes: {}
+};
+Q.Method.define(Q.Onboarding, "{{Q}}/js/methods/Q/Onboarding", function() {
+	return [Q, root];
+});
+
 Q.addEventListener(root, 'click', function _clicked() {
 	Q.Pointer.clickedAtLeastOnce = true;
 	Q.removeEventListener(root, 'click', _clicked);
@@ -15114,6 +15101,9 @@ Q.Dialogs = {
 		topMargin: '5%', // in percentage
 		bottomMargin: '5%' // or in absolute pixel values
 	},
+
+	onPush: new Q.Event(),
+    onPop: new Q.Event(),
 	
 	dialogs: [], // stack of dialogs that is currently being shown
 	
@@ -15192,6 +15182,7 @@ Q.Dialogs = {
 		} else {
 			_proceed1(o.content);
 		}
+		Q.handle(Q.Dialogs.onPush, Q.Dialogs, [dialog]);
 		return dialog;
 		function _proceed1(content) {
 			if (o.stylesheet) {
@@ -15300,6 +15291,7 @@ Q.Dialogs = {
 				$dialog.data('Q/dialog').close();
 			}
 		}
+		Q.handle(Q.Dialogs.onPop, Q.Dialogs, [dialog]);
 		return $dialog[0];
 	},
 
