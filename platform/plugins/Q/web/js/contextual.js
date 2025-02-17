@@ -17,6 +17,9 @@
 		// and optional 'info' field, which may contain arbitrary data assosiated with given contextual;
 		// so it's like [{ 'trigger': obj, 'contextual': obj, 'info': obj }]
 		collection: [],
+        
+		onShow: new Q.Event(),
+		onHide: new Q.Event(),
 
 		// stores currently shown contextual id, it's '-1' when no contextual is shown at the moment
 		current: -1,
@@ -129,7 +132,7 @@
 				}
 			}
 			var current = col.splice(cid, 1)[0];
-			current.trigger.off('mouseenter.Q_contextual');
+			current.trigger.unbind('mouseenter.Q_contextual');
 			return current;
 		},
 	
@@ -511,15 +514,10 @@
 					// select current element
 					li.addClass('Q_selected');
 
-					var handler = li.attr('data-handler') || li.data('handler') || contextual.attr('data-handler') || contextual.data('defaultHandler');
+					var handler = li.handler || li.attr('data-handler') || li.data('handler') || contextual.attr('data-handler') || contextual.data('defaultHandler');
 
-					try
-					{
-						handler = eval(handler);
-					}
-					catch (e)
-					{
-						return;
+					if (typeof handler === 'string') {
+						handler = Q.getObject(handler);
 					}
 					Q.handle(handler, contextual, [li, event]);
 
@@ -709,11 +707,13 @@
 
 			if (Q.info.isTouchscreen)
 			{
+				var zIndex = Q.zIndexTopmost();
 				var mask = Q.Masks.show('Q.screen.mask', {
 					fadeIn: Q.Contextual.fadeTime,
-					zIndex: 'auto'
+					zIndex: zIndex
 				});
 				contextual.insertAfter(mask.element);
+				contextual.css('z-index', zIndex);
 			}
 		
 			if (!info.ellipsissed)
@@ -727,6 +727,8 @@
 			}
 
 			$('html').addClass('Q_contextual_shown');
+            
+            Q.handle(Q.Contextual.onShow, Q.Contextual, [contextual]);
 		},
 
 		/**
@@ -792,6 +794,8 @@
 			Q.Contextual.outOfBounds = false;
 
 			$('html').removeClass('Q_contextual_shown');
+            
+            Q.handle(Q.Contextual.onHide, Q.Contextual, [contextual]);
 		},
 	
 		/**
@@ -819,4 +823,4 @@
 		'height': '80%'
 	};
 
-})(Q, Q.jQuery);
+})(Q, jQuery);

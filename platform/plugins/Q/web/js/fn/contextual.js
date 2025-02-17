@@ -81,16 +81,15 @@ Q.Tool.jQuery('Q/contextual', function _Q_contextual() {
 	}
 	contextual.append(listingWrapper.append(listing));
 
-	// set contextual max z-index
-	contextual.css("z-index", Q.zIndexTopmost());
-
-	$(document.body).append(contextual);
-
-	var cid = Q.Contextual.add($this, contextual, null, state.size);
-	state.id = cid;
-	state.contextual = contextual;
-	
-	Q.handle(state.onConstruct, $this, [contextual, cid]);
+	Q.addScript("{{Q}}/js/contextual.js", function () {
+		var cid = Q.Contextual.add($this, contextual, null, state.size);
+		state.id = cid;
+		state.contextual = contextual;
+		// set contextual max z-index
+		contextual.css("z-index", Q.zIndexTopmost());
+		$(document.body).append(contextual);
+		Q.handle(state.onConstruct, $this, [contextual, cid]);
+	}, { slotName: 'Q' });
 },
 
 {
