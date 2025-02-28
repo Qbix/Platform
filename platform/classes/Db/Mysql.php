@@ -393,6 +393,7 @@ class Db_Mysql implements Db_Interface
 			return false;
 		}
 		$possibleMagicInsertFields = array('insertedTime', 'created_time');
+		$possibleMagicUpdateFields = array('updatedTime', 'updated_time');
 		$onDuplicateKeyUpdate = isset($options['onDuplicateKeyUpdate'])
 				? $options['onDuplicateKeyUpdate'] : null;
 		$className = isset($options['className']) ? $options['className'] : null;
@@ -426,15 +427,21 @@ class Db_Mysql implements Db_Interface
 					throw new Exception("Db_Mysql::insertManyAndExecute: need options['className'] when onDuplicateKeyUpdate === true");
 				}
 				$row = new $options['className'];
-				$primaryKey = $row->primaryKey();
+				$primaryKey = $row->getPrimaryKey();
 				$onDuplicateKeyUpdate = array();
 				foreach ($columnsList as $column) {
 					if (in_array($column, $primaryKey)) {
 						continue;
 					}
-					$onDuplicateKeyUpdate[$column] = in_array($column, $possibleMagicInsertFields)
+					$onDuplicateKeyUpdate[$column] = in_array($column, $possibleMagicUpdateFields)
 						? new Db_Expression("CURRENT_TIMESTAMP")
 						: new Db_Expression("VALUES(`$column`)");
+				}
+				$fieldNames = call_user_func($options['className'], 'fieldNames');
+				foreach ($possibleMagicUpdateFields as $column) {
+					if (in_array($column, $fieldNames)) {
+						$onDuplicateKeyUpdate[$column] = new Db_Expression("CURRENT_TIMESTAMP");
+					}
 				}
 			}
 			foreach ($onDuplicateKeyUpdate as $k => $v) {
