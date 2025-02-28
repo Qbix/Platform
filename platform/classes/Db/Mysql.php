@@ -429,15 +429,16 @@ class Db_Mysql implements Db_Interface
 				$row = new $options['className'];
 				$primaryKey = $row->getPrimaryKey();
 				$onDuplicateKeyUpdate = array();
-				foreach ($columnsList as $column) {
+				foreach ($columnsList as $c) {
+					$column = isset($rawColumns[$c]) ? $rawColumns[$c] : $c;
 					if (in_array($column, $primaryKey)) {
 						continue;
 					}
 					$onDuplicateKeyUpdate[$column] = in_array($column, $possibleMagicUpdateFields)
 						? new Db_Expression("CURRENT_TIMESTAMP")
-						: new Db_Expression("VALUES(`$column`)");
+						: new Db_Expression("VALUES($column)");
 				}
-				$fieldNames = call_user_func($options['className'], 'fieldNames');
+				$fieldNames = call_user_func(array($options['className'], 'fieldNames'));
 				foreach ($possibleMagicUpdateFields as $column) {
 					if (in_array($column, $fieldNames)) {
 						$onDuplicateKeyUpdate[$column] = new Db_Expression("CURRENT_TIMESTAMP");
