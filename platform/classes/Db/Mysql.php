@@ -375,7 +375,9 @@ class Db_Mysql implements Db_Interface
 	 *    You can put an array of fieldname => value pairs here,
 	 *    which will add an ON DUPLICATE KEY UPDATE clause to the query.
 	 *    Consider using new Db_Expression("VALUES(fieldName)") for the values of fields
-	 *    that you'd want to update on existing rows.
+	 *    that you'd want to update on existing rows, and Db_Expression("CURRENT_TIMESTAMP")
+	 *    for magic time fields.
+	 *    Or you can just pass true instead of an array, and the system will do it for you.
 	 */
 	function insertManyAndExecute ($table_into, array $rows = array(), $options = array())
 	{
@@ -419,6 +421,22 @@ class Db_Mysql implements Db_Interface
 		if (isset($onDuplicateKeyUpdate)) {
 			$odku_clause = "\n\t ON DUPLICATE KEY UPDATE ";
 			$parts = array();
+			if ($onDuplicateKeyUpdate === true) {
+				if (empty($options['className'])) {
+					throw new Exception("Db_Mysql::insertManyAndExecute: need options['className'] when onDuplicateKeyUpdate === true");
+				}
+				$row = new $options['className'];
+				$primaryKey = $row->primaryKey();
+				$onDuplicateKeyUpdate = array();
+				foreach ($columnsList as $column) {
+					if (in_array($column, $primaryKey)) {
+						continue;
+					}
+					$onDuplicateKeyUpdate[$column] = in_array($column, $possibleMagicInsertFields)
+						? new Db_Expression("CURRENT_TIMESTAMP")
+						: new Db_Expression("VALUES(`$column`)");
+				}
+			}
 			foreach ($onDuplicateKeyUpdate as $k => $v) {
 				if ($v instanceof Db_Expression) {
 					$part = "= $v";
