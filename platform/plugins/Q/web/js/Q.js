@@ -2736,29 +2736,44 @@ Q.swapElements = function(element1, element2) {
  * @return {Element}
  */
 Q.element = function (tagName, attributes, elementsToAppend) {
-	var element = document.createElement(tagName);
-	if (attributes) {
-		for (var k in attributes) {
-			element.setAttribute(k, attributes[k]);
-		}
-	}
-	if (elementsToAppend) {
-		if (typeof elementsToAppend === 'string') {
-			element.innerHTML = elementsToAppend
-		} else {
-			for (var i=0, l=elementsToAppend.length; i<l; ++i) {
-				var e = elementsToAppend[i];
-				if (e) {
-					if (typeof(e) === 'string') {
-						element.innerHTML += e; // append as HTML, not text
-					} else {
-						element.append(e);
-					}
-				}
-			}
-		}
-	}
-	return element;
+    var element = document.createElement(tagName);
+
+    // Set attributes
+    if (attributes) {
+        for (var k in attributes) {
+            if (k.startsWith("on") && typeof attributes[k] === "function") {
+                // Assign event handlers directly
+                element[k] = attributes[k];
+            } else {
+                element.setAttribute(k, attributes[k]);
+            }
+        }
+    }
+
+    // Append children or raw HTML
+    if (elementsToAppend) {
+        if (typeof elementsToAppend === 'string') {
+            element.innerHTML = elementsToAppend; // Direct HTML insertion
+        } else {
+            var fragment = document.createDocumentFragment(); // Optimize appending multiple elements
+            for (var i = 0, l = elementsToAppend.length; i < l; ++i) {
+                var e = elementsToAppend[i];
+                if (e) {
+                    if (typeof e === 'string') {
+                        var temp = document.createElement("div");
+                        temp.innerHTML = e;
+                        while (temp.firstChild) {
+                            fragment.appendChild(temp.firstChild);
+                        }
+                    } else {
+                        fragment.appendChild(e); // Use appendChild for better browser compatibility
+                    }
+                }
+            }
+            element.appendChild(fragment); // Append everything at once
+        }
+    }
+    return element;
 };
 
 /**
@@ -7250,7 +7265,7 @@ Q.IndexedDB = {};
  *   You can also pass a string here, if you're just specifying the keyPath.
  * @param {String} params.keyPath The key path inside the object store.
  * @param {Array} params.indexes Array of arrays for createIndex consisting of [indexName, keyPath, options]
- * @param {Function} callback Receives (error, ObjectStore)
+ * @param {Function} callback Receives (error, IDBObjectStore, IDBDatabase)
  * @return {Q.Promise}
  */
 Q.IndexedDB.open = Q.promisify(function (dbName, storeName, params, callback) {
@@ -7294,7 +7309,7 @@ Q.IndexedDB.open = Q.promisify(function (dbName, storeName, params, callback) {
 		// Start a new transaction
 		var tx = db.transaction(storeName, "readwrite");
 		var store = tx.objectStore(storeName);
-		callback && callback.call(Q.IndexedDB, null, store);
+		callback && callback.call(Q.IndexedDB, null, store, db);
 		// Close the db when the transaction is done
 		tx.oncomplete = function() {
 			db.close();
@@ -8837,18 +8852,15 @@ Q.interpolateUrl = function (url, additional) {
 	if (url.indexOf('{{') < 0) {
 		return url;
 	}
-	var substitutions = {};
-	substitutions['baseUrl'] = substitutions[Q.info.app] = Q.baseUrl();
-	substitutions['Q'] = Q.pluginBaseUrl('Q');
-	for (var plugin in Q.plugins) {
-		substitutions[plugin] = Q.pluginBaseUrl(plugin);
-	}
-	url = url.interpolate(substitutions);
+	url = url.interpolate(Q.interpolateUrl.substitutions);
 	if (additional) {
 		url = url.interpolate(additional);
 	}
 	return url;
 };
+
+Q.interpolateUrl.substitutions = {};
+Q.interpolateUrl.substitutionsWithFullURL = {};
 
 /**
  * Interpolates between values e.g. color components of RGB, HSL, etc.
@@ -10700,8 +10712,9 @@ Q.find = function _Q_find(elem, filter, callbackBefore, callbackAfter, options, 
  *  activated as "this".
  * @param {Object} [internal] stuff for internal use
  * @param {Boolean} [internal.lazyload] used by Q/lazyload tool
- * @param {Function} [internal.progress] function to cal with incremental progress, to debug Q.activate()
- * @return {Q.Promise} Returns a promise with an extra .cancel() method to cancel the action
+ * @param {Function} [internal.progress] function to call with incremental progress, to debug Q.activate()
+ * @return {Q.Promise} Returns a promise with an extra .cancel() method to cancel the action.
+ *  Also has .element to facilitate chaining (e.g. append(Q.activate(element).element))
  */
 Q.activate = function _Q_activate(elem, options, callback, internal) {
 	
@@ -10755,6 +10768,7 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 		shared.canceled = true;
 		_reject && _reject();
 	};
+	promise.element = elem;
 	return promise;
 	
 	function _activated() {
@@ -12011,7 +12025,7 @@ Q.Template.render = Q.promisify(function _Q_Template_render(name, fields, callba
 			// the partials, helpers and text should have already been processed
 			if (params.text[1]) {
 				// fields should replace any text collisions, to avoid problems
-				fields = Q.extend({}, params.text[1], fields);
+				fields = Object.assign({}, Q.interpolateUrl.substitutionsWithFullURL, params.text[1], fields);
 			}
 			var tbaOld = Q.Tool.beingActivated;
 			var pbaOld = Q.Page.beingActivated;
@@ -14362,6 +14376,10 @@ Q.Visual = Q.Pointer = {
                                 x: Q.Visual.positionLeft() + offset.left + target.offsetWidth / 2,
                                 y: Q.Visual.positionTop() + offset.top + target.offsetHeight / 2
                             };
+							var elementAtPoint = document.elementFromPoint(point.x, point.y)
+							if (!target.contains(elementAtPoint)) {
+								return false; // the element is overlapped
+							}
                         } else {
                             point = target;
                         };
@@ -14393,7 +14411,10 @@ Q.Visual = Q.Pointer = {
 							if (options.tooltip.html) {
 								tool.innerHTML = options.tooltip.html;
 							} else if (options.tooltip.text) {
-								tooltip.innerHTML = options.tooltip.text.encodeHTML();
+								var fields = {};
+                                Q.take(Q.Pointer, ['ClickOrTap', 'clickOrTap', 'CLICKORTAP'], fields);
+                                Q.extend(fields, options.tooltip.fields);
+                                tooltip.innerHTML = options.tooltip.text.interpolate(fields).encodeHTML();
 							}
 							tooltip.style.zIndex = img.computedStyle().zIndex + 100;
 							Q.extend(tooltip.style, {
@@ -14777,9 +14798,24 @@ Q.Visual = Q.Pointer = {
 Q.Onboarding = {
 	start: new Q.Method(),
 	stop: new Q.Method(),
+	handle: new Q.Method(),
 	processes: {},
 	prefix: 'Q.Onboarding: ',
-	interval: { frequency: 100 }
+	interval: { 
+		frequency: 100,
+		afterHintHide: 3000
+	},
+	events: {},
+	selectors: {},
+	waitToDisappear: {},
+	text: null,
+	textPath: [],
+	options: {
+		hint: {
+			dontStopBeforeShown: true,
+			show: { delay: 500 }
+		}
+	}
 };
 Q.Method.define(Q.Onboarding, "{{Q}}/js/methods/Q/Onboarding", function() {
 	return [Q, root];
@@ -16113,6 +16149,17 @@ Q.onInit.add(function () {
 		}
 	}, 'Q.Socket');
 
+	var substitutions = Q.interpolateUrl.substitutions;
+	substitutions['baseUrl'] = substitutions[Q.info.app] = Q.baseUrl();
+	substitutions['Q'] = Q.pluginBaseUrl('Q');
+	for (var plugin in Q.plugins) {
+		substitutions[plugin] = Q.pluginBaseUrl(plugin);
+	}
+	var sfu = Q.interpolateUrl.substitutionsWithFullURL 
+	for (var k in substitutions) {
+		sfu[k] = Q.url(substitutions[k]);
+	}
+
 	var QtQw = Q.text.Q.words;
 	Q.Pointer.ClickOrTap = QtQw.ClickOrTap = useTouchEvents ? QtQw.Tap : QtQw.Click;
 	Q.Pointer.clickOrTap = QtQw.clickOrTap = useTouchEvents ? QtQw.tap : QtQw.click;
@@ -17110,11 +17157,13 @@ Q.beforeInit.addOnce(function () {
 		}
 	}
 
+	Q.Onboarding.text = Q.Onboarding.text || Q.info.app + '/content';
 	if (Q.info.text) {
 		Q.Text.loadBeforeInit = Q.info.text.loadBeforeInit || Q.Text.loadBeforeInit;
 		Q.Text.useLocale = Q.info.text.useLocale || Q.Text.useLocale;
+        Q.Onboarding.textName = Q.info.text.onboardingTextName || Q.Onboarding.textName;
+        Q.Onboarding.textPath = Q.info.text.onboardingTextPath || Q.Onboarding.textPath;
 	}
-
 	Q.ensure('Promise');
 }, 'Q');
 
