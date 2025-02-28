@@ -1,4 +1,6 @@
 .Q_expandable_tool h2.Q_expandable_title {
+    max-width: 100%;
+    overflow: hidden;
     background: rgba(255, 255, 255, 0.2);
     border-radius: 10px;
     cursor: pointer;
@@ -46,6 +48,10 @@
 	font-weight: bold;
     margin: 7px;
     line-height: 20px;
+}
+
+.Q_expandable_count:empty {
+    display: none;
 }
 
 .Q_expandable_container {
