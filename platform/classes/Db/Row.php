@@ -1556,7 +1556,7 @@ class Db_Row
 			$class_name = get_class($this);
 			$args2 = array_merge(array($this), $args);
 			$callable = array($class_name, $name);
-			if (is_callable($callable)) {
+			if (method_exists($class_name, $name)) {
 				return call_user_func_array($callable, $args2);
 			}
 			$class_event = implode('/', explode('_', $class_name));
