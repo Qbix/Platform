@@ -14233,7 +14233,8 @@ Q.Visual = Q.Pointer = {
 	 * @param {boolean} [options.tooltip.html] Use to put text in the tooltip (overrides text)
 	 * @param {boolean} [options.tooltip.index] Specify the index of the image to which to attach the tooltip, defaults to the last hint image
 	 * @param {boolean} [options.tooltip.className='Q_pulsate'] You can override the additional class name / animation effect
-	 * @param {boolean} [options.tooltip.margin=10] The margin to put around the tooltip if it gets too close to the edges
+	 * @param {boolean} [options.tooltip.aboveOrBelow] Optionally pass a number of pixels to make the tooltip appear either above or below the target's bounding rectangle.
+	 * @param {boolean} [options.tooltip.margin=10] The margin to keep around the tooltip if it gets too close to the edges
 	 * @param {Object} [options.speak] Can be used to speak some text. See Q.Audio.speak()
 	 *  function for options you can pass in this object
 	 * @param {String} [options.speak.text] The text to speak.
@@ -14425,16 +14426,20 @@ Q.Visual = Q.Pointer = {
 							});
 							var irect = img.getBoundingClientRect();
 							var rect = tooltip.getBoundingClientRect();
+							var aboveOrBelow = options.tooltip.aboveOrBelow;
 							var tleft = point.x - rect.width / 2;
-							var ttop = irect.bottom;
+							var ttop = aboveOrBelow ? offset.bottom : irect.bottom;
 							var m = ('margin' in options.tooltip) ? options.tooltip.margin : 10;
-							if (ttop + rect.height > window.innerHeight) {
-								ttop = point.y - rect.height - m;
-							}
-							if (tleft + rect.width > window.innerWidth) {
-								tleft = window.innerWidth - rect.width - m;
-							} else if (tleft < 0) {
-								tleft = m;
+							var ttop = ('aboveOrBelow' in options.tooltip)
+								? offset.bottom + options.tooltip.aboveOrBelow
+								: irect.bottom;
+							var m = ('margin' in options.tooltip) ? options.tooltip.margin : 10;
+							if (ttop + rect.height > window.innerHeight - m) {
+								ttop = (
+									('aboveOrBelow' in options.tooltip)
+									? offset.top - options.tooltip.aboveOrBelow
+									: point.y
+								) - rect.height;
 							}
 							tooltip.style.left = tleft + 'px';
 							tooltip.style.top = ttop + 'px';
@@ -16371,7 +16376,12 @@ function _addHandlebarsHelpers() {
 			var args = Array.prototype.slice.call(arguments);
 			var result = args.pop().data.root;
 			Q.each(args, function (i, key) {
-				if (typeof key === 'string' || typeof key === 'number') {
+				if (typeof key === 'object') {
+					result = key;
+				} else if (typeof key === 'string' || typeof key === 'number') {
+					if (!result) {
+						console.warn('Handlebars getObject helper: ', args);
+					}
 					result = result[key];
 				}
 			});

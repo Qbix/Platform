@@ -217,9 +217,9 @@ class Q_Cache
 					}
 				} else {
 					if (is_callable('apcu_delete')) {
-						apcu_delete($name, $store[$key]);
+						apcu_delete($name);
 					} else if (is_callable('apc_delete')) {
-						apc_delete($name, $store[$key]);
+						apc_delete($name);
 					}
 				}
 			}
