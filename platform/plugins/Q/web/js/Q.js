@@ -14841,6 +14841,7 @@ Q.Onboarding = {
 	waitToDisappear: {},
 	text: null,
 	textPath: [],
+	treatAsVisible: ['.Q_overlay.Q_behind', '.Q_fullscreen_dialog.Q_behind'],
 	options: {
 		hint: {
 			dontStopBeforeShown: true,
@@ -15323,7 +15324,7 @@ Q.Dialogs = {
 			if (!topDialog || topDialog !== dialog) {
 				dialogs.push(dialog);
 				if (o.hidePrevious && topDialog) {
-					topDialog.addClass('Q_hide');
+					topDialog.addClass('Q_behind');
 				}
 			}
 			if (o.closeAfterDelay) {
@@ -15350,7 +15351,7 @@ Q.Dialogs = {
 		var $dialog = $(dialog);
 
 		if (this.dialogs.length) {
-			this.dialogs[this.dialogs.length - 1].removeClass('Q_hide');
+			this.dialogs[this.dialogs.length - 1].removeClass('Q_behind');
 		}
 		if (!dontTriggerClose && $dialog) {
 			Q.Dialogs.dontPopOnClose = true;

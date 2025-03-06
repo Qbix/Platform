@@ -160,6 +160,9 @@ body { position: relative; margin: 0; }
 	animation: Q_fadeIn 300ms ease-in-out forwards;
 }
 
+.Q_behind { opacity: 0.2 !important; filter: blur(1px); }
+.Q_fullscreen_dialog.Q_behind { opacity: 0.8 !important; }
+
 .Q_clear{ clear: both; }
 .Q_left{ float: left; }
 .Q_right{ float: right; }

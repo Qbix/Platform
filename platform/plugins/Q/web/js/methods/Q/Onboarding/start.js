@@ -18,7 +18,7 @@ Q.exports(function (Q) {
      *   "disappear" (selector to override what should disappear before hint event stops)
      *   "after" (key of a hint event that has to stop before this hint starts)
      *   "options" (for options passed to Q.Visual.hint, merged over Q.Onboarding.options.hint)
-     * 
+     *
      */
     return function _Q_Onboarding_start(instructions) {
         if (!instructions) {
@@ -86,7 +86,10 @@ Q.exports(function (Q) {
                 var visible = false;
                 for (var i=0; i<elementsToAppear.length; ++i) {
                     var r = elementsToAppear[i].getBoundingClientRect();
-                    if (r.width && r.height) {
+                    var s = Q.Onboarding.treatAsVisible;
+                    var elements = Array.prototype.slice.call(document.querySelectorAll(s));
+                    var treatAsVisible = elements.includes(elementsToAppear[i]);
+                    if (treatAsVisible || (r.width && r.height)) {
                         visible = true;
                         appeared.push(elementsToAppear[i]);
                     }
@@ -120,8 +123,11 @@ Q.exports(function (Q) {
                 var elementsToDisappear = document.querySelectorAll(selectorToDisappear);
                 for (var i=0; i<elementsToDisappear.length; ++i) {
                     var r = elementsToDisappear[i].getBoundingClientRect();
-                    if (r.width && r.height) {
-                        visible = true; 
+                    var s = Q.Onboarding.treatAsVisible;
+                    var elements = Array.prototype.slice.call(document.querySelectorAll(s));
+                    var treatAsVisible = elements.includes(elementsToDisappear[i]);
+                    if (treatAsVisible || (r.width && r.height)) {
+                        visible = true;
                         break;
                     }
                 }
