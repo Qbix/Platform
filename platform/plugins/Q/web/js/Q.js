@@ -5228,7 +5228,7 @@ Q.Tool.jQuery.info = function (element) {
 Q.Tool.jQuery.options = function (pluginName, setOptions) {
 	var options;
 	var pluginName = Q.normalize.memoized(pluginName);
-	if (typeof _qtc[name] === 'function') {
+	if (root.jQuery.fn && typeof root.jQuery.fn[pluginName] === 'function') {
 		options = root.jQuery.fn[pluginName].options;
 	} else {
 		options = _qtjo[pluginName] = _qtjo[pluginName] || {};
@@ -12130,6 +12130,23 @@ Q.Data = Q.Method.define({
 			u8arr[n] = bstr.charCodeAt(n);
 		}
 		return new Blob([u8arr], {type:mime});
+	},
+	variant: function(sessionId, index, segments, seed) {
+		segments = segments || 2;
+		seed = seed || 0xBABE;
+		sessionId = sessionId.replace(/-/g, '');
+		let mixedStr = segmentId + ":" + index + ":" + seed;
+		let hash = 0x811c9dc5;
+		for (let i = 0; i < mixedStr.length; i++) {
+			hash ^= mixedStr.charCodeAt(i);
+			hash = Math.imul(hash, 0x01000193); // Large prime multiplier
+			hash ^= (hash >>> 17);
+			hash = Math.imul(hash, 0x85ebca6b); // MurmurHash3 prime
+			hash ^= (hash >>> 13);
+			hash = Math.imul(hash, 0xc2b2ae35); // Extra entropy spreading
+			hash ^= (hash >>> 16);
+		}
+		return (hash >>> 0) % segments === 0;
 	}
 }, "{{Q}}/js/methods/Q/Data", function() {
 	return [Q];
@@ -12166,14 +12183,23 @@ Q.Text = {
 	 * @static
 	 * @param {String} language Something like "en"
 	 * @param {String} locale Something like "US", but can also be blank if unknown
+	 * @param {Object} [options]
+	 * @param {Boolean} [options.skipRTL] Set to true, to not also set the dir="RTL" of the document.documentElement for some languages
 	 */
-	setLanguage: function (language, locale) {
+	setLanguage: function (language, locale, options) {
 		Q.Text.language = language.toLowerCase();
 		Q.Text.locale = locale && locale.toUpperCase();
 		Q.Text.languageLocaleString = Q.Text.language
 			+ (Q.Text.useLocale && Q.Text.locale ? '-' + Q.Text.locale : '');
 		Q.Text.languageLocale = Q.Text.language
 			+ (Q.Text.locale ? '-' + Q.Text.locale : '');
+		if (!options || !options.skipRTL) {
+			var languagesRTL = ['he', 'ar', 'arc', 'az', 'ku', 'fa', 'ur', 'rhg', 'ff'];
+			var lang = language.split('-')[0];
+			if (languagesRTL.includes(lang)) {
+				document.documentElement.setAttribute('dir', 'rtl');
+			}
+		}
 	},
 
 	/**

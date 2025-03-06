@@ -2173,6 +2173,30 @@ class Q_Utils
 		}
 	}
 
+	static function variant($sessionId, $index, $segments = 2, $seed = 0xBABE)
+	{
+		$mixedStr = $sessionId . ":" . $index . ":" . $seed;
+		$hash = 0x811c9dc5; // JavaScript large prime offset
+		$length = strlen($mixedStr);
+		for ($i = 0; $i < $length; $i++) {
+			$hash ^= ord($mixedStr[$i]); // XOR with character's ASCII value
+			// JavaScript-style 32-bit multiplication (prevents PHP overflow)
+			$hash = (int) (($hash * 0x01000193) & 0xFFFFFFFF);
+			$hash = unsigned_right_shift($hash ^ unsigned_right_shift($hash, 17), 0);
+			$hash = (int) (($hash * 0x85ebca6b) & 0xFFFFFFFF);
+			$hash = unsigned_right_shift($hash ^ unsigned_right_shift($hash, 13), 0);
+			$hash = (int) (($hash * 0xc2b2ae35) & 0xFFFFFFFF);
+			$hash = unsigned_right_shift($hash ^ unsigned_right_shift($hash, 16), 0);
+		}
+		// Exact JavaScript-like unsigned integer handling
+		$hash = $hash & 0xFFFFFFFF;
+		return ($hash % $segments) === 0;
+	}
+	
+	private static function unsigned_right_shift($x, $n) {
+		return ($x >= 0) ? ($x >> $n) : (($x + 0x100000000) >> $n);
+	}
+
 	private static function compareKeysNumerically($a, $b)
 	{
 		$ap = preg_split('/\D/', $a, -1);
