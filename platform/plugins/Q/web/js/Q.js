@@ -15340,10 +15340,11 @@ Q.Dialogs = {
 	 * Closes dialog and removes it from top of internal dialog stack.
 	 * @static
      * @method pop
-	 * @param {boolean} dontTriggerClose is for internal use only
+	 * @param {boolean} dontTriggerClose is for internal use only, prevent triggering onClose
+	 * @param {Object} options any options to send to onClose handlers
 	 * @return {HTMLElement} The HTML element of the dialog that was just popped.
 	 */
-	pop: function(dontTriggerClose) {
+	pop: function(dontTriggerClose, options) {
 		if (dontTriggerClose === undefined) {
 			dontTriggerClose = false;
 		}
@@ -15357,12 +15358,12 @@ Q.Dialogs = {
 		if (!dontTriggerClose && $dialog) {
 			Q.Dialogs.dontPopOnClose = true;
 			if ($dialog.data('Q/overlay')) {
-				$dialog.data('Q/overlay').close();
+				$dialog.data('Q/overlay').close(null, options);
 			} else if ($dialog.data('Q/dialog')) {
-				$dialog.data('Q/dialog').close();
+				$dialog.data('Q/dialog').close(null, options);
 			}
 		}
-		Q.handle(Q.Dialogs.onPop, Q.Dialogs, [dialog]);
+		Q.handle(Q.Dialogs.onPop, Q.Dialogs, [dialog, options]);
 		return $dialog[0];
 	},
 
