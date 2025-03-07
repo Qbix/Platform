@@ -15303,12 +15303,12 @@ Q.Dialogs = {
 			dialog.style.display = 'none';
 			(o.appendTo || document.body).append(dialog);
 			var _onClose = o.onClose;
-			o.onClose = new Q.Event(function() {
+			o.onClose = new Q.Event(function(dialog, options) {
 				if (!Q.Dialogs.dontPopOnClose) {
 					Q.Dialogs.pop(true);
 				}
 				Q.Dialogs.dontPopOnClose = false;
-				Q.handle(o.onClose.original, dialog, [dialog]);
+				Q.handle(o.onClose.original, dialog, [dialog, options]);
 			}, 'Q.Dialogs');
 			o.onClose.original = _onClose;
 			try {
