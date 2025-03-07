@@ -406,11 +406,11 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 				}},
 				beforeClose: o.beforeClose,
 				onClose: { 
-					"Q/dialog": function () {
+					"Q/dialog": function (e, options) {
 						if (o.removeOnClose) {
 							Q.removeElement($this[0], true);
 						}
-						Q.handle(o.onClose, $this[0], [$this[0]]);
+						Q.handle(o.onClose, $this[0], [$this[0], options]);
 					},
 					"Q.Dialogs.updateMask": function () {
 						// set z-index of mask less than visible dialog element
@@ -489,7 +489,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 						});
 					}
 				},
-				close: function(e) {
+				close: function(e, options) {
 					if (false === Q.handle(o.beforeClose, $this[0], [$this[0]])) {
 						return false;
 					}
@@ -516,7 +516,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 						}
 					}
 
-					Q.handle(o.onClose, $this[0], [$this[0]]);
+					Q.handle(o.onClose, $this[0], [$this[0], options || {}]);
 					if (e) $.Event(e).preventDefault();
 				},
 				windowParams: windowParams
