@@ -262,7 +262,7 @@ Q.Tool.jQuery('Q/overlay',
 							$('html').removeClass(htmlClass);
 						}
 					}
-					Q.handle(data.options.onClose, $this[0], [e, options || {}]);
+					Q.handle(data.options.onClose, $this[0], [$this[0], options || {}]);
 					if (data.options.mask) {
 						Q.Masks.hide('Q.dialog.mask');
 					}
