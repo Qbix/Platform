@@ -338,7 +338,7 @@ Sp.interpolate = function _String_prototype_interpolate(fields) {
 
 /**
  * Similar to String.prototype.replace, but replaces globally
- * @method replaceAll
+ * @method replaceAllPlaceholders
  * @return {String}
  */
 Sp.replaceAllPlaceholders = function _String_prototype_replaceAllPlaceholders(pairs) {
@@ -6345,6 +6345,7 @@ Q.Links = {
 		return 'googlechrome://navigate?url=' + url; // note: don't encodeURIComponent
 	}
 };
+Q.Links.whatsapp = Q.Links.whatsApp;
 
 /**
  * For defining method stubs that will be replaced with methods on demand.

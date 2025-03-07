@@ -219,7 +219,7 @@ Q.Tool.jQuery('Q/overlay',
 					Q.handle(data.options.onLoad, $this[0], [$this[0]]);
 				}
 			},
-			close: function(e)
+			close: function(e, options)
 			{
 				if (e) {
 					$.Event(e).preventDefault();
@@ -262,7 +262,7 @@ Q.Tool.jQuery('Q/overlay',
 							$('html').removeClass(htmlClass);
 						}
 					}
-					Q.handle(data.options.onClose, $this[0], []);
+					Q.handle(data.options.onClose, $this[0], [e, options || {}]);
 					if (data.options.mask) {
 						Q.Masks.hide('Q.dialog.mask');
 					}
