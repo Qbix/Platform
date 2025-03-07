@@ -184,8 +184,8 @@ Q.Tool.define('Q/expandable', function (options) {
 			}
 		}, state.duration).onComplete.set(function () {
 			$h2.add($expandable).addClass('Q_expanded');
-			Q.handle(callback, tool, []);
-			Q.handle(state.onExpand, tool, []);
+			Q.handle(callback, tool, [options || {}]);
+			Q.handle(state.onExpand, tool, [options || {}]);
 		});
 	},
 	

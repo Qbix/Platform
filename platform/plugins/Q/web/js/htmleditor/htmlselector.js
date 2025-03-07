@@ -3776,7 +3776,7 @@ function HTMLselector(el,options) {
             return this;
         }
 
-        this.replaceAll = function (replaceText) {
+        this.replaceAllPlaceholders = function (replaceText) {
             this.currentMatch = this.resultsQuantity-1;
             while(this.currentMatch >= 0){
                 this.replace(replaceText);

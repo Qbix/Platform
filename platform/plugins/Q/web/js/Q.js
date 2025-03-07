@@ -291,7 +291,7 @@ Sp.encodeHTML = function _String_prototype_encodeHTML(convert) {
 	if (convert) {
 		conversions = Q.take(conversions, convert);
 	}
-	return this.replaceAll(conversions);
+	return this.replaceAllPlaceholders(conversions);
 };
 
 /**
@@ -341,7 +341,7 @@ Sp.interpolate = function _String_prototype_interpolate(fields) {
  * @method replaceAll
  * @return {String}
  */
-Sp.replaceAll = function _String_prototype_replaceAll(pairs) {
+Sp.replaceAllPlaceholders = function _String_prototype_replaceAllPlaceholders(pairs) {
 	var result = this;
 	for (var k in pairs) {
 		result = result.split(k).join(pairs[k]);
@@ -5674,7 +5674,7 @@ Tp.forEachChild = function _Q_Tool_prototype_forEachChild(name, levels, withSibl
  * @return {String}
  */
 Q.Tool.encodeOptions = function _Q_Tool_encodeOptions(options) {
-	return JSON.stringify(options).encodeHTML().replaceAll({"&quot;": '"'});
+	return JSON.stringify(options).encodeHTML().replaceAllPlaceholders({"&quot;": '"'});
 };
 
 /**
