@@ -1716,31 +1716,84 @@ class Q
 		return $mixed;
 	}
 	/**
-	 * A wrapper for json_decode
+	 * A wrapper for json_decode with enhanced character handling
+	 * 
 	 * @method json_decode
 	 * @static
+	 * @param string $json The JSON string to decode
+	 * @param bool $assoc When true, returned objects will be converted into associative arrays
+	 * @param int $depth Maximum recursion depth
+	 * @param int $options Bitmask of JSON decode options (includes custom high-value flag)
+	 * 
+	 * Custom Flag:
+	 * - JSON_DECODE_CLEAN = 0x10000 (Replaces problematic characters like \n, \r, \0 with markers)
+	 * 
 	 * @throws Q_Exception_JsonDecode
 	 */
-	static function json_decode()
+	static function json_decode($json, $assoc = false, $depth = 512, $options = 0)
 	{
-		$args = func_get_args();
-		if (empty($args[0])) {
-			return $args[0];
+		if (empty($json)) {
+			return $json;
 		}
-		$result = call_user_func_array('json_decode', $args);
+
+		// Handle problematic characters before decoding if flag is set
+		if ($options & JSON_DECODE_CLEAN) {
+			$json = strtr($json, [
+				"\n" => "@@NEWLINE@@",
+				"\r" => "@@CARRIAGERETURN@@",
+				"\0" => "@@NULL@@",
+				"\x1F" => "@@CONTROL@@"
+			]);
+		}
+
+		$result = json_decode($json, $assoc, $depth, $options & ~JSON_DECODE_CLEAN);
+
+		// Error Handling - Exception Throwing
 		if (is_callable('json_last_error')) {
 			if ($code = json_last_error()) {
-				throw new Q_Exception_JsonDecode(array(
+				throw new Q_Exception_JsonDecode([
 					'message' => json_last_error_msg()
-				), array(), $code);
+				], [], $code);
 			}
-		} else if (!isset($result) and strtolower(trim($args[0])) !== 'null') {
-			throw new Q_Exception_JsonDecode(array(
+		} elseif (!isset($result) && strtolower(trim($json)) !== 'null') {
+			throw new Q_Exception_JsonDecode([
 				'message' => 'Invalid JSON'
-			), null, -1);
+			], null, -1);
 		}
+
+		// Restore problematic characters after decoding if flag is set
+		if ($options & JSON_DECODE_CLEAN) {
+			$result = self::decodeProblematicChars($result);
+		}
+
 		return $result;
 	}
+
+	/**
+	 * Restore problematic characters like \n, \r, etc. after json_decode
+	 * 
+	 * @param mixed $data The decoded data
+	 * @return mixed The data with problematic characters restored
+	 */
+	static function decodeProblematicChars($data)
+	{
+		if (is_string($data)) {
+			return strtr($data, [
+				"@@NEWLINE@@" => "\n",
+				"@@CARRIAGERETURN@@" => "\r",
+				"@@NULL@@" => "\0",
+				"@@CONTROL@@" => "\x1F"
+			]);
+		} elseif (is_array($data)) {
+			return array_map(array('Q', 'decodeProblematicChars'), $data);
+		} elseif (is_object($data)) {
+			foreach ($data as $key => $value) {
+				$data->$key = self::decodeProblematicChars($value);
+			}
+		}
+		return $data;
+	}
+
 
 	/**
 	 * Exports a simple variable into something that looks nice, nothing fancy (for now)
@@ -2324,6 +2377,11 @@ if (!function_exists('json_last_error_msg')) {
         $error = json_last_error();
         return isset($ERRORS[$error]) ? $ERRORS[$error] : 'Unknown error';
     }
+}
+
+// Custom Flag for Problematic Character Handling
+if (!defined('JSON_DECODE_CLEAN')) {
+    define('JSON_DECODE_CLEAN', 0x10000);
 }
 
 /// { aggregate classes for production
