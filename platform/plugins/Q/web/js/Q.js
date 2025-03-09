@@ -15284,6 +15284,7 @@ Q.Dialogs = {
 				title = dialog.querySelector('.Q_title_slot');
 				contentElement = dialog.querySelector('.Q_dialog_slot');
 			}
+			dialog.addClass('Q_dialog'); // in addition to Q_overlay or Q_fullscreen_dialog
 			contentElement.addClass('Q_content_container');
 			var $dialog = $(dialog);
 			if (o.title) {
