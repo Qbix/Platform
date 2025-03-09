@@ -10,12 +10,11 @@ Q.exports(function (Q) {
      * Encodes text data with TextEncoder, then verifies it with
      * each of the public keys.
      * @static
-     * @method sign
+     * @method verify
      * @param {String} data the signed payload to verify
      * @param {Array} publicKeyRawStrings array of exported public keys
      * @param {Array} signatures array of ArrayBuffer signatures
      *   previously generated with the corresponding public keys.
-     *   Use Q.Data.fromBase64() if the strings are in String format.
      * @param {Object} [algo] you can specify a different algorithm
      * @param {String} [algo.name="ECDSA"]
      * @param {String} [algo.namedCurve="P-256"]
@@ -26,6 +25,10 @@ Q.exports(function (Q) {
      *   Or rejects if any of the keys fail to be imported.
      */
     return function Q_Data_verify(data, publicKeyRawStrings, signatures, algo) {
+		const sigs = [];
+		for (sig of signatures) {
+			sigs.push(typeof sig === 'string' ? Q.Data.fromBase64(sig) : sig);
+		}
         algo = Q.extend({
             name: 'ECDSA',
             namedCurve: 'P-256',
@@ -34,9 +37,9 @@ Q.exports(function (Q) {
         return Q.Promise.all(
             publicKeyRawStrings.map((pks, i) => 
                 crypto.subtle.importKey('raw', Q.Data.fromBase64(pks), algo, false, ['verify']
-            ).then(publicKey => crypto.subtle.verify(algo, publicKey, signatures[i], new TextEncoder().encode(data)))
-        )
-    );
-  };
+            ).then(publicKey => crypto.subtle.verify(algo, publicKey, sigs[i], new TextEncoder().encode(data)))
+			)
+		);
+	};
 
 });

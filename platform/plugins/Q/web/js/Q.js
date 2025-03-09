@@ -15340,7 +15340,7 @@ Q.Dialogs = {
 	 * Closes dialog and removes it from top of internal dialog stack.
 	 * @static
      * @method pop
-	 * @param {boolean} dontTriggerClose is for internal use only, prevent triggering onClose
+	 * @param {boolean} dontTriggerClose is for internal use only, prevents closing the dialog
 	 * @param {Object} options any options to send to onClose handlers
 	 * @return {HTMLElement} The HTML element of the dialog that was just popped.
 	 */
