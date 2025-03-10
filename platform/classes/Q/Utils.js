@@ -909,19 +909,20 @@ function _split() {
 	var total = 0, read = 0, count = 0, shards = Object.keys(_shards);
 	var batches = {};
 	shards.forEach(function(shard) {
-		batches[shard] = Q.batcher(function(rows, callback) {
+		batches[shard] = Q.batcher(function(rows, params, callbacks) {
 			// insert ['row1', 'row2', ...] to 'shard'
-			if (rows.length) {
-				_dbm.reallyConnect(function (client) {
-					var i, s = [];
-					function _escapeRow(row) {
-						var key, v = [];
-						for (key in row) v.push(client.escape(row[key]));
-						return "("+v.join(", ")+")";
-					}
-					for (i=0; i<rows.length; i++) {
-						s.push(_escapeRow(rows[i]));
-					}
+			if (!rows.length) {
+				return;
+			}
+			_dbm.reallyConnect(function (client) {
+				var i, s = [];
+				function _escapeRow(row) {
+					var key, v = [];
+					for (key in row) v.push(client.escape(row[key]));
+					return "("+v.join(", ")+")";
+				}
+				for (i=0; i<rows.length; i++) {
+					s.push(_escapeRow(rows[i]));
 					var sql = "INSERT INTO "+_rowClass.table().toString()
 						.replace('{{prefix}}', _dbm.prefix())
 						.replace('{{dbname}}', _dbm.dbname())
@@ -930,8 +931,8 @@ function _split() {
 						process.stderr.write("Processed "+(count/total*100).toFixed(1)+"%\r");
 						callback([err]);
 					});
-				}, shard, _shards[shard]);
-			} else callback();
+				}
+			}, shard, _shards[shard]);
 		}, {ms: 50, max: 100}); // explicit batch options
 	});
 	_logging = 1;
