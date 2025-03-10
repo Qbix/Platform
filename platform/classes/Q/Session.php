@@ -494,6 +494,10 @@ class Q_Session
 	 */
 	static function regenerateId($destroy_old_session = false, $duration = null, $prefixType = '')
 	{
+		if (session_status() === PHP_SESSION_ACTIVE) {
+			session_write_close();
+		}
+		
 		$old_SESSION = $_SESSION;
 		if ($destroy_old_session) {
 			self::destroy();
@@ -1283,6 +1287,9 @@ class Q_Session
 
 	static function setSessionHandlers()
 	{
+		if (session_status() === PHP_SESSION_ACTIVE) {
+			session_write_close(); // Close active session to reset handlers
+		}
 		if (version_compare(PHP_VERSION, '7.0.0', '<')) {
 			session_set_save_handler(
 				array(__CLASS__, 'openHandler'),
