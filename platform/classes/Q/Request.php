@@ -843,7 +843,11 @@ class Q_Request
 		} else {
 			$source = array_merge($_GET, $_POST, $_COOKIE);
 		}
-		// PHP replaces dots with underscores
+		// Try with dots first. It may be parsed from JSON.
+		if (isset($source["Q.$fieldname"])) {
+			return $source["Q.$fieldname"];
+		}
+		// PHP replaces dots with underscores in HTTP requests
 		if (isset($source["Q_$fieldname"])) {
 			return $source["Q_$fieldname"];
 		}
