@@ -79,8 +79,13 @@ Q.Tool.jQuery('Q/textfill',
 			$e.addClass('Q_textfill_resizing');
 			for (var i=0; i<100; ++i) {
 				$e.css('font-size', fontSize + 'px');
-				textHeight = Math.round($e.outerHeight(true));
-				textWidth = Math.round($e.outerWidth(true));
+				var rect = ourElement[0].getBoundingClientRect();
+				textWidth = Math.round(rect.width
+					+ parseFloat(ourElement.css('margin-left'))
+					+ parseFloat(ourElement.css('margin-right')));
+				textHeight = Math.round(rect.height
+					+ parseFloat(ourElement.css('margin-top'))
+					+ parseFloat(ourElement.css('margin-bottom')));
 				if (o.maxLines) {
 					lines = Math.round(textHeight/lineHeight);
 				}
