@@ -114,7 +114,9 @@ function () {
 			});
 			var lineHeight = $this[0].style.lineHeight
 				? $this[0].style.lineHeight
-				: $this.height() + 'px';
+				: ($this[0].getBoundingClientRect().height
+					- parseFloat($this[0].computedStyle().paddingTop)
+					-parseFloat($this[0].computedStyle().paddingBottom)) + 'px';
 			var $placeholder = $('<div />').text(plch).css({
 				'position': 'absolute',
 				'left': 0,
