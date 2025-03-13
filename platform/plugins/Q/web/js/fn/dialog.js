@@ -305,7 +305,7 @@ Q.Tool.jQuery('Q/overlay',
 			this.data('Q/overlay').load();
 		},
 		close: function (options) {
-			this.data('Q/overlay').close(options);
+			this.data('Q/overlay').close(null, options);
 		},
 		remove: function () {
 			this.each(function() {
@@ -591,7 +591,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 			this.data('Q/dialog').load();
 		},
 		close: function (options) {
-			this.data('Q/dialog').close(options);
+			this.data('Q/dialog').close(null, options);
 		}
 	}
 
