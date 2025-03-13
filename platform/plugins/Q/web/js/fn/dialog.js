@@ -489,7 +489,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 						});
 					}
 				},
-				close: function(options) {
+				close: function(e, options) {
 					if (false === Q.handle(o.beforeClose, $this[0], [$this[0]])) {
 						return false;
 					}
