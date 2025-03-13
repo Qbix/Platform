@@ -15373,9 +15373,10 @@ Q.Dialogs = {
 	 * @static
      * @method close
 	 * @param {Number|Element|jQuery} dialog You can pass an element here, or index in the dialog stack
+	 * @param {Object} options any options to send to onClose handlers
 	 * @return {HTMLElement|null} The HTML element of the dialog that was just closed, or null if not found.
 	 */
-	close: function(dialog) {
+	close: function(dialog, options) {
 		var index = -1;
 		if (Q.isInteger(dialog)) {
 			index = dialog;
@@ -15397,7 +15398,7 @@ Q.Dialogs = {
 				Q.Dialogs.dontPopOnClose = true;
 				this.dialogs.splice(index, 1);
 			}
-			$(dialog).plugin('Q/dialog', 'close');
+			$(dialog).plugin('Q/dialog', 'close', options);
 			return dialog;
 		}
 		return null;
