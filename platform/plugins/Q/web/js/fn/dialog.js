@@ -304,8 +304,8 @@ Q.Tool.jQuery('Q/overlay',
 		load: function () {
 			this.data('Q/overlay').load();
 		},
-		close: function () {
-			this.data('Q/overlay').close();
+		close: function (options) {
+			this.data('Q/overlay').close(options);
 		},
 		remove: function () {
 			this.each(function() {
@@ -406,7 +406,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 				}},
 				beforeClose: o.beforeClose,
 				onClose: { 
-					"Q/dialog": function (e, options) {
+					"Q/dialog": function (element, options) {
 						if (o.removeOnClose) {
 							Q.removeElement($this[0], true);
 						}
@@ -489,7 +489,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 						});
 					}
 				},
-				close: function(e, options) {
+				close: function(options) {
 					if (false === Q.handle(o.beforeClose, $this[0], [$this[0]])) {
 						return false;
 					}
@@ -590,8 +590,8 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 		load: function () {
 			this.data('Q/dialog').load();
 		},
-		close: function (e, o) {
-			this.data('Q/dialog').close(e, o);
+		close: function (options) {
+			this.data('Q/dialog').close(options);
 		}
 	}
 
