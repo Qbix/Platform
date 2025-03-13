@@ -730,8 +730,8 @@ Q.Tool.define("Q/tabs", function(options) {
 				elements: elements,
 				className: "Q_tabs_contextual",
 				defaultHandler: state.contextualHandler,
-				onConstruct: function ($contextual) {
-					_addListeners(tool, $contextual);
+				onConstruct: function (contextual) {
+					_addListeners(tool, $(contextual));
 					Q.handle(state.onRefresh, this);
 					Q.handle(callback, tool);
 					tool.element.addClass('Q_tabs_arranged');

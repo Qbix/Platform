@@ -590,8 +590,8 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 		load: function () {
 			this.data('Q/dialog').load();
 		},
-		close: function (e) {
-			this.data('Q/dialog').close(e);
+		close: function (e, o) {
+			this.data('Q/dialog').close(e, o);
 		}
 	}
 

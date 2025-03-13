@@ -519,7 +519,7 @@
 					if (typeof handler === 'string') {
 						handler = Q.getObject(handler);
 					}
-					Q.handle(handler, contextual, [li, event]);
+					Q.handle(handler, contextual, [li[0], event]);
 
 					Q.Contextual.hide();
 				};
