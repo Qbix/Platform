@@ -4617,6 +4617,7 @@ Q.Tool = function _Q_Tool(element, options) {
 	}
 	this.activated = true;
 	this.element = element;
+	this.elements = {};
 	this.typename = 'Q.Tool';
 	
 	if (options === true) {
@@ -5245,6 +5246,39 @@ var _qtc = Q.Tool.constructors = {};
 var _qtp = Q.Tool.placeholders = {};
 
 var Tp = Q.Tool.prototype;
+
+/**
+ * Use this to render a template into a tool's element,
+ * using its prefix for any tools inside the template.
+ * This function also extends the tool.elements object
+ * with elements defined in the template and found with
+ * tool.element.querySelector() inside the element.
+ * @method renderTemplate
+ * @param {String|Object} name See Q.Template.render and Q.Template.load
+ * @param {Object} [fields] The fields to pass to the template when rendering it.
+ * @param {Function} [callback] a callback - receives (error) or (error, html)
+ * @param {Object} [options={}] Options for the template engine compiler. See Q.Template.render
+ */
+Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
+	var tool = this;
+	Q.Template.render(name, fields || {}, function (err, html) {
+		if (err) {
+			return callback && callback(err);
+		}
+		tool.element.innerHTML = html;
+		var n = Q.normalize.memoized(name);
+		var info = Q.Template.info[n];
+		if (!tool.elements) {
+			tool.elements = {};
+		}
+		for (var k in info.elements || {}) {
+			tool.elements[k] = tool.element.querySelector(info.elements[k]);
+		}
+		callback && callback(null, html, tool.elements);
+	}, Q.extend({
+		tool: tool
+	}, options));
+});
 
 /**
  * Call this after changing one more values in the state.
@@ -11796,6 +11830,8 @@ Q.Template.info = {};
  * @param {String} content The content of the template that will be processed by the template engine.
  *   To avoid setting the content (so the template will be loaded on demand later), pass undefined here.
  * @param {Object|String} info You can also pass a string "type" here.
+ * @param {Object} [info.elements] Key-Value pairs where keys are the names used in Q.Tool.prototype.renderTemplate,
+ *   and the values can be passed to querySelector() after rendering the template
  * @param {String} [info.type="handlebars"] The type of template.
  * @param {Array} [info.text] Array naming sources for text translations, to be sent to Q.Text.get()
  * @param {Array} [info.partials] Relative urls of .js scripts for registering partials.
