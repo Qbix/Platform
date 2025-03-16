@@ -249,8 +249,8 @@ var Sp = String.prototype;
  * @return {String}
  */
 Sp.toCapitalized = function _String_prototype_toCapitalized() {
-	return this.replace(/^([a-z])|\s+([a-z])/g, function (found) {
-		return found.toUpperCase();
+	return input.replace(/(\S+)(\s*)/g, (match, word, space) => {
+		return word.charAt(0).toLocaleUpperCase() + word.slice(1) + space;
 	});
 };
 
@@ -16531,7 +16531,7 @@ function _addHandlebarsHelpers() {
 				text = Q.getObject('data.root.toCapitalized', text);
 			}
 			text = text || '';
-			return text.charAt(0).toUpperCase() + text.slice(1);
+			return text.toCapitalized();
 		});
 	}
 	if (!Handlebars.helpers.json) {
