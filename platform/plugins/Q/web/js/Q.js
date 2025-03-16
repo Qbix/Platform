@@ -13026,10 +13026,15 @@ function _listenForVisibilityChange() {
 		}
 	});
 	var _isDocumentHidden = null;
+	var _lastDocumentHidden = null;
 	var _handleOnVisibilityChange = Q.debounce(function (event) {
 		if (_isDocumentHidden === null) {
 			_isDocumentHidden = Q.isDocumentHidden();
 		}
+		if (_lastDocumentHidden == _isDocumentHidden) {
+			return;
+		}
+		_lastDocumentHidden = _isDocumentHidden;
 		Q.onVisibilityChange.handle.call(document, !_isDocumentHidden, event);
 	}, 10);
 	Q.addEventListener(document, [visibilityChange, 'pause', 'resume', 'resign', 'active'],
