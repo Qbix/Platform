@@ -473,8 +473,8 @@ class Q_Request
 	
 	
 	/**
-	 * Use this to determine whether or not it the request is an "AJAX"
-	 * request, and is not expecting a full document layout.
+	 * Use this to determine whether or not it the client expects
+	 * JSON in the response, or this is an "AJAX" request
 	 * @method isAjax
 	 * @static
 	 * @return {string} The contents of `Q.ajax` if it is present.
@@ -494,7 +494,36 @@ class Q_Request
 			return $result;
 		}
 		$result = Q_Request::special('ajax', false);
+		if ($result === false) {
+			$result = self::expectsJSON();
+		}
 		return $result;
+	}
+
+	/**
+	 * Use this to determine whether the client expects JSON
+	 * in the response
+	 * @method expectsJSON
+	 * @static
+	 * @return {string} The contents of `Q.ajax` if it is present.
+	 */
+	static function expectsJSON()
+	{
+		$acceptHeader = $_SERVER['HTTP_ACCEPT'] ? $_SERVER['HTTP_ACCEPT'] : '';
+		$acceptHeader = strtolower(trim($acceptHeader));
+		$acceptTypes = array_map('trim', explode(',', $acceptHeader));
+		foreach ($acceptTypes as $type) {
+			// Allow only "application/json" or variations like "application/json; charset=UTF-8"
+			if (preg_match('#^application/json($|[ ;])#', $type)) {
+				return true;
+			}
+
+			// False if any type accepts text/html or other non-JSON types
+			if (str_contains($type, 'text/html') || str_contains($type, 'application/xhtml+xml')) {
+				return false;
+			}
+		}
+		return false;
 	}
 
 	/**

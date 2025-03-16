@@ -13177,7 +13177,7 @@ Q.jQueryPluginPlugin = function _Q_jQueryPluginPlugin() {
 	 * @param {String|Function} [id]
 	 *  Optional id of the tool, such as "Q_tabs_2"
 	 * @param {String} [prefix]
-	 *  Optional prefix to prepend to the tool's id
+	 *  Optional prefix to prepend to the tool's id, used in children() and .forEachTool()
 	 * @param {Boolean} [lazyload=false]
 	 *    Pass true to allow the tool to be lazy-loaded by a Q/lazyload tool if it is
 	 *    activated on one of its containers.
