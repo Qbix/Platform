@@ -4612,7 +4612,7 @@ Q.Exception.prototype = Error.prototype;
  *	 Otherwise returns null, or false if the tool was already constructed.
  */
 Q.Tool = function _Q_Tool(element, options) {
-	if (this.activated) {
+	if (this.activating || this.activated) {
 		return this; // don't construct the same tool more than once
 	}
 	this.activated = true;
@@ -11574,11 +11574,17 @@ function _activateTools(toolElement, options, shared) {
 		if (!_constructors[toolName]) {
 			_constructors[toolName] = function Q_Tool(element, options) {
 				// support re-entrancy of Q.activate
+				var prevTool = Q.Tool.beingActivated;
 				var tool = Q.getObject(['Q', 'tools', toolName], element);
 				if (this.activating || this.activated || tool) {
+					tool = tool || this;
 					return _activateTools.alreadyActivated;
 				}
-				this.activating = true
+				if ((prevTool && prevTool.element === element && prevTool.name === toolName)) {
+					tool = prevTool;
+					return _activateTools.alreadyActivated;
+				}
+				this.activating = false; // below, Q.Tool.call will set it to true
 				this.activated = false;
 				this.initialized = false;
 				try {
@@ -11599,7 +11605,6 @@ function _activateTools(toolElement, options, shared) {
 					if (toolConstructor.text) {
 						this.text = toolConstructor.text;
 					}
-					var prevTool = Q.Tool.beingActivated;
 					Q.Tool.beingActivated = this;
 					// Trigger events in some global event factories
 					var normalizedName = Q.normalize.memoized(this.name);
