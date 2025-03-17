@@ -8,7 +8,7 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
     font-weight: 300;
-    text-align:  left;
+    text-align: start;
     font-size: 20px;
     line-height: 30px;
     padding: 5px;
@@ -41,7 +41,7 @@
 }
 
 .Q_expandable_count {
-	float: right;
+	float: inline-end;
     padding: 0 5px 0 5px;
     border-radius: 5px;
 	font-size: 12px;
@@ -55,7 +55,7 @@
 }
 
 .Q_expandable_container {
-    text-align: left;
+    text-align: start;
     font-weight: 100;
     font-size: 15px;
     /* -webkit-mask-image: -webkit-linear-gradient(rgba(0,0,0,1) 80%, rgba(0,0,0,0) 100%); */
