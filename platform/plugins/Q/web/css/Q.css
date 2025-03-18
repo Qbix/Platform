@@ -543,7 +543,6 @@ div.Q_placeholder { pointer-events: none; }
 .Q_inplace_tool { display: none; visibility: hidden; }
 .Q_textfill_resizing,
 .Q_textfill_resized {
-	line-height: 1.2;
 	left: 0 !important;
 	width: 100% !important;
 	vertical-align: middle !important;

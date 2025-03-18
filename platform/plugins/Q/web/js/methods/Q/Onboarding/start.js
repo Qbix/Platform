@@ -85,17 +85,18 @@ Q.exports(function (Q) {
                 var appeared = [];
                 var visible = false;
                 for (var i=0; i<elementsToAppear.length; ++i) {
-                    var r = elementsToAppear[i].getBoundingClientRect();
+					var e = elementsToAppear[i];
+                    var r = e.getBoundingClientRect();
                     var s = Q.Onboarding.treatAsVisible;
                     var elements = Array.prototype.slice.call(document.querySelectorAll(s));
                     var treatAsVisible = elements.includes(elementsToAppear[i]);
-                    if (treatAsVisible || (r.width && r.height)) {
+                    if (treatAsVisible || (r.width && r.height && !_isOverlapped(e))) {
                         visible = true;
                         appeared.push(elementsToAppear[i]);
                     }
                 }
                 if (!events[k].occurred && visible) {
-                    var after = instructions[k].after;
+                    var after = instructions[k]?.after;
                     if (typeof after === 'string') {
                         after = [after];
                     }
@@ -122,11 +123,12 @@ Q.exports(function (Q) {
                 visible = false;
                 var elementsToDisappear = document.querySelectorAll(selectorToDisappear);
                 for (var i=0; i<elementsToDisappear.length; ++i) {
-                    var r = elementsToDisappear[i].getBoundingClientRect();
+					var e = elementsToDisappear[i];
+                    var r = e.getBoundingClientRect();
                     var s = Q.Onboarding.treatAsVisible;
                     var elements = Array.prototype.slice.call(document.querySelectorAll(s));
                     var treatAsVisible = elements.includes(elementsToDisappear[i]);
-                    if (treatAsVisible || (r.width && r.height)) {
+                    if (treatAsVisible || (r.width && r.height && !_isOverlapped(e))) {
                         visible = true;
                         break;
                     }
@@ -141,5 +143,18 @@ Q.exports(function (Q) {
                 }
             }
         }, 100);
+        function _isOverlapped(el) {
+			const rect = el.getBoundingClientRect();
+			const points = [
+				[rect.left, rect.top],
+				[rect.right, rect.top],
+				[rect.left, rect.bottom],
+				[rect.right, rect.bottom],
+				[(rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2]
+			];
+
+			return !points.every(([x, y]) => document.elementFromPoint(x, y) === el);
+		}
+
     };
 });
