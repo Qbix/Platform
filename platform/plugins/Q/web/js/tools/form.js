@@ -108,7 +108,7 @@ Q.Tool.define('Q/form', function(options) {
 					}
 					return;
 				}
-				var redirectUrl = Q.getObject('redirect.url', data);
+				var redirectUrl = Q.getObject('redirect.url', response);
 				if (redirectUrl) {
 					// handle one redirect (if it redirects again, give up)
 					Q.request(redirectUrl, state.slotsToRequest, function (err, data2) {
