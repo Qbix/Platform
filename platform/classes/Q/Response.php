@@ -319,7 +319,7 @@ class Q_Response
 					Q_Response::addContentSecurityPolicy($type, "'sha256-$hash'");
 				}
 			}
-			if ($nodeUrl = Q_Config::get('Q', 'node', 'url', null)) {
+			if ($nodeUrl = Q_Utils::nodeUrl()) {
 				if (substr($nodeUrl, -1) !== '/') {
 					$nodeUrl .= '/';
 				}
