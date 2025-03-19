@@ -249,7 +249,7 @@ var Sp = String.prototype;
  * @return {String}
  */
 Sp.toCapitalized = function _String_prototype_toCapitalized() {
-	return input.replace(/(\S+)(\s*)/g, (match, word, space) => {
+	return this.replace(/(\S+)(\s*)/g, (match, word, space) => {
 		return word.charAt(0).toLocaleUpperCase() + word.slice(1) + space;
 	});
 };
