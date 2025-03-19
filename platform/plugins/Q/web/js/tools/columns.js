@@ -70,7 +70,7 @@ Q.Tool.define("Q/columns", function(options) {
 	Q.addStylesheet('{{Q}}/css/tools/columns.css', function () {
 		if (state.title === undefined) {
 			state.title = $('<div />').append('<img class="Q_columns_loading" src="'
-				+ Q.info.imgLoading
+				+ Q.url(Q.info.imgLoading)
 				+'" alt="">')[0];
 		}
 
