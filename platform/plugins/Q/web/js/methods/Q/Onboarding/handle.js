@@ -16,8 +16,9 @@ Q.exports(function (Q) {
      * @param {Function} [callback]
      */
     return function _Q_Onboarding_handle(key, callback) {
+        var lsk = Q.Onboarding.prefix + key;
         var event = Q.Onboarding.events[key];
-        if (!event || event.occurred || event.stopped) {
+        if (!localStorage[lsk] || !event || event.occurred || event.stopped) {
             return callback && callback(false);
         }
         var appeared = [];
