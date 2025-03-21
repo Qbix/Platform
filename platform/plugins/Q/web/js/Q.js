@@ -5258,14 +5258,15 @@ var Tp = Q.Tool.prototype;
  * @param {Object} [fields] The fields to pass to the template when rendering it.
  * @param {Function} [callback] a callback - receives (error) or (error, html)
  * @param {Object} [options={}] Options for the template engine compiler. See Q.Template.render
+ * @return {Promise} can use this instead of callback
  */
 Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
 	var tool = this;
-	Q.Template.render(name, fields || {}, function (err, html) {
+	return Q.Template.render(name, fields || {}, function (err, html) {
 		if (err) {
 			return callback && callback(err);
 		}
-		tool.element.innerHTML = html;
+		Q.replace(tool.element, html);
 		var n = Q.normalize.memoized(name);
 		var info = Q.Template.info[n];
 		if (!tool.elements) {
