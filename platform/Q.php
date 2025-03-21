@@ -12,7 +12,7 @@
  
 // Enforce PHP version to be > 5.0
 if (version_compare(PHP_VERSION, '5.0.0', '<')) {
-	die("Q requires PHP version 5.0 or higher. It works even better with PHP 7 and above.");
+	die("Q requires PHP version 5.0 or higher. It works even better with PHP 8 and above.");
 }
 
 // Was this loaded? In that case, do nothing.
@@ -20,6 +20,10 @@ if (defined('Q_VERSION')) {
 	return;
 }
 define('Q_VERSION', '1.1');
+
+// Supress deprecation warnings, we support a wide range of PHP >= 5.0!
+ini_set('display_errors', 1);
+error_reporting(E_ALL & ~E_DEPRECATED);
 
 //
 // Constants

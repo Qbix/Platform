@@ -320,7 +320,7 @@ class Q_Bootstrap
 		foreach ($script_files as $cf) {
 			Q::includeFile($cf);
 		}
-		error_reporting(Q_Config::get('Q', 'errorReporting', E_ALL & ~E_NOTICE & ~E_STRICT));
+		error_reporting(Q_Config::get('Q', 'errorReporting', E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED));
 		
 		//if (isset($old_setting)) {
 			// Q_Cache::ignore($old_setting);
