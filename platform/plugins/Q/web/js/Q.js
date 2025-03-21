@@ -2399,13 +2399,13 @@ Q.chain = function (callbacks) {
 	return result;
 };
 
-/**
+**
  * Takes a function and returns a version that returns a promise
  * @method promisify
  * @static
  * @param  {Function} getter A function that takes arguments that include a callback and passes err as the first parameter to that callback, and the value as the second argument.
- * @param {Boolean} [useThis] whether to resolve the promise with the "this" instead of the second argument.
- * @param {Number|Array} [callbackIndex] Which argument the getter is expecting the callback, if any.
+ * @param {Boolean|string} useThis whether to resolve the promise with the "this" instead of the second argument.
+ * @param {Number|Array} callbackIndex Which argument the getter is expecting the callback, if any.
  *  For cordova-style functions pass an array of indexes for the
  *  onSuccess, onFailure callbacks, respectively.
  * @return {Function} a wrapper around the function that returns a promise, extended with the original function's return value if it's an object
@@ -2416,49 +2416,77 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 			return getter.apply(this, args);
 		}
 		var args = [], resolve, reject, found = false;
-		Q.each(arguments, function (i, ai) {
-			if (typeof ai !== 'function') {
-				args.push(ai);
-			} else {
-				found = true;
-				args.push(function _promisified(err, second) {
-					try {
-						ai.apply(this, arguments);
-					} catch (e) {
-						err = e;
-					}
-					if (err) {
-						return reject(err);
-					}
-					resolve(useThis ? this : second);
-				});
-			}
-		});
-		if (!found) {
-			if (callbackIndex instanceof Array) {
-				(0 in callbackIndex) && (args[callbackIndex[0]] = function _onResolve(value) {
-					return resolve(value);
-				});
-				(1 in callbackIndex) && (args[callbackIndex[1]] = function _onReject(value) {
-					return reject(value);
-				});
-			} else {
-				var ci = (callbackIndex === undefined) ? args.length : callbackIndex;
-				if (args.length < ci) {
-					throw new Q.Exception("Q.promisify: Too few arguments");
-				}
-				args.splice(ci, 0, function _defaultCallback(err, second) {
-					if (err) {
-						return reject(err);
-					}
-					resolve(useThis ? this : second);
-				});
-			}
-		}
 		var promise = new Q.Promise(function (r1, r2) {
 			resolve = r1;
 			reject = r2;
 		});
+		Q.each(arguments, function (i, ai) {
+			if (callbackIndex instanceof Array
+			&& callbackIndex[0] == i) {
+				found = true;
+				args.push(function _onResolve(value) {
+					if (ai instanceof Function) {
+						try {
+							return ai.apply(this, arguments);
+						} catch (e) {
+							return;
+						}
+					}
+					return resolve(value);
+				});
+			} else if (callbackIndex instanceof Array
+			&& callbackIndex[0] == i) {
+				found = true;
+				args.push(function _onReject(value) {
+					if (ai instanceof Function) {
+						try {
+							return ai.apply(this, arguments);
+						} catch (e) {
+							return;
+						}
+						return;
+					}
+					return reject(value);
+				});
+			}
+			if (!(ai instanceof Function)) {
+				args.push(ai);
+			} else {
+				found = true;
+				args.push(_promisified);
+				function _promisified(err, second) {
+					if (ai instanceof Function) {
+						try {
+							ai.apply(this, arguments);
+						} catch (e) {
+							err = e;
+						}
+						return;
+					}
+					if (err) {
+						return reject(err);
+					}
+					resolve(useThis ? this : second);
+				}
+			}
+		});
+		if (callbackIndex instanceof Array) {
+			if (callbackIndex[0] && args.length <= callbackIndex[0]) {
+				args.push(resolve);
+			}
+			if (callbackIndex[1] && args.length <= callbackIndex[1]) {
+				args.push(reject);
+			}
+		}
+		if (!found) {
+			var ci = (callbackIndex === undefined) ? args.length : callbackIndex;
+			args.splice(ci, 0, function _defaultCallback(err, second) {
+				if (err) {
+					return reject(err);
+				}
+				resolve(useThis ? this : second);
+			});
+		}
 		try {
 			return Q.extend(promise, getter.apply(this, args));
 		} catch (e) {
@@ -5286,7 +5314,7 @@ Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
 	}, Q.extend({
 		tool: tool
 	}, options));
-});
+}, false, 2);
 
 /**
  * Call this after changing one more values in the state.
@@ -7358,16 +7386,16 @@ Q.IndexedDB.open = Q.promisify(function (dbName, storeName, params, callback) {
 			db.close();
 		};
 	};
-});
+}, false, 3);
 Q.IndexedDB.put = Q.promisify(function (store, value, callback) {
 	_DB_addEvents(store, store.put(value), callback);
-});
+}, false, 3);
 Q.IndexedDB.get = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.get(key), callback);
-});
+}, false, 3);
 Q.IndexedDB['delete'] = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.delete(key), callback);
-});
+}, false, 3);
 
 function _DB_addEvents(store, request, callback) {
 	request.onsuccess = function (event) {
