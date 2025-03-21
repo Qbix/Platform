@@ -5253,11 +5253,13 @@ var Tp = Q.Tool.prototype;
  * This function also extends the tool.elements object
  * with elements defined in the template and found with
  * tool.element.querySelector() inside the element.
+ * It also activates the content inside the tool, if any.
  * @method renderTemplate
  * @param {String|Object} name See Q.Template.render and Q.Template.load
  * @param {Object} [fields] The fields to pass to the template when rendering it.
  * @param {Function} [callback] a callback - receives (error) or (error, html)
- * @param {Object} [options={}] Options for the template engine compiler. See Q.Template.render
+ * @param {Object} [options={}] Options for the template engine compiler. See Q.Template.render.
+ *  Also used as options for Q.activate()
  * @return {Promise} can use this instead of callback
  */
 Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
@@ -5275,7 +5277,12 @@ Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
 		for (var k in info.elements || {}) {
 			tool.elements[k] = tool.element.querySelector(info.elements[k]);
 		}
-		callback && callback(null, html, tool.elements);
+		if (options && options.beforeActivate) {
+			callback && callback.call(tool, null, html, tool.elements, tools, options);
+		}
+		Q.activate(tool.element.children, options, function (elem, tools, options) {
+			callback && callback.call(this, null, html, tool.elements, tools, options);
+		});
 	}, Q.extend({
 		tool: tool
 	}, options));
