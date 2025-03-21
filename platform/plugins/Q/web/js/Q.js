@@ -3841,7 +3841,7 @@ Q.ensure = function _Q_ensure(property, callback) {
 			loader(property, callback);
 		} else if (loader instanceof Q.Event) {
 			loader.addOnce(property, function _loaded() {
-				callback && callback(property);
+				callback && callback(Q.getObject(property));
 			});
 		}
 	});
