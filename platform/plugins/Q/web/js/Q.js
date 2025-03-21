@@ -2448,8 +2448,7 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 					}
 					return reject(value);
 				});
-			}
-			if (!(ai instanceof Function)) {
+			} else if (!(ai instanceof Function)) {
 				args.push(ai);
 			} else {
 				found = true;
