@@ -2399,7 +2399,7 @@ Q.chain = function (callbacks) {
 	return result;
 };
 
-**
+/**
  * Takes a function and returns a version that returns a promise
  * @method promisify
  * @static
