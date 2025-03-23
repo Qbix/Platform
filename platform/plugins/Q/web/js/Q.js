@@ -2458,12 +2458,7 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 				args.push(_promisified);
 				function _promisified(err, second) {
 					if (ai instanceof Function) {
-						try {
-							ai.apply(this, arguments);
-						} catch (e) {
-							err = e;
-						}
-						return;
+						return ai.apply(this, arguments);
 					}
 					if (err) {
 						return reject(err);
