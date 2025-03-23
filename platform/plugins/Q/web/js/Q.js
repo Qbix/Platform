@@ -2819,10 +2819,8 @@ Q.$ = function (selector, container, toArray) {
 };
 
 /**
- * Like a timestamp, but works with number of Gregorian Calendar 
- * days since fictional epoch year=0, month=0, day=1.
- * You can store daystamps and do arithmetic with them.
- * @class Daystamp
+ * Functionality related to regular expressions
+ * @class RegExp
  */
 Q.RegExp = {
 	/**
