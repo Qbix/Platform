@@ -2255,6 +2255,9 @@ Q.setObject = function _Q_setObject(name, value, context, delimiter) {
  * @return {Object|undefined} Returns the originally stored value, or `undefined` if nothing is there
  */
 Q.getObject = function _Q_getObject(name, context, delimiter, create) {
+	if (!name) {
+		return undefined; 
+	}
 	delimiter = delimiter || '.';
 	if (typeof name === 'string') {
 		name = name.split(delimiter);
@@ -2435,7 +2438,7 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 					return resolve(value);
 				});
 			} else if (callbackIndex instanceof Array
-			&& callbackIndex[0] == i) {
+			&& callbackIndex[1] == i) {
 				found = true;
 				args.push(function _onReject(value) {
 					if (ai instanceof Function) {
