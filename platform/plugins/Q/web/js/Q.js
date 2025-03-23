@@ -2115,7 +2115,7 @@ Q.mixin = function _Q_mixin(A /*, B, ... */) {
 	A.staticProperty = function _staticProperty(propName) {
 		for (var i=0; i<A.__mixins.length; ++i) {
 			if (propName in A.__mixins[i]) {
-				return A.__mixins[i].propName;
+				return A.__mixins[i][propName];
 			}
 		}
 		return undefined;
