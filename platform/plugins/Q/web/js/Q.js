@@ -2255,9 +2255,6 @@ Q.setObject = function _Q_setObject(name, value, context, delimiter) {
  * @return {Object|undefined} Returns the originally stored value, or `undefined` if nothing is there
  */
 Q.getObject = function _Q_getObject(name, context, delimiter, create) {
-	if (!name) {
-		return undefined; 
-	}
 	delimiter = delimiter || '.';
 	if (typeof name === 'string') {
 		name = name.split(delimiter);
