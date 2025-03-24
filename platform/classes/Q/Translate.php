@@ -90,11 +90,10 @@ class Q_Translate
 	static function arrayToBranch($arr)
 	{
 		$key = array_shift($arr);
-		if (!sizeof($arr)) {
+		if (!$arr) {
 			return $key;
-		} else {
-			return array($key => Q_Translate::arrayToBranch($arr));
 		}
+		return array($key => Q_Translate::arrayToBranch($arr));
 	}
 
 	public function getLocales()

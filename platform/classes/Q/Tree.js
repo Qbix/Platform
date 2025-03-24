@@ -314,16 +314,17 @@ module.exports = function (linked) {
 	 * @param {Q.Tree|Object} second The Object or Q.Tree to merge over the existing tree.
 	 * @param {boolean} [under=false] If true, merges the second under this tree, instead of over it.
 	 *  By default, second is merged on top of this tree.
-	 * @return {object} Returns the resulting tree, modified by the merge.
+	 * @param {boolean} [noNumericArrays=false] If true, treats numeric arrays as objects
+	 * @return {object|false} Returns the resulting tree, modified by the merge.
 	 **/
-	this.merge = function(second, under) {
+	this.merge = function(second, under, noNumericArrays) {
 		if (Q.typeOf(second) === 'Q.Tree') {
 			this.merge(second.getAll(), under);
 		} else if (typeof second === 'object') {
 			if (under === true) {
-				linked = _merge(second, linked);
+				linked = _merge(second, linked, noNumericArrays);
 			} else {
-				linked = _merge(linked, second);
+				linked = _merge(linked, second, noNumericArrays);
 			}
 		} else {
 			return false;
@@ -341,7 +342,11 @@ module.exports = function (linked) {
 		for (k in first) {
 			result[k] = first[k];
 		}
-		switch (Q.typeOf(second)) {
+		var type = Q.typeOf(second);
+		var type2 = (noNumericArrays && type === 'array')
+			? 'object'
+			: type;
+		switch (type2) {
 			case 'array':
 				// merge in values if they are not in array yet
 				// if array contains scalar values only unique values are kept
@@ -353,6 +358,9 @@ module.exports = function (linked) {
 				break;
 			case 'object':
 				for (k in second) {
+					if (type === 'array' && isNaN(k)) {
+						continue; // only numeric keys
+					}
 					if (!(k in result)) {
 						// key is not in result so just add it
 						result[k] = second[k];
@@ -364,7 +372,7 @@ module.exports = function (linked) {
 						result[k] = second[k];
 					} else {
 						// otherwise second[k] is an object so merge it in
-						result[k] = _merge(result[k], second[k]);
+						result[k] = _merge(result[k], second[k], noNumericArrays);
 					}
 				}
 				break;

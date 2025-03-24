@@ -474,21 +474,29 @@ class Q_Tree
 	 * Merges trees over the top of existing trees
 	 * @method merge
 	 * @param {array|Q_Tree} $second The array or Q_Tree to merge on top of the existing one
-	 * @return {boolean}
+	 * @param {boolean} [$noNumericArrays=false] Set to true to treat all arrays as associative
+	 * @return {Q_Tree|false} Returns existing tree, modified by the merge
 	 */
-	function merge ($second)
+	function merge ($second, $under = false, $noNumericArrays = false)
 	{
+		if ($second instanceof Q_Tree) {
+			$this->merge(
+				$second->parameters, $under, $noNumericArrays
+			);
+		}
 		if (is_array($second)) {
-			$this->parameters = self::merge_internal($this->parameters, 
-				$second);
-			return true;
-		} else if ($second instanceof Q_Tree) {
-			$this->parameters = self::merge_internal($this->parameters, 
-				$second->parameters);
-			return true;
-		} else {
+			if ($under === true) {
+				$this->parameters = self::merge_internal(
+					$second, $this->parameters, $noNumericArrays
+				);
+			} else {
+				$this->parameters = self::merge_internal(
+					$this->parameters, $second, $noNumericArrays
+				);
+			}
 			return false;
 		}
+		return $this;
 	}
 	
 	/**
@@ -547,16 +555,17 @@ class Q_Tree
 	 * @protected
 	 * @param {array} [$array1=array()]
 	 * @param {array} [$array2=array()]
+	 * @param {boolean} [$noNumericArrays=false] Set to true to treat all arrays as associative
 	 * $return {array}
 	 */
-	protected static function merge_internal ($array1 = array(), $array2 = array())
+	protected static function merge_internal ($array1 = array(), $array2 = array(), $noNumericArrays = false)
 	{
 		if (!Q::isAssociative($array1) and isset($array2['replace'])) {
 			return $array2['replace'];
 		}
 		$result = $array1;
 		foreach ($array2 as $key => $value) {
-			if (!Q::isAssociative($array2)) {
+			if (!$noNumericArrays and !Q::isAssociative($array2)) {
 				// merge in values if they are not in array yet
 				// if array contains scalar values only unique values are kept
 				if (!in_array($value, $result)) {
@@ -567,7 +576,7 @@ class Q_Tree
 			} else if (array_key_exists($key, $result)) {
 				if (is_array($value) and is_array($result[$key])) {
 					// key already in result and both values are arrays
-					$result[$key] = self::merge_internal($result[$key], $value);
+					$result[$key] = self::merge_internal($result[$key], $value, $noNumericArrays);
 				} else {
 					// key already in result but one of the values is a scalar
 					$result[$key] = $value;

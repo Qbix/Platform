@@ -1,6 +1,6 @@
 <?php
 
-class   Q_Translate_Google {
+class Q_Translate_Google {
 
 	function __construct(Q_Translate $parent)
 	{
@@ -69,7 +69,7 @@ class   Q_Translate_Google {
 				$arr = $content;
 				$tree = new Q_Tree();
 				$tree->load($localeFile);
-				$tree->merge($arr);
+				$tree->merge($arr, false, true);
 				foreach ($toRemove as $n => $parts) {
 					call_user_func_array(array($tree, 'clear'), $parts);
 				}
@@ -91,7 +91,7 @@ class   Q_Translate_Google {
 			}
 			array_push($d['key'], $d['value']);
 			$tree = new Q_Tree($arr);
-			$tree->merge(Q_Translate::arrayToBranch($d['key']));
+			$tree->merge(Q_Translate::arrayToBranch($d['key']), false, true);
 		}
 		$filenames = array();
 		foreach ($jsonFiles as $dirname => $content) {
