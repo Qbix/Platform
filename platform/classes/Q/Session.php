@@ -206,7 +206,7 @@ class Q_Session
 		$baseUrl = Q_Request::baseUrl();
 		$parts = parse_url($baseUrl);
 		$path = !empty($parts['path']) ? $parts['path'] : '/';
-		$domain = '.'.$parts['host'];
+		$domain = '';
 
 		Q::event('Q/session/init', array(
 			'name' => &$name,
