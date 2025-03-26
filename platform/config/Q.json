@@ -2,7 +2,6 @@
 	"Q": {
 		"defaultTimezone": "UTC",
 		"handlersBeforeEvent": {
-			"Q/reroute": ["Q/before/Q_reroute"],
 			"Q/initialExtras": ["Q/before/Q_initialExtras"],
 			"Q/responseExtras": ["Q/before/Q_responseExtras"],
 			"Q/sessionExtras": ["Q/before/Q_sessionExtras"],

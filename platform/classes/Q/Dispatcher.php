@@ -354,6 +354,25 @@ class Q_Dispatcher
 				}
 
 				if ($try === 0) {
+					// We might want to reroute the request
+					$eventName = 'Q/reroute';
+					self::startSessionBeforeEvent($eventName);
+					if (!isset(self::$skip[$eventName])) {
+						/**
+						 * Gives the app a chance to reroute the request
+						 * @event Q/reroute
+						 * @param {array} $routed
+						 * @return {boolean} whether to stop the dispatch
+						 */
+						$stop_dispatch = Q::event($eventName, self::$routed, true);
+						if ($stop_dispatch) {
+							self::result("Stopped dispatch");
+							self::$served = 'stopped';
+							return false;
+						}
+					}
+
+					// send cookies
 					self::cookies();
 				}
 
@@ -545,6 +564,13 @@ class Q_Dispatcher
 		// Set cookie from latest update timestamp, if it was set
 		if ($Q_ut = Q::ifset(Q_Uri::$urls, '@timestamp', null)) {
 			Q_Response::setCookie('Q_ut', $Q_ut);
+		}
+		// Set cookies from app id and udid
+		if ($appId = Q_Request::appId()) {
+			Q_Response::setCookie('Q_appId', $appId);
+		}
+		if ($udid = Q_Request::udid()) {
+			Q_Response::setCookie('Q_udid', $udid);
 		}
 	}
 	
