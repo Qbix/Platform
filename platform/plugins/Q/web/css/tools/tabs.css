@@ -1,5 +1,5 @@
 .Q_tabs_tabs { text-align: center; border-bottom: solid 1px #aaa; width: 100%; margin: 0; padding: 0; list-style-type: none; }
-.Q_tabs_tab { justify-content: center; justify-items: center; vertical-align: middle; cursor: pointer; display: flex; flex-direction: column; font-size: 100%; border-bottom: 0 border-left: 0; margin-bottom: -1px;background-color: #f8f8f8; list-style-type: none; text-indent: 0; white-space: nowrap;}
+.Q_tabs_tab { justify-content: center; justify-items: center; vertical-align: middle; cursor: pointer; display: flex; flex-direction: row; font-size: 100%; border-bottom: 0 border-left: 0; margin-bottom: -1px;background-color: #f8f8f8; list-style-type: none; text-indent: 0; white-space: nowrap;}
 .Q_tabs_tab, .Q_tabs_tab * { font-weight: 400; }
 .Q_tabs_title { position: relative; display: inline; }
 .Q_tabs_vertical>.Q_tabs_tab { display: block; float: none; vertical-align: middle; cursor: pointer; }
