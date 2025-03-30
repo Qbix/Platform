@@ -2466,13 +2466,12 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 		});
 		if (callbackIndex instanceof Array) {
 			if (callbackIndex[0] && args.length <= callbackIndex[0]) {
-				args.push(resolve);
+				args[callbackIndex[0]] = resolve;
 			}
 			if (callbackIndex[1] && args.length <= callbackIndex[1]) {
-				args.push(reject);
+				args[callbackIndex[1]] = reject;
 			}
-		}
-		if (!found) {
+		} else if (!found) {
 			var ci = (callbackIndex === undefined) ? args.length : callbackIndex;
 			args.splice(ci, 0, function _defaultCallback(err, second) {
 				if (err) {
@@ -12182,6 +12181,7 @@ Q.Data = Q.Method.define({
 	decompress: new Q.Method(),
 	sign: new Q.Method(),
 	verify: new Q.Method(),
+	generateKey: new Q.Method(),
 	all: function (a, b) {
 		return a && b;
 	},

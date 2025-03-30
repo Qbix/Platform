@@ -13,8 +13,10 @@
  *   @param {Number} [options.maxFontPixels] Maximum size of text font,
  *   set this if your text container is large and you don't want to have extra large text on page
  *   @param {Number} [options.minFontPixels] Minimum size of text font,
- *   @param {Number} [options.maxLines=null] Maximum number of lines,
+ *   @param {Number} [options.maxLines] Maximum number of lines,
  *   set this if you'd like to have a maximum number of lines.
+ *   @param {Number} [options.maxWidth] This allows the element to stretch til maxWidth
+ *   @param {Number} [options.maxHeight] This allows the element to stretch til maxHeight
  *   @param {boolean} [options.refreshOnLayout=true] Whether to refresh the textfill on any layout change that affects its container
  *   @param {boolean} [options.fillPadding=false] Whether to have the text extend into the padding as well
  *   @param {boolean} [options.fillParent=false] Whether we should fit the parent of this element instead
@@ -38,8 +40,10 @@ Q.Tool.jQuery('Q/textfill',
 	{
 		maxFontPixels: 30,
 		minFontPixels: 10,
-		refreshOnLayout: true,
-		maxLines: null
+		maxWidth: null,
+		maxHeight: null,
+		maxLines: null,
+		refreshOnLayout: true
 	},
 
 	{
@@ -72,8 +76,8 @@ Q.Tool.jQuery('Q/textfill',
 			if (!$c.length) {
 				return false; // it's not part of the DOM yet
 			}
-			var maxHeight = Math.round(o.fillPadding ? $c.innerHeight() : $c.height());
-			var maxWidth = Math.round(o.fillPadding ? $c.innerWidth() : $c.width());
+			var maxHeight = o.maxHeight || Math.round(o.fillPadding ? $c.innerHeight() : $c.height());
+			var maxWidth = o.maxWidth || Math.round(o.fillPadding ? $c.innerWidth() : $c.width());
 			var lineHeight = parseInt(document.defaultView.getComputedStyle($c[0], null).getPropertyValue("line-height"));
 			var textHeight, textWidth, lines, tooBig;
 			$e.addClass('Q_textfill_resizing');

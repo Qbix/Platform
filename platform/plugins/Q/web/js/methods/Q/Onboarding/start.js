@@ -74,9 +74,7 @@ Q.exports(function (Q) {
             selectors[k] = { appear: instr.appear };
             Q.take(instr, ['targets', 'disappear'], selectors[k]);
         });
-        if (Q.Onboarding.intervalId) {
-            return;
-        }
+        Q.Onboarding.intervalId && clearInterval(Q.Onboarding.intervalId);
         Q.Onboarding.intervalId = setInterval(function () {
             for (var k in selectors) {
                 var selectorToAppear = selectors[k].appear;
