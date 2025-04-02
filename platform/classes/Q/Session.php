@@ -1017,11 +1017,25 @@ class Q_Session
 		if (!$sessionId) {
 			return null;
 		}
+		$prefixes = Q_Config::get('Q', 'session', 'id', 'prefixes', array());
+		$longestPrefix = "";
+		$longestPrefixLen = 0;
+		$id = $sessionId;
+		foreach ($prefixes as $prefix) {
+			if (Q::startsWith($sessionId, $prefix)) {
+				$strlen = strlen($prefix);
+				if ($strlen > $longestPrefixLen) {
+					$longestPrefix = $prefix;
+					$longestPrefixLen = $strlen;
+					$id = substr($sessionId, $strlen);
+				}
+			}
+		}
 		$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		if (!isset($secret)) {
 			$secret = Q::app();
 		}
-		return hash_hmac('sha256', $sessionId, $secret);
+		return $longestPrefix . hash_hmac('sha256', $id, $secret);
 	}
 
 	/**

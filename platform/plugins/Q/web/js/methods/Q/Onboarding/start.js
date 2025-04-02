@@ -57,7 +57,7 @@ Q.exports(function (Q) {
                         'Q.Onboarding': function () {
                             setTimeout(function () {
                                 if (!waitToDisappear[k]) {
-                                    // They never appeared, or weren't speciied
+                                    // They never appeared, or weren't specified
                                     // So go to the next hint.
                                     localStorage[Q.Onboarding.prefix + k] = 'stopped';
                                     events[k].stop();
@@ -100,7 +100,7 @@ Q.exports(function (Q) {
                     }
                     var proceed = false;
                     Q.each(after, function (i, s) {
-                        if (Q.Onboarding.events[s].stopped
+                        if (Q.Onboarding.events[s]?.stopped
                         || localStorage[Q.Onboarding.prefix + s] === 'stopped') {
                             proceed = true;
                             return false;
@@ -115,8 +115,10 @@ Q.exports(function (Q) {
                     continue;
                 }
                 if (selectorToDisappear === selectorToAppear) {
-                    events[k].stop(); // nothing to wait for
-                    continue;
+                    if (selectorToDisappear === selectorToAppear) {
+                        // event will stop onHide of the hints
+                        continue; // nothing to wait for
+                    }
                 }
                 visible = false;
                 var elementsToDisappear = document.querySelectorAll(selectorToDisappear);
