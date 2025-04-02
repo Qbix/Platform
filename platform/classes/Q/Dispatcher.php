@@ -375,24 +375,6 @@ class Q_Dispatcher
 					// send cookies
 					self::cookies();
 				}
-
-				// We might want to reroute the request
-				$eventName = 'Q/reroute';
-				self::startSessionBeforeEvent($eventName);
-				if (!isset(self::$skip[$eventName])) {
-					/**
-					 * Gives the app a chance to reroute the request
-					 * @event Q/reroute
-					 * @param {array} $routed
-					 * @return {boolean} whether to stop the dispatch
-					 */
-					$stop_dispatch = Q::event($eventName, self::$routed, true);
-					if ($stop_dispatch) {
-						self::result("Stopped dispatch");
-						self::$served = 'stopped';
-						return false;
-					}
-				}
 				
 				// Time to instantiate some app objects from the request
 				$eventName = 'Q/objects';
