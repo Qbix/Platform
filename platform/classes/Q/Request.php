@@ -948,17 +948,21 @@ class Q_Request
 		$platform = self::platform();
 		$useragent = $_SERVER['HTTP_USER_AGENT'];
 		$len = strlen($useragent);
+		$test = array('ios' => 'OS ', 'android' => 'Android ');
 		switch ($platform) {
 			case 'ios':
-				$index = strpos($useragent, 'OS ');
-				if ($index === false) return null;
-				$ver = substr($useragent, $index + 3, 3);
-				return implode('.', explode('_', $ver));
-				break;
 			case 'android':
-				$index = strpos($useragent, 'Android ');
-				if ($index === false) return null;
-				return substr($useragent, $index + 8, 3);
+				$start = strpos($useragent, $test[$platform]);
+				$testlen = strlen($test[$platform]);
+				if ($start === false) return null;
+				for ($end = $start + $testlen; $end < $len; ++$end) {
+					$char = $useragent[$end];
+					if (!ctype_alnum($char) && $char !== '_' && $char !== '.') {
+						break;
+					}
+				}
+				$ver = substr($useragent, $start + $testlen, $end - $start - $testlen);
+				return implode('.', explode('_', $ver));
 				break;
 			case 'mac':
 			case 'windows':
@@ -1008,29 +1012,37 @@ class Q_Request
 	}
 	
 	/**
-	 * Returns the name of the browser that made the request
-	 * @return {string} can be "ie", "firefox", "chrome", "safari", "opera", otherwise null
+	 * Returns the name of the browser that made the request.
+	 * @return {string|null} Can be "edge", "opera", "chrome", "firefox", "safari", "ie", otherwise null.
 	 */
 	static function browser()
 	{
 		if (!isset($_SERVER['HTTP_USER_AGENT'])) {
 			return null;
 		}
-		$userAgent = strtolower($_SERVER['HTTP_USER_AGENT']);
+
+		$ua = strtolower($_SERVER['HTTP_USER_AGENT']);
+
+		// Order matters — check more specific first
 		$detect = array(
-			'msie' => 'ie',
+			'edg'     => 'edge',
+			'opr'     => 'opera',      // Opera (Blink-based)
+			'chrome'  => 'chrome',     // Must come before 'safari'
 			'firefox' => 'firefox',
-			'chrome' => 'chrome',
-			'safari' => 'safari',
-			'opera' => 'opera'
+			'safari'  => 'safari',
+			'msie'    => 'ie',         // IE < 11
+			'trident' => 'ie'          // IE 11
 		);
-		foreach ($detect as $k => $v) {
-			if (strpos($userAgent, $k) !== false) {
-				return $v;
+
+		foreach ($detect as $needle => $name) {
+			if (strpos($ua, $needle) !== false) {
+				return $name;
 			}
 		}
+
 		return null;
 	}
+
 	
 	/**
 	 * Returns the app's id on the platform
