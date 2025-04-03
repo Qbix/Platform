@@ -810,6 +810,7 @@ class Q_Session
 						flock($file, LOCK_UN);
 						fclose($file);
 					}
+					$result = true;
 				} else {
 					/**
 					 * @event Q/session/save {before}
