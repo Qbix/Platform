@@ -245,6 +245,9 @@ class Q
 		$errline,
 		$errcontext = null)
 	{
+		if (in_array($errno, [E_DEPRECATED, E_USER_DEPRECATED])) {
+			return;
+		}
 	    if (!(error_reporting()  & $errno)) {
 	        // This error code is not included in error_reporting
 			// just continue on with execution, if possible.

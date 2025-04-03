@@ -3793,7 +3793,7 @@ Q.currentScript = function (stackLevels) {
 		}
 		src = lines[index];
 	}
-	var parts = src.match(/((http[s]?:\/\/.+\/|file:\/\/\/.+\/)([^\/]+\.(?:js|html)[^:]*))/);
+	var parts = src.match(/((http[s]?:\/\/.+\/|file:\/\/\/.+\/)([^\/]+\.(?:js|html|php)[^:]*))/);
 	return {
 		src: parts[1].split('?')[0],
 		srcWithQuerystring: parts[1],
@@ -7890,7 +7890,7 @@ var _loadNonceReq = Q.getter(function (callback, context, args) {
 				Q.nonce = Q.cookie('Q_nonce');
 				var reason = location.hostname.isIPAddress() ? " Saving cookies to IP address is not supported." : "";
 				if (!Q.nonce) {
-					alert("Our server couldn't set cookies in this browser." + reason);
+					console.warn("Our server couldn't set cookies in this browser." + reason);
 				}
 			});
 		}
