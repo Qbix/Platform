@@ -963,7 +963,6 @@ class Q_Request
 				}
 				$ver = substr($useragent, $start + $testlen, $end - $start - $testlen);
 				return implode('.', explode('_', $ver));
-				break;
 			case 'mac':
 			case 'windows':
 			case 'linux':
