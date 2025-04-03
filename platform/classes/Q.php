@@ -1652,19 +1652,27 @@ class Q
 		return null;
 	}
 	
-	private static function toArrays($value)
+	private static function toArrays($value, $depth = 0, $maxDepth = 100)
 	{
+		if ($depth > $maxDepth) {
+			return '*DEPTH_LIMIT_REACHED*';
+		}
+
 		$result = Q::event('Q/json_encode_toArrays', compact('value'), 'before', false, $value);
-		$result = (is_object($result) and method_exists($result, 'toArray'))
-			? $result->toArray()
-			: $result;
+
+		if (is_object($result) && method_exists($result, 'toArray')) {
+			$result = $result->toArray();
+		}
+
 		if (is_array($result)) {
 			foreach ($result as $k => &$v) {
-				$v = self::toArrays($v);
+				$v = self::toArrays($v, $depth + 1, $maxDepth);
 			}
 		}
+
 		return $result;
 	}
+
 	
 	/**
 	 * A wrapper for json_encode
@@ -1676,7 +1684,7 @@ class Q
 	{
 		$args = func_get_args();
 		$value = self::utf8ize($value);
-		$args[0] = self::toArrays($value);
+		$args[0] = self::toArrays($value, 0, $depth);
 		$result = call_user_func_array('json_encode', $args);
 		if ($result === false) {
 			if (is_callable('json_last_error')) {
@@ -1738,6 +1746,7 @@ class Q
 
 		// Handle problematic characters before decoding if flag is set
 		if ($options & JSON_DECODE_CLEAN) {
+			$json = self::utf8ize($json);
 			$json = strtr($json, [
 				"\n" => "@@NEWLINE@@",
 				"\r" => "@@CARRIAGERETURN@@",
