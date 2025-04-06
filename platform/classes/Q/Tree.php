@@ -475,7 +475,7 @@ class Q_Tree
 	 * @method merge
 	 * @param {array|Q_Tree} $second The array or Q_Tree to merge on top of the existing one
 	 * @param {boolean} [$noNumericArrays=false] Set to true to treat all arrays as associative
-	 * @return {Q_Tree|false} Returns existing tree, modified by the merge
+	 * @return {Q_Tree} Returns existing tree, modified by the merge
 	 */
 	function merge ($second, $under = false, $noNumericArrays = false)
 	{
@@ -494,7 +494,7 @@ class Q_Tree
 					$this->parameters, $second, $noNumericArrays
 				);
 			}
-			return false;
+			return $this;
 		}
 		return $this;
 	}
