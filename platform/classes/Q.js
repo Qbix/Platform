@@ -14,6 +14,14 @@ var events = require('events');
 var path = require('path');
 var fs = require('fs');
 
+console.log.startTracingSources = function () {
+	var _c = console.log;
+	console.log = function (a) {
+		_c(Q.stackTrace());
+		_c(a);
+	};
+	Q.extend(console.log, _c);
+};
 console.log.register = function (name) {
 	return console.log[name] = function() {
 		var params = Array.prototype.slice.call(arguments);
@@ -3987,13 +3995,6 @@ Q.absoluteModulePath = function (name) {
 	const end = idx + suffix.length - 1;
 	return main_export.slice(0, end);
 };
-
-var _c = console.log;
-console.log = function (a) {
-	_c(Q.stackTrace());
-	_c(a);
-};
-Q.extend(console.log, _c);
 
 // Q.on('init', function () {
 // 	[
