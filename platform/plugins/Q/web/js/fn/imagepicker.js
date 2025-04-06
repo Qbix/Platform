@@ -47,6 +47,7 @@ Q.onInit.add(function () {
  * @param {String} [options.url] url is a url to post to.
  * @param {String} [options.path="uploads"] Can be a URL path or a function returning a URL path. It must exist on the server.
  * @param {String|Function} [options.subpath=""] A subpath which may be created on the server if it doesn't already exist. If this is a function, it is executed right before the request is sent.
+ * @param {Object} [options.moreFields={}] you can pass any additional fields to send to server
  * @param {String} [options.showSize=null] showSize is a key in saveSizeName to show on success.
  * @param {String} [options.useAnySize=false] whether to tell the server to accept any size without complaining.
  * @param {String} [options.sendOriginal=false] If true pass to server also original image source as "original" field.
@@ -190,6 +191,7 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 	saveSizeName: null,
 	showSize: null,
 	useAnySize: false,
+	moreFields: {},
 	crop: null,
 	sendOriginal: false,
 	cropping: true,
@@ -598,14 +600,14 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 				path = (typeof path === 'function') ? path() : path;
 				var subpath = state.subpath;
 				subpath = (typeof subpath === 'function') ? subpath() : subpath;
-				var params = {
+				var params = Q.extend({
 					'data': data,
 					'path': path,
 					'subpath': subpath,
 					'url': state.url,
 					'loader': state.loader,
 					'crop': crop
-				};
+				}, state.moreFields);
 				if (state.sendOriginal) {
 					params.original = src;
 				}
@@ -713,14 +715,14 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 			);
 			$this.removeClass('Q_uploading');
 		};
-		var params = {
+		var params = Q.extend({
 			'name': state.file.name,
 			'data': data,
 			'path': path,
 			'subpath': subpath,
 			'url': Q.action("Q/file"),
 			'loader': state.loader
-		};
+		}, state.moreFields);
 		if (state.save) {
 			params.save = state.save;
 		}
