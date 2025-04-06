@@ -22,7 +22,7 @@ try {
 
 // private properties
 var _isReady = false;
-var _isOnline = null;
+var _isOnline = nagivator.onLine;
 var _isCordova = null;
 var _documentIsUnloading = null;
 
