@@ -423,7 +423,7 @@ class Q_Image
 	 * @param {string} [$params.skipAccess=false] if true, skips the check for authorization to write files there
 	 * @return {array} an array of ($size => $fullImagePath) pairs
 	 */
-	static function save($params)
+	static function save($params, $throwIfNotAuthorized = false)
 	{
 		if (empty($params['data'])) {
 			throw new Q_Exception("Image data is missing");
@@ -634,11 +634,14 @@ class Q_Image
 		 * @param {string} writePath
 		 * @param {string} data
 		 */
-		Q::event(
+		$permitted = Q::event(
 			'Q/image/save', 
 			@compact('path', 'subpath', 'writePath', 'data', 'save', 'crop', 'ext'),
 			'after'
 		);
+		if ($throwIfNotAuthorized) {
+			throw new Users_Exception_NotAuthorized();
+		}
 		return $data;
 	}
 
