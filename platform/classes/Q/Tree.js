@@ -332,7 +332,7 @@ module.exports = function (linked) {
 		return this;
 	};
 
-	function _merge(first, second) {
+	function _merge(first, second, noNumericArrays) {
 		var result = (Q.typeOf(second) === 'object' ? {} : []);
 		var k;
 		// copy first to the result
