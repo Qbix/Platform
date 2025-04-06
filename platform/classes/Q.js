@@ -3988,6 +3988,13 @@ Q.absoluteModulePath = function (name) {
 	return main_export.slice(0, end);
 };
 
+var _c = console.log;
+console.log = function (a) {
+	_c(Q.stackTrace());
+	_c(a);
+};
+Q.extend(console.log, _c);
+
 // Q.on('init', function () {
 // 	[
 // 		Object,
