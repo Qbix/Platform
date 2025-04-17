@@ -27,7 +27,7 @@
 		"cache": {
 			"duration": 600,
 			"secret": "" /* you can set a secret to expect in Q.clearCache field to clear the cache */
-		}
+		},
 		"images": {
 			"pixabay": null /* {
 				"username": "TODO: YOUR USERNAME HERE",
