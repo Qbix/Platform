@@ -53,8 +53,7 @@ Q.Tool.define("Q/tabs", function(options) {
 	}
 	
 	if (state.contextualHandler == null) {
-		state.contextualHandler = function ($jq, event) {
-			var element = $jq[0];
+		state.contextualHandler = function (element, event) {
 			tool.switchTo([element.getAttribute('data-name'), element], {
 				event: event
 			});

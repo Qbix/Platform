@@ -3,6 +3,7 @@
 :root {
 	--updated-color-from: rgba(255, 215, 0, 0.9);
 	--updated-color-to: rgba(255, 215, 0, 0.1);
+	--dashboard-mobile-height: 50px;
 	--dashboard-bg-color: #444444;
 	--dashboard-bg-color-to: #111111;
 	--dashboard-main-color: white;

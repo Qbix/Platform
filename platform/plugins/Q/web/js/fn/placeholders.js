@@ -79,17 +79,18 @@ function () {
 				return;
 			}
 			$this.removeAttr('placeholder');
-			var dim = $this[0].cssDimensions();
+			var dim = this.cssDimensions();
 			var display = $this.css('display');
 			if (display === 'inline') {
 				display = 'inline-block';
 			}
+			var cs = this.computedStyle();
 			var span = $('<span />').css({
 				position: 'relative',
 				width: dim.width,
 				height: dim.height,
 				"vertical-align": Q.getObject("verticalAlign", this.computedStyle('placeholder'))
-					|| Q.getObject("verticalAlign", this.computedStyle()) || "middle",
+					|| Q.getObject("verticalAlign", cs) || "middle",
 				display: display
 			}).addClass('Q_placeholders_container');
 			var props = {};
@@ -112,11 +113,11 @@ function () {
 			span.on(Q.Pointer.fastclick, function() {
 				$this.trigger('focus');
 			});
-			var lineHeight = $this[0].style.lineHeight
-				? $this[0].style.lineHeight
-				: ($this[0].getBoundingClientRect().height
-					- parseFloat($this[0].computedStyle().paddingTop)
-					-parseFloat($this[0].computedStyle().paddingBottom)) + 'px';
+			var lineHeight = cs.lineHeight
+				? cs.lineHeight
+				: (this.getBoundingClientRect().height
+					- parseFloat(cs.paddingTop)
+					-parseFloat(cs.paddingBottom)) + 'px';
 			var $placeholder = $('<div />').text(plch).css({
 				'position': 'absolute',
 				'left': 0,
@@ -128,9 +129,11 @@ function () {
 				'padding-bottom': props['padding-bottom'],
 				'border-top': 'solid ' + $this.css('border-top-width') + ' transparent',
 				'border-left': 'solid ' + $this.css('border-left-width') + ' transparent',
+				'font-family': $this.css('font-family'),
 				'font-size': $this.css('font-size'),
 				'font-weight': $this.css('font-weight'),
-				'overflow': 'hidden',
+				'line-height': $this.css('line-height'),
+				'vertical-align': $this.css('vertical-align'),
 				'width': '100%',
 				'height': '100%',
 				'text-align': $this.css('text-align'),
@@ -146,7 +149,7 @@ function () {
 				});
 			}
 			// IE8 workaround
-			$placeholder[0].style.fontFamily = $this[0].style.fontFamily;
+			$placeholder[0].style.fontFamily = cs.fontFamily;
 			if ($this.val()) {
 				$placeholder.stop().hide();
 			}
