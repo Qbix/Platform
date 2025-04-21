@@ -37,3 +37,5 @@
 .Q_js .Q_tabs_tab { visibility: hidden; }
 .Q_js .Q_tabs_tool.Q_tabs_arranged .Q_tabs_tab,
 .Q_js .Q_tabs_contextual .Q_tabs_tab { visibility: visible; }
+
+.Q_listing .Q_tabs_tab { flex-direction: row; justify-content: initial; }
