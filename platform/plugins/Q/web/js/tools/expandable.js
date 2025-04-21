@@ -52,6 +52,7 @@ Q.Tool.define('Q/expandable', function (options) {
 		$h2.addClass('Q_expanded')
 		.next().addClass('Q_expanded')
 		.css('display', 'block');
+		$te.addClass('Q_expanded');
 	} else {
 		$h2.next().hide();
 	}
@@ -93,7 +94,8 @@ Q.Tool.define('Q/expandable', function (options) {
 	onRefresh: new Q.Event(),
 	beforeExpand: new Q.Event(),
 	onExpand: new Q.Event(),
-	beforeCollapse: new Q.Event()
+	beforeCollapse: new Q.Event(),
+	onCollapse: new Q.Event(),
 }, {
 	/**
 	 * @method expand
@@ -107,6 +109,7 @@ Q.Tool.define('Q/expandable', function (options) {
 	expand: function (options, callback) {
 		var tool = this;
 		var state = tool.state;
+		var $te = $(this.element);
 		if (false === Q.handle(state.beforeExpand, this, [])) {
 			return false;
 		}
@@ -128,6 +131,7 @@ Q.Tool.define('Q/expandable', function (options) {
 		if (!o.scrollContainer) {
 			return;
 		}
+		$te.addClass('Q_expanding');
 		Q.Animation.play(function (x, y) {
 			var $scrollable = (o.scrollContainer instanceof Element)
 				? $(o.scrollContainer) : tool.scrollable();
@@ -183,7 +187,8 @@ Q.Tool.define('Q/expandable', function (options) {
 				$scrollable.scrollTop(scrollTop);
 			}
 		}, state.duration).onComplete.set(function () {
-			$h2.add($expandable).addClass('Q_expanded');
+			$te.removeClass('Q_expanding');
+			$h2.add($expandable).add($te).addClass('Q_expanded');
 			Q.handle(callback, tool, [options || {}]);
 			Q.handle(state.onExpand, tool, [options || {}]);
 		});
@@ -193,12 +198,22 @@ Q.Tool.define('Q/expandable', function (options) {
 		var tool = this;
 		var state = this.state;
 		var $h2 = $('>h2', this.element);
+		var $te = $(this.element);
+		if (!$te.hasClass('Q_expanded')) {
+			return false;
+		}
+		$te.addClass('Q_collapsing');
 		$h2.removeClass('Q_expanded')
 		.next().removeClass('Q_expanded')
-		.slideUp(state.duration).each(function () {
+		.slideUp(state.duration, function () {
+			$te.removeClass('Q_collapsing');
+			tool.element.scrollIntoView({behavior: 'smooth'});
+			Q.handle(tool.state.onCollapse, tool, []);
+		}).each(function () {
 			Q.handle(callback, tool, []);
 			Q.handle(tool.state.beforeCollapse, tool, []);
 		});
+		$te.removeClass('Q_expanded');
 		state.expanded = false;
 	},
 	

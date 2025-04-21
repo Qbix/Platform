@@ -324,6 +324,9 @@ Q.Tool.define('Q/lazyload', function (options) {
 	},
 	unfreezeDimensions: function(element) {
 		var ep = this.frozenDimensions.get(element);
+		if (!ep) {
+			return false;
+		}
 		if (ep.width) {
 			element.style.width = ep.width;
 		} else {
