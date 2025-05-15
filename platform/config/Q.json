@@ -12,6 +12,9 @@
 		"handlersAfterEvent": {
 			"Q/tool/render": ["Q/after/Q_tool_render"]
 		},
+		"remote": {
+			"controller": "remote.php"
+		},
 		"autoload": {
 			"requires": {
 				"Q_Crypto": {

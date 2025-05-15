@@ -1175,9 +1175,10 @@ class Q
 
 	}
 	/**
-	 * Executes a particular handler
+	 * Executes a particular handler, optionally offloading to a remote service if configured.
 	 * @method handle
 	 * @static
+	 * @protected
 	 * @param {string} $handler_name
 	 *  The name of the handler. The handler can be overridden
 	 *  via the include path, but an exception is thrown if it is missing.
@@ -1203,6 +1204,14 @@ class Q
 		if (!isset($handler_name)) {
 			return null;
 		}
+
+		// Check if remote override is configured
+		$remote = Q_Config::get('Q', 'handlersUsingRemote', $handler_name, null);
+		if (is_array($remote)) {
+			return Q::handleUsingRemote($handler_name, $params, $remote);
+		}
+
+		// Otherwise proceed with standard include and function resolution
 		$handler_name_parts = explode('/', $handler_name);
 		$function_name = str_replace('-', '_', implode('_', $handler_name_parts));
 		if (!is_array($params)) {
@@ -1225,6 +1234,108 @@ class Q
 		// call_user_func doesn't work with references being passed
 		$args = array(&$params, &$result);
 		return call_user_func_array($function_name, $args);
+	}
+
+	/**
+	 * Executes a particular event handler remotely, if configured via Q_Config.
+	 * This method is called internally by Q::handle when a handler is marked for remote execution
+	 * in the 'Q/handlersUsingRemote/$handler_name' configuration path.
+	 *
+	 * @method handleUsingRemote
+	 * @static
+	 * @protected
+	 * @param {string} $handler_name
+	 *  The name of the handler. Used as the 'function' in the remote payload.
+	 * @param {array} $params=array()
+	 *  Parameters to pass to the handler remotely.
+	 * @param {&mixed} $result=null
+	 *  Optional. Will be populated with the result returned by the remote handler.
+	 * @return {mixed}
+	 *  Whatever the remote call returns, potentially cast to a specific type based on config.
+	 * @throws {Exception} If the remote call fails or returns an error.
+	 */
+	protected static function handleUsingRemote($eventName, $params, $remote)
+	{
+		if (!isset($remote['baseUrl'])) {
+			$remote['baseUrl'] = Q_Request::baseUrl();
+		}
+	
+		$context = array(
+			'globals' => array(),
+			'backtrace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)
+		);
+	
+		foreach (Q::ifset($remote, 'globals', array()) as $g) {
+			if (isset($GLOBALS[$g])) {
+				$context['globals'][$g] = $GLOBALS[$g];
+			}
+		}
+	
+		$payload = json_encode(array(
+			'function' => $eventName,
+			'params' => $params,
+			'context' => $context
+		));
+	
+		$secret = Q_Config::expect('Q', 'remote', 'secret');
+		$hmac = hash_hmac('sha256', $payload, $secret);
+		$remoteController = Q_Config::get('Q', 'remote', 'controller', 'remote.php');
+		$url = rtrim($remote['baseUrl'], '/') . '/' . $remoteController;
+	
+		$ch = curl_init($url);
+		curl_setopt_array($ch, array(
+			CURLOPT_RETURNTRANSFER => true,
+			CURLOPT_POST => true,
+			CURLOPT_HTTPHEADER => array(
+				'Content-Type: application/json',
+				'X-Q-HMAC: ' . $hmac
+			),
+			CURLOPT_POSTFIELDS => $payload,
+			CURLOPT_TIMEOUT => 5
+		));
+	
+		$response = curl_exec($ch);
+		if ($response === false) {
+			throw new Exception("Remote handler call failed: " . curl_error($ch));
+		}
+		curl_close($ch);
+	
+		$result = json_decode($response, true);
+		if (!is_array($result) || !array_key_exists('success', $result)) {
+			throw new Exception("Malformed response from remote handler for $eventName");
+		}
+	
+		if (!$result['success'] && isset($result['exception'])) {
+			$e = $result['exception'];
+			$type = Q::ifset($e, 'type', 'Exception');
+			$params = Q::ifset($e, 'params', array());
+			if (!class_exists($type)) $type = 'Exception';
+	
+			switch (count($params)) {
+				case 0: $ex = new $type(); break;
+				case 1: $ex = new $type($params[0]); break;
+				case 2: $ex = new $type($params[0], $params[1]); break;
+				default: $ex = new Exception("Too many parameters for $type");
+			}
+			if (isset($e['file'])) $ex->remoteFile = $e['file'];
+			if (isset($e['line'])) $ex->remoteLine = $e['line'];
+			if (isset($e['backtrace'])) $ex->remoteTrace = $e['backtrace'];
+	
+			throw $ex;
+		}
+	
+		switch (Q::ifset($remote, 'returnType', 'raw')) {
+			case 'bool': return (bool)$result['data'];
+			case 'int': return (int)$result['data'];
+			case 'array': return (array)$result['data'];
+			case 'object': return (object)$result['data'];
+			case 'raw': return $result['data'];
+			default:
+				if (class_exists($remote['returnType'])) {
+					return new $remote['returnType']($result['data']);
+				}
+				throw new Exception("Unknown returnType for remote handler: " . $remote['returnType']);
+		}
 	}
 
 	/**
