@@ -509,7 +509,7 @@ class Q_Request
 	 */
 	static function expectsJSON()
 	{
-		$acceptHeader = $_SERVER['HTTP_ACCEPT'] ? $_SERVER['HTTP_ACCEPT'] : '';
+		$acceptHeader = !empty($_SERVER['HTTP_ACCEPT']) ? $_SERVER['HTTP_ACCEPT'] : '';
 		$acceptHeader = strtolower(trim($acceptHeader));
 		$acceptTypes = array_map('trim', explode(',', $acceptHeader));
 		foreach ($acceptTypes as $type) {

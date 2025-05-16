@@ -139,20 +139,30 @@ class Q_Bootstrap
 	 */
 	static function shutdownFunction()
 	{
-		if ($error = error_get_last()) {
+		$error = error_get_last();
+
+		if ($error) {
 			Q::log($error, 'fatal');
-			header('X-Error: PHP Fatal Error', true, 500); // do not expose the error contents
+			if (!headers_sent()) {
+				http_response_code(500);
+				header('X-Error: PHP Fatal Error');
+			} else {
+				error_log("Cannot send 500 status — headers already sent");
+			}
 		}
+
 		/**
 		 * @event Q/shutdown {before}
 		 */
 		Q::event('Q/shutdown', @compact('error'), 'before');
 		Q_Cache::shutdownFunction();
 		Db_Query_Mysql::shutdownFunction();
+
 		if (Q_Session::id()) {
 			session_write_close();
 		}
 	}
+
 
 	/**
 	 * Used to undo the mangling done by magic_quotes_gpc

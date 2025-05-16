@@ -515,12 +515,12 @@ class Q
 		}
 
 		// Do a search for the file
-	    $paths = explode(PS, get_include_path());
+		$paths = explode(PS, get_include_path());
 		array_unshift($paths, "");
 		$result = false;
-	    foreach ($paths as $path) {
+		foreach ($paths as $path) {
 			if (substr($path, -1) == DS) {
-	        	$fullpath = $path.$filename;
+				$fullpath = $path.$filename;
 			} else {
 				$fullpath = ($path ? $path . DS : "") . $filename;
 			}

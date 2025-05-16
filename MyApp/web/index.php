@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Front controller for Q
+ * Front controller for Q remove/microservices requests
  */
 
 include(dirname(__FILE__).DIRECTORY_SEPARATOR.'Q.inc.php');

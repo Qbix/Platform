@@ -6,10 +6,14 @@
 				"compatible": "0.8"
 			}
 		},
-		"routes": {
+		"routes@start": {
 			"Q/urls/urls/latest.json": {
 				"module": "Q",
 				"action": "urls"
+			},
+			"Q/blank": {
+				"module": "Q",
+				"action": "blank"
 			}
 		},
 		"audio": {
