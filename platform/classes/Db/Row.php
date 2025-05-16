@@ -470,7 +470,7 @@ class Db_Row
 	 * @param {Db_Relation} $relation The relation between two or more tables, or the table
 	 *  with itself.
 	 * 
-	 *  You can pass as many Db_Relations as necessary and they are combined
+	 *  You can pass as many Db_Relations as necessary as the last parameters and they are combined
 	 *  using Db_Relation's constructor.
 	 *  The only valid relations are the ones
 	 *  which have a single root foreign_table.
@@ -479,8 +479,7 @@ class Db_Row
 		$relationName, 
 		$to_class_name, 
 		$alias, 
-		Db_Relation $relation, 
-		Db_Relation $relation2 = null)
+		Db_Relation $relation)
 	{
 		$args = func_get_args();
 		array_unshift($args, get_class($this));
@@ -574,7 +573,7 @@ class Db_Row
 	 *  corresponding to $this object.
 	 * @param {Db_Relation} $relation The relation between two or more tables, or the table with itself.
 	 *
-	 * You can pass as many Db_Relations as necessary and they are combined
+	 * You can pass as many Db_Relations as necessary as the last parameters and they are combined
 	 * using Db_Relation's constructor.
 	 * The only valid relations are the ones which have a single root foreign_table.
 	 */
@@ -648,8 +647,7 @@ class Db_Row
 		$relationName, 
 		$to_class_name,
 		$from_alias, 
-		Db_Relation $relation, 
-		Db_Relation $relation2 = null)
+		Db_Relation $relation)
 	{
 		$args = func_get_args();
 		$count = count($args);
