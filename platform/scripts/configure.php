@@ -108,8 +108,23 @@ $maxFileSize = min(pow(2, 20), Q_Utils::memoryLimit()/2);
 if ($Desired !== CONFIGURE_ORIGINAL_APP_NAME) {
 	$it = new RecursiveDirectoryIterator($appRootDir, RecursiveDirectoryIterator::SKIP_DOTS);
 	foreach(new RecursiveIteratorIterator($it) as $filename => $splFileInfo) {
-		if (is_dir($filename) or is_link($filename)
-		or $filename === APP_SCRIPTS_DIR . DS . 'Q' . DS . 'configure.php') {
+		if (is_dir($filename)) {
+			continue;
+		}
+		if (is_link($filename)) {
+			$oldTarget = readlink($filename);
+			$newTarget = $oldTarget;
+			$newTarget = preg_replace("/{$APPNAME}_/", $DESIRED.'_', $newTarget);
+			$newTarget = preg_replace("/_{$APPNAME}/", '_'.$DESIRED, $newTarget);
+			$newTarget = preg_replace("/$AppName/", $Desired, $newTarget);
+			$newTarget = preg_replace("/$appname/", $desired, $newTarget);
+			if ($oldTarget !== $newTarget) {
+				echo "Repointing symlink: $filename\n";
+				echo "    Old: $oldTarget\n";
+				echo "    New: $newTarget\n";
+				unlink($filename);
+				symlink($newTarget, $filename);
+			}
 			continue;
 		}
 		$extension = pathinfo($filename, PATHINFO_EXTENSION);
@@ -127,7 +142,8 @@ if ($Desired !== CONFIGURE_ORIGINAL_APP_NAME) {
 			continue;
 		}
 		$contents = file_get_contents($filename);
-		$contents = preg_replace("/$APPNAME/", $DESIRED, $contents);
+		$contents = preg_replace("/{$APPNAME}_/", $DESIRED.'_', $contents);
+		$contents = preg_replace("/_{$APPNAME}/", '_'.$DESIRED, $contents);
 		$contents = preg_replace("/$AppName/", $Desired, $contents);
 		$contents = preg_replace("/$appname/", $desired, $contents);
 		file_put_contents($filename, $contents);
