@@ -14,7 +14,7 @@
  *  @param {float} [options.currentPosition] Current left scroll position in percents
  *  @param {string} [options.clipStart] Clip start position in percents
  *  @param {string} [options.clipEnd] Clip end position in percents
- *  @param {float} [options.scale=0.5] Page scale. More
+ *  @param {float} [options.scale="fit"] Page scale. Can also be a fraction between 0 and 1
  *  @param {Q.Event} [options.onSuccess] Call when save or upload action successfully ended.
  *  @param {Q.Event} [options.onFinish] Call when save or upload action ended.
  *  @param {Q.Event} [options.onError] Call when error occur.
@@ -35,7 +35,7 @@ Q.Tool.define("Q/pdf", function (options) {
 	tool.cache = Q.Cache.document('Q/pdf');
 	tool.cacheKey = Q.normalize(state.url);
 
-	tool.implement();
+	tool.refresh();
 
 	tool.Q.onStateChanged('clipStart').set(function () {
 		tool.setClip("start")
@@ -107,9 +107,9 @@ Q.Tool.define("Q/pdf", function (options) {
 	},
 	/**
 	 * Refreshes the appearance of the tool completely
-	 * @method implement
+	 * @method refresh
 	 */
-	implement: function () {
+	refresh: function () {
 		var tool = this;
 		var state = this.state;
 		var $toolElement = $(tool.element);
@@ -191,50 +191,53 @@ Q.Tool.define("Q/pdf", function (options) {
 		var state = this.state;
 		var pdf = state.pdf;
 		var $toolElement = $(tool.element);
-
+	
 		if (!page) {
 			return pdf.getPage(1).then(tool.renderPage.bind(tool));
 		}
-
-		//This gives us the page's dimensions at full scale
-		var viewport = page.getViewport({
-			scale: $toolElement.width()/page.getViewport({scale: state.scale}).width
-		});
+	
+		// Get native page dimensions at scale=1.0
+		var nativeViewport = page.getViewport({ scale: 1.0 });
+		var pageWidth = nativeViewport.width;
+	
+		// Calculate actual scale
+		var scale = state.scale;
+		if (scale === "fit") {
+			scale = $toolElement.width() / pageWidth;
+		}
+		scale = parseFloat(scale) || 1.0;
+	
+		// Build viewport for rendering
+		var viewport = page.getViewport({ scale: scale });
 		var i = 1;
 		while (viewport.width * viewport.height > state.maxCanvas) {
-			viewport = page.getViewport({
-				scale: $toolElement.width()/page.getViewport({scale: state.scale + i*0.1}).width
-			});
+			scale -= 0.05;
+			viewport = page.getViewport({ scale: scale });
 			i++;
 		}
-
-		//We'll create a canvas for each page to draw it on
+	
+		// Create canvas
 		var canvas = document.createElement("canvas");
 		canvas.height = viewport.height;
 		canvas.width = viewport.width;
-
-		var context = canvas.getContext('2d');
-
-		//Draw it on the canvas
+		var context = canvas.getContext("2d");
+	
+		// Render PDF page to canvas
 		page.render({
 			canvasContext: context,
 			viewport: viewport
 		});
-
-		//Add it to the web page
+	
 		tool.element.appendChild(canvas);
-
 		tool.cacheData.pages.push(canvas);
-
+	
 		var currPage = page.pageNumber + 1;
-
-		//Move to next page
 		if (pdf !== null && currPage <= pdf.numPages) {
 			pdf.getPage(currPage).then(tool.renderPage.bind(tool));
-		} else if (currPage >= pdf.numPages) {
+		} else {
 			Q.handle(state.onRefresh, tool, [pdf.numPages, tool.element]);
 		}
-	},
+	},	
 	/**
 	 * @method setCurrentPosition
 	 * @param {number} top

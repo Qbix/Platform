@@ -9,9 +9,9 @@
  * @constructor
  * @param {Object} [options] Override various options for this tool
  *	@param {String} [options.action="implement"] Which mode need to use for this tool. Can be:
- *		implement - render default player with source from state.url
- *		recorder  - render audio recorder
- *		player 	  -	render player in Q/pie view (for preview play)
+ *		player - render larger player with source audio from state.url
+ *		recorder - render audio recorder
+ *		compact - render preview in Q/pie view (for preview play)
  *	@param {Integer} [options.maxRecordTime=60] max record time for recorder in seconds
  *	@param {Integer} [options.clipStart] if clip defined, start time in milliseconds
  *	@param {Integer} [options.clipEnd] if clip defined, end time in milliseconds
@@ -29,7 +29,7 @@ Q.Tool.define("Q/audio", function (options) {
 		state.url = state.url.interpolate({ "baseUrl": Q.info.baseUrl });
 	}
 
-	if (state.action === "implement" && Q.isEmpty(state.url)) {
+	if (state.action === "player" && Q.isEmpty(state.url)) {
 		throw new Q.Error("URL required");
 	}
 
@@ -42,7 +42,7 @@ Q.Tool.define("Q/audio", function (options) {
 
 	tool.adapters = {
 		"soundcloud": {
-			implement: function (showPlayer) {
+			refresh: function (showPlayer) {
 				showPlayer = Q.typeOf(showPlayer) === "boolean" ? showPlayer : true;
 				var url = 'https://w.soundcloud.com/player/?' + $.param({
 					url: state.url,
@@ -142,7 +142,7 @@ Q.Tool.define("Q/audio", function (options) {
 			}
 		},
 		"general": {
-			implement: function (showPlayer) {
+			refresh: function (showPlayer) {
 				showPlayer = Q.typeOf(showPlayer) === "boolean" ? showPlayer : true;
 				tool.implementNativeAudio();
 
@@ -203,7 +203,7 @@ Q.Tool.define("Q/audio", function (options) {
 },
 
 {
-	action: "implement",
+	action: "player",
 	url: null,
 	autoplay: false,
 	/* <Q/audio jquery plugin states> */
@@ -333,12 +333,12 @@ Q.Tool.define("Q/audio", function (options) {
 	},
 	/**
 	 * Refreshes the appearance of the tool completely
-	 * @method implement
+	 * @method refresh
 	 * @param {boolean} [showPlayer=true] If true show player, if false hide.
 	 */
-	implement: function (showPlayer) {
+	refresh: function (showPlayer) {
 		var adapterName = this.adapterNameFromUrl();
-		this.adapters[adapterName].implement(showPlayer);
+		this.adapters[adapterName].refresh(showPlayer);
 	},
 	/**
 	 * Handle recorder states
@@ -679,7 +679,7 @@ Q.Tool.define("Q/audio", function (options) {
 		tool.$pieBox = $(tool.element);
 		tool.$playerBox = $("<div>").appendTo(tool.$pieBox);
 
-		tool.implement(false);
+		tool.refresh(false);
 
 		// set player state if it didn't set yet
 		tool.$pieBox.attr("data-state", "play");

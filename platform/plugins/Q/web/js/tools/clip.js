@@ -24,6 +24,8 @@ Q.Tool.define("Q/clip", function (options) {
 		tool.text = text.clip;
 		p.fill('text')();
 	});
+
+	tool.originalHTML = tool.element.innerHTML;
 },
 
 { // default options here
@@ -52,7 +54,7 @@ Q.Tool.define("Q/clip", function (options) {
 			endFixed: state.endPosition !== null ? 'Q_clip_fixed' : '',
 			text: tool.text
 		}, function (err, html) {
-			$toolElement.html(html);
+			$toolElement.html(html + tool.originalHTML);
 
 			$("button", $toolElement).on(Q.Pointer.fastclick, function () {
 				var $this = $(this);
@@ -116,19 +118,21 @@ Q.Tool.define("Q/clip", function (options) {
 	}
 });
 
-Q.Template.set('Q/clip',
-	'<button name="start" class="{{startFixed}}" type="button">' +
-	'	<span class="Q_clip_defined">{{text.ClipStart}}: </span>' +
-	'	<span class="Q_clip_set">{{text.SetClipStart}}</span>' +
-	'	<span class="Q_clip_position_display">{{startPositionDisplay}}</span>' +
-	'	<span class="Q_clip_position">{{startPosition}}</span>' +
-	'</button>' +
-	'<button name="end" class="{{endFixed}}" type="button">' +
-	'	<span class="Q_clip_defined">{{text.ClipEnd}}: </span>' +
-	'	<span class="Q_clip_set">{{text.SetClipEnd}}</span>' +
-	'	<span class="Q_clip_position_display">{{endPositionDisplay}}</span>' +
-	'	<span class="Q_clip_position">{{endPosition}}</span>' +
-	'</button>'
-);
+Q.Template.set('Q/clip', `
+	<div class="Q_clip_buttons">
+		<button name="start" class="{{startFixed}}" type="button">
+			<span class="Q_clip_defined">{{text.ClipStart}}: </span>
+			<span class="Q_clip_set">{{text.SetClipStart}}</span>
+			<span class="Q_clip_position_display">{{startPositionDisplay}}</span>
+			<span class="Q_clip_position">{{startPosition}}</span>
+		</button>
+		<button name="end" class="{{endFixed}}" type="button">
+			<span class="Q_clip_defined">{{text.ClipEnd}}: </span>
+			<span class="Q_clip_set">{{text.SetClipEnd}}</span>
+			<span class="Q_clip_position_display">{{endPositionDisplay}}</span>
+			<span class="Q_clip_position">{{endPosition}}</span>
+		</button>
+	</div>
+`);
 
 })(window, Q, Q.jQuery);
