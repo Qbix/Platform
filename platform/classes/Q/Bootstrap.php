@@ -141,7 +141,7 @@ class Q_Bootstrap
 	{
 		$error = error_get_last();
 
-		if ($error) {
+		if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
 			Q::log($error, 'fatal');
 			if (!headers_sent()) {
 				http_response_code(500);

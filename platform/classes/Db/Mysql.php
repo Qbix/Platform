@@ -16,7 +16,7 @@ class Db_Mysql implements Db_Interface
 	 * This is required for actually connecting to the database.
 	 * @param {PDO} [$pdo=null] Existing PDO connection. Only accepts connections to MySQL.
 	 */
-	function __construct ($connectionName, PDO $pdo = null)
+	function __construct ($connectionName, $pdo = null)
 	{
 		$this->connectionName = $connectionName;
 		if ($pdo) {
