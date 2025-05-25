@@ -310,6 +310,7 @@ class Q
 			}
 			return true;
 		}
+		return false;
 	}
 
 	/**
