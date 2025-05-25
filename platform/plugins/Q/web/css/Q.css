@@ -11,6 +11,8 @@
 	--button-bg-color-to: #333333;
 	--dialog-title-bg-color: #444444;
 	--dialog-title-bg-color-to: #111111;
+	--content-fg-color: black;
+	--tabs-color: black;
 }
 html, body { height: 100%; height: -moz-fill-available; height: -webkit-fill-available; height: fill-available; }
 table { border-spacing:0; border-collapse:collapse; }
@@ -1130,6 +1132,10 @@ body.Q_columns_animationFX {
 }
 
 @media (prefers-color-scheme: dark) {
+	:root {
+		--content-fg-color: white;
+		--tabs-color: white;
+	}
 	.Q_overlay, .Q_fullscreen_dialog {
 		background: url(../img/bg/overlay-dark.png);
 		color: white;
