@@ -934,8 +934,11 @@ class Q_Uri
 		}
 		$app = Q::app();
 		$baseUrl = Q_Request::baseUrl();
+		$proxyBaseUrl = Q_Request::proxyBaseUrl();
 		$substitutions = array(
-			'baseUrl' => $baseUrl,
+			'baseUrl' => $proxyBaseUrl,
+			'proxyBaseUrl' => $proxyBaseUrl,
+			'reallyBaseUrl' => $baseUrl,
 			$app => $baseUrl
 		);
 		$plugins = Q_Config::expect('Q', 'plugins');

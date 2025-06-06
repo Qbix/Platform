@@ -13,7 +13,7 @@
  * @param {Object} [options] This object contains properties for this function
  *  @param {Object} [options.tabs] An object of name: title pairs.
  *  @param {Object} [options.urls] An object name: url pairs to override the default urls.
- *  @param {Object} [options.windowThemeColors] You can pass an object of name: color here to set custom statusbar colors
+ *  @param {Object} [options.windowThemeColors] You can pass an object of name: color or name: [colorLight, colorDark] here to set custom statusbar colors
  *  @param {String} [options.field='tab'] Uses this field when urls doesn't contain the tab name.
  *  @param {Boolean|Object} [options.retain] Pass true to retain slots from all tabs, or object of {name: Boolean} for individual tabs. Makes switchTo avoid reloading tab url by default, instead it restores last-seen slot contents, url and title.
  *  @param {Boolean} [options.checkQueryString=false] Whether the default getCurrentTab should check the querystring when determining the current tab
@@ -445,6 +445,9 @@ Q.Tool.define("Q/tabs", function(options) {
 		}
 
 		var color = Q.getObject(['windowThemeColors', state.tabName], state);
+		if (color instanceof Array) {
+			color = color[Q.Browser.getDarkMode() ? 1 : 0];
+		}
 		Q.addScript('{{Q}}/js/Color.js', function () {
 			Q.Color.setWindowTheme(color || tool.originalWindowThemeColor);
 		});

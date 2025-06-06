@@ -83,6 +83,7 @@
 				"googlebot-news": "nosnippet"
 			}
 		},
+		"proxies": {},
 		"static": {
 			"url": "{{web}}/Q/static",
 			"dir": "{{web}}/Q/static",

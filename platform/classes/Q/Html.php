@@ -1444,7 +1444,7 @@ class Q_Html
 			return $result;
 		}
 
-		$filePath2 = Q_Uri::interpolateUrl($filePath, Q::ifset($options, 'fullUrlForPlugins'));
+		$filePath2 = Q_Uri::interpolateUrl($filePath, Q::ifset($options, 'fullUrlForPlugins', false));
 		
 		$baseUrl = Q_Request::baseUrl();
 		if (Q::startsWith($filePath2, $baseUrl)) {

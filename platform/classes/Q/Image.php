@@ -410,7 +410,7 @@ class Q_Image
 	 * @static
 	 * @param {array} $params 
 	 * @param {string} [$params.data] the image data
-	 * @param {string} [$params.path="uploads"] parent path under web dir (see subpath)
+	 * @param {string} [$params.path="Q/uploads"] parent path under web dir (see subpath)
 	 * @param {string} [$params.subpath=""] subpath that should follow the path, to save the image under
 	 * @param {string} [$params.merge=""] path under web dir for an optional image to use as a background
 	 * @param {string} [$params.crop] array with keys "x", "y", "w", "h" to crop the original image

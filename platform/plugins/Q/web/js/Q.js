@@ -580,34 +580,47 @@ Sp.matchTypes = function (types, options) {
 
 Sp.matchTypes.adapters = {
 	url: function (options) {
-		var parts = this.split(' ');
-		var res = [];
-		var fileRegExp = /^(file:\/\/\/)/gim;
-		var urlRegExp = (options && options.requireScheme)
-			? /^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)(localhost|[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,50}|[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3})(:[0-9]{1,5})?([\/|\?].*)?$/gim
-			: /^(http:\/\/www\.|https:\/\/www\.|http:\/\/|https:\/\/)?(localhost|[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,50}|[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3}\.[0-9]{0,3})(:[0-9]{1,5})?([\/|\?].*)?$/gim;
-		for (var i=0; i<parts.length; i++) {
-			if (( 
-				(!options || !options.excludeLocalFiles)
-				&& parts[i].match(fileRegExp)
-			) || parts[i].match(urlRegExp)) {
-				res.push(parts[i]);
-			}
-			
+		const input = this;
+		const res = [];
+
+		const fileRegExp = /file:\/\/\/[^\s]+/gi;
+
+		const urlRegExp = (options && options.requireScheme)
+			? /\bhttps?:\/\/[^\s]+/gi
+			: /\b(?:https?:\/\/)?(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[a-z0-9\-]+(?:\.[a-z0-9\-]+)*\.[a-z]{2,})(:\d{1,5})?(\/[^\s]*)?/gi;
+
+		// Match file URLs if not excluded
+		if (!options || !options.excludeLocalFiles) {
+			const fileMatches = input.match(fileRegExp);
+			if (fileMatches) res.push(...fileMatches);
 		}
+
+		const urlMatches = input.match(urlRegExp);
+		if (urlMatches) {
+			for (let url of urlMatches) {
+				// Remove trailing punctuation
+				url = url.replace(/[.,!?)\]]+$/, '');
+				res.push(url);
+			}
+		}
+
 		return res;
 	},
+
 	email: function () {
-		return this.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi) || [];
+		return this.match(/\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g) || [];
 	},
+
 	phone: function () {
-		return this.match(/\+[0-9]{1,2}?(-|\s|\.)?[0-9]{3,5}(-|\s|\.)?([0-9]{3,5}(-|\s|\.)?)?([0-9]{4,5})/gi) || [];
+		return this.match(/\+?\d{1,3}[-.\s]?\(?\d{2,5}\)?[-.\s]?\d{2,5}[-.\s]?\d{2,6}/g) || [];
 	},
+
 	twitter: function () {
-		return this.match(/\+[0-9]{1,2}?(-|\s|\.)?[0-9]{3,5}(-|\s|\.)?([0-9]{3,5}(-|\s|\.)?)?([0-9]{4,5})/gi) || [];
+		return this.match(/(?<!\w)@([a-zA-Z0-9_]{1,15})\b/g) || [];
 	},
+
 	qbixUserId: function () {
-		return this.match(/(@[a-z]{8}@)/gi) || [];
+		return this.match(/@[a-z]{8}@/g) || [];
 	}
 };
 
