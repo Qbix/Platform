@@ -331,8 +331,13 @@ class Q_Image
 
 	static function shouldUseBasenames($themedUrl)
 	{
+		$baseUrl = Q_Request::baseUrl();
+		$proxyBaseUrl = Q_Request::proxyBaseUrl();
 		$baseUrls = Q_Config::get('Q', 'images', 'shouldUseBasenames', array());
-		$baseUrls[] = Q_Request::baseUrl();;
+		$baseUrls[] = $baseUrl;
+		if ($proxyBaseUrl !== $baseUrl) {
+			$baseUrls[] = $proxyBaseUrl;
+		}
 		foreach ($baseUrls as $b) {
 			if (Q::startsWith($themedUrl, $b)) {
 				return true;
