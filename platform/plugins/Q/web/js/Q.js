@@ -7364,15 +7364,15 @@ Q.IndexedDB.open = Q.promisify(function (dbName, storeName, params, callback) {
 			}
 		}
 	};
-	open.onversionchange = function () {
-		db.close();
-	};
 	open.onerror = function (error) {
 		callback && callback.call(Q.IndexedDB, error);
 	};
 	open.onsuccess = function() {
 		var db = this.result;
 		var version = db.version;
+		db.onversionchange = function () {
+			db.close();
+		};
 		if (!db.objectStoreNames.contains(storeName)) {
 			// need to upgrade version and add this store
 			++version;
