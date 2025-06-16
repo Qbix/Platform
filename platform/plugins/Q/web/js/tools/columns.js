@@ -48,10 +48,11 @@ var dataKey_opening = 'opening';
  *    You can also put a number of milliseconds to wait and pushUrl (if pagePushUrl is true) as long as columns.open() isn't called during that time.
  *  @param {Q.Event} [options.beforeOpen] Event that happens before a column is opened. Return false to prevent opening. Receives (options, index).
  *  @param {Q.Event} [options.beforeClose] Event that happens before a column is closed. Receives (index, indexAfterClose, columnElement). Return false to prevent closing.
+ *  @param {Q.Event} [options.onClose] Event that happens after a column is opened.
+ *  @param {Q.Event} [options.onClose] Event that happens after a column is closed.
  *  @param {Q.Event} [options.onActivate] Event that happens after a column is opened and activated. Receives (options, index, columnElement).
  *  @param {Q.Event} [options.onTransitionEnd] Event that happens after a css transition compete. Have tool as context and index, div as arguments.
  *  @param {Q.Event} [options.afterDelay] Event that happens after a column is opened, after a delay intended to wait out various animations. Receives (options, index, columnElement).
- *  @param {Q.Event} [options.onClose] Event that happens after a column is closed.
  * @return {Q.Tool}
  */
 Q.Tool.define("Q/columns", function(options) {
@@ -179,6 +180,7 @@ Q.Tool.define("Q/columns", function(options) {
 		setTimeout(_updateAttributes.bind(this), 0);
 	}, 'Q/columns'),
 	beforeClose: new Q.Event(),
+	onOpen: new Q.Event(),
 	onActivate: new Q.Event(function (div, options, index) {
 		var tool = this;
 		Q.Pointer.stopHints();
@@ -537,6 +539,8 @@ Q.Tool.define("Q/columns", function(options) {
 				presentColumn(tool, $div, o.fullscreen, true);
 			}, tool);
 
+			Q.handle(o.onOpen, tool, [div, o, index]);
+   
 			waitFor.push('activated1', 'activated2', 'activated3');
 			$titleSlot.activate(o.activateOptions, p.fill('activated1'));
 			$columnSlot.activate(o.activateOptions, p.fill('activated2'));

@@ -799,6 +799,26 @@ class Q
 	}
 
 	/**
+	 * Tests whether a particular view exists
+	 * @method canView
+	 * @static
+	 * @param {string} $viewName
+	 *  The name of the view. The handler can be overridden
+	 *  via the include path, but an exception is thrown if it is missing.
+	 * @return {boolean}
+	 *  Whether the view exists
+	 * @throws {Q_Exception_MissingFile}
+	 */
+	static function canView(
+	 $viewName)
+	{
+		if (!isset($viewName)) {
+			return false;
+		}
+		return self::realPath('views'.DS.str_replace('/', DS, $viewName));
+	}
+
+	/**
 	 * Renders a particular view
 	 * @method view
 	 * @static
@@ -1173,8 +1193,8 @@ class Q
 			return false;
 		}
 		return function_exists($function_name);
-
 	}
+	
 	/**
 	 * Executes a particular handler, optionally offloading to a remote service if configured.
 	 * @method handle
