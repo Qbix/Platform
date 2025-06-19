@@ -237,6 +237,7 @@ html[xmlns] .Q_clearfix { display: block; }
 .Q_forceDisplayBlock { display: block !important; }
 .Q_forceDisplayInline { display: inline !important; }
 .Q_forceDisplayNone { display: none !important; }
+.Q_badge { text-align: center; justify-content: center; align-items: center; }
 
 /* the overlayed element */
 .Q_overlay { 
