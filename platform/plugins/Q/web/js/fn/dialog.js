@@ -441,7 +441,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 				var child = $(this);
 				if (child[0] !== $this[0] &&
 				child.css('display') !== 'none'
-				&& this.hasClass('Q_mask')) {
+				&& !this.hasClass('Q_mask')) {
 					child.addClass('Q_hide')
 					hiddenChildren.push(child);
 				}
@@ -469,9 +469,6 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 						'width': '100dvw',
 						'height': '100dvh'
 					});
-					for (var i = 0; i < hiddenChildren.length; i++) {
-						hiddenChildren[i].removeClass('Q_hide');
-					}
 					$this.show().css('opacity', 0);
 					// ods.css('padding-top', ots.outerHeight());
 
@@ -495,7 +492,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 					}
 					Q.Pointer.cancelClick();
 					for (var i = 0; i < hiddenChildren.length; i++) {
-						hiddenChildren[i].show();
+						hiddenChildren[i].removeClass('Q_hide');
 					}
 					var data = $this.data('Q/dialog');
 					window.scrollTo(data.windowParams.scrollLeft, data.windowParams.scrollTop);
