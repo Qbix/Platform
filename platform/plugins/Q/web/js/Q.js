@@ -5055,8 +5055,9 @@ Q.Tool.define = function (name, /* require, */ ctor, defaultOptions, stateKeys, 
 				Q.Text.get(c.text, p.fill('text'));
 			}
 			if (c.css) {
+				var slotName = name.split('/')[0];
 				waitFor.push('css');
-				Q.addStylesheet(c.css, p.fill('css'));
+				Q.addStylesheet(c.css, null, p.fill('css'), {slotName: slotName});
 			}
 			p.add(waitFor, 1, function (params) {
 				if (params && params.text && params.text[1]) {
@@ -6146,8 +6147,10 @@ function _loadToolScript(toolElement, callback, shared, parentId, options) {
 		}
 		// start loading css and text at the same time as the js and html
 		if (toolConstructor.css) {
+			var n = Q.Tool.names[toolName];
+			var slotName = (n && n.split('/')[0]) || '';
 			waitFor.push('css');
-			Q.addStylesheet(toolConstructor.css, pipe.fill('css'));
+			Q.addStylesheet(toolConstructor.css, null, pipe.fill('css'), {slotName: slotName});
 		}
 		var n = Q.normalize.memoized(toolName);
 		var text = Q.Text.addedFor('Q.Tool.define', n, toolConstructor);
