@@ -2146,6 +2146,72 @@ class Q_Utils
 	}
 
 	/**
+	 * Returns a MIME type for a given file extension.
+	 *
+	 * @method mimeType
+	 * @static
+	 * @param string $ext The lowercase file extension (e.g. "woff2", "png")
+	 * @return string MIME type string (e.g. "font/woff2")
+	 */
+	static function mimeType($ext)
+	{
+		switch (strtolower($ext)) {
+
+			// Fonts
+			case 'ttf':   return 'application/x-font-ttf';
+			case 'otf':   return 'font/otf';
+			case 'woff':  return 'font/woff';
+			case 'woff2': return 'font/woff2';
+			case 'eot':   return 'application/vnd.ms-fontobject';
+			case 'sfnt':  return 'application/font-sfnt';
+
+			// Images
+			case 'png':   return 'image/png';
+			case 'jpg':
+			case 'jpeg':  return 'image/jpeg';
+			case 'gif':   return 'image/gif';
+			case 'svg':   return 'image/svg+xml';
+			case 'ico':
+			case 'cur':   return 'image/vnd.microsoft.icon';
+			case 'webp':  return 'image/webp';
+
+			// Audio
+			case 'mp3':   return 'audio/mpeg';
+			case 'ogg':   return 'audio/ogg';
+			case 'wav':   return 'audio/wav';
+			case 'flac':  return 'audio/flac';
+
+			// Video
+			case 'mp4':   return 'video/mp4';
+			case 'webm':  return 'video/webm';
+			case 'ogv':   return 'video/ogg';
+			case 'mov':   return 'video/quicktime';
+			case 'flv':   return 'video/x-flv';
+
+			// Text & Web
+			case 'txt':   return 'text/plain';
+			case 'css':   return 'text/css';
+			case 'js':    return 'application/javascript';
+			case 'json':  return 'application/json';
+			case 'xml':   return 'application/xml';
+			case 'csv':   return 'text/csv';
+			case 'html':
+			case 'htm':   return 'text/html';
+
+			// Documents & Archives
+			case 'pdf':   return 'application/pdf';
+			case 'zip':   return 'application/zip';
+			case 'tar':   return 'application/x-tar';
+			case 'gz':    return 'application/gzip';
+			case 'rar':   return 'application/vnd.rar';
+
+			// Default
+			default:      return 'application/octet-stream';
+		}
+	}
+
+
+	/**
 	 * Converts seconds to hh:mm:ss format
 	 * @method secondsToHMS
 	 * @static
