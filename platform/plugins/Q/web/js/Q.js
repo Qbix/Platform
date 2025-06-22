@@ -10300,7 +10300,7 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		});
 		return ret;
 	}
-	var container = options.container || document.getElementsByTagName('head')[0];
+	var container = o.container || document.getElementsByTagName('head')[0];
 
 	if (!href) {
 		onload(false);
