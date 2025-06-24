@@ -1818,6 +1818,12 @@ class Q
 	static function json_encode($value, $options = 0, $depth = 512)
 	{
 		$args = func_get_args();
+		if ($options & Q::JSON_FORCE_OBJECT) {
+			if (is_array($value) && array_keys($value) === range(0, count($value) - 1)) {
+				$value = (object) $value;
+			}
+			$options &= ~Q::JSON_FORCE_OBJECT;
+		}
 		$value = self::utf8ize($value);
 		$args[0] = self::toArrays($value, 0, $depth);
 		$result = call_user_func_array('json_encode', $args);
@@ -2505,6 +2511,19 @@ class Q
 	 * @static
 	 */
 	public static $null;
+
+	/**
+	 * Custom flag for Q::json_encode.
+	 * Force the top-level array to be encoded as a JSON object,
+	 * even if it's a sequential array or empty.
+	 * Unlike PHP's JSON_FORCE_OBJECT, this does not affect nested arrays.
+	 *
+	 * @type int
+	 * @static
+	 * @final
+	 */
+	public const JSON_FORCE_OBJECT = 1 << 16; // 65536
+
 }
 
 if (!function_exists('json_last_error_msg')) {
