@@ -1,0 +1,6 @@
+{
+    "apps": {
+        "FirstApp": "/path/to/FirstApp",
+        "SecondApp": "/path/to/SecondApp"
+    }
+}
