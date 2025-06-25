@@ -339,27 +339,29 @@ class Q
 	/**
 	 * Goes through the params and replaces any references
 	 * to their names in the string with their value.
-	 * References are expected to be of the form {{varname}} or $varname.
-	 * However, dollar signs prefixed with backslashes will not be replaced.
+	 * References are expected to be of the form {{varname}}.
 	 * @method interpolate
 	 * @static
 	 * @param {string|array} $expression
 	 *  The string containing possible references to interpolate values for.
-	 *  Can also be array($textName, $pathArray) to load expression using Q_Text::get()
+	 *  Can also be array($textName, $pathArray) to load expression using Q_Text::get().
+	 *  In this case, the function also checks if there are any overrides at
+	 *  Q_Config::get('Q', 'text', 'overrides', $name, ...$pathArray)
+	 *  which can be [newName, newPath] for overriding some text.
 	 * @param {array|string} [$params=array()]
 	 *  An array of parameters to the expression.
 	 *  Variable names in the expression can refer to them.
 	 *  You can also pass an indexed array, in which case the expression's
-	 *  placeholders of the form {{0}}, {{1}}, or $0, $1 will be replaced by the
+	 *  placeholders of the form {{0}}, {{1} }will be replaced by the
 	 *  corresponding strings.
-	 *  If the expression is missing {{0}} and $0, then {{1}} or $1 is replaced
-	 *  by the first string, {{2}} or $2 by the second string, and so on.
+	 *  If the expression is missing {{0}}, then {{1}} is replaced
+	 *  by the first string, {{2}} by the second string, and so on.
 	 *  If the placeholder names contain dots, e.g. "{{foo.bar.baz}}" or "{{0.bar.baz}}",
 	 *  we use Q::getObject to dig deeper into the fields.
 	 * @param {array} [$options=array()]
 	 *  Pass any additional options to Q_Text::get() if it is called
-	 * @return {string}
-	 *  The result of the interpolation
+	 * @return {string|null}
+	 *  The result of the interpolation, or null if there is no text at the given path
 	 */
 	static function interpolate(
 		$expression,
@@ -367,8 +369,21 @@ class Q
 		$options = array())
 	{
 		if (is_array($expression)) {
-			$name = $expression[0];
-			$path = $expression[1];
+			list($name, $path) = $expression;
+			$p = array_merge(array('Q', 'text', 'override', $name), $path);
+			$args = array_merge($p, array(null));
+			if ($override = call_user_func_array(array('Q_Config', 'get'), $args)) {
+				if (empty($override)) {
+					return null;
+				}
+				if (!is_array($override) or empty($override[1]) or !is_array($override[1])) {
+					throw new Q_Exception_WrongType(array(
+						'field' => implode('/', $p),
+						'type' => '[name, path]'
+					));
+				}
+				list($name, $path) = $override;
+			}
 			$text = Q_Text::get($name, $options);
 			$expression = Q::getObject($text, $path, null);
 			if (!isset($expression)) {
@@ -380,7 +395,6 @@ class Q
 		}
 		$a = (
 			strpos($expression, '{{0}}') === false
-			and strpos($expression, '$0') === false
 		) ? 1 : 0;
 		$keys = array_keys($params);
 		usort($keys, array(__CLASS__, 'reverseLengthCompare'));
