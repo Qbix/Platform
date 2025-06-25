@@ -710,7 +710,8 @@ class Q
 	}
 
 	/**
-	 * Returns whether the conditions are met for this class to be loaded
+	 * Returns whether the conditions are met for this class to be loaded.
+	 * Supports checking minimum PHP version, required extensions, and functions.
 	 * @method autoloadRequirementsMet
 	 * @static
 	 * @param {string} $className
@@ -718,12 +719,37 @@ class Q
 	 */
 	static function autoloadRequirementsMet($className)
 	{
-		if (!empty(Q::$autoloadRequires[$className]['PHP'])) {
-			$version = Q::$autoloadRequires[$className]['PHP'];
-			if (version_compare(PHP_VERSION, $version, '<')) {
+		if (empty(Q::$autoloadRequires[$className])) {
+			return true;
+		}
+
+		$requires = Q::$autoloadRequires[$className];
+
+		// Check PHP version
+		if (!empty($requires['PHP'])) {
+			if (version_compare(PHP_VERSION, $requires['PHP'], '<')) {
 				return false;
 			}
 		}
+
+		// Check required PHP extensions
+		if (!empty($requires['extensions']) && is_array($requires['extensions'])) {
+			foreach ($requires['extensions'] as $ext) {
+				if (!extension_loaded($ext)) {
+					return false;
+				}
+			}
+		}
+
+		// Check required functions
+		if (!empty($requires['functions']) && is_array($requires['functions'])) {
+			foreach ($requires['functions'] as $func) {
+				if (!function_exists($func)) {
+					return false;
+				}
+			}
+		}
+
 		return true;
 	}
 

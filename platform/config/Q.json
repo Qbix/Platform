@@ -18,7 +18,9 @@
 		"autoload": {
 			"requires": {
 				"Q_Crypto": {
-					"PHP": 7.3
+					"PHP": "7.3",
+					"extensions": ["gmp"],
+					"functions": ["gmp_init", "hex2bin", "chunk_split"]
 				}
 			}
 		},
