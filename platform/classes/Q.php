@@ -344,10 +344,11 @@ class Q
 	 * @static
 	 * @param {string|array} $expression
 	 *  The string containing possible references to interpolate values for.
-	 *  Can also be array($textName, $pathArray) to load expression using Q_Text::get().
+	 *  Can also be array(textName, pathArray) to load expression using Q_Text::get().
 	 *  In this case, the function also checks if there are any overrides at
-	 *  Q_Config::get('Q', 'text', 'overrides', $name, ...$pathArray)
-	 *  which can be [newName, newPath] for overriding some text.
+	 *  Q_Config::get('Q', 'text', 'overrides', name, ...subpath)
+	 *  for any subpath of the pathToArray. The string value there is used
+	 *  to override the name of the text file, to be used with all paths under it.
 	 * @param {array|string} [$params=array()]
 	 *  An array of parameters to the expression.
 	 *  Variable names in the expression can refer to them.
@@ -370,21 +371,24 @@ class Q
 	{
 		if (is_array($expression)) {
 			list($name, $path) = $expression;
-			$p = array_merge(array('Q', 'text', 'override', $name), $path);
-			$args = array_merge($p, array(null));
-			if ($override = call_user_func_array(array('Q_Config', 'get'), $args)) {
-				if (empty($override)) {
-					return null;
-				}
-				if (!is_array($override) or empty($override[1]) or !is_array($override[1])) {
-					throw new Q_Exception_WrongType(array(
-						'field' => implode('/', $p),
-						'type' => '[name, path]'
-					));
-				}
-				list($name, $path) = $override;
+			$override = Q_Config::get('Q', 'text', 'override', array());
+			if (!is_array($override)) {
+				$override = array();
 			}
-			$text = Q_Text::get($name, $options);
+			$current = $override;
+			$actualName = $name;
+			foreach (array_merge(array($name), $path) as $part) {
+				if (isset($current[$part])) {
+					$current = $current[$part];
+					if (is_string($current)) {
+						$actualName = $current;
+						break;
+					}
+				} else {
+					break;
+				}
+			}
+			$text = Q_Text::get($actualName, $options);
 			$expression = Q::getObject($text, $path, null);
 			if (!isset($expression)) {
 				return null;
