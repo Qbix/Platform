@@ -1777,6 +1777,10 @@ EOT;
 		}
 		$pk_exported = var_export($pk, true);
 		$pk_json = json_encode($pk);
+
+		// Magic field name arrays
+		$possibleMagicFields = array('insertedTime', 'updatedTime', 'created_time', 'updated_time');
+		$possibleMagicInsertFields = array('insertedTime', 'created_time');
 		
 		// Calculate validation functions
 		$functions = array();
@@ -2120,8 +2124,6 @@ EOT;
 					$isTimeLike = true;
 					$properties[]="string|Db_Expression $field_name";
 					$js_properties[] = "String|Db.Expression $field_name";
-					$possibleMagicFields = array('insertedTime', 'updatedTime', 'created_time', 'updated_time');
-					$possibleMagicInsertFields = array('insertedTime', 'created_time');
 					if (in_array($field_name, $possibleMagicFields) and !isset($field_default)) {
 						$magic_field_names[] = $field_name;
 						$is_magic_field = true;
