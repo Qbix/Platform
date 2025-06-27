@@ -2304,35 +2304,8 @@ EOT;
 		}
 	}
 EOT;
-			$return_statement = <<<EOT
-		return \$value;
-EOT;
-			$js_return_statement = <<<EOT
-	return value;
-EOT;
 			$functions["beforeSave"][] = $beforeSave_code;
-			$functions['beforeSave']['return_statement'] = $return_statement;
-			$functions['beforeSave']['comment'] = <<<EOT
-	$dc
-	 * Check if mandatory fields are set and updates 'magic fields' with appropriate values
-	 * @method beforeSave
-	 * @param {array} \$value The array of fields
-	 * @return {array}
-	 * @throws {Exception} If mandatory field is not set
-	 */
-EOT;
 			$js_functions["beforeSave"][] = $js_beforeSave_code;
-			$js_functions['beforeSave']['return_statement'] = $js_return_statement;
-			$js_functions['beforeSave']['comment'] = <<<EOT
-$dc
- * Check if mandatory fields are set and updates 'magic fields' with appropriate values
- * @method beforeSave
- * @param {Object} value The object of fields
- * @param {Function} callback Call this callback if you return null
- * @return {Object|null} Return the fields, modified if necessary. If you return null, then you should call the callback(err, modifiedFields)
- * @throws {Error} If e.g. mandatory field is not set or a bad values are supplied
- */
-EOT;
 		}
 
 		//$functions['beforeSave'] = array();
@@ -2372,16 +2345,8 @@ EOT;
 					break;
 				}
 			}
-			$return_statement = <<<EOT
-		return \$value;
-EOT;
-			$js_return_statement = <<<EOT
-	return value;
-EOT;
 			$functions['beforeSave'][] = $beforeSave_code;
-			$functions['beforeSave']['return_statement'] = $return_statement;
 			$js_functions['beforeSave'][] = $js_beforeSave_code;
-			$js_functions['beforeSave']['return_statement'] = $js_return_statement;
 		}
 
 		foreach ($field_nulls as $i => $isNull) {
@@ -2409,6 +2374,34 @@ EOT;
 	}
 EOT;
 			}
+		}
+
+		if (!empty($functions['beforeSave'])) {
+			$functions['beforeSave']['return_statement'] = <<<EOT
+		return \$value;
+EOT;
+			$functions['beforeSave']['comment'] = <<<EOT
+	$dc
+	 * Check if mandatory fields are set and updates 'magic fields' with appropriate values
+	 * @method beforeSave
+	 * @param {array} \$value The array of fields
+	 * @return {array}
+	 * @throws {Exception} If mandatory field is not set
+	 */
+EOT;
+			$js_functions['beforeSave']['return_statement'] = <<<EOT
+	return value;
+EOT;;
+			$js_functions['beforeSave']['comment'] = <<<EOT
+$dc
+ * Check if mandatory fields are set and updates 'magic fields' with appropriate values
+ * @method beforeSave
+ * @param {Object} value The object of fields
+ * @param {Function} callback Call this callback if you return null
+ * @return {Object|null} Return the fields, modified if necessary. If you return null, then you should call the callback(err, modifiedFields)
+ * @throws {Error} If e.g. mandatory field is not set or a bad values are supplied
+ */
+EOT;
 		}
 		
 		$functions['fieldNames'] = array();
