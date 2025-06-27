@@ -49,11 +49,17 @@ class Q_Text
 	 * @static
 	 * @param {String} language Something like "en"
 	 * @param {String} [locale=null] Something like "US", but can also be null if unknown
+	 * @return {Boolean} whether the language was set successfully
 	 */
 	static function setLanguage($language, $locale = null)
 	{
+		$lang = preg_replace('/[^a-zA-Z_-]/', '', $language);
+		if (!$lang) {
+			return false;
+		}
 		self::$language = strtolower($language);
 		self::$locale = $locale ? strtoupper($locale) : '';
+		return true;
 	}
 
 	/**

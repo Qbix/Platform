@@ -208,7 +208,7 @@ class Db_Result
 	 * @param {string} [$class_name=null] The name of the class to instantiate and fill objects from.
 	 *  Must extend Db_Row. Defaults to $this->query->className
 	 * @param {string} [$fields_prefix=''] This is the prefix, if any, to strip out when fetching the rows.
-	 * @return {Db_Row|boolean} Returns false if no row, otherwise returns an object of type $class_name
+	 * @return {Db_Row|false} Returns false if no row, otherwise returns an object of type $class_name
 	 */
 	function fetchDbRow(
 		$class_name = null, 

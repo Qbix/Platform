@@ -2122,12 +2122,9 @@ EOT;
 					$js_properties[] = "String|Db.Expression $field_name";
 					$possibleMagicFields = array('insertedTime', 'updatedTime', 'created_time', 'updated_time');
 					$possibleMagicInsertFields = array('insertedTime', 'created_time');
-					if (in_array($field_name, $possibleMagicFields)) {
-						if (!in_array($field_name, $possibleMagicInsertFields)
-						or !isset($field_default)) {
-							$magic_field_names[] = $field_name;
-							$is_magic_field = true;
-						}
+					if (in_array($field_name, $possibleMagicFields) and !isset($field_default)) {
+						$magic_field_names[] = $field_name;
+						$is_magic_field = true;
 					}
 					$functions["beforeSet_$field_name_safe"][] = <<<EOT
 		{$null_check}{$dbe_check}if (\$value instanceof DateTime) {
@@ -2383,6 +2380,33 @@ EOT;
 			$functions['beforeSave']['return_statement'] = $return_statement;
 			$js_functions['beforeSave'][] = $js_beforeSave_code;
 			$js_functions['beforeSave']['return_statement'] = $js_return_statement;
+		}
+
+		foreach ($field_nulls as $i => $isNull) {
+			if ($isNull) {
+				continue;
+			}
+			$fn = $field_names[$i];
+			if (in_array($fn, $possibleMagicFields)) {
+				continue;
+			}
+			$fn_json = json_encode($fn);
+			$fd = $defaults[$i];
+			$js_fd = $js_defaults[$i];
+			if ($fd !== 'null') {
+				$functions["beforeSave"][] = <<<EOT
+
+		if (!isset(\$value[$fn_json])) {
+			\$this->$fn = \$value[$fn_json] = $fd;
+		}
+EOT;
+				$js_functions["beforeSave"][] = <<<EOT
+
+	if (this.fields[$fn_json] == undefined) {
+		this.fields[$fn_json] = value[$fn_json] = $js_fd;
+	}
+EOT;
+			}
 		}
 		
 		$functions['fieldNames'] = array();
