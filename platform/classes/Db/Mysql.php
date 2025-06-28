@@ -2363,13 +2363,13 @@ EOT;
 			if ($fd !== 'null') {
 				$functions["beforeSave"][] = <<<EOT
 
-		if (!isset(\$value[$fn_json])) {
+		if (!isset(\$this->fields[$fn_json]) and !isset(\$value[$fn_json])) {
 			\$this->$fn = \$value[$fn_json] = $fd;
 		}
 EOT;
 				$js_functions["beforeSave"][] = <<<EOT
 
-	if (this.fields[$fn_json] == undefined) {
+	if (this.fields[$fn_json] == undefined && value[$fn_json] == undefined) {
 		this.fields[$fn_json] = value[$fn_json] = $js_fd;
 	}
 EOT;
