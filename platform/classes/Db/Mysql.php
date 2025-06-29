@@ -1793,6 +1793,7 @@ EOT;
 		$magic_field_names = array();
 		$defaults = array();
 		$comments = array();
+		$defaultsAlreadyInDB = array();
 		foreach ($table_cols as $table_col) {
 			$is_magic_field = null;
 			$field_name = $table_col['Field'];
@@ -1946,6 +1947,7 @@ EOT;
 						? $table_col['Default']
 						: ($field_null ? null : 0);
 					$js_defaults[] = $defaults[] = json_encode((int)$default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 
 				case 'enum':
@@ -1981,6 +1983,7 @@ EOT;
 						? $table_col['Default']
 						: null;
 					$js_defaults[] = $defaults[] = json_encode($default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 				
 				case 'char':
@@ -2066,6 +2069,7 @@ EOT;
 						? $table_col['Default']
 						: ($field_null ? null : '');
 					$js_defaults[] = $defaults[] = json_encode($default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 				
 				case 'date':
@@ -2118,6 +2122,7 @@ EOT;
 					$js_defaults[] = $isExpression
 						? 'new Db.Expression(' . json_encode($default) . ')'
 						: json_encode($default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 				case 'datetime':
 				case 'timestamp':
@@ -2177,6 +2182,7 @@ EOT;
 					$js_defaults[] = $isExpression
 						? 'new Db.Expression(' . json_encode($default) . ')'
 						: json_encode($default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 
 				case 'numeric':
@@ -2209,6 +2215,7 @@ EOT;
 						? $table_col['Default']
 						: ($field_null ? null : 0);
 					$js_defaults[] = $defaults[] = json_encode((double)$default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 
 				default:
@@ -2218,6 +2225,7 @@ EOT;
 						? $table_col['Default']
 						: ($field_null ? null : '');
 					$js_defaults[] = $defaults[] = json_encode($default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 			}
 			if (! empty($functions["beforeSet_$field_name_safe"])) {
@@ -2355,6 +2363,9 @@ EOT;
 			}
 			$fn = $field_names[$i];
 			if (in_array($fn, $possibleMagicFields)) {
+				continue;
+			}
+			if ($defaultsAlreadyInDB[$i]) {
 				continue;
 			}
 			$fn_json = json_encode($fn);
