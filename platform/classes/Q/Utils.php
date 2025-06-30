@@ -2122,7 +2122,7 @@ class Q_Utils
 	}
 
 	/**
-	 * Sorts keys such as "4x8x9" numerically by dimensions
+	 * Sorts keys such as "4x8x9" numerically by dimensions, left to right
 	 * @method sortKeysNumerically
 	 * @static
 	 * @param {array&} $arr Reference to an array
@@ -2134,8 +2134,8 @@ class Q_Utils
 	}
 
 	/**
-	 * Sorts keys such as "4x8x9" numerically by dimensions
-	 * @method sortKeysNumerically
+	 * Sorts keys such as "4x8x9" by largest numerical dimension found
+	 * @method sortKeysByLargestNumber
 	 * @static
 	 * @param {array&} $arr Reference to an array
 	 * @return 
@@ -2143,6 +2143,18 @@ class Q_Utils
 	static function sortKeysByLargestNumber(&$arr)
 	{
 		return uksort($arr, array('Q_Utils', 'compareKeysByLargestNumber'));
+	}
+
+	/**
+	 * Sorts keys such as "4x8x9" numerically by multiplying dimensional components
+	 * @method sortKeysByArea
+	 * @static
+	 * @param {array&} $arr Reference to an array
+	 * @return 
+	 */
+	static function sortKeysByArea(&$arr)
+	{
+		return uksort($arr, array('Q_Utils', 'compareKeysNumerically'));
 	}
 
 	/**
@@ -2292,6 +2304,17 @@ class Q_Utils
 		$am = max($ap);
 		$bm = max($bp);
 		return $am > $bm ? 1 : ($bm > $am ? -1 : 0);
+	}
+
+	private static function compareKeysByArea($a, $b)
+	{
+		$ap = preg_split('/\D+/', $a, -1, PREG_SPLIT_NO_EMPTY);
+		$bp = preg_split('/\D+/', $b, -1, PREG_SPLIT_NO_EMPTY);
+
+		$apArea = array_product(array_map('intval', $ap));
+		$bpArea = array_product(array_map('intval', $bp));
+
+		return $apArea <=> $bpArea;
 	}
 
 	protected static $urand;
