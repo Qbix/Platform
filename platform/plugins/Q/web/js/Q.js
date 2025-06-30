@@ -341,10 +341,17 @@ Sp.interpolate = function _String_prototype_interpolate(fields) {
  * @method replaceAllPlaceholders
  * @return {String}
  */
-Sp.replaceAllPlaceholders = function _String_prototype_replaceAllPlaceholders(pairs) {
+Sp.replaceAllPlaceholders = function (pairs) {
 	var result = this;
-	for (var k in pairs) {
-		result = result.split(k).join(pairs[k]);
+	var keys = Object.keys(pairs);
+	// Sort keys by descending length to prevent partial replacement
+	keys.sort(function (a, b) {
+		return b.length - a.length;
+	});
+	for (var i = 0; i < keys.length; i++) {
+		var k = keys[i];
+		var v = String(pairs[k]);
+		result = result.split(k).join(v);
 	}
 	return result;
 };
