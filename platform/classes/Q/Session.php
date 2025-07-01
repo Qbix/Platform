@@ -353,13 +353,13 @@ class Q_Session
 					self::writeHandler($id, '');
 				}
 				if (!empty($_SERVER['HTTP_HOST'])) {
-					// TODO: Think about session fixation attacks, require nonce.
 					$durationName = self::durationName();
 					$duration = Q_Config::get('Q', 'session', 'durations', $durationName, 0);
 					$secure = Q_Config::get('Q', 'session', 'cookie', 'secure', true);
 					$sessionCookieParams = session_get_cookie_params();
 					$sessionName = self::name();
-					if (!Q_Dispatcher::$startedResponse) {
+					if (!Q_Request::cookie($sessionName) || !Q_Dispatcher::$startedResponse) {
+						// the following might throw an error if response already started, that's good:
 						Q_Response::setCookie(
 							$sessionName, $id, $duration ? time()+$duration : 0, 
 							null, Q::ifset($sessionCookieParams, "domain", null), $secure, true, 'Lax'
