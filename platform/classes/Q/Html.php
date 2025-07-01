@@ -1086,7 +1086,7 @@ class Q_Html
 	 * @param {string} $content The string to escape
 	 * @param {string} [$convert=array()] An array of additional characters to convert. Can include "\n" and " ".
 	 * @param {string} [$unconvert=array()] An array of from => to pairs to unconvert back.
-	 * @return {string}
+	 * @return {string|null} returns null if content is null, otherwise returns transformed content
 	 */
 	static function text(
 	 $content,
@@ -1094,6 +1094,9 @@ class Q_Html
 	 $unconvert = array(),
 	 $flags = ENT_QUOTES)
 	{
+		if (!isset($content)) {
+			return null;
+		}
 		if (!is_array($convert)) {
 			$convert = array();
 		}
