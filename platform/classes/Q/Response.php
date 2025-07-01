@@ -2239,7 +2239,7 @@ class Q_Response
 			return; // otherwise we might want to update the expiration time
 		}
 		if (Q_Dispatcher::$startedResponse) {
-			throw new Q_Exception_CookieBeforeResponse();
+			throw new Q_Exception_CookieDuringResponse();
 		}
 		$baseUrl = Q_Request::baseUrl();
 		if (!isset($path)) {
