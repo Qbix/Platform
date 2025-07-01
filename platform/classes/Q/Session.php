@@ -377,6 +377,8 @@ class Q_Session
 			throw $e;
 		} catch (Q_Exception_FailedValidation $e) {
 			throw $e;
+		} catch (Q_Exception_HeadersDuringResponse $e) {
+			throw $e;
 		} catch (Exception $e) {
 			$app = Q_Config::get('Q', 'app', null);
 			$prefix = $app ? APP_FILES_DIR.'/' : '';
@@ -399,7 +401,7 @@ class Q_Session
 				Q::log($e);
 				$app_dir = APP_DIR;
 				$scripts_dir = APP_SCRIPTS_DIR . DS . 'Q';
-				throw new Q_Exception("Please run $prefix"."scripts/Q/install.php --all");
+				throw new Q_Exception_PleaseRunInstaller(compact('prefix'));
 			}
 		}
 		// merge in all the stuff that was added to $_SESSION
