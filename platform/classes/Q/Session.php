@@ -401,7 +401,7 @@ class Q_Session
 				Q::log($e);
 				$app_dir = APP_DIR;
 				$scripts_dir = APP_SCRIPTS_DIR . DS . 'Q';
-				throw new Q_Exception_PleaseRunInstaller(compact('prefix'));
+				throw new Q_Exception_PleaseRunInstall(compact('prefix'));
 			}
 		}
 		// merge in all the stuff that was added to $_SESSION
