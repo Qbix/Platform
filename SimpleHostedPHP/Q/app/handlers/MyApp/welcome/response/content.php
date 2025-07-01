@@ -18,26 +18,26 @@ function MyApp_welcome_response_content($params)
 	$communityIcon = Q_Uri::interpolateUrl($communityUser->icon.'/400.png');
 	$url = Q_Uri::url($communityId.'/welcome');
 	Q_Response::setMeta(array(
-		array('attrName' => 'name', 'attrValue' => 'title', 'content' => $title),
-		array('attrName' => 'property', 'attrValue' => 'og:title', 'content' => $title),
-		array('attrName' => 'property', 'attrValue' => 'twitter:title', 'content' => $title),
-		array('attrName' => 'name', 'attrValue' => 'description', 'content' => $description),
-		array('attrName' => 'property', 'attrValue' => 'og:description', 'content' => $description),
-		array('attrName' => 'property', 'attrValue' => 'twitter:description', 'content' => $description),
-		array('attrName' => 'name', 'attrValue' => 'image', 'content' => $communityIcon),
-		array('attrName' => 'property', 'attrValue' => 'og:image', 'content' => $communityIcon),
-		array('attrName' => 'property', 'attrValue' => 'twitter:image', 'content' => $communityIcon),
-		array('attrName' => 'property', 'attrValue' => 'og:url', 'content' => $url),
-		array('attrName' => 'property', 'attrValue' => 'twitter:url', 'content' => $url),
-		array('attrName' => 'property', 'attrValue' => 'twitter:card', 'content' => 'summary'),
-		array('attrName' => 'property', 'attrValue' => 'og:type', 'content' => 'website'),
+		array('name' => 'name', 'value' => 'title', 'content' => $title),
+		array('name' => 'property', 'value' => 'og:title', 'content' => $title),
+		array('name' => 'property', 'value' => 'twitter:title', 'content' => $title),
+		array('name' => 'name', 'value' => 'description', 'content' => $description),
+		array('name' => 'property', 'value' => 'og:description', 'content' => $description),
+		array('name' => 'property', 'value' => 'twitter:description', 'content' => $description),
+		array('name' => 'name', 'value' => 'image', 'content' => $communityIcon),
+		array('name' => 'property', 'value' => 'og:image', 'content' => $communityIcon),
+		array('name' => 'property', 'value' => 'twitter:image', 'content' => $communityIcon),
+		array('name' => 'property', 'value' => 'og:url', 'content' => $url),
+		array('name' => 'property', 'value' => 'twitter:url', 'content' => $url),
+		array('name' => 'property', 'value' => 'twitter:card', 'content' => 'summary'),
+		array('name' => 'property', 'value' => 'og:type', 'content' => 'website'),
 	));
 	if ($fbApps = Q_Config::get('Users', 'apps', 'facebook', array())) {
 		$app = Q::app();
 		$fbApp = isset($fbApps[$app]) ? $fbApps[$app] : reset($fbApps);
 		if ($appId = $fbApp['appId']) {
 			Q_Response::setMeta(array(
-				'attrName' => 'property', 'attrValue' => 'fb:app_id', 'content' => $appId
+				'name' => 'property', 'value' => 'fb:app_id', 'content' => $appId
 			));
 		}
 	}

@@ -541,6 +541,7 @@ class Q_Response
 				'value' => Q::ifset($argList, 0, ''),
 				'content' => Q::ifset($argList, 1, '')
 			);
+			$slotName = null;
 		} elseif (isset($params[0]) and is_array($params[0])) {
 			foreach ($params as $v) {
 				if (is_array($v)) {

@@ -16,7 +16,11 @@ function Q_response_content()
 		$event = "$app/notFound/response/content";
 	}
 	
-	Q_Response::setMeta('format-detection', 'telephone=no,date=no,address=no,email=no,url=no');
+	Q_Response::setMeta(array(
+		'name' => 'name',
+		'value' => 'format-detection',
+		'content' => 'telephone=no,date=no,address=no,email=no,url=no'
+	));
 		
 	// Go ahead and fire the event, returning the result.
 	return Q::event($event);
