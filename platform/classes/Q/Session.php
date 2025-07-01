@@ -359,7 +359,7 @@ class Q_Session
 					$secure = Q_Config::get('Q', 'session', 'cookie', 'secure', true);
 					$sessionCookieParams = session_get_cookie_params();
 					$sessionName = self::name();
-					if (!Q_Response::$startedResponse) {
+					if (!Q_Dispatcher::$startedResponse) {
 						Q_Response::setCookie(
 							$sessionName, $id, $duration ? time()+$duration : 0, 
 							null, Q::ifset($sessionCookieParams, "domain", null), $secure, true, 'Lax'
