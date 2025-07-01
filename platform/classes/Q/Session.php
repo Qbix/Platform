@@ -358,10 +358,13 @@ class Q_Session
 					$duration = Q_Config::get('Q', 'session', 'durations', $durationName, 0);
 					$secure = Q_Config::get('Q', 'session', 'cookie', 'secure', true);
 					$sessionCookieParams = session_get_cookie_params();
-					Q_Response::setCookie(
-						self::name(), $id, $duration ? time()+$duration : 0, 
-						null, Q::ifset($sessionCookieParams, "domain", null), $secure, true, 'Lax'
-					);
+					$sessionName = self::name();
+					if (!Q_Response::$startedResponse) {
+						Q_Response::setCookie(
+							$sessionName, $id, $duration ? time()+$duration : 0, 
+							null, Q::ifset($sessionCookieParams, "domain", null), $secure, true, 'Lax'
+						);
+					}
 				}
 			}
 			if (empty($_SERVER['HTTP_HOST']) and empty($_SESSION)) {
