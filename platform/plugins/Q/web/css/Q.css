@@ -769,9 +769,9 @@ html.Q_scanning body > .Q_scanning_code {
 }
 
 @-webkit-keyframes Q_live {
-	0%   { background-color: rgba(150, 150, 150, 0); }
-	50%  { background-color: rgba(150, 150, 150, 0.5); }
-	100% { background-color: rgba(150, 150, 150, 0); }
+	0%   { background-color: rgba(150, 150, 150, 1); }
+	50%  { background-color: rgba(150, 150, 150, 0.8); }
+	100% { background-color: rgba(150, 150, 150, 1); }
 }
 
 }
