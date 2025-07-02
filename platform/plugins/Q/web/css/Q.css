@@ -770,7 +770,10 @@ html.Q_scanning body > .Q_scanning_code {
 
 @-webkit-keyframes Q_live {
 	0%   { background-color: rgba(150, 150, 150, 0); }
-	50% { background-color: rgba(150, 150, 150, 0.5); }
+	50%  { background-color: rgba(150, 150, 150, 0.5); }
+	100% { background-color: rgba(150, 150, 150, 0); }
+}
+
 }
 @keyframes Q_live {
 	0%   { background-color: rgba(150, 150, 150, 0); }
@@ -778,7 +781,7 @@ html.Q_scanning body > .Q_scanning_code {
 }
 .Q_live {
 	background-image:none !important;
-	animation: Q_live 2s ease-in-out infinite;
+	animation: Q_live 2s ease-in-out alternate infinite;
 }
 
 #notices_slot {
