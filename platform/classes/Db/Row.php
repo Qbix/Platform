@@ -1743,7 +1743,7 @@ class Db_Row
 	 * If the row was retrieved from the database, issues an UPDATE.
 	 * If the row was created from scratch, then issue an INSERT.
 	 * @method save
-	 * @param {boolean} [$onDuplicateKeyUpdate=false] If MySQL is being used, you can set this to TRUE
+	 * @param {boolean|array} [$onDuplicateKeyUpdate=false] If MySQL is being used, you can set this to TRUE
 	 *  to add an ON DUPLICATE KEY UPDATE clause to the INSERT statement,
 	 *  or set it to an array to override specific fields with your own Db_Expressions
 	 * @param {boolean} [$commit=false] If this is TRUE, then the current transaction is committed right after the save.
