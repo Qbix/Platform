@@ -1,3 +1,7 @@
+.Q_expandable_tool {
+    scroll-margin: 5px;
+}
+
 .Q_expandable_tool h2.Q_expandable_title {
     max-width: 100%;
     overflow: hidden;
@@ -37,6 +41,11 @@
 }
 
 .Q_expandable_tool h2.Q_expandable_title.Q_expanded .Q_expandable_count {
+	display: none;
+}
+
+.Q_expandable_tool:not(.Q_expanded) .Q_expandable_whenExpanded,
+.Q_expandable_tool:not(.Q_expanded) .Q_expandable_content {
 	display: none;
 }
 

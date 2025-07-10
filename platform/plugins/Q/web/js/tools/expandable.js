@@ -89,7 +89,9 @@ Q.Tool.define('Q/expandable', function (options) {
 	expanded: null,
 	autoCollapseSiblings: true,
 	scrollContainer: true,
-	duration: 300,
+	animation: {
+		duration: 300
+	},
 	evenIfFilled: false,
 	onRefresh: new Q.Event(),
 	beforeExpand: new Q.Event(),
@@ -101,9 +103,11 @@ Q.Tool.define('Q/expandable', function (options) {
 	 * @method expand
 	 * @param {Object} [options]
 	 *  @param {Boolean} [options.autoCollapseSiblings] Pass false to skip collapsing siblings even if state.collapseSiblings is currently true
+	 *  @param {Object} [options.animation]
+	 *  @param {Object} [options.animation.duration=300] Pass 0 to skip animations
 	 *  @param {Boolean} [options.scrollContainer] Whether to scroll a parent container
 	 *  @param {Boolean} [options.scrollToElement] Can be used to specify another element to scroll to when expanding. Defaults to the title element of the expandable.
- *  @param {Number} [options.spaceAbove] How many pixels of space to leave above at the end of the scrolling animation
+ 	 *  @param {Number} [options.spaceAbove] How many pixels of space to leave above at the end of the scrolling animation
 	 * @param {Function} [callback] the function to call once the expanding has completed
 	 */
 	expand: function (options, callback) {
@@ -123,18 +127,17 @@ Q.Tool.define('Q/expandable', function (options) {
 					return;
 				}
 
-				this.collapse();
+				this.collapse(null, {dontScrollIntoView: true});
 			});
 		}
 		var $expandable = $h2.next().slideDown(state.duration, 'linear');
 		state.expanded = true;
-		if (!o.scrollContainer) {
-			return;
-		}
 		$te.addClass('Q_expanding');
 		Q.Animation.play(function (x, y) {
-			var $scrollable = (o.scrollContainer instanceof Element)
-				? $(o.scrollContainer) : tool.scrollable();
+			var $scrollable = o.scrollContainer
+				? ((o.scrollContainer instanceof Element)
+					? $(o.scrollContainer) : tool.scrollable()
+				) : $();
 			var offset = $scrollable.length
 				? $scrollable.offset()
 				: {left: 0, top: 0};
@@ -186,15 +189,16 @@ Q.Tool.define('Q/expandable', function (options) {
 				var scrollTop = $scrollable.scrollTop() + t - t1 * (1-y) - spaceAbove * y;
 				$scrollable.scrollTop(scrollTop);
 			}
-		}, state.duration).onComplete.set(function () {
+		}, state.animation.duration).onComplete.set(_proceed);
+		function _proceed() {
 			$te.removeClass('Q_expanding');
 			$h2.add($expandable).add($te).addClass('Q_expanded');
 			Q.handle(callback, tool, [options || {}]);
 			Q.handle(state.onExpand, tool, [options || {}]);
-		});
+		}
 	},
 	
-	collapse: function (callback) {
+	collapse: function (callback, options) {
 		var tool = this;
 		var state = this.state;
 		var $h2 = $('>h2', this.element);
@@ -207,7 +211,9 @@ Q.Tool.define('Q/expandable', function (options) {
 		.next().removeClass('Q_expanded')
 		.slideUp(state.duration, function () {
 			$te.removeClass('Q_collapsing');
-			tool.element.scrollIntoView({behavior: 'smooth'});
+			if (!options || !options.dontScrollIntoView) {
+				tool.element.scrollIntoView({behavior: 'smooth'});
+			}
 			Q.handle(tool.state.onCollapse, tool, []);
 		}).each(function () {
 			Q.handle(callback, tool, []);
