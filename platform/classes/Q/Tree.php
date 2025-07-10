@@ -560,8 +560,19 @@ class Q_Tree
 	 */
 	protected static function merge_internal ($array1 = array(), $array2 = array(), $noNumericArrays = false)
 	{
-		if (!Q::isAssociative($array1) and isset($array2['replace'])) {
-			return $array2['replace'];
+		if (!Q::isAssociative($array1)) {
+			if (isset($array2['replace'])) {
+				return $array2['replace'];
+			}
+			if (isset($array2['remove'])) {
+				$array3 = $array1;
+				$array3 = array_values(array_diff($array1, $array2['remove']));
+				if (!isset($array2['add'])) {
+					return $array3;
+				}
+				$array3 = array_unique(array_merge($array3, $array2['add']));
+				return $array3;
+			}
 		}
 		$result = $array1;
 		foreach ($array2 as $key => $value) {

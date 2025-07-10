@@ -336,8 +336,25 @@ module.exports = function (linked) {
 		var result = (Q.typeOf(second) === 'object' ? {} : []);
 		var k;
 		// copy first to the result
-		if (Q.typeOf(first) === 'array' && second.replace) {
-			return second.replace;
+		if (Q.typeOf(first) === 'array') {
+			if (second.replace) {
+				return second.replace;
+			}
+			if (second.remove) {
+				var arr = first;
+				arr = first.filter(x => !second.remove.includes(x));
+				if (!second.add) {
+					return arr;
+				}
+				var r = arr.slice();
+				var b = second.add;
+				for (var i = 0; i < b.length; i++) {
+					if (r.indexOf(b[i]) === -1) {
+						r.push(b[i]);
+					}
+				}
+				return r;
+			}
 		}
 		for (k in first) {
 			result[k] = first[k];

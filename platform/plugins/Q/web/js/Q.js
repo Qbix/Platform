@@ -2008,9 +2008,26 @@ Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... [
 				&& (typeof target[k] === 'object' || typeof target[k] === 'function') 
 				&& tak !== 'Q.Event'
 				&& (Q.isPlainObject(argk) || (ttk === 'array' && tak === 'array'))) {
-					target[k] = (ttk === 'array' && ('replace' in argk))
-						? Q.copy(argk.replace)
-						: Q.extend(target[k], deep, levels-1, argk);
+					if ((ttk === 'array' && (('replace' in argk) || ('remove' in argk)))) {
+						if ('replace' in argk) {
+							target[k] = Q.copy(argk.replace);
+						} else if ('remove' in argk) {
+							var arr = Q.diff(target[k], argk.remove);
+							if (argk.add) {
+								var r = arr.slice(), b = argk.add;
+								for (var i = 0; i < b.length; i++) {
+									if (r.indexOf(b[i]) < 0) {
+										r.push(b[i]);
+									}
+								}
+								target[k] = r;	
+							} else {
+								target[k] = arr;
+							}
+						}
+					} else {
+						target[k] = Q.extend(target[k], deep, levels-1, argk);
+					}
 				} else {
 					target[k] = Q.extend.dontCopy[Q.typeOf(argk)]
 						? argk
@@ -4341,6 +4358,7 @@ Q.batcher.factory = function _Q_batcher_factory(collection, baseUrl, tail, slotN
  * @param {Integer} [options.throttleSize=100] The size of the throttle, if it is enabled
  * @param {Boolean} [options.nonStandardErrorConvention=false] Pass true here if the callback parameters don't work with Q.firstErrorMessage() conventions
  * @param {Number} [callbackIndex] use this to explicitly specify which argument number is expecting a callback function
+ * @param {Boolean} [resolveWithSecondArgument] pass true to use the first argument when resolving the returned promise
  * @param {Q.Cache|Boolean} [options.cache] pass false here to prevent caching, or an object which supports the Q.Cache interface
  *  By default, it will set up a cache in the loaded webpage with default parameters.
  *  You can use functions Q.Cache.document, Q.Cache.local and Q.Cache.session
@@ -4375,7 +4393,9 @@ Q.getter = function _Q_getter(original, options) {
 				if (error) {
 					_reject(error);
 				} else {
-					_resolve(this !== undefined ? this : obj);
+					_resolve(
+						((!options || !options.resolveWithSecondArgument) && this !== undefined)
+						? this : obj);
 				}
 			};
 			callbacks.push(_promiseCallback);
@@ -7341,66 +7361,94 @@ Q.Cache.session.caches = {};
 Q.IndexedDB = {};
 
 /**
- * Creates or uses an existing database and object store name.
- * @static
+ * Opens an IndexedDB database and ensures the object store exists.
+ * Uses Q.getter internally to cache and reuse database connections per dbName.
+ * 
+ * Automatically upgrades the schema if the object store or indexes are missing.
+ * Detects and recovers from stale or closed connections, such as when resuming from background.
+ * 
+ * If the callback is provided, it will be called with (err, objectStore, db).
+ * If no callback is provided, returns a Promise that resolves to the IDBDatabase.
+ * 
  * @method open
- * @param {String} dbName The name of the database
- * @param {String} storeName The name of the object store name inside the database
- * @param {String|Object} params Parameters for creating the key store.
- *   You can also pass a string here, if you're just specifying the keyPath.
- * @param {String} params.keyPath The key path inside the object store.
- * @param {Array} params.indexes Array of arrays for createIndex consisting of [indexName, keyPath, options]
- * @param {Function} callback Receives (error, IDBObjectStore, IDBDatabase)
- * @return {Q.Promise}
+ * @param {String} dbName The name of the IndexedDB database
+ * @param {String} storeName The name of the object store to ensure exists
+ * @param {String|Object} params Either a string keyPath, or an object: { keyPath, indexes }
+ * @param {String} [params.keyPath] The keyPath to use when creating the object store
+ * @param {Array} [params.indexes] Optional array of [indexName, keyPath, options] entries
+ * @param {Function} [callback] Optional Node-style callback with (err, objectStore, db)
+ * @return {Promise<IDBDatabase>} Resolves with the open IDBDatabase if no callback is passed
  */
-Q.IndexedDB.open = Q.promisify(function (dbName, storeName, params, callback) {
+Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 	if (!root.indexedDB) {
-		return false;
+		var err = new Error("IndexedDB not supported");
+		if (callback) callback(err);
+		return false; // prevents caching
 	}
-	var keyPath = (typeof params === 'string' ? params : params.keyPath);
-	var open = indexedDB.open(dbName);
-	var _triedAddingObjectStore = false;
-	open.onupgradeneeded = function() {
-		var db = this.result;
-		if (!db.objectStoreNames.contains(storeName)
-		&& !_triedAddingObjectStore) {
-			_triedAddingObjectStore = true;
-			var store = db.createObjectStore(storeName, {keyPath: keyPath});
-			var idxs = params.indexes;
-			if (idxs) {
-				for (var i=0, l=idxs.length; i<l; ++i) {
-					store.createIndex(idxs[i][0], idxs[i][1], idxs[i][2]);
+	var keyPath = typeof params === 'string' ? params : params.keyPath;
+	var indexes = (typeof params === 'object' && Array.isArray(params.indexes)) ? params.indexes : [];
+	var triedCreatingStore = false;
+	tryOpen();
+	function tryOpen(version) {
+		var req = version ? indexedDB.open(dbName, version) : indexedDB.open(dbName);
+
+		req.onupgradeneeded = function () {
+			var db = req.result;
+			if (!db.objectStoreNames.contains(storeName) && !triedCreatingStore) {
+				triedCreatingStore = true;
+				var store = db.createObjectStore(storeName, { keyPath: keyPath });
+				for (var i = 0; i < indexes.length; ++i) {
+					var idx = indexes[i];
+					store.createIndex(idx[0], idx[1], idx[2]);
 				}
 			}
-		}
-	};
-	open.onerror = function (error) {
-		callback && callback.call(Q.IndexedDB, error);
-	};
-	open.onsuccess = function() {
-		var db = this.result;
-		var version = db.version;
-		db.onversionchange = function () {
-			db.close();
 		};
-		if (!db.objectStoreNames.contains(storeName)) {
-			// need to upgrade version and add this store
-			++version;
-			db.close();
-			var o = indexedDB.open(dbName, version);
-			Q.take(open, ['onupgradeneeded', 'onerror', 'onsuccess'], o);
-			return;
-		}
-		// Start a new transaction
-		var tx = db.transaction(storeName, "readwrite");
-		var store = tx.objectStore(storeName);
-		callback && callback.call(Q.IndexedDB, null, store, db);
-		// Close the db when the transaction is done
-		tx.oncomplete = function() {
-			db.close();
+
+		req.onerror = function (e) {
+			callback(e);
 		};
-	};
-}, false, 3);
+
+		req.onsuccess = function () {
+			var db = req.result;
+			if (!db._versionchangeAttached) {
+				db._versionchangeAttached = true;
+				db.onversionchange = function () {
+					db.close();
+				};
+			}
+
+			if (!db.objectStoreNames.contains(storeName)) {
+				db.close();
+				tryOpen((db.version || 1) + 1);
+			} else {
+				callback(null, db);
+			}
+		};
+	}
+}, {
+	cache: Q.Cache.document("Q.IndexedDB.open", 10),
+	resolveWithSecondArgument: true,
+	prepare: function (s, p, callback, args) {
+		var gw = this;
+		var db = p[1], dbName = args[0], storeName = args[1], params = args[2];
+		try {
+			const tx = db.transaction(storeName, 'readonly');
+			callback(s, p); // everything is fine
+		} catch (e) {
+			// Connection is closing or closed — refresh manually without infinite loop
+			this.original(dbName, storeName, params, function (err, newDb) {
+				var key = Q.Cache.key(args);
+				if (!err && gw.cache) {
+					var cached = gw.cache.get(key);
+					if (cached) {
+						gw.cache.set(key, cached.cbpos, s, arguments);
+					}
+				}
+				return callback(this, arguments);
+			});
+		}
+	}
+});
 Q.IndexedDB.put = Q.promisify(function (store, value, callback) {
 	_DB_addEvents(store, store.put(value), callback);
 }, false, 3);
@@ -7943,7 +7991,7 @@ Q.loadHandlebars = Q.getter(function _Q_loadHandlebars(callback) {
 		});
 	}, 'Q.loadHandlebars');
 }, {
-	cache: Q.Cache.document('Q.loadHandlebars', 1)
+	cache: Q.Cache.document('Q.loadHandlebars', 10)
 });
 
 /**
@@ -9452,7 +9500,7 @@ Q.request = function (url, slotNames, callback, options) {
 Q.request.callbacks = []; // used by Q.request
 
 Q.request.once = Q.getter(Q.request, {
-	cache: Q.Cache.document('Q.request', 1)
+	cache: Q.Cache.document('Q.request', 10)
 });
 
 /**
@@ -12195,7 +12243,8 @@ Q.Template.render = Q.promisify(function _Q_Template_render(name, fields, callba
 	});
 }, false, 2);
 
-Q.leaves = new Q.Method(); 
+Q.leaves = new Q.Method();
+Q.globalMemoryWalk = new Q.Method();
 Q.Method.define(Q);
 
 /**
@@ -15533,7 +15582,7 @@ Q.Dialogs.push.options = {
 	beforeLoad: new Q.Event(),
 	onActivate: new Q.Event(),
 	beforeClose: new Q.Event(),
-	onClose: null,
+	onClose: new Q.Event(),
 	closeOnEsc: true,
 	removeOnClose: null,
 	hidePrevious: true
