@@ -383,6 +383,7 @@ class Q_Session
 		} catch (Q_Exception_HeadersDuringResponse $e) {
 			throw $e;
 		} catch (Exception $e) {
+			throw $e;
 			$app = Q_Config::get('Q', 'app', null);
 			$prefix = $app ? APP_FILES_DIR.'/' : '';
 			if (Q::startsWith($prefix, APP_WEB_DIR)) {
