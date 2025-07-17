@@ -1884,12 +1884,20 @@ Q.copy = function _Q_copy(x, fields, levels) {
 	}
 	var result = Q.objectWithPrototype(Object.getPrototypeOf(x)), i, k, l;
 	if (fields) {
-		for (i=0, l = fields.length; i<l; ++i) {
-			k = fields[i];
-			if (!(k in x)) {
-				continue;
+		for (i = 0, l = fields.length; i < l; ++i) {
+			var path = fields[i].split('.');
+			var value = x;
+			for (var j = 0; j < path.length; ++j) {
+				if (value && typeof value === 'object') {
+					value = value[path[j]];
+				} else {
+					value = undefined;
+					break;
+				}
 			}
-			result[k] = levels ? Q.copy(x[k], null, levels-1) : x[k];
+			if (typeof value !== 'undefined') {
+				result[fields[i]] = levels ? Q.copy(value, null, levels - 1) : value;
+			}
 		}
 	} else {
 		for (k in x) {
@@ -16415,7 +16423,10 @@ Q.Tool.define({
 	"Q/bookmarklet": "{{Q}}/js/tools/bookmarklet.js",
 	"Q/columns": "{{Q}}/js/tools/columns.js",
 	"Q/drawers": "{{Q}}/js/tools/drawers.js",
-	"Q/expandable": "{{Q}}/js/tools/expandable.js",
+	"Q/expandable": {
+		js: "{{Q}}/js/tools/expandable.js",
+		css: "{{Q}}/css/tools/expandable.css"
+	},
 	"Q/filter": "{{Q}}/js/tools/filter.js",
 	"Q/rating": "{{Q}}/js/tools/rating.js",
 	"Q/paging": "{{Q}}/js/tools/paging.js",

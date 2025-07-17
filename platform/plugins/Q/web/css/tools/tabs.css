@@ -6,7 +6,7 @@
 .Q_tabs_vertical>.Q_tabs_tab > * { vertical-align: middle; cursor: pointer; text-overflow: ellipsis;  white-space: nowrap; overflow-x: hidden; overflow-y: visible; text-transform: capitalize; }
 .Q_tabs_horizontal { overflow-y: hidden; }
 
-.Q_mobile .Q_tabs_tool { height: var(--dashboard-mobile-height); }
+.Q_mobile #dashboard .Q_tabs_tool { height: var(--dashboard-mobile-height); }
 .Q_notMobile.Q_layout_widebar .Q_tabs_tab { display: flex; flex-direction: row; text-align: center; }
 
 .Q_tabs_contextual .Q_tabs_tab { display: block; float: none; line-height: 40px; border: 0; } 

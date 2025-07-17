@@ -24,8 +24,6 @@ Q.Tool.define('Q/expandable', function (options) {
 	var tool = this;
 	var state = tool.state;
 	var $te = $(tool.element);
-	
-	Q.addStylesheet('{{Q}}/css/tools/expandable.css');
 
 	if (state.evenIfFilled || !$te.children().length) {
 		// set it up with javascript
@@ -54,7 +52,7 @@ Q.Tool.define('Q/expandable', function (options) {
 		.css('display', 'block');
 		$te.addClass('Q_expanded');
 	} else {
-		$h2.next().hide();
+		$h2.next().removeClass('Q_expanded');
 	}
 	
 	this.element.preventSelections(true);
@@ -90,7 +88,8 @@ Q.Tool.define('Q/expandable', function (options) {
 	autoCollapseSiblings: true,
 	scrollContainer: true,
 	animation: {
-		duration: 300
+		duration: 500,
+		ease: 'linear'
 	},
 	evenIfFilled: false,
 	onRefresh: new Q.Event(),
@@ -126,12 +125,10 @@ Q.Tool.define('Q/expandable', function (options) {
 				if (this.id === tool.id) {
 					return;
 				}
-
 				this.collapse(null, {dontScrollIntoView: true});
 			});
 		}
-		var $expandable = $h2.next().slideDown(state.duration, 'linear');
-		state.expanded = true;
+		var $content = $h2.next();
 		$te.addClass('Q_expanding');
 		Q.Animation.play(function (x, y) {
 			var $scrollable = o.scrollContainer
@@ -147,7 +144,7 @@ Q.Tool.define('Q/expandable', function (options) {
 			var t1 = $element.offset().top - offset.top;
 			var defaultSpaceAbove = $element.height() / 2;
 			var moreSpaceAbove = 0;
-			var $ts = $expandable.closest('.Q_columns_column').find('.Q_columns_title');
+			var $ts = $te.closest('.Q_columns_column').find('.Q_columns_title');
 			if ($ts.length && $ts.css('position') === 'fixed') {
 				moreSpaceAbove = $ts.outerHeight();
 			} else {
@@ -189,10 +186,15 @@ Q.Tool.define('Q/expandable', function (options) {
 				var scrollTop = $scrollable.scrollTop() + t - t1 * (1-y) - spaceAbove * y;
 				$scrollable.scrollTop(scrollTop);
 			}
-		}, state.animation.duration).onComplete.set(_proceed);
+			$content[0].style.maxHeight = y * window.innerHeight + 'px';
+		}, state.animation.duration, state.animation.ease || 'linear').onComplete.set(_proceed);
 		function _proceed() {
-			$te.removeClass('Q_expanding');
-			$h2.add($expandable).add($te).addClass('Q_expanded');
+			$h2.add($content).add($te)
+				.removeClass('Q_expanding')
+				.addClass('Q_expanded');
+			$content[0].style.removeProperty('max-height');
+			state.expanded = true;
+			tool.stateChanged('expanded');
 			Q.handle(callback, tool, [options || {}]);
 			Q.handle(state.onExpand, tool, [options || {}]);
 		}
@@ -206,21 +208,24 @@ Q.Tool.define('Q/expandable', function (options) {
 		if (!$te.hasClass('Q_expanded')) {
 			return false;
 		}
+		var $content = $h2.next();
 		$te.addClass('Q_collapsing');
-		$h2.removeClass('Q_expanded')
-		.next().removeClass('Q_expanded')
-		.slideUp(state.duration, function () {
-			$te.removeClass('Q_collapsing');
+		Q.Animation.play(function (x, y) {
+			$content[0].style.maxHeight = (1 - y) * window.innerHeight + 'px';
+		}, state.animation.duration, state.animation.ease || 'linear').onComplete.set(_proceed);
+		function _proceed() {
+			$content[0].style.removeProperty('max-height');
+			$h2.add($content).add($te)
+				.removeClass('Q_expanded Q_collapsing');
+			state.expanded = false;
+			tool.stateChanged('expanded');
 			if (!options || !options.dontScrollIntoView) {
-				tool.element.scrollIntoView({behavior: 'smooth'});
+				tool.element.scrollIntoView({behavior: 'smooth'});			
 			}
-			Q.handle(tool.state.onCollapse, tool, []);
-		}).each(function () {
 			Q.handle(callback, tool, []);
 			Q.handle(tool.state.beforeCollapse, tool, []);
-		});
-		$te.removeClass('Q_expanded');
-		state.expanded = false;
+			Q.handle(tool.state.onCollapse, tool, []);
+		}
 	},
 	
 	scrollable: function () {

@@ -57,28 +57,28 @@ Q.Tool.define("Q/panel", function() {
 	if (container.hasClass('Q_panel_tool_toggle_onclick')) {
 		var header = $('.Q_panel_tool_header', container);
 		header.click(function() {
-			if (container.hasClass('Q_collapsed')) {
-				container.removeClass('Q_collapsed');
+			if (container.hasClass('Q_panel_collapsed')) {
+				container.removeClass('Q_panel_collapsed');
 				container.addClass('Q_expanded');
 			} else {
-				container.addClass('Q_collapsed');
+				container.addClass('Q_panel_collapsed');
 				container.removeClass('Q_expanded');
 			}
 		});
 	} else if (container.hasClass('Q_panel_tool_toggle_move')) {
 		var header = $('.Q_panel_tool_header', container);
 		header.mouseenter(function() {
-			container.removeClass('Q_collapsed');
+			container.removeClass('Q_panel_collapsed');
 			container.addClass('Q_expanded');
 		});
 		container.mouseleave(function() {
-			container.addClass('Q_collapsed');
+			container.addClass('Q_panel_collapsed');
 			container.removeClass('Q_expanded');
 		});
 	}
 	edit_button.click(function() {
 		container.addClass('Q_editing');
-		container.removeClass('Q_collapsed');
+		container.removeClass('Q_panel_collapsed');
 		container.addClass('Q_expanded');
 		container.find('.Q_panel_tool_form :input:visible').eq(0).focus();
 		return false;

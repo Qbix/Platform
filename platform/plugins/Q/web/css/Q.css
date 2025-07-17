@@ -99,11 +99,15 @@ body { position: relative; margin: 0; }
 .Q_hide { display: none !important; }
 .Q_hideUntilLoaded body { opacity: 0; }
 .Q_blink { animation: Q_blink .5s step-end infinite alternate; }
-.Q_updated_flash { animation: updated-flash-anim .5s ease-in-out alternate; }
+.Q_updated_flash { animation: updated-flash-anim .5s ease-in-out .5s 1 alternate; }
+.Q_updated_flash.Q_pop {
+	animation: updated-flash-anim .5s ease-in-out .5s 1 alternate,
+	Q_pop 1s ease-in-out 0s 0.7;
+}
 
 .Q_forceRedraw { animation: Q_forceRedraw 4s infinite; }
 .Q_pagebreak { page-break-after: always; }
-.Q_collapsed { border-bottom: solid 2px #777 !important; }
+.Q_panel_collapsed { border-bottom: solid 2px #777 !important; }
 .Q_square { aspect-ratio: 1 !important; height: auto !important; object-fit: cover !important; }
 .Q_compact {}
 .Q_editable { color: #225 !important; }
@@ -1111,6 +1115,17 @@ html.Q_layout_sidebar {
 	display: block;
 }
 /* </Q tabs> */
+
+/* <Q expandable> */
+.Q_expandable_tool h2.Q_expandable_title.Q_expanded .Q_expandable_count {
+	display: none;
+}
+
+.Q_expandable_tool:not(.Q_expanded) .Q_expandable_whenExpanded,
+.Q_expandable_tool:not(.Q_expanded):not(.Q_expanding):not(.Q_collapsing) .Q_expandable_content {
+	display: none;
+}
+/* </Q expandable> */
 
 .Q_dialog_imagepicker .Q_viewport {
 	display: block;
