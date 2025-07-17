@@ -40,6 +40,13 @@ interface Db_Query_Interface
 	function __toString ();
 
 	/**
+	 * Surrounds an identifier with quotes to be inserted into a statement
+	 * @method quoted
+	 * @param {string} $identifier
+	 */
+	static function quoted($identifier);
+
+	/**
 	 * Gets the SQL that would be executed with the execute() method.
 	 * @method getSQL
 	 * @param {callable} [$callback=null] If not set, this function returns the generated SQL string.
@@ -574,6 +581,23 @@ abstract class Db_Query extends Db_Expression
 	 * @default 0
 	 */
 	public $nestedTransactionCount = 0;
+
+	/**
+	 * Symbolic constant for "do not change this field" during upsert
+	 * @var object
+	 */
+	private static $DONT_CHANGE;
+
+	/**
+	 * Returns the unique sentinel object for DONT_CHANGE
+	 * @return object
+	 */
+	public static function DONT_CHANGE() {
+		if (!self::$DONT_CHANGE) {
+			self::$DONT_CHANGE = new \stdClass();
+		}
+		return self::$DONT_CHANGE;
+	}
 
 	/**
 	 * This class lets you create and use Db queries
@@ -1485,65 +1509,78 @@ abstract class Db_Query extends Db_Expression
 		return $this;
 	}
 
-
 	/**
 	 * Adds an ORDER BY clause to the query
 	 * @method orderBy
 	 * @param {Db_Expression|string} $expression A string or Db_Expression with the expression to order the results by.
 	 *  Can also be "random", in which case you are highly encouraged to call ->ignoreCache() as well to get a new random result every time!
-	 * @param {boolean} $ascending=true If false, sorts results as descending, otherwise ascending.
+	 * @param {boolean|string} $ascending true/false or "ASC"/"DESC"
 	 * @return {Db_Query}  The resulting object implementing Db_Query_Interface
 	 * @throws {Exception} If ORDER BY clause does not belong to context
 	 * @chainable
 	 */
-	function orderBy ($expression, $ascending = true)
+	function orderBy($expression, $ascending = true)
 	{
 		switch ($this->type) {
 			case Db_Query::TYPE_SELECT:
 			case Db_Query::TYPE_UPDATE:
 				break;
 			case Db_Query::TYPE_INSERT:
-				if ($this->isInsertSelectQuery) {
-					break;
-				}
+				if ($this->isInsertSelectQuery) break;
 			default:
-				throw new Exception("The ORDER BY clause does not belong in this context.",-1);
+				throw new Exception("The ORDER BY clause does not belong in this context.", -1);
 		}
 
 		if ($expression instanceof Db_Expression) {
 			if (is_array($expression->parameters)) {
-				$this->parameters = array_merge(
-					$this->parameters, $expression->parameters
-				);
+				$this->parameters = array_merge($this->parameters, $expression->parameters);
 			}
 		}
 		$expression = (string) $expression;
-		if (! is_string($expression))
-			throw new Exception("The ORDER BY expression has to be specified correctly.",-1);
 
-		if (is_string($expression) and (
-			strtoupper($expression) === 'RANDOM'
-			or strtoupper($expression) === 'RAND()'
-		)) {
-			$expression = 'RAND()';
-		} else if (is_bool($ascending)) {
-			$expression .= $ascending ? ' ASC' : ' DESC';
-		} else if (is_string($ascending)) {
-			if (strtoupper($ascending) == 'ASC') {
-				$expression .= ' ASC';
-			} else if (strtoupper($ascending) == 'DESC') {
-				$expression .= ' DESC';
-			}
+		if (!is_string($expression)) {
+			throw new Exception("The ORDER BY expression has to be specified correctly.", -1);
 		}
 
-		if (empty($this->clauses['ORDER BY'])
-		or $this->clauses['ORDER BY'] == 'NULL') {
-			$this->clauses['ORDER BY'] = "$expression";
+		$expression = $this->orderBy_expression($expression, $ascending);
+
+		if (empty($this->clauses['ORDER BY']) || $this->clauses['ORDER BY'] === 'NULL') {
+			$this->clauses['ORDER BY'] = $expression;
 		} else {
 			$this->clauses['ORDER BY'] .= ", $expression";
 		}
+
 		return $this;
 	}
+
+	/**
+	 * Processes ORDER BY expression and handles backend-specific cases like RANDOM()
+	 * @method orderBy_expression
+	 * @param {string} $expression
+	 * @param {boolean|string} $ascending
+	 * @return {string} final expression to append
+	 */
+	protected function orderBy_expression($expression, $ascending)
+	{
+		$expr = strtoupper($expression);
+		if ($expr === 'RANDOM' || $expr === 'RAND()') {
+			return 'RANDOM()'; // Default for PostgreSQL and SQLite
+		}
+
+		if (is_bool($ascending)) {
+			return $expression . ($ascending ? ' ASC' : ' DESC');
+		}
+
+		if (is_string($ascending)) {
+			$dir = strtoupper($ascending);
+			if ($dir === 'ASC' || $dir === 'DESC') {
+				return $expression . ' ' . $dir;
+			}
+		}
+
+		return $expression;
+	}
+
 
 	/**
 	 * Adds optional LIMIT and OFFSET clauses to the query
@@ -1642,7 +1679,7 @@ abstract class Db_Query extends Db_Expression
 		if (is_array($updates)) {
 			$updates_list = array();
 			foreach ($updates as $field => $value) {
-				$column = self::column($field);
+				$column = static::column($field);
 				if ($value instanceof Db_Expression) {
 					if (is_array($value->parameters)) {
 						$this->parameters = array_merge($this->parameters, $value->parameters);
@@ -1698,12 +1735,6 @@ abstract class Db_Query extends Db_Expression
 	function onDuplicateKeyUpdate ($updates = array())
 	{
 		$updates = $this->onDuplicateKeyUpdate_internal($updates);
-
-		if (empty($this->clauses['ON DUPLICATE KEY UPDATE']))
-			$this->clauses['ON DUPLICATE KEY UPDATE'] = $updates;
-		else
-			$this->clauses['ON DUPLICATE KEY UPDATE'] .= ", $updates";
-		return $this;
 	}
 
 	/**
@@ -1964,9 +1995,13 @@ abstract class Db_Query extends Db_Expression
 		$parts = explode('.', $part);
 		$quoted = array();
 		foreach ($parts as $p) {
-			$quoted[] = "`$p`";
+			$quoted[] = static::quoted($p);
 		}
 		return implode('.', $quoted) . ($pos ? substr($column, $pos) : '');
+	}
+
+	static function quoted($identifier) {
+		return "`$identifier`"; // override per adapter
 	}
 
 	/**
@@ -2128,9 +2163,7 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	protected function build_insert_onDuplicateKeyUpdate() {
-		return empty($this->clauses['ON DUPLICATE KEY UPDATE'])
-			? ''
-			: "\nON DUPLICATE KEY UPDATE " . $this->clauses['ON DUPLICATE KEY UPDATE'];
+		throw new Q_Exception_MethodNotSupported(array('method' => 'build_onDuplicateKeyUpdate'));
 	}
 
 	protected function build_select($joinClauses, $where, $orderBy, $limit) {
@@ -2806,7 +2839,7 @@ abstract class Db_Query extends Db_Expression
 
 		$columnSql = [];
 		foreach ($columns as $column) {
-			$columnSql[] = self::column($column);
+			$columnSql[] = static::column($column);
 			if (!empty($fillCriteria[$column])) {
 				$fillCriteria[$column] = [];
 			}
@@ -2849,7 +2882,7 @@ abstract class Db_Query extends Db_Expression
 		}
 		return preg_match('/\W/', $lastChar)
 			? "$expr ($value)"
-			: self::column($expr) . " = ($value)";
+			: static::column($expr) . " = ($value)";
 	}
 
 	protected function criteria_internal_array($expr, array $value, &$fillCriteria, &$i)
@@ -2872,7 +2905,7 @@ abstract class Db_Query extends Db_Expression
 		if (preg_match('/\W/', substr($expr, -1))) {
 			return "$expr ($value_list)";
 		}
-		return self::column($expr) . " IN ($value_list)";
+		return static::column($expr) . " IN ($value_list)";
 	}
 
 	protected function criteria_internal_scalar($expr, $value, &$fillCriteria, &$i)
@@ -2882,7 +2915,7 @@ abstract class Db_Query extends Db_Expression
 		$this->parameters["_where_$i"] = $value;
 		$fillCriteria[$expr] = $value;
 		++$i;
-		return self::column($expr) . "$eq$param";
+		return static::column($expr) . "$eq$param";
 	}
 
 	protected function criteria_internal_range($expr, Db_Range $value, &$i)
@@ -2896,14 +2929,14 @@ abstract class Db_Query extends Db_Expression
 				$cmp = $range->includeMin ? '>=' : '>';
 				$param = ":_where_$i";
 				$this->parameters["_where_$i"] = $range->min;
-				$conditions[] = self::column($expr) . " $cmp $param";
+				$conditions[] = static::column($expr) . " $cmp $param";
 				++$i;
 			}
 			if (isset($range->max)) {
 				$cmp = $range->includeMax ? '<=' : '<';
 				$param = ":_where_$i";
 				$this->parameters["_where_$i"] = $range->max;
-				$conditions[] = self::column($expr) . " $cmp $param";
+				$conditions[] = static::column($expr) . " $cmp $param";
 				++$i;
 			}
 			if ($conditions) {

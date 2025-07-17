@@ -45,22 +45,17 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	}
 
 	/**
-	 * MySQL supports ON DUPLICATE KEY UPDATE
+	 * MySQL uses backticks for quoting
 	 */
-	protected function build_insert_onDuplicateKeyUpdate() {
-		return empty($this->clauses['ON DUPLICATE KEY UPDATE'])
-			? ''
-			: "\nON DUPLICATE KEY UPDATE " . $this->clauses['ON DUPLICATE KEY UPDATE'];
+	static function quoted($identifier) {
+		return "`$identifier`";
 	}
 
 	/**
-	 * MySQL supports INSERT ... SELECT ... ON DUPLICATE KEY UPDATE
-	 * So we override build_select to allow appending that
+	 * MySQL supports ON DUPLICATE KEY UPDATE
 	 */
-	protected function build_select_onDuplicateKeyUpdate() {
-		return empty($this->clauses['ON DUPLICATE KEY UPDATE'])
-			? ''
-			: "\nON DUPLICATE KEY UPDATE " . $this->clauses['ON DUPLICATE KEY UPDATE'];
+	protected function build_insert_onDuplicateKeyUpdate() {
+		return $this->build_onDuplicateKeyUpdate();
 	}
 
 	/**
@@ -71,6 +66,22 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		return empty($this->clauses['ON DUPLICATE KEY UPDATE'])
 			? ''
 			: "\nON DUPLICATE KEY UPDATE " . $this->clauses['ON DUPLICATE KEY UPDATE'];
+	}
+
+	/**
+	 * MySQL-specific ORDER BY expression handler
+	 * @method orderBy_expression
+	 * @param {string} $expression
+	 * @param {boolean|string} $ascending
+	 * @return {string}
+	 */
+	protected function orderBy_expression($expression, $ascending)
+	{
+		$expr = strtoupper($expression);
+		if ($expr === 'RANDOM' || $expr === 'RAND()') {
+			return 'RAND()'; // MySQL uses RAND()
+		}
+		return parent::orderBy_expression($expression, $ascending);
 	}
 
 	/**
@@ -91,7 +102,9 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		if (is_array($updates)) {
 			$updates_list = array();
 			foreach ($updates as $field => $value) {
-				if ($value instanceof Db_Expression) {
+				if ($value === self::DONT_CHANGE()) {
+					$updates_list[] = self::column($field) . " = " . self::column($field);
+				} else if ($value instanceof Db_Expression) {
 					if (is_array($value->parameters)) {
 						$this->parameters = array_merge($this->parameters,
 							$value->parameters);
@@ -105,8 +118,15 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			}
 			$updates = implode(", ", $updates_list);
 		}
-		if (! is_string($updates))
+		if (! is_string($updates)) {
 			throw new Exception("The ON DUPLICATE KEY updates need to be specified correctly.", -1);
+		}
+
+		if (empty($this->clauses['ON DUPLICATE KEY UPDATE'])) {
+			$this->clauses['ON DUPLICATE KEY UPDATE'] = $updates;
+		} else {
+			$this->clauses['ON DUPLICATE KEY UPDATE'] .= ", $updates";
+		}
 
 		return $updates;
 	}
