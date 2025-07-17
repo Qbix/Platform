@@ -136,7 +136,7 @@ function Q_panel_tool($options)
 	
 	if ($editing) $panel_classes .= ' Q_editing';
 	if ($complete) $panel_classes .= ' Q_complete';
-	if ($collapsed) $panel_classes .= ' Q_collapsed';
+	if ($collapsed) $panel_classes .= ' Q_panel_collapsed';
 	if ($toggle === 'click') $panel_classes .= ' Q_panel_tool_toggle_onclick';
 	if ($toggle === 'move') $panel_classes .= ' Q_panel_tool_toggle_move';
 	
