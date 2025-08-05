@@ -22,8 +22,8 @@
 
 .Q_tabs_compact { white-space: nowrap; }
 
-.Q_tabs_compact .Q_tabs_overflowGlyph { position: absolute; right: 3%; top: 50%; height: 100%; transform: translate(0, -50%); }
-.Q_tabs_compact .Q_tabs_tab  { padding: 50px 0; }
+.Q_tabs_compact .Q_tabs_overflowGlyph { position: absolute; right: 3%; top: 50%; height: 60%; transform: translate(0, -50%); }
+.Q_tabs_compact .Q_tabs_tab  { padding: 50px 0; flex-direction: row; justify-items: initial; }
 .Q_tabs_compact .Q_tabs_tab .Q_tabs_copiedTitle.Q_overflowed { mask-image: linear-gradient(90deg, #000 80%, transparent); }
 [dir=rtl] .Q_tabs_compact .Q_tabs_tab .Q_tabs_copiedTitle.Q_overflowed { mask-image: linear-gradient(270deg, #000 80%, transparent); }
 [dir=rtl] .Q_tabs_compact .Q_tabs_overflowGlyph  { left: 3%; right: auto; }
