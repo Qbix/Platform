@@ -593,6 +593,55 @@ class Q_Session
 	}
 
 	/**
+	 * Serialize a session array according to the active session.serialize_handler.
+	 * - php           => "key|serialize(value)" concatenation
+	 * - php_serialize => serialize($array)
+	 * - others        => use session_encode() via a safe temporary swap of $_SESSION
+	 * Preserves references to the original $_SESSION by restoring in a finally block.
+	 */
+	protected static function serializeSessionArray(array $sessionArray)
+	{
+		$handler = ini_get('session.serialize_handler') ?: 'php';
+
+		if ($handler === 'php') {
+			$out = '';
+			foreach ($sessionArray as $k => $v) {
+				$out .= (string)$k . '|' . serialize($v);
+			}
+			return $out;
+		}
+
+		if ($handler === 'php_serialize') {
+			return serialize($sessionArray);
+		}
+
+		if (session_status() === PHP_SESSION_ACTIVE) {
+			// Preserve the original zval; no deep copy.
+			$backup =& $_SESSION;
+			$tmp    = $sessionArray;      // independent zval
+			$_SESSION =& $tmp;            // temporarily point $_SESSION at our data
+			try {
+				return session_encode();  // encoded by the current handler/extension
+			} finally {
+				$_SESSION =& $backup;     // restore original zval (references intact)
+			}
+		}
+
+		// Last resort if no active session under a non-php handler.
+		return serialize($sessionArray);
+	}
+
+	/**
+	 * Decode JSON (column `content`) into an assoc array.
+	 */
+	protected static function decodeSessionJSON(?string $json)
+	{
+		if (!$json) return [];
+		$arr = json_decode($json, true);
+		return is_array($arr) ? $arr : [];
+	}
+
+	/**
 	 * @method readHandler
 	 * @static
 	 * @param {string} $id
@@ -630,17 +679,19 @@ class Q_Session
 				$row = new $class();
 				$row->$id_field = $id;
 				if ($row->retrieve()) {
-					// NOTE: we don't need to begin a transaction
-					// when we open the session and commit when we close it
-					// because we have a convention to merge session
 					self::$sessionExists = $sessionExists = true;
 				}
 				self::$session_db_row = $row;
 			} else {
 				self::$sessionExists = $sessionExists = true;
 			}
-			$result = isset(self::$session_db_row->$data_field)
-				? self::$session_db_row->$data_field : '';
+			if (!empty(self::$session_db_row->content)) {
+				$arr = self::decodeSessionJSON(self::$session_db_row->content);
+				$result = self::serializeSessionArray($arr);
+			} else {
+				$result = isset(self::$session_db_row->$data_field)
+					? self::$session_db_row->$data_field : '';
+			}
 		} else {
 			$duration_name = self::durationName();
 			$id1 = substr($id, 0, 4);
@@ -751,12 +802,6 @@ class Q_Session
 				$dir = $ssp . DS . "$duration_name/$id1/";
 			}
 			if ($changed) {
-				// Apparently, we want to save some changes.
-				// The convention to avoid locking is that everything
-				// stored in sessions must be mergeable using the
-				// Q_Tree merge algorithm.
-				// So we will retrieve the latest session data again,
-				// merge our changes over it, and save.
 				$params = array(
 					'changed' => $changed,
 					'sess_data' => $sess_data,
@@ -767,25 +812,30 @@ class Q_Session
 						'begin' => true,
 						'ignoreCache' => true
 					));
-					$existing_data = Q::ifset($row, $data_field, "");
+					$jsonArr = self::decodeSessionJSON(Q::ifset($row, 'content', '[]'));
+					$t = new Q_Tree($jsonArr);
+					$t->merge($our_SESSION);
+					$_SESSION = $t->getAll();
+					$merged_data = self::serializeSessionArray($_SESSION);
+
 					$params = array_merge($params, array(
 						'id_field' => $id_field,
 						'data_field' => $data_field,
 						'duration_field' => $duration_field,
 						'platform_field' => $platform_field,
 						'updated_field' => $updated_field,
-						'row' => $row
+						'row' => $row,
+						'existing_data' => Q::ifset($row, $data_field, ''),
+						'merged_data' => $merged_data
 					));
 				} else {
 					if (!is_dir($dir)) {
 						mkdir($dir, fileperms($ssp), true);
 					}
 					if (!is_writable($dir)) {
-						// alert the developer to this problem
 						Q::log("$sess_file is not writable", 'fatal');
 						die("$sess_file is not writable");
 					}
-					
 					if (file_exists($sess_file)) {
 						$file = fopen($sess_file, "r+");
 						flock($file, LOCK_EX);
@@ -801,14 +851,15 @@ class Q_Session
 							'filename' => $sess_file
 						));
 					}
+					$t = new Q_Tree($_SESSION);
+					$t->merge($our_SESSION);
+					$_SESSION = $t->getAll();
+					$merged_data = session_id() ? session_encode() : '';
+					$params['existing_data'] = $existing_data;
+					$params['merged_data'] = $merged_data;
 				}
-				$t = new Q_Tree($_SESSION);
-				$t->merge($our_SESSION);
-				$_SESSION = $t->getAll();
-				$params['existing_data'] = $existing_data;
-				$params['merged_data'] = $merged_data = session_id() ? session_encode() : '';
+
 				if ($params['existing_data'] === $params['merged_data']) {
-					// nothing changed after all
 					if (! empty(self::$session_db_connection)) {
 						$row->executeCommit();
 					} else {
@@ -817,16 +868,6 @@ class Q_Session
 					}
 					$result = true;
 				} else {
-					/**
-					 * @event Q/session/save {before}
-					 * @param {string} sess_data
-					 * @param {string} old_data
-					 * @param {string} existing_data
-					 * @param {string} merged_data
-					 * @param {boolean} changed
-					 * @param {Db_Row} row
-					 * @return {boolean}
-					 */
 					Q::event('Q/session/save', $params, 'before');
 					if (! empty(self::$session_db_connection)) {
 						$row->$data_field = $merged_data ? $merged_data : '';
@@ -846,27 +887,11 @@ class Q_Session
 						$result = fwrite($file, $merged_data);
 						flock($file, LOCK_UN);
 						fclose($file);
-					}	
+					}
 				}
 			} else {
 				$result = true;
 			}
-			/**
-			 * @event Q/session/write {after}
-			 * @param {string} id
-			 * @param {boolean} changed
-			 * @param {string} sess_data
-			 * @param {string} old_data
-			 * @param {string} existing_data
-			 * @param {string} merged_data
-			 * @param {string} data_field
-			 * @param {string} updated_field
-			 * @param {string} duration_field
-			 * @param {string} platform_field
-			 * @param {string} sess_file
-			 * @param {integer} row
-			 * @return {mixed}
-			 */
 			$result = Q::event(
 				'Q/session/write',
 				@compact(
