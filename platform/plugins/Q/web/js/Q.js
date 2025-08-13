@@ -224,10 +224,7 @@ JSON.isValid = function (str) {
  * @class Array
  * @description Q extended methods for Arrays
  */
-
-var Ap = Array.prototype;
-
-Object.defineProperty(Ap, "toHex", {
+Object.defineProperty(Array.prototype, "toHex", {
 	enumerable: false,
 	value: function () {
 		return this.map(function (x) { 
@@ -661,7 +658,7 @@ Sp.deobfuscate = function (key) {
  */
 Sp.hexToDecimal = function () {
 	var hex = this.substring(0, 2) == '0x' ? this : '0x' + this;
-	return BigInt(hex).toString();
+	return root.BigInt(hex).toString();
 };
 
 /**
@@ -1490,8 +1487,8 @@ Q.each = function _Q_each(container, callback, options) {
 					}
 				}
 				var s = options.sort;
-				var t = typeof(s);
-				var compare = (t === 'function') ? s : (t === 'string'
+				var t2 = typeof(s);
+				var compare = (t2 === 'function') ? s : (t2 === 'string'
 					? (options.numeric ? _byFieldsNumeric : _byFields)
 					: (options.numeric ? _byKeysNumeric : _byKeys));
 				keys.sort(compare);
@@ -1518,7 +1515,6 @@ Q.each = function _Q_each(container, callback, options) {
 			}
 			break;
 		case 'string':
-			var c;
 			if (!container || !callback) return;
 			if (options && options.ascending === false) {
 				for (i=0; i<container.length; ++i) {
@@ -2109,7 +2105,7 @@ Q.take = function _Q_take(source, fields, result) {
  */
 Q.shuffle = function _Q_shuffle( arr ) {
 	var i = arr.length;
-	if ( !i ) return false;
+	if ( !i ) return arr;
 	while ( --i ) {
 		var j = Math.floor( Math.random() * ( i + 1 ) );
 		var tempi = arr[i];
@@ -2189,7 +2185,7 @@ Q.mixin = function _Q_mixin(A /*, B, ... */) {
  * @param {String} [replacement='_']
  *  Defaults to '_'. A string to replace one or more unacceptable characters.
  *  You can also change this default using the config Db/normalize/replacement
- * @param {RegExp|Boolean} [$characters=null] Defaults to alphanumerics across most languages /[^\p{L}0-9]+/gu. 
+ * @param {RegExp|Boolean} [characters=null] Defaults to alphanumerics across most languages /[^\p{L}0-9]+/gu. 
  *  You can pass true here to allow only ASCII alphanumerics, i.e. /[^A-Za-z0-9]+/g.
  *  Or pass a RegExp identifying regexp characters that are not acceptable.
  * @param {number} numChars
@@ -2199,24 +2195,26 @@ Q.mixin = function _Q_mixin(A /*, B, ... */) {
  */
 Q.normalize = function _Q_normalize(text, replacement, characters, numChars, keepCaseIntact) {
 	if (text === undefined || typeof text !== 'string') {
-		debugger; // pause here if debugging
+		debugger;
 		return text;
 	}
 	if (!numChars) numChars = 200;
 	if (replacement === undefined) replacement = '_';
-	characters = characters || (
-		characters === true ? /[^A-Za-z0-9]+/g : /[^\p{L}0-9]+/gu
-	);
+	if (characters === true) characters = Q.normalize.regexpASCII;
+	else if (!characters) characters = Q.normalize.regexpUNICODE;
 	if (!keepCaseIntact) {
 		text = text.toLowerCase();
 	}
 	var result = text.replace(characters, replacement);
 	if (result.length > numChars) {
-		result = result.substring(0, numChars-11) + '_' 
-				 + Math.abs(result.substring(numChars-11).hashCode());
+		result = result.substring(0, numChars - 11) + '_' +
+			Math.abs(result.substring(numChars - 11).hashCode());
 	}
 	return result;
 };
+
+Q.normalize.regexpASCII = new RegExp("[^A-Za-z0-9]+", "g");
+Q.normalize.regexpUNICODE = new RegExp("[^\\p{L}0-9]+", "gu");
 
 /**
  * A simplified version of Q.normalize that remembers results, to avoid
@@ -2458,7 +2456,7 @@ Q.chain = function (callbacks) {
 Q.promisify = function (getter, useThis, callbackIndex) {
 	function _promisifier() {
 		if (!Q.Promise) {
-			return getter.apply(this, args);
+			return getter.apply(this, arguments);
 		}
 		var args = [], resolve, reject, found = false;
 		var promise = new Q.Promise(function (r1, r2) {
@@ -2496,8 +2494,6 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 			} else if (!(ai instanceof Function)) {
 				args.push(ai);
 			} else {
-				found = true;
-				args.push(_promisified);
 				function _promisified(err, second) {
 					if (ai instanceof Function) {
 						return ai.apply(this, arguments);
@@ -2507,6 +2503,8 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 					}
 					resolve(useThis ? this : second);
 				}
+				found = true;
+				args.push(_promisified)
 			}
 		});
 		if (callbackIndex instanceof Array) {
@@ -3127,7 +3125,7 @@ Q.Event.from = function _Q_Event_from(target, eventName) {
 	var event = new Q.Event();
 	Q.addEventListener(target, eventName, event.handle);
 	event.onEmpty().set(function () {
-		Q.removeEventListener(target, eventName, event.handler);
+		Q.removeEventListener(target, eventName, event.handle);
 	});
 	return event;
 };
@@ -3771,8 +3769,8 @@ Q.onLayout = function (element) {
 
 	// create ResizeObserver
 	var observer = null;
-	if (typeof ResizeObserver === 'function') {
-		observer = new ResizeObserver(function () {
+	if (typeof root.ResizeObserver === 'function') {
+		observer = new root.ResizeObserver(function () {
 			event.handle.call(event, element, element);
 		});
 		observer.observe(element);
@@ -3861,6 +3859,7 @@ Q.currentScriptPath = function (subpath, stackLevels) {
 	return Q.currentScript(stackLevels).src.split('/').slice(0, -1).join('/')
 		+ (subpath ? '/' + subpath : '');
 };
+var currentScriptPath = Q.currentScriptPath();
 
 /**
  * Use this to ensure that a property exists before running some javascript code.
@@ -3904,9 +3903,9 @@ Q.ensure = function _Q_ensure(property, callback) {
 		} else if (typeof loader === 'function') {
 			loader(property, callback);
 		} else if (loader instanceof Q.Event) {
-			loader.addOnce(property, function _loaded() {
-				callback && callback(Q.getObject(property));
-			});
+			loader.addOnce(function _loaded() {
+				callback && callback(property);
+			}, property);
 		}
 	});
 };
@@ -4321,7 +4320,9 @@ Q.batcher.factory = function _Q_batcher_factory(collection, baseUrl, tail, slotN
 			}
 			var request = this;
 			if (!response.slots) {
-				callbacks[k][0].call(this, "The slots field is missing", null, request);
+				Q.each(response.slots.batch, function (k) {
+					callbacks[k][0].call(this, "The slots field is missing", null, request);
+				});
 			}
 			Q.each(response.slots.batch, function (k, result) {
 				if (result && result.errors) {
@@ -4627,6 +4628,8 @@ Q.getter = function _Q_getter(original, options) {
 	
 	var ignoreCache = false;
 	gw.force = function _force() {
+		var key = Q.Cache.key(arguments);
+		_waiting[key] = [];
 		ignoreCache = true;
 		return gw.apply(this, arguments);
 	};
@@ -4673,8 +4676,8 @@ Q.Exception.prototype = Error.prototype;
  * The root mixin added to all tools.
  * @class Q.Tool
  * @constructor
- * @param [element] the element to activate into a tool
- * @param [options={}] an optional set of options that may contain ".Tool_name or #Some_exact_tool or #Some_child_tool"
+ * @param {HTMLElement} [element] the element to activate into a tool
+ * @param {Object} [options={}] an optional set of options that may contain ".Tool_name or #Some_exact_tool or #Some_child_tool"
  * @return {Q.Tool} if this tool is replacing an earlier one, returns existing tool that was removed.
  *	 Otherwise returns null, or false if the tool was already constructed.
  */
@@ -4692,7 +4695,7 @@ Q.Tool = function _Q_Tool(element, options) {
 	}
 
 	if (root.jQuery) {
-		jQuery(element).data('Q_tool', this);
+		root.jQuery(element).data('Q_tool', this);
 	}
 
 	// ID and prefix
@@ -5202,12 +5205,12 @@ Q.Tool.jQuery = function(name, ctor, defaultOptions, stateKeys, methods, overwri
 	Q.Tool.names[n] = name;
 	if (typeof ctor === 'string' || typeof ctor === 'object') {
 		if (root.jQuery
-		&& typeof jQuery.fn.plugin[n] !== 'function') {
+		&& typeof root.jQuery.fn.plugin[n] !== 'function') {
 			_qtjo[n] = _qtjo[n] || {};
 			if (overwrite || typeof _qtc[n] !== 'function') {
 				_qtc[n] = ctor;
 			}
-			jQuery.fn.plugin[n] = _qtc[n];
+			root.jQuery.fn.plugin[n] = _qtc[n];
 		}
 		return ctor;
 	}
@@ -5282,7 +5285,7 @@ Q.Tool.jQuery = function(name, ctor, defaultOptions, stateKeys, methods, overwri
 Q.Tool.jQuery.loadAtStart = [];
 
 Q.Tool.jQuery.info = function (element) {
-	return jQuery.hasData(element) && jQuery._data(element);
+	return root.jQuery.hasData(element) && root.jQuery._data(element);
 };
 
 /**
@@ -5346,7 +5349,7 @@ Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
 			tool.elements[k] = tool.element.querySelector(info.elements[k]);
 		}
 		if (options && options.beforeActivate) {
-			callback && callback.call(tool, null, html, tool.elements, tools, options);
+			callback && callback.call(tool, null, html, tool.elements, options);
 		}
 		Q.activate(tool.element.children, options, function (elem, tools, options) {
 			callback && callback.call(this, null, html, tool.elements, tools, options);
@@ -5640,7 +5643,7 @@ Tp.remove = function _Q_Tool_prototype_remove(removeCached, removeElementAfterLa
 
 	var i;
 	var shouldRemove = removeCached
-		|| !this.element.getAttribute('data-Q-retain') !== null;
+		|| this.element.getAttribute('data-Q-retain') === null;
 	if (!shouldRemove || !Q.Tool.active[this.id]) {
 		return false;
 	}
@@ -5708,17 +5711,17 @@ Tp.remove = function _Q_Tool_prototype_remove(removeCached, removeElementAfterLa
  * to $, but scoped to the DOM tree of this tool.
  * @method $
  * @param {String} selector
- *   jQuery selector
+ *   jQuery selector, fall back toquerySelectorAll selector
  * @return {Object}
- *   jQuery object matched by the given selector
+ *   jQuery object matched by the given selector, fallback to Array of HTMLElement
  */
 Tp.$ = function _Q_Tool_prototype_$(selector) {
-	if (root.jQuery) {
+	if ($) {
 		return selector === undefined
-			? jQuery(this.element)
-			: jQuery(selector, this.element);
+			? $(this.element)
+			: $(selector, this.element);
 	} else {
-		throw new Q.Error("Tp.$ requires jQuery");
+		return Q.$(selector, this.element, true);
 	}
 };
 
@@ -5795,7 +5798,7 @@ Q.Tool.encodeOptions = function _Q_Tool_encodeOptions(options) {
  * @param {Object} options You may want to do Q.extend({}, tool.options, newStuff) here
  */
 Tp.updateElementOptions = function _Q_Tool_updateElementOptions(options) {
-	var attrName = 'data-' + this.name.replace('_', '-');
+	var attrName = 'data-' + this.name.replace(new RegExp('_', 'g'), '-');
 	this.element.setAttribute(attrName, JSON.stringify(options));
 };
 
@@ -5976,7 +5979,7 @@ Q.Tool.from = function _Q_Tool_from(toolElement, toolName, useClosest) {
 	}
 	if (useClosest) {
 		var className = toolName.split('/').join('_')+'_tool';
-		toolElement = toolElement.closest('.'+className);
+		toolElement = toolElement && toolElement.closest('.'+className);
 	}
 	return toolElement && toolElement.Q ? toolElement.Q(toolName) : null;
 };
@@ -6041,7 +6044,7 @@ Q.Tool.byName = function _Q_Tool_byName(name) {
 Q.Tool.calculatePrefix = function _Q_Tool_calculatePrefix(id) {
 	if (id.match(/_tool$/)) {
 		return id.substring(0, id.length-4);
-	} else if (id.substring(id.lengh-1) === '_') {
+	} else if (id.substring(id.length-1) === '_') {
 		return id;
 	} else {
 		return id + "_";
@@ -6056,7 +6059,7 @@ Q.Tool.calculatePrefix = function _Q_Tool_calculatePrefix(id) {
  * @param {String} id the id or prefix of an existing tool or its element
  * @return {String}
  */
-Q.Tool.calculateId = function _Q_Tool_calculatePrefix(id) {
+Q.Tool.calculateId = function _Q_Tool_calculateId(id) {
 	if (id.match(/_tool$/)) {
 		return id.substring(0, id.length-5);
 	} else if (id.substring(id.length-1) === '_') {
@@ -6741,7 +6744,7 @@ Q.Response.processMetas = function Q_Response_processMetas(response) {
 			});
 			if (!found) {
 				var meta = document.createElement("meta");
-				meta.setAttribute(this.name, metaData.value);
+				meta.setAttribute(metaData.name, metaData.value);
 				meta.setAttribute("content", metaData.content);
 				elHead.appendChild(meta);
 				return;
@@ -6940,7 +6943,7 @@ function Q_Cache_get(cache, key, special) {
 	if (cache.documentStorage) {
 		return (special === true) ? cache.special[key] : cache.data[key];
 	}
-	var storage = cache.localStorage ? localStorage : (cache.sessionStorage ? sessionStorage : null);
+	var storage = cache.localStorage ? root.localStorage : (cache.sessionStorage ? root.sessionStorage : null);
 	var item = storage.getItem(cache.name + (special===true ? "\t" : "\t\t") + key);
 	return item ? JSON.parse(item) : undefined;
 }
@@ -6955,7 +6958,7 @@ function Q_Cache_set(cache, key, obj, special) {
 		if (cache.localStorage && Q.Frames && !Q.Frames.isMain()) {
 			return false; // do nothing, this isn't the main frame
 		}
-		var storage = cache.localStorage ? localStorage : (cache.sessionStorage ? sessionStorage : null);
+		var storage = cache.localStorage ? root.localStorage : (cache.sessionStorage ? root.sessionStorage : null);
 		var id = cache.name + (special===true ? "\t" : "\t\t") + key;
 		try {
 			var serialized = JSON.stringify(obj);
@@ -7005,7 +7008,7 @@ function Q_Cache_remove(cache, key, special) {
 		if (cache.localStorage && Q.Frames && !Q.Frames.isMain()) {
 			return false; // do nothing, this isn't the main frame
 		}
-		var storage = cache.localStorage ? localStorage : (cache.sessionStorage ? sessionStorage : null);
+		var storage = cache.localStorage ? root.localStorage : (cache.sessionStorage ? root.sessionStorage : null);
 		storage.removeItem(cache.name + (special === true ? "\t" : "\t\t") + key);
 	}
 }
@@ -7366,18 +7369,33 @@ Q.Cache.session.caches = {};
  * @constructor
  * @param {String} uriString
  */
-Q.IndexedDB = {};
+Q.IndexedDB = {
+	/**
+	* Store and customize your text strings under Q.text
+	* @property {Object} Store Q.IndexedDB.params[dbName][storeName] = params for IndexedDB.open()
+	*/
+	params: {},
+	/**
+	* Store and customize your text strings under Q.text
+	* @property {Q.Event} This event is fired during Q.IndexedDB.open() when
+	*   all databases are discovered to have version <= 1
+	*/
+	onEmptyDatabases: new Q.Event()
+};
 
 /**
- * Opens an IndexedDB database and ensures the object store exists.
+ * Opens an IndexedDB database and ensures the object store and indexes exist.
  * Uses Q.getter internally to cache and reuse database connections per dbName.
- * 
- * Automatically upgrades the schema if the object store or indexes are missing.
- * Detects and recovers from stale or closed connections, such as when resuming from background.
- * 
+ *
+ * Automatically upgrades the schema if the object store is missing, or if
+ * Q.Cordova.IndexedDB.forceRecreate is true and required indexes are missing.
+ *
+ * - Increments the database version and recreates the store if needed.
+ * - Detects and recovers from stale or closed connections (e.g., after background resume).
+ *
  * If the callback is provided, it will be called with (err, objectStore, db).
  * If no callback is provided, returns a Promise that resolves to the IDBDatabase.
- * 
+ *
  * @method open
  * @param {String} dbName The name of the IndexedDB database
  * @param {String} storeName The name of the object store to ensure exists
@@ -7389,83 +7407,147 @@ Q.IndexedDB = {};
  */
 Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 	if (!root.indexedDB) {
-		var err = new Error("IndexedDB not supported");
+		const err = new Error("IndexedDB not supported");
 		if (callback) callback(err);
-		return false; // prevents caching
+		return false; // prevents Q.getter from caching failure
 	}
-	var keyPath = typeof params === 'string' ? params : params.keyPath;
-	var indexes = (typeof params === 'object' && Array.isArray(params.indexes)) ? params.indexes : [];
+
+	if (typeof params === 'string') {
+		params = { keyPath: params };
+	}
+	if (typeof params === 'function') {
+		callback = params;
+		params = {};
+	}
+
+	params = Q.extend({}, Q.getObject([dbName, storeName], Q.IndexedDB.params), params);
+	var indexes = Array.isArray(params.indexes) ? params.indexes : [];
+	var tryCreatingStore = false;
 	var triedCreatingStore = false;
+
 	tryOpen();
-	function tryOpen(version) {
-		var req = version ? indexedDB.open(dbName, version) : indexedDB.open(dbName);
+
+	async function tryOpen(version) {
+		// Check for empty (only version=1) databases
+		try {
+			var dbs = await indexedDB.databases();
+			var hasUpgraded = dbs.some(db => (db.version || 0) > 1);
+			if (!hasUpgraded && !Q.IndexedDB.onEmptyDatabases.occurred) {
+				if (false === Q.handle(Q.IndexedDB.onEmptyDatabases, Q.IndexedDB)) {
+					callback && callback(new Error("Q.IndexedDB.open: aborted due to empty databases"));
+					return;
+				}
+			}
+		} catch (e) {
+			// ignore indexedDB.databases errors on older browsers
+		}
+
+		const req = version ? indexedDB.open(dbName, version) : indexedDB.open(dbName);
 
 		req.onupgradeneeded = function () {
-			var db = req.result;
-			if (!db.objectStoreNames.contains(storeName) && !triedCreatingStore) {
+			const db = req.result;
+			if (db.version > 1 && !db.objectStoreNames.contains(storeName) && !triedCreatingStore) {
 				triedCreatingStore = true;
-				var store = db.createObjectStore(storeName, { keyPath: keyPath });
-				for (var i = 0; i < indexes.length; ++i) {
-					var idx = indexes[i];
-					store.createIndex(idx[0], idx[1], idx[2]);
+				const store = db.createObjectStore(storeName, { keyPath: params.keyPath });
+				for (let i = 0; i < indexes.length; ++i) {
+					const [name, keyPath, opts] = indexes[i];
+					store.createIndex(name, keyPath, opts);
 				}
 			}
 		};
 
 		req.onerror = function (e) {
-			callback(e);
+			callback && callback(e.target.error || new Error("IndexedDB open error"));
 		};
 
 		req.onsuccess = function () {
-			var db = req.result;
+			const db = req.result;
+
 			if (!db._versionchangeAttached) {
 				db._versionchangeAttached = true;
 				db.onversionchange = function () {
 					db.close();
 				};
 			}
-
-			if (!db.objectStoreNames.contains(storeName)) {
-				db.close();
-				tryOpen((db.version || 1) + 1);
-			} else {
-				callback(null, db);
+			
+			var storeNeedsRecreate = false;
+			try {
+				if (!db.objectStoreNames.contains(storeName)) {
+					storeNeedsRecreate = true;
+				} else if (Q.getObject('Q.Cordova.IndexedDB.forceRecreate')) {
+					var tx = db.transaction(storeName, 'readonly');
+					var store = tx.objectStore(storeName);
+					for (var i = 0; i < indexes.length; ++i) {
+						var indexName = indexes[i][0];
+						try {
+							store.index(indexName); // throws if missing
+						} catch (e) {
+							storeNeedsRecreate = true;
+							break;
+						}
+					}
+				}
+			} catch (e) {
+				// In case of transaction issues, play it safe
+				storeNeedsRecreate = true;
 			}
+
+			if (storeNeedsRecreate) {
+				if (triedCreatingStore || tryCreatingStore) {
+					callback && callback(new Error("Store creation failed after upgrade"), db);
+					return;
+				}
+				tryCreatingStore = true;
+				db.close();
+				var DB_VERSION_KEY = 'Q.Cordova.IndexedDB.version.' + dbName;
+				var localVersion = parseInt(localStorage[DB_VERSION_KEY] || "1", 10);
+				var nextVersion = Math.max(db.version || 1, localVersion) + 1;
+				localStorage[DB_VERSION_KEY] = nextVersion;
+				tryOpen(nextVersion);
+				return;
+			}
+
+			callback && callback(null, db);
 		};
 	}
 }, {
 	cache: Q.Cache.document("Q.IndexedDB.open", 10),
 	resolveWithSecondArgument: true,
 	prepare: function (s, p, callback, args) {
-		var gw = this;
-		var db = p[1], dbName = args[0], storeName = args[1], params = args[2];
+		const getter = this;
+		const [dbName, storeName, params] = args;
+		const db = p[1];
+
 		try {
-			const tx = db.transaction(storeName, 'readonly');
-			callback(s, p); // everything is fine
+			db.transaction(storeName, 'readonly'); // triggers exception if closed
+			callback(s, p); // valid cache
 		} catch (e) {
+			if (e.message && e.message.indexOf('closing') < 0 && e.message.indexOf('closed') < 0) {
+				return;
+			}
 			// Connection is closing or closed — refresh manually without infinite loop
-			this.original(dbName, storeName, params, function (err, newDb) {
-				var key = Q.Cache.key(args);
-				if (!err && gw.cache) {
-					var cached = gw.cache.get(key);
+			getter.original(dbName, storeName, params, function (err, newDb) {
+				const key = Q.Cache.key(args);
+				if (!err && getter.cache) {
+					const cached = getter.cache.get(key);
 					if (cached) {
-						gw.cache.set(key, cached.cbpos, s, arguments);
+						getter.cache.set(key, cached.cbpos, s, arguments);
 					}
 				}
-				return callback(this, arguments);
+				callback.apply(getter, arguments);
 			});
 		}
 	}
 });
 Q.IndexedDB.put = Q.promisify(function (store, value, callback) {
 	_DB_addEvents(store, store.put(value), callback);
-}, false, 3);
+});
 Q.IndexedDB.get = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.get(key), callback);
-}, false, 3);
+});
 Q.IndexedDB['delete'] = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.delete(key), callback);
-}, false, 3);
+});
 
 function _DB_addEvents(store, request, callback) {
 	request.onsuccess = function (event) {
@@ -7671,6 +7753,7 @@ Q.init = function _Q_init(options) {
 		_isCordova = options.isCordova;
 	}
 	if (_isCordova) {
+		var cordova = root.cordova;
 		checks.push("device");
 		Q.Visual.preventRubberBand(); // call it by default
 	
@@ -7785,8 +7868,8 @@ Q.init = function _Q_init(options) {
 	// Bind document ready event
 	if (root.jQuery) {
 		Q.jQueryPluginPlugin();
-		Q.onJQuery.handle(jQuery, [jQuery]);
-		jQuery(document).ready(_domReady);
+		Q.onJQuery.handle(root.jQuery, [root.jQuery]);
+		root.jQuery(document).ready(_domReady);
 	} else {
 		document.addEventListener("DOMContentLoaded", _domReady);
 		var _timer = setInterval(function() { // for old browsers
@@ -7939,8 +8022,8 @@ Q.loadNonce = function _Q_loadNonce(callback, context, args) {
 	if (Q.info.isStatic) {
 		Q.request({"Q.scriptData": 1}, Q.info.isStatic, Q.info.slotNames,
 		function (err, res) {
-			for (var slot in response.scriptData) {
-				var data = response.scriptData[slot];
+			for (var slot in res.scriptData) {
+				var data = res.scriptData[slot];
 				for (var k in data) {
 					Q.setObject(k, data[k]);
 				}
@@ -8013,46 +8096,39 @@ Q.loadHandlebars = Q.getter(function _Q_loadHandlebars(callback) {
  * @return {Number}
  */
 Q.fixedOffset = function (from, filter) {
-	var elements = document.body.getElementsByClassName('Q_fixed_'+from);
+	from = from || 'top';
+	var elements = document.body.getElementsByClassName('Q_fixed_' + from);
 	var result = 0;
+
 	Q.each(elements, function () {
 		if (Q.isArrayLike(filter)) {
-			var classes = this.className.split(' ');
-			if (false === Q.each(filter, function (i, item) {
+			var classes = (this.className || '').split(' ');
+			var skip = false;
+			Q.each(filter, function (_, item) {
+				if (typeof item === 'string' && classes.indexOf(item) >= 0) {
+					skip = true; return false;
+				}
+			});
+			if (skip) return;
+			var anyElems = false, isSibling = false, el = this;
+			Q.each(filter, function (_, item) {
 				if (item instanceof HTMLElement) {
-					if (false !== Q.each(this.parentElement.childNodes, function () {
-						if (this === filter) {
-							return false;
-						}
-					})) {
-						return false;
-					}
-				} else if (typeof item === 'string') {
-					if (classes.indexOf(item) >= 0) {
-						return false;
+					anyElems = true;
+					if (item.parentElement && el.parentElement === item.parentElement) {
+						isSibling = true; return false;
 					}
 				}
-			})) {
-				return;
-			}
+			});
+			if (anyElems && !isSibling) return;
 		}
-		if (typeof filter === 'function' && !filter.apply(this)) {
-			return;
-		}
+
+		if (typeof filter === 'function' && !filter.call(this)) return;
+
 		var rect = this.getBoundingClientRect();
-		switch (from) {
-			case 'top':
-			case 'bottom':
-				result += rect.height;
-				break;
-			case 'left': 
-			case 'right':
-				result += rect.width;
-				break;
-			default:
-				return;
-		}
+		if (from === 'left' || from === 'right') result += rect.width;
+		else if (from === 'top' || from === 'bottom') result += rect.height;
 	});
+
 	return result;
 };
 
@@ -8093,7 +8169,7 @@ Q.removeElement = function _Q_removeElement(element, removeTools) {
 	}
 	if (root.jQuery) {
 		// give jQuery a chance to do its own cleanup
-		return jQuery(element).remove();
+		return root.jQuery(element).remove();
 	}
 	if (!element.parentElement) return false;
 	element.parentElement.removeChild(element);
@@ -8254,47 +8330,73 @@ Q.Browser = {
      * @method detect
      * @return {Object}
 	 */
-	detect: function() {
+	detect: function () {
+		var userAgent = navigator.userAgent || '';
+		var appVersion = navigator.appVersion || '';
+		var ua = userAgent.toLowerCase();
+
 		var data = this.searchData(this.dataBrowser);
-		var browser = (data && data.identity) || "unknownBrowser";
-		
-		var version = (this.searchVersion(navigator.userAgent)
-			|| this.searchVersion(navigator.appVersion)
-			|| "?").toString();
+		var browser = (data && data.identity) || 'unknownBrowser';
+
+		var version = this.searchVersion(userAgent)
+			|| this.searchVersion(appVersion)
+			|| '?';
+		version = version.toString();
 		var dotIndex = version.indexOf('.');
-		var mainVersion = version.substring(0, dotIndex != -1 ? dotIndex : version.length);
+		var mainVersion = version.substring(0, dotIndex !== -1 ? dotIndex : version.length);
+
 		var OSdata = this.searchData(this.dataOS);
-		var OS = (OSdata && OSdata.identity) || "unknownOS";
-		var engine = '', ua = navigator.userAgent.toLowerCase();
-		if (ua.indexOf('webkit') != -1) {
+		var OS = (OSdata && OSdata.identity) || 'unknownOS';
+
+		var engine = '';
+		if (ua.indexOf('webkit') !== -1) {
 			engine = 'webkit';
-		} else if (ua.indexOf('gecko') != -1) {
+		} else if (ua.indexOf('gecko') !== -1) {
 			engine = 'gecko';
-		} else if (ua.indexOf('presto') != -1) {
+		} else if (ua.indexOf('presto') !== -1) {
 			engine = 'presto';
 		}
-		var isWebView = /(.*)QWebView(.*)/.test(navigator.userAgent);
-		var isStandalone = navigator.standalone
-			|| (root.matchMedia && root.matchMedia('(display-mode: standalone)').matches)
-			|| (root.external && external.msIsSiteMode && external.msIsSiteMode())
-			|| false;
-		if (OS === 'Android') {
-			var w = screen.width-document.documentElement.clientHeight;
-			var h = screen.height-document.documentElement.clientHeight;
-			isStandalone = (0<h && h<40)|| (0<w && w<40);
+
+		var isWebView = /QWebView/.test(userAgent);
+
+		var isStandalone = false;
+		if (typeof navigator !== 'undefined') {
+			if (navigator.standalone === true) {
+				isStandalone = true;
+			}
+			if (typeof window !== 'undefined' && window.matchMedia) {
+				try {
+					if (window.matchMedia('(display-mode: standalone)').matches) {
+						isStandalone = true;
+					}
+				} catch (e) {}
+			}
 		}
-		if (/(.*)QWebView(.*)/.test(navigator.userAgent)) {
+
+		if (OS === 'Android') {
+			var w = screen.width - document.documentElement.clientHeight;
+			var h = screen.height - document.documentElement.clientHeight;
+			if ((0 < h && h < 40) || (0 < w && w < 40)) {
+				isStandalone = true;
+			}
+		}
+
+		if (/QWebView/.test(userAgent)) {
 			isStandalone = false;
 		}
+
 		var name = browser.toLowerCase();
-		var prefix;
+		var prefix = '';
 		switch (engine) {
 			case 'webkit': prefix = '-webkit-'; break;
 			case 'gecko': prefix = '-moz-'; break;
 			case 'presto': prefix = '-o-'; break;
 			default: prefix = '';
 		}
-		prefix = (name === 'explorer') ? '-ms-' : prefix;
+		if (name === 'explorer') {
+			prefix = '-ms-';
+		}
+
 		return {
 			name: name,
 			mainVersion: mainVersion,
@@ -8304,7 +8406,7 @@ Q.Browser = {
 			device: OSdata && OSdata.device,
 			isWebView: isWebView,
 			isStandalone: isStandalone,
-			isCordova: _isCordova
+			isCordova: typeof _isCordova !== 'undefined' ? _isCordova : false
 		};
 	},
 	
@@ -8593,6 +8695,14 @@ Q.addEventListener = function _Q_addEventListener(element, eventName, eventHandl
 		}
 		return;
 	}
+	
+	var u = useCapture ? 'useCapture' : '';
+	var path = ['Q', 'eventListeners', 'eventName|'+u];
+	if (Q.getObject(path, element) === handler) {
+		return handler;
+	}
+	Q.setObject(path, handler);
+
 	if (element.addEventListener) {
 		element.addEventListener(eventName, handler, useCapture);
 	} else if (element.attachEvent) {
@@ -8631,10 +8741,8 @@ function _Q_Event_stopPropagation() {
 	Q.each(Q.addEventListener.hooks, function () {
 		var element = this[0];
 		var matches = element === root
-		|| element === document
-		|| (element instanceof Element
-			&& element !== event.target
-		    && element.contains(event.target));
+			|| element === document
+			|| (element instanceof Element && element !== event.target && element.contains(event.target));
 		if (matches && this[1] === event.type) {
 			this[2].apply(element, [event]);
 		}
@@ -8643,7 +8751,7 @@ function _Q_Event_stopPropagation() {
 	if (p) {
 		p.apply(event, arguments);
 	} else {
-		event.cancelBubble = false;
+		event.cancelBubble = true; // <-- must be true to stop bubbling
 	}
 }
 _Q_Event_stopPropagation.previous = Event.prototype.stopPropagation;
@@ -8670,7 +8778,7 @@ Q.removeEventListener = function _Q_removeEventListener(element, eventName, even
 	}
 	if (Q.isArrayLike(element)) {
 		for (var i=0, l=element.length; i<l; ++i) {
-			Q.removeEventListener(element[i], eventName, eventHandler, useCapture, hookStopPropagation);
+			Q.removeEventListener(element[i], eventName, eventHandler, useCapture);
 		}
 		return;
 	}
@@ -8705,12 +8813,17 @@ Q.removeEventListener = function _Q_removeEventListener(element, eventName, even
 		}
 	}
 	if (element.removeEventListener) {
-		element.removeEventListener(eventName, handler, false);
+		element.removeEventListener(eventName, handler, !!useCapture);
 	} else if (element.detachEvent) {
 		element.detachEvent('on'+eventName, handler);
 	} else {
 		element["on"+eventName] = null; // best we can do
 	}
+	
+	var u = useCapture ? 'useCapture' : '';
+	var path = ['Q', 'eventListeners', 'eventName|'+u];
+	Q.setObject(path, null);
+
 	var hooks = Q.addEventListener.hooks;
 	for (var i=hooks.length-1; i>=0; --i) {
 		var hook = hooks[i];
@@ -9869,19 +9982,19 @@ Q.formPost.counter = 0;
 Q.updateUrls = function(callback) {
 	var timestamp, earliest, url, json, ut = Q.cookie('Q_ut');
 	try {
-		var lut = localStorage.getItem(Q.updateUrls.timestampKey);
+		var lut = root.localStorage.getItem(Q.updateUrls.timestampKey);
 	} catch (e) {}
 	if (ut && !lut) {
 		Q.request('Q/urls/urls/latest.json', [], function (err, result) {
 			Q.updateUrls.urls = result;
 			json = JSON.stringify(Q.updateUrls.urls);
-			localStorage.setItem(Q.updateUrls.urlsKey, json);
+			root.localStorage.setItem(Q.updateUrls.urlsKey, json);
 			if (timestamp = result['@timestamp']) {
-				localStorage.setItem(Q.updateUrls.timestampKey, timestamp);
+				root.localStorage.setItem(Q.updateUrls.timestampKey, timestamp);
 				Q.cookie('Q_ut', timestamp);
 			}
 			if (earliest = result['@earliest']) {
-				localStorage.setItem(Q.updateUrls.earliestKey, earliest);
+				root.localStorage.setItem(Q.updateUrls.earliestKey, earliest);
 			}
 			Q.handle(callback, null, [result, timestamp]);
 		}, {extend: false, cacheBust: 1000, skipNonce: true});
@@ -9899,20 +10012,20 @@ Q.updateUrls = function(callback) {
 			}
 			function _update(result) {
 				try {
-					var urls = JSON.parse(localStorage.getItem('Q.updateUrls.urls'));
+					var urls = JSON.parse(root.localStorage.getItem('Q.updateUrls.urls'));
 				} catch (e) {}
 				if (!Q.isEmpty(urls)) {
 					Q.updateUrls.urls = urls;
 					Q.extend(Q.updateUrls.urls, 100, result);
 				}
 				json = JSON.stringify(Q.updateUrls.urls);
-				localStorage.setItem(Q.updateUrls.urlsKey, json);
+				root.localStorage.setItem(Q.updateUrls.urlsKey, json);
 				if (timestamp = result['@timestamp']) {
-					localStorage.setItem(Q.updateUrls.timestampKey, timestamp);
+					root.localStorage.setItem(Q.updateUrls.timestampKey, timestamp);
 					Q.cookie('Q_ut', timestamp);
 				}
 				if (earliest = result['@earliest']) {
-					localStorage.setItem(Q.updateUrls.earliestKey, timestamp);
+					root.localStorage.setItem(Q.updateUrls.earliestKey, earliest);
 				}
 				Q.handle(callback, null, [result, timestamp]);
 			}
@@ -9926,7 +10039,7 @@ Q.updateUrls.urlsKey = 'Q.updateUrls.urls';
 Q.updateUrls.earliestKey = 'Q.updateUrls.earliest';
 Q.updateUrls.timestampKey = 'Q.updateUrls.timestamp';
 try {
-	Q.updateUrls.urls = JSON.parse(localStorage.getItem(Q.updateUrls.urlsKey) || "{}");
+	Q.updateUrls.urls = JSON.parse(root.localStorage.getItem(Q.updateUrls.urlsKey) || "{}");
 } catch (e) {}
 
 /**
@@ -10005,7 +10118,7 @@ Q.addScript = function _Q_addScript(src, onload, options) {
 	function _onload() {
 		Q.addScript.loaded[src2] = true;
 		if (root.jQuery && !Q.onJQuery.occurred) {
-			Q.onJQuery.handle(jQuery, [jQuery]);
+			Q.onJQuery.handle(root.jQuery, [root.jQuery]);
 		}
 		Q.jQueryPluginPlugin();
 		onload();
@@ -10318,8 +10431,8 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		}
 		var cb;
 		Q.addStylesheet.loaded[href2] = false;
-		if (Q.addScript.onErrorCallbacks[href2]) {
-			while ((cb = Q.addScript.onErrorCallbacks[href2].shift())) {
+		if (Q.addStylesheet.onErrorCallbacks[href2]) {
+			while ((cb = Q.addStylesheet.onErrorCallbacks[href2].shift())) {
 				cb.call(this);
 			}
 		}
@@ -10460,13 +10573,13 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 	link.onload = onload2;
 	link.onreadystatechange = onload2; // for IE
 	link.setAttribute('href', href);
-	var elements = document.querySelectorAll('link[data-slot], style[data-slot]');
+	var elements2 = document.querySelectorAll('link[data-slot], style[data-slot]');
 	var insertBefore = null;
 	if (Q.allSlotNames && o.slotName) {
 		link.setAttribute('data-slot', o.slotName);
 		var slotIndex = Q.allSlotNames.indexOf(o.slotName);
-		for (var j=0; j<elements.length; ++j) {
-			e = elements[j];
+		for (var j=0; j<elements2.length; ++j) {
+			e = elements2[j];
 			var slotName = e.getAttribute('data-slot');
 			if (Q.allSlotNames.indexOf(slotName) > slotIndex) {
 				insertBefore = e;
@@ -10511,13 +10624,16 @@ Q.findStylesheet = function (href) {
 Q.ServiceWorker = {
 	start: function(callback, options) {
 		options = options || {};
-		if (!'serviceWorker' in navigator) {
+		if (!('serviceWorker' in navigator)) {
 			Q.handle(callback, null, [false]);
 			Q.ServiceWorker.onActive.handle(false);
 			return console.warn('Q.ServiceWorker.start: Service workers are not supported.');
 		}
+		var src = Q.info.serviceWorkerUrl;
+		if (!src) {
+			return callback(true);
+		}
 		Q.ServiceWorker.started = true;
-		var src = Q.url('Q-ServiceWorker');
 		navigator.serviceWorker.getRegistration(src)
 		.then(function (registration) {
 			if (registration && registration.active
@@ -10549,7 +10665,7 @@ Q.ServiceWorker = {
 					Q.handle(Q.ServiceWorker.onActive, Q.ServiceWorker, [worker, registration]);
 				}
 			}).catch(function (error) {
-				debugger;
+				callback(error);
 				console.warn("Q.ServiceWorker.start error", error);
 			});
 		});
@@ -10706,7 +10822,7 @@ Q.sessionId = function () {
  * @return {string}
  */
 Q.clientId = function () {
-	var storage = sessionStorage;
+	var storage = root.sessionStorage;
 	if (Q.clientId.value = storage.getItem("Q.clientId")) {
 		return Q.clientId.value;
 	}
@@ -10779,7 +10895,7 @@ Q.find = function _Q_find(elem, filter, callbackBefore, callbackAfter, options, 
 	// Arrays are accepted
 	if ((Q.isArrayLike(elem) && !Q.instanceOf(elem, Element))
 	|| (typeof HTMLCollection !== 'undefined' && (elem instanceof root.HTMLCollection))
-	|| (root.jQuery && (elem instanceof jQuery))) {
+	|| (root.jQuery && (elem instanceof root.jQuery))) {
 		Q.each(elem, function _Q_find_array(i, item) {
 			if (!item) {
 				return;
@@ -10875,7 +10991,7 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 		elem = tool.element;
 	}
 	
-	var activating = ((activating || 0) + 1) % 1000000;
+	var activating = ((elem.Q_activating || 0) + 1) % 1000000;
 	elem.Q_activating = activating;
 	
 	Q.beforeActivate.handle.call(root, elem); // things to do before things are activated
@@ -10919,9 +11035,7 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 	function _activated() {
 		var tool = shared.firstTool || shared.tool;
 		shared.internal && shared.internal.progress && shared.internal.progress(shared);
-		if (!Q.isEmpty(shared.tools) && !tool) {
-			throw new Q.Error("Q.activate: tool " + shared.firstToolId + " not found.");
-		}
+		// tool may be undefined, if Q.activate() is called synchronously by tool's own construtor
 		if (callback) {
 			Q.handle(callback, tool, [elem, shared.tools, options]);
 		}
@@ -11030,7 +11144,7 @@ Q.loadUrl = function _Q_loadUrl(url, options) {
 	}
 	promise.cancel = function () {
 		_canceled = true;
-		_reject && reject("request canceled");
+		_reject && _reject("request canceled");
 	};
 	return promise;
 
@@ -12005,7 +12119,7 @@ Q.Template.compile = function _Q_Template_compile (content, type, options) {
 	var r = Q.Template.compile.results;
 	if (!r[content]) {
 		if (type === 'handlebars') {
-			r[content] = Handlebars.compile(content, Q.extend({}, Q.Template.compile.options, options));
+			r[content] = root.Handlebars.compile(content, Q.extend({}, Q.Template.compile.options, options));
 		} else {
 			r[content] = function (fields, options) {
 				return content; // just renders the template's content itself
@@ -12228,7 +12342,7 @@ Q.Template.render = Q.promisify(function _Q_Template_render(name, fields, callba
 					try {
 						Q.each(ia, function (i, pname) {
 							var r = result[pname] = params[pname][1];
-							Handlebars.registerPartial(pname, r);
+							root.Handlebars.registerPartial(pname, r);
 						});
 						p.fill(aspect)([null, result]);
 					} catch (e) {
@@ -12239,7 +12353,7 @@ Q.Template.render = Q.promisify(function _Q_Template_render(name, fields, callba
 				Q.each(ia, function (i, pname) {
 					if (pname.split('.').pop() === 'js') {
 						Q.addScript(pname, p2.fill(pname));
-						waitFor.push(pname);
+						ia.push(pname);
 					} else {
 						Q.Template.load(pname, p2.fill(pname));
 					}
@@ -12252,6 +12366,7 @@ Q.Template.render = Q.promisify(function _Q_Template_render(name, fields, callba
 }, false, 2);
 
 Q.leaves = new Q.Method();
+Q.sanitize = new Q.Method();
 Q.globalMemoryWalk = new Q.Method();
 Q.Method.define(Q);
 
@@ -12289,8 +12404,8 @@ Q.Data = Q.Method.define({
 		segments = segments || 2;
 		seed = seed || 0xBABE;
 		sessionId = sessionId.replace(/-/g, '');
-		let mixedStr = segmentId + ":" + index + ":" + seed;
-		let hash = 0x811c9dc5;
+		var mixedStr = sessionId + ":" + index + ":" + seed;
+		var hash = 0x811c9dc5;
 		for (let i = 0; i < mixedStr.length; i++) {
 			hash ^= mixedStr.charCodeAt(i);
 			hash = Math.imul(hash, 0x01000193); // Large prime multiplier
@@ -13784,7 +13899,7 @@ Q.Visual = Q.Pointer = {
 		}
 		var x = Math.max(first.left, second.left);
 		var y = Math.max(first.top, second.top);
-		return new DOMRect(
+		return new root.DOMRect(
 			x, y, 
 			Math.min(first.right, second.right) - x,
 			Math.max(first.bottom, second.bottom) - y
@@ -14112,60 +14227,6 @@ Q.Visual = Q.Pointer = {
 		return root.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
 	},
 	/**
-	 * Get the rectangle enclosing all the children of the container element
-	 * and – for their children with overflow: visible – their overflowed contents.
-	 * @static
-	 * @method boundingRect
-	 * @param {HTMLElement} [container=document.body] The container element
-	 * @param {Array} [omitClasses] Put CSS classes of any elements to omit from calculations
-	 * @param {boolean} [omitOverflow=false] If true, doesn't use overflowed content in calculations
-	 * @return {Object} with properties left, right, top, bottom, width, height
-	 */
-	boundingRect: function (container, omitClasses, omitOverflow) {
-		var rect = {left: 0, top: 0};
-		rect.right = Q.Visual.windowWidth();
-		rect.bottom = Q.Visual.windowHeight();
-		container = container || document.body;
-		var sl = Q.Visual.scrollLeft();
-		var st = Q.Visual.scrollTop();
-		Q.each(container.children || container.childNodes, function () {
-			if (this.hasClass && omitClasses) {
-				for (var i=0, l=omitClasses.length; i<l; ++i) {
-					if (this.hasClass(omitClasses[i])) return;
-				}
-			}
-			var bcr = this.getBoundingClientRect();
-			var r = {
-				left: bcr.left,
-				top: bcr.top,
-				right: bcr.right,
-				bottom: bcr.bottom
-			};
-			if (!r) return;
-			r.left += sl; r.right += sl;
-			r.top += st; r.bottom += st;
-			var cs = this.computedStyle();
-			if (!omitOverflow && cs.overflow === 'visible') {
-				if (this.scrollWidth > r.right - r.left) {
-					r.right += this.scrollWidth - (r.right - r.left);
-					r.left -= this.scrollLeft;
-				}
-				if (this.scrollHeight > r.bottom - r.top) {
-					r.bottom += this.scrollHeight - (r.bottom - r.top);
-					r.top -= this.scrollTop;
-				}
-			}
-			if (r.right - r.left == 0 || r.bottom - r.top == 0) return;
-			rect.left = Math.min(rect.left, r.left);
-			rect.top = Math.min(rect.top, r.top);
-			rect.right = Math.max(rect.right, r.right);
-			rect.bottom = Math.max(rect.bottom, r.bottom);
-		});
-		rect.width = rect.right - rect.left;
-		rect.height = rect.bottom - rect.top;
-		return rect;
-	},
-	/**
 	 * Call this function to find out whether a click on a link
 	 * should typically result in opening a new window on this
 	 * operating system. Since the choice of tab or window is
@@ -14372,10 +14433,10 @@ Q.Visual = Q.Pointer = {
 	 * @static
 	 * @method relatedTarget
 	 * @param {Q.Event} e Some mouse or touch event from the DOM
-	 * @return {number}
+	 * @return {HTMLElement}
 	 */
 	relatedTarget: function (e) {
-		e.relatedTarget = e.relatedTarget || (e.type == 'mouseover' ? e.fromElement : e.toElement);	
+		return e.relatedTarget = e.relatedTarget || (e.type == 'mouseover' ? e.fromElement : e.toElement);	
 	},
 	/**
 	 * Computes the offset of an element relative to the browser
@@ -14595,7 +14656,7 @@ Q.Visual = Q.Pointer = {
 								img.parentElement.insertBefore(tooltip, img);
 							}
 							if (options.tooltip.html) {
-								tool.innerHTML = options.tooltip.html;
+								tooltip.innerHTML = options.tooltip.html;
 							} else if (options.tooltip.text) {
 								var fields = {};
                                 Q.take(Q.Pointer, ['ClickOrTap', 'clickOrTap', 'CLICKORTAP'], fields);
@@ -14998,7 +15059,7 @@ Q.Onboarding = {
 	events: {},
 	selectors: {},
 	waitToDisappear: {},
-	text: null,
+	text: {},
 	textPath: [],
 	treatAsVisible: ['.Q_overlay.Q_behind', '.Q_fullscreen_dialog.Q_behind'],
 	options: {
@@ -15245,7 +15306,7 @@ function _onPointerMoveHandler(evt) { // see http://stackoverflow.com/a/2553717/
 		var times = Q.Pointer.movement.times;
 		var velocities = Q.Pointer.movement.velocities;
 		var totalX = 0, totalY = 0;
-		var t = _timestamp, tNext;
+		var t = _timestamp;
 		for (var i=times.length-1; i>=1; --i) {
 			var tNext = times[i];
 			if (tNext < _timestamp - 100) break;
@@ -15262,7 +15323,7 @@ function _onPointerMoveHandler(evt) { // see http://stackoverflow.com/a/2553717/
 			// no movement for a while
 			var noMovement = {x: 0, y: 0};
 			var _timestamp = Q.milliseconds();
-			var _timeDiff = _timeDiff - _lastTimestamp;
+			var _timeDiff = _timestamp - _lastTimestamp;
 			var movement = Q.Pointer.movement;
 			movement.times.push(_timestamp);
 			movement.velocities.push(noMovement);
@@ -15540,7 +15601,7 @@ Q.Dialogs = {
 			index = dialog;
 			dialog = this.dialogs[index];
 		}
-		if (dialog instanceof jQuery) {
+		if (dialog instanceof root.jQuery) {
 			dialog = dialog[0];
 		}
 		if (dialog instanceof Element) {
@@ -15953,7 +16014,7 @@ Aup.recorderInit = function (options) {
 
 	// load recorder
 	Q.addScript("{{Q}}/js/audioRecorder/recorder.js", function(){
-		tool.recorder = tool.recorder || new Recorder({leaveStreamOpen: true, encoderPath: Q.url("{{Q}}/js/audioRecorder/encoderWorker.js")}); // ogg format encoder
+		tool.recorder = tool.recorder || new root.Recorder({leaveStreamOpen: true, encoderPath: Q.url("{{Q}}/js/audioRecorder/encoderWorker.js")}); // ogg format encoder
 		//tool.recorder = tool.recorder || new Recorder({leaveStreamOpen: true, encoderPath: Q.url("{{Q}}/js/audioRecorder/recorderWorkerMP3.js")}); // mp3 format encoder
 
 		tool.recorder.addEventListener("streamReady", function(e){
@@ -16222,9 +16283,6 @@ Q.Masks = {
 				'top': rect.top,
 				'bottom': rect.bottom
 			};
-			if (!mask.shouldCover) {
-				//mask.rect = Q.Visual.boundingRect(document.body, ['Q_mask']);
-			}
 			if (mask.rect.top < 0) {
 				mask.rect.top = 0;
 			}
@@ -16346,6 +16404,7 @@ Q.onInit.add(function () {
 	var substitutions = Q.interpolateUrl.substitutions;
 	substitutions['baseUrl'] = substitutions[Q.info.app] = Q.baseUrl();
 	substitutions['Q'] = Q.pluginBaseUrl('Q');
+	substitutions['currentScriptPath'] = currentScriptPath;
 	for (var plugin in Q.plugins) {
 		substitutions[plugin] = Q.pluginBaseUrl(plugin);
 	}
@@ -16384,9 +16443,9 @@ Q.onInit.add(function () {
 	Q.addScript("{{Q}}/js/fn/clickfocus.js");
 
 	function _enableSpeech () {
-		var s = new SpeechSynthesisUtterance();
+		var s = new root.SpeechSynthesisUtterance();
 		s.text = '';
-		speechSynthesis.speak(s); // enable speech for the site, on any click
+		root.speechSynthesis.speak(s); // enable speech for the site, on any click
 		Q.removeEventListener(document.body, 'click', _enableSpeech);
 		Q.Audio.speak.enabled = true;
 	}
@@ -16805,30 +16864,42 @@ Q.request.options = {
 
 Q.onReady.set(function _Q_masks() {
 	_Q_restoreScrolling();
+
 	Q.request.options.onLoadStart.set(function(url, slotNames, o) {
 		if (o.quiet) return;
 		Q.Masks.show('Q.request.load.mask');
 	}, 'Q.request.load.mask');
+
 	Q.request.options.onShowCancel.set(function(callback, o) {
 		if (o.quiet) return;
+
 		var mask = Q.Masks.mask('Q.request.cancel.mask').element;
-		var button = mask.querySelectorAll('.Q_load_cancel_button');
-		if (!button.length) {
+		if (mask && mask[0]) {
+			mask = mask[0]; // unwrap jQuery if needed
+		}
+
+		var button = mask.querySelector('.Q_load_cancel_button');
+		if (!button) {
 			button = document.createElement('button');
 			button.setAttribute('class', 'Q_button Q_load_cancel_button Q_wiggle');
 			button.innerHTML = 'Cancel';
-			if (mask[0]) { mask = mask[0]; }
 			mask.appendChild(button);
-			button.style.marginLeft - button.getBoundingClientRect()/2;
+
+			var rect = button.getBoundingClientRect();
+			button.style.marginLeft = (-rect.width / 2) + "px";
 		}
-		$(button).off(Q.Pointer.end).on(Q.Pointer.end, callback);
+
+		Q.removeEventListener(button, Q.Pointer.end, callback);
+		Q.addEventListener(button, Q.Pointer.end, callback);
 		Q.Masks.show('Q.request.cancel.mask');
 	}, 'Q.request.load.mask');
+
 	Q.request.options.onLoadEnd.set(function(url, slotNames, o) {
 		if (o.quiet) return;
 		Q.Masks.hide('Q.request.load.mask');
 		Q.Masks.hide('Q.request.cancel.mask');
 	}, 'Q.request.load.mask');
+
 	Q.layout();
 }, 'Q.Masks');
 
@@ -16860,7 +16931,7 @@ Q.Camera = {
 		QR: function (callback, options) {
 			options = Q.extend({}, this.options, options);
 			var audio =  new Q.Audio(options.sound.src);
-			if (typeof QRScanner !== "undefined") {
+			if (root.QRScanner) {
 				return this.adapters.cordova(audio, callback, options);
 			}
 			this.adapters.instascan(audio, callback, options);
@@ -16941,6 +17012,7 @@ Q.Camera = {
 			 * @param {Object} options object with options to replace default
 			 */
 			cordova: function (audio, callback, options) {
+				var QRScanner = root.QRScanner;
 				var $html = $('html');
 				$html.addClass("Q_scanning");
 				var _close = function(event){
@@ -17036,7 +17108,7 @@ Q.Camera = {
 
 					var elementId = "Q_instascan_" + Date.now();
 					$element.prop("id", elementId);
-					var html5QrcodeScanner = new Html5QrcodeScanner(elementId, { fps: 5, qrbox: {width: elementWidth-50, height: elementHeight-50}},
+					var html5QrcodeScanner = new root.Html5QrcodeScanner(elementId, { fps: 5, qrbox: {width: elementWidth-50, height: elementHeight-50}},
 						/* verbose= */ false);
 
 					html5QrcodeScanner.render(function onScanSuccess(decodedText, decodedResult) {
@@ -17108,7 +17180,7 @@ Q.Notices = {
 	 */
 	add: function(options)
 	{
-		if (!this.container instanceof HTMLElement) {
+		if (!(this.container instanceof HTMLElement)) {
 			throw new Error("Q.Notices.add: Notices container element doesn't exist.");
 		}
 
@@ -17183,7 +17255,7 @@ Q.Notices = {
 				return;
 			}
 			if (!key) {
-				throw new Exception("key required for persistent notice");
+				throw new Error("Q.Notices.add: key required for persistent notice");
 			}
 			var oj = Q.take(o, ['persistent', 'closeable', 'timeout', 'handler']);
 			Q.req('Q/notice', [], null, {
@@ -17372,9 +17444,9 @@ Q.beforeInit.addOnce(function () {
 /**
  * @module Q
  */
-if (typeof module !== 'undefined' && typeof process !== 'undefined') {
+if (typeof root.module !== 'undefined' && typeof root.process !== 'undefined') {
 	// Assume we are in a Node.js environment, e.g. running tests
-	module.exports = Q;
+	root.module.exports = Q;
 } else if (!dontSetGlobals) {
 	// We are in a browser environment
 	/**
@@ -17426,6 +17498,7 @@ Q.stackTrace = function() {
 
 /**
  * Use it like this: foo.bar = Q.hook(foo.bar, console.trace);
+ * Supports sync and async functions transparently.
  * @method hook
  * @static
  * @param {Function} original 
@@ -17433,13 +17506,29 @@ Q.stackTrace = function() {
  * @param {Function} [hookAfter] 
  * @return {Function} the function with before/after hooks applied
  */
-Q.hook = function (original, hookBefore, hookAfter)  {
-	var hooked = function _Q_hook () {
-		hookBefore && hookBefore.apply(this, arguments);
-		var result = original.apply(this, arguments);
-		hookAfter && hookAfter.apply(this, arguments);
-		return result;
-	};
+Q.hook = function (original, hookBefore, hookAfter) {
+	const isAsync = original.constructor.name === "AsyncFunction" ||
+		(hookBefore && hookBefore.constructor.name === "AsyncFunction") ||
+		(hookAfter && hookAfter.constructor.name === "AsyncFunction");
+
+	let hooked;
+
+	if (isAsync) {
+		hooked = async function _Q_hook_async(...args) {
+			if (hookBefore) await hookBefore.apply(this, args);
+			const result = await original.apply(this, args);
+			if (hookAfter) await hookAfter.apply(this, args);
+			return result;
+		};
+	} else {
+		hooked = function _Q_hook(...args) {
+			if (hookBefore) hookBefore.apply(this, args);
+			const result = original.apply(this, args);
+			if (hookAfter) hookAfter.apply(this, args);
+			return result;
+		};
+	}
+
 	hooked.original = original;
 	return hooked;
 };
@@ -17462,6 +17551,7 @@ Q.hook = function (original, hookBefore, hookAfter)  {
 Q.removeCurrentScript = function() {
 	var cs;
 	cs = document.currentScript || document.scripts[document.scripts.length - 1];
+	cs.textContent = '';
 	cs.parentElement.removeChild(cs);
 };
 
