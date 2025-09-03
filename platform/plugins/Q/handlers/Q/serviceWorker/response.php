@@ -2,11 +2,12 @@
 
 function Q_serviceWorker_response()
 {
-    header("Content-Type: text/javascript");
+	header("Content-Type: text/javascript");
 
 	$baseUrl_json = Q::json_encode(Q_Request::baseUrl());
-	$serviceWorkerUrl_json = Q::json_encode(Q_Request::serviceWorkerURL());
-	$cookies_json = Q::json_encode($_COOKIE);
+	$serviceWorkerUrl_json = Q::json_encode(Q_Uri::serviceWorkerURL());
+	$cookies_json = Q::json_encode($_COOKIE); // can be filtered for HttpOnly simulation
+
 	echo <<<JS
 /************************************************
  * Unified Service Worker for Qbix Platform App
@@ -26,11 +27,9 @@ var Q = {
 		}
 	}
 };
-(function () {
-	// This anonymous closure is not accessible from outside.
-	// It contains code to read, store and attach cookie-like
-	// Cookie-JS request headers, and Set-Cookie-JS response headers.
 
+(function () {
+	// Local cookie store
 	var cookies = $cookies_json;
 
 	self.addEventListener('clearCache', function (event) {
@@ -38,66 +37,103 @@ var Q = {
 	});
 
 	self.addEventListener('fetch', function (event) {
-		// if request is not for same origin, then just send it
 		var url = new URL(event.request.url);
-		var ext = event.request.url.split('?')[0]
-			.split('.').pop().toLowerCase();
-		if (url.origin !== self.location.origin
-		|| ['js', 'css'].indexOf(ext) < 0) {
-			return; // let the browser do its usual fetch
+		var ext = url.pathname.split('.').pop().toLowerCase();
+
+		// Skip non-same-origin or non-relevant file types
+		if (url.origin !== self.location.origin || ['js', 'css'].indexOf(ext) < 0) {
+			return;
 		}
+
 		if (url.toString() === Q.info.serviceWorkerUrl) {
 			return event.respondWith(new Response(
 				"// Can't peek at serviceWorker JS, please use Q.ServiceWorker.start()",
-				{
-					headers: {'Content-Type': 'text/javascript'}
-				}
+				{ headers: {'Content-Type': 'text/javascript'} }
 			));
 		}
-		return event.respondWith(
-			caches.match(event.request)
-			.then(function (response) {
-				if (response !== undefined) {
-					console.log('cached: ' + event.request.url);
-					return response;
+
+		// Clone request and attach Cookie-JS header
+		const original = event.request;
+		const cookieHeader = Object.entries(cookies)
+			.map(([k, v]) => k + "=" + v).join("; ");
+
+		const newHeaders = new Headers(original.headers);
+		newHeaders.set("Cookie-JS", cookieHeader);
+
+		const init = {
+			method: original.method,
+			headers: newHeaders,
+			mode: original.mode,
+			credentials: original.credentials,
+			cache: original.cache,
+			redirect: original.redirect,
+			referrer: original.referrer,
+			referrerPolicy: original.referrerPolicy,
+			integrity: original.integrity,
+			keepalive: original.keepalive,
+			signal: original.signal
+		};
+
+		if (original.method !== 'GET' && original.method !== 'HEAD') {
+			init.body = original.clone().body;
+		}
+
+		const newRequest = new Request(original.url, init);
+
+		event.respondWith(
+			fetch(newRequest).then(response => {
+				const clone = response.clone();
+				const setCookieHeader = clone.headers.get("Set-Cookie-JS");
+				if (setCookieHeader) {
+					setCookieHeader.split(';').forEach(kv => {
+						const [k, v] = kv.trim().split('=');
+						if (k && v) cookies[k] = v;
+					});
 				}
-				// otherwise, attach some headers
-				return fetch(event.request);
+				return response;
 			})
 		);
 	});
+
 	self.addEventListener("install", (event) => {
 		self.skipWaiting();
 	});
 	self.addEventListener("activate", (event) => {
-  		event.waitUntil(clients.claim());
+		event.waitUntil(clients.claim());
 	});
+
 	self.addEventListener('message', function (event) {
 		var data = event.data || {};
 		if (data.type === 'Q.Cache.put') {
 			caches.open('Q').then(function (cache) {
 				data.items.forEach(function (item) {
-					var o = {};
+					const options = {};
 					if (item.headers) {
-						o.headers = new Headers(item.headers);
+						options.headers = new Headers(item.headers);
 					}
-					cache.put(item.url, new Response(item.content, o));
+					cache.put(item.url, new Response(item.content, options));
 					console.log("cache.put " + item.url);
 				});
 			});
 		}
+		if (data.type === 'Set-Cookie-JS') {
+			if (data.key && data.value) {
+				cookies[data.key] = data.value;
+			}
+		}
 	});
 })();
-
-
 JS;
 
+	// Optional extra plugin code
 	echo <<<JS
+
 /************************************************
  * Qbix Platform plugins have added their own code
  * to this service worker through the config named
  * Q/javascript/serviceWorker/modules
  ************************************************/
+
 JS;
 
 	echo PHP_EOL . PHP_EOL;
@@ -110,22 +146,11 @@ JS;
  * add their own code to this service worker by
  * adding hooks after  "Q/serviceWorker/response"
  ************************************************/
+
 JS;
-			
-	echo PHP_EOL . PHP_EOL;
 	
-	// Give a chance for other hooks to output some code.
+	echo PHP_EOL . PHP_EOL;
 	Q::event("Q/serviceWorker/response", array(), 'after');
 
-	// TODO: output the other service worker code here from plugins
-	// TODO: output the httponly cookies in the service worker, inside a closure
-	// and use it to sign things.
-	// TODO: also send the httponly cookies again on every request,
-	// TODO: listen to Set-Cookie-JS headers and update cookies
-	// Every time the script is reloaded, it will get the latest cookies.
-	// And then Set-Cookie-JS will set the cookies there.
-	// Notice that other sites won't be able to get this,
-	// make sure that CORS headers do NOT include access-control-allow-origin
-
-    return false;
+	return false;
 }
