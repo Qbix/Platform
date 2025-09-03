@@ -2135,6 +2135,28 @@ class Q_Response
 	}
 
 	/**
+	 * Export schemas to client-side JS.
+	 *
+	 * @method exportSchemas
+	 * @static
+	 * @param {array} $names Array of schema names, e.g. ["Streams/templates/Avatar"]
+	 */
+	static function exportSchemas($names = null)
+	{
+		if (empty($names)) {
+			$names = array_keys(Q_Config::get('Q', 'models', 'schemas', array()));
+		}
+		foreach ($names as $name) {
+			$schema = Q_Models::schemaFromClassName($name);
+			if (!$schema) {
+				continue;
+			}
+			$key = "Q.Models.schemas." . $name;
+			Q_Response::setScriptData($key, $schema);
+		}
+	}
+
+	/**
 	 * Get the latest timestamp one of the inputs to a resource has.
 	 * Used to find out the latest time the resource changed, and thus
 	 * whether to reload it (e.g. with Q.ServiceWorker.start())

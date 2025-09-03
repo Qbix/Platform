@@ -2251,6 +2251,29 @@ class Q_Utils
 		}
 	}
 
+	/**
+	 * Deterministically assigns a session/index pair into one of N segments.
+	 * 
+	 * Uses a JavaScript-style FNV-1a / MurmurHash-inspired hash mixing algorithm
+	 * to ensure that results are consistent across PHP and JavaScript.
+	 * 
+	 * @method variant
+	 * @static
+	 * @param {string} $sessionId The session identifier (any string).
+	 * @param {int} $index An index number to further differentiate the variant.
+	 * @param {int} [$segments=2] Total number of segments (default is 2).
+	 * @param {int} [$seed=0xBABE] Optional seed value to perturb the hash.
+	 * @return {boolean} True if the computed variant falls into segment 0,
+	 *   otherwise false. Useful for A/B or multivariate testing.
+	 * 
+	 * @example
+	 *     // 50/50 split for A/B testing
+	 *     if (Q_Utils::variant($sessionId, $userId)) {
+	 *         // Variant A
+	 *     } else {
+	 *         // Variant B
+	 *     }
+	 */
 	static function variant($sessionId, $index, $segments = 2, $seed = 0xBABE)
 	{
 		$mixedStr = $sessionId . ":" . $index . ":" . $seed;
@@ -2314,7 +2337,7 @@ class Q_Utils
 		$apArea = array_product(array_map('intval', $ap));
 		$bpArea = array_product(array_map('intval', $bp));
 
-		return $apArea <=> $bpArea;
+		return ($apArea < $bpArea) ? -1 : (($apArea > $bpArea) ? 1 : 0);
 	}
 
 	protected static $urand;

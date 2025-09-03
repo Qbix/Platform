@@ -31,7 +31,7 @@ class Q_Daystamp
      * @param {string} $datetime 
      * @return {integer}
      */
-    static function fromDateTime(string $datetime)
+    static function fromDateTime($datetime)
     {
         return self::fromTimestamp(strtotime($datetime));
     }

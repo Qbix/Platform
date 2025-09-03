@@ -634,7 +634,7 @@ class Q_Session
 	/**
 	 * Decode JSON (column `content`) into an assoc array.
 	 */
-	protected static function decodeSessionJSON(?string $json)
+	protected static function decodeSessionJSON($json)
 	{
 		if (!$json) return [];
 		$arr = json_decode($json, true);

@@ -2566,7 +2566,7 @@ class Q
 	 * @static
 	 * @final
 	 */
-	public const JSON_FORCE_OBJECT = 1 << 16; // 65536
+	const JSON_FORCE_OBJECT = 1 << 16; // 65536
 
 }
 

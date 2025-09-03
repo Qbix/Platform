@@ -296,6 +296,9 @@
 			"dontCache": false,
 			"duration": 3600
 		},
+		"models": {
+			"schemas": {}
+		},
 		"images": {
 			"x": {
 				"sizes": {"x": "x.png"},

@@ -31,7 +31,8 @@ function Q_before_Q_responseExtras()
 			'baseUrl' => $base_url,
 			'proxyBaseUrl' => Q_Uri::url($base_url),
 			'cacheBaseUrl' => Q_Uri::url($cache_base_url),
-			'proxyUrl' => Q_Uri::url($url)
+			'proxyUrl' => Q_Uri::url($url),
+			'serviceWorkerUrl' => Q_Uri::serviceWorkerUrl()
 		)
 	);
 	foreach ($info as $k => $v) {

@@ -46,7 +46,7 @@ class Q_Uri
 		
 		if (is_string($source)) {
 			if (Q_Valid::url($source)) {
-				if ($source === Q_Request::serviceWorkerURL()) {
+				if ($source === Q_Uri::serviceWorkerURL()) {
 					return false;
 				}
 				return self::fromUrl($source, $route);
@@ -204,6 +204,12 @@ class Q_Uri
 	{
 		return Q_Config::get('Q', 'uri', 'unreachableUri', '#_noRouteToUri');
 	}
+
+	static function serviceWorkerURL()
+	{
+		return Q_Request::baseUrl() . '/Q-ServiceWorker.js';
+	}
+	
 	
 	/**
 	 * Adds cache busting to a url

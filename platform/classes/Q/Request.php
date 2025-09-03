@@ -316,12 +316,7 @@ class Q_Request
 	static function isServiceWorker()
 	{
 		$url = Q_Request::url();
-		return ($url === self::serviceWorkerURL());
-	}
-
-	static function serviceWorkerURL()
-	{
-		return Q_Request::baseUrl() . '/Q-ServiceWorker';
+		return ($url === Q_Uri::serviceWorkerURL());
 	}
 	
 	/**
@@ -519,7 +514,8 @@ class Q_Request
 			}
 
 			// False if any type accepts text/html or other non-JSON types
-			if (str_contains($type, 'text/html') || str_contains($type, 'application/xhtml+xml')) {
+			if (strpos($type, 'text/html') !== false
+			 || strpos($type, 'application/xhtml+xml') !== false) {
 				return false;
 			}
 		}
@@ -937,57 +933,65 @@ class Q_Request
 
 	/**
 	 * Returns a string identifying user platform version.
-	 * @method version
+	 * @method OSVersion
 	 * @static
-	 * @return {string}
+	 * @return {string|null}
 	 */
 	static function OSVersion() {
 		if (!isset($_SERVER['HTTP_USER_AGENT'])) {
 			return null;
 		}
+
 		$platform = self::platform();
-		$useragent = $_SERVER['HTTP_USER_AGENT'];
-		$len = strlen($useragent);
-		$test = array('ios' => 'OS ', 'android' => 'Android ');
+		$ua = $_SERVER['HTTP_USER_AGENT'];
+
+		$patterns = [
+			'ios'     => '/\bOS\s+([0-9][0-9_.]*)\b/i',            // e.g. "OS 17_5" -> "17_5"
+			'android' => '/\bAndroid\s+([0-9][0-9_.]*)\b/i',       // e.g. "Android 14" -> "14"
+			'mac'     => '/\bMac\s?OS\s?X\s+([0-9][0-9_.]*)\b/i',  // e.g. "Mac OS X 10_15_7"
+			'windows' => '/\bWindows\s+NT\s+([0-9][0-9_.]*)\b/i',  // e.g. "Windows NT 10.0"
+			'linux'   => '/\bLinux(?:\/| )([0-9][0-9_.]*)\b/i'     // rarely present
+		];
+
+		if (isset($patterns[$platform]) && preg_match($patterns[$platform], $ua, $m)) {
+			return self::normalizeVersion($m[1]);
+		}
+
+		// Fallbacks by platform if the primary pattern didn't match
 		switch ($platform) {
 			case 'ios':
-			case 'android':
-				$start = strpos($useragent, $test[$platform]);
-				$testlen = strlen($test[$platform]);
-				if ($start === false) return null;
-				for ($end = $start + $testlen; $end < $len; ++$end) {
-					$char = $useragent[$end];
-					if (!ctype_alnum($char) && $char !== '_' && $char !== '.') {
-						break;
-					}
+				// Older iOS Safari sometimes has "... OS 17_0 like Mac OS X)"
+				if (preg_match('/\bOS\s+([0-9][0-9_.]*)(?=\s+like\s+Mac\s+OS\s+X)/i', $ua, $m)) {
+					return self::normalizeVersion($m[1]);
 				}
-				$ver = substr($useragent, $start + $testlen, $end - $start - $testlen);
-				return implode('.', explode('_', $ver));
+				break;
 			case 'mac':
-			case 'windows':
-			case 'linux':
-				$find = array(
-					'mac' => 'Macintosh',
-					'windows' => 'Windows',
-					'linux' => 'Linux'
-				);
-				$index = strpos($useragent, $find[$platform]);
-				if ($index === false) return null;
-				$paren = strpos($useragent, ')', $index + 1);
-				$ur = strrev($useragent);
-				$pos = strpos($ur, ' ', $len - $paren);
-				$space = ($pos === false) ? false : $len - $pos;
-				$pos = strpos($ur, ':', $len - $paren);
-				$colon = ($pos === false) ? false : $len - $pos;
-				$max = ($space !== false and $space > $colon) ? $space : $colon;
-				if ($max === false) return null;
-				$ver = substr($useragent, $max, $paren - $max);
-				return str_replace('_', '.', $ver);
-			default:
-				return null;
+				// Sometimes shows as "Intel Mac OS X 10_15_7)"
+				if (preg_match('/Macintosh.*?\(.*?OS\s+X\s+([0-9][0-9_.]*)/i', $ua, $m)) {
+					return self::normalizeVersion($m[1]);
+				}
 				break;
 		}
+
+		return null;
 	}
+
+	/**
+	 * Normalize a captured version token:
+	 * - Convert underscores to dots
+	 * - Strip non [0-9 .]
+	 * - Collapse multiple dots
+	 * - Trim leading/trailing dots
+	 * Returns null if nothing usable remains.
+	 */
+	private static function normalizeVersion($v) {
+		$v = str_replace('_', '.', $v);
+		$v = preg_replace('/[^0-9.]/', '', $v);
+		$v = preg_replace('/\.{2,}/', '.', $v);
+		$v = trim($v, '.');
+		return ($v === '') ? null : $v;
+	}
+
 
 	/**
 	 * Parses the cookie headers and returns an array of values.
