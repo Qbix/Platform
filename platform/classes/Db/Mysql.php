@@ -2402,7 +2402,7 @@ EOT;
 EOT;
 			$js_functions['beforeSave']['return_statement'] = <<<EOT
 	return value;
-EOT;;
+EOT;
 			$js_functions['beforeSave']['comment'] = <<<EOT
 $dc
  * Check if mandatory fields are set and updates 'magic fields' with appropriate values

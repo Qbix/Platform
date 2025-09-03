@@ -750,31 +750,61 @@ abstract class Db
 	 * @method exportArray
 	 * @static
 	 * @param {mixed} $what Could be a (multidimensional) array of Db_Row objects or a Db_Row object
-	 * @param {array} $options Options for row exportArray methods. Can also include the following:
-	 * @param {boolean} [$options.numeric]: Makes a plain numerically indexed array, even if $what has keys
-	 * @return {string}
+	 * @param {array} [$options=array()] Options for row exportArray methods:
+	 *   @param {bool}   [$options.skipUsingSchema=false]
+	 *       If true, always return associative arrays without using schema.
+	 *   @param {string} [$options.schemaName]
+	 *       Schema name in the views folder. Defaults to the Db_Row class name,
+	 *       e.g. class `Streams_Avatar` → "Streams/templates/Avatar".
+	 *   @param {bool}   [$options.numeric=false]
+	 *       If true, makes a plain numerically indexed array even if $what has keys.
+	 * @return {array} Exported data, recursively applying exportArray or schema mapping.
 	 */
 	static function exportArray($what, $options = array())
 	{
 		$arr = is_array($what) ? $what : array($what);
 		$result = array();
+
 		foreach ($arr as $k => $row) {
-			$r = is_array($row) ? self::exportArray($row, $options) : (
-				$row ? (
-					method_exists($row, 'exportArray')
-					? $row->exportArray($options)
-					: $row->fields
-				) : $row
-			);
+			if (is_array($row)) {
+				$r = self::exportArray($row, $options);
+
+			} elseif ($row) {
+				if (method_exists($row, 'exportArray')) {
+					$data = $row->exportArray($options);
+				} elseif (property_exists($row, 'fields')) {
+					$data = $row->fields;
+				} else {
+					$data = $row;
+				}
+				if (is_array($data) && empty($options['skipUsingSchema'])) {
+					if ($schema = Q_Models::schemaFromClassName(get_class($row), false)) {
+						$mapped = array();
+						foreach ($schema['fieldNames'] as $field) {
+							$mapped[] = array_key_exists($field, $data) ? $data[$field] : null;
+						}
+						if ($a = array_diff(array_keys($data), array_values($schema['fieldNames']))) {
+							echo $a; 
+						}
+						$data = $mapped;
+					}
+				}
+
+				$r = $data;
+			} else {
+				$r = $row;
+			}
+
 			if (empty($options['numeric'])) {
 				$result[$k] = $r;
 			} else {
 				$result[] = $r;
 			}
 		}
+
 		return $result;
 	}
-	
+
 	/**
 	 * Calculates a hash code from a string, to match String.prototype.hashCode() in Q.js
 	 * @static
