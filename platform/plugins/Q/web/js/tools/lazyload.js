@@ -50,6 +50,37 @@ Q.Tool.define('Q/lazyload', function (options) {
 		tool.observer = _createObserver(tool, p);
 		tool.observe(tool.prepare(tool.element, false));
 
+		// Add mutation observer to detect direct DOM removals
+		Q.ensure('MutationObserver', function () {
+			var removalObserver = new MutationObserver(function (mutations) {
+				for (var mutation of mutations) {
+					for (var node of mutation.removedNodes) {
+						if (!(node instanceof HTMLElement)) continue;
+						tool.unobserve([node]); // safety
+						forEachLazyElement(tool, node, function (element) {
+							for (var name in tool.state.handlers) {
+								var info = tool.state.handlers[name];
+								if (element.matches(info.selector)) {
+									if (element._Q_lazyload_exited
+									&& element._Q_lazyload_exited[name]
+									) {
+										continue;
+									}
+									element._Q_lazyload_exited = element._Q_lazyload_exited || {};
+									element._Q_lazyload_exited[name] = true;
+									info.exiting && info.exiting.call(tool, element);
+								}
+							}
+						});
+					}
+				}
+			});
+			removalObserver.observe(state.root || document.body, {
+				childList: true,
+				subtree: true
+			});
+		});
+
 		// Override innerHTML
 
 		var originalSet = Object.getOwnPropertyDescriptor(Elp, 'innerHTML').set;
@@ -251,7 +282,7 @@ Q.Tool.define('Q/lazyload', function (options) {
 					// and prevent all the elements shifting. However, if the container
 					// itself is resizing, then we will remove this snapshot since things
 					// will shift anyway.
-					const cs = element.computedStyle();
+					var cs = element.computedStyle();
 					tool.frozenDimensions.set(element, {
 						width: element.style.width,
 						height: element.style.height,
@@ -360,6 +391,9 @@ function _createObserver(tool, container) {
 				}
 				if (entry.target.matches && entry.target.matches(info.selector)) {
 					if (entry.isIntersecting) {
+						if (entry.target._Q_lazyload_exited) {
+							delete entry.target._Q_lazyload_exited[name];
+						}
 						info.entering.call(tool, entry.target, entry);	
 					} else  {
 						var rect = entry.target.getBoundingClientRect();
@@ -376,5 +410,24 @@ function _createObserver(tool, container) {
 
 Q.lazyload = Q.lazyload || {};
 var _loadedImages = Q.lazyload.loadedImages = {};
+
+function forEachLazyElement(tool, container, callback) {
+	for (var name in tool.state.handlers || {}) {
+		var handler = tool.state.handlers[name];
+		if (!handler || !handler.selector) {
+			continue;
+		}
+		if (!(container instanceof HTMLElement)) {
+			continue;
+		}
+		var elements = container.querySelectorAll(handler.selector) || [];
+		if (container.matches(handler.selector)) {
+			callback(container);
+		}
+		for (var i=0; i<elements.length; ++i) {
+			callback(elements[i]);
+		}
+	}
+}
 
 })(Q, Q.jQuery);

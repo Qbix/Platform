@@ -1709,8 +1709,6 @@ Q.diff = function _Q_diff(container1, container2 /*, ... comparator */) {
 			return v1 === v2 && (ipo ? (k == j) : true);
 		}
 		++len;
-	} else {
-		comparator = null;
 	}
 	var isArr = Q.isArrayLike(container1);
 	var result = isArr ? [] : {};
@@ -5335,6 +5333,10 @@ var Tp = Q.Tool.prototype;
  */
 Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
 	var tool = this;
+	if (typeof fields === 'function') {
+		callback = fields;
+		fields = {};
+	}
 	return Q.Template.render(name, fields || {}, function (err, html) {
 		if (err) {
 			return callback && callback(err);
@@ -12422,6 +12424,45 @@ Q.Data = Q.Method.define({
 });
 
 /**
+ * Methods for working with models
+ * @class Q.Models
+ */
+Q.Models = {
+	schemas: {},
+	/**
+	 * Normalize input according to a model schema.
+	 *
+	 * @method fields
+	 * @param {string} typename e.g. "Q.Streams.Avatar"
+	 * @param {Array|Object} input Either a compact array or already an object
+	 * @return {Object} Object with field → value
+	 */
+	fields: function (typename, input) {
+		if (!Q.isArrayLike(input)) {
+			return input || {};
+		}
+		var info = Q.Models.schemas[typename]
+			|| Q.Models.schemas[typename.replace(/^Q\./, '').replace(/\./g, '_')];
+		if (!info || !info.fieldNames) {
+			return {};
+		}
+		var names = info.fieldNames;
+		var out = {};
+		for (var i = 0; i < names.length; i++) {
+			out[names[i]] = input[i];
+		}
+		if (info.defaults) {
+			for (var k in info.defaults) {
+				if (out[k] === undefined) {
+					out[k] = info.defaults[k];
+				}
+			}
+		}
+		return out;
+	}
+};
+
+/**
  * Module for loading text from files.
  * Used for translations, A/B testing and more.
  * @class Q.Text
@@ -12610,6 +12651,9 @@ Q.Text = {
 		for (var namePrefix in d) {
 			if (!normalizedName.startsWith(namePrefix)) {
 				continue;
+			}
+			if (objectToExtend && objectToExtend.text === false) {
+				continue; // asked not to extend
 			}
 			var text = objectToExtend.text = objectToExtend.text || [];
 			Q.each(d[namePrefix], function (i, t) {
@@ -16510,7 +16554,11 @@ Q.Tool.define({
 	"Q/carousel": "{{Q}}/js/tools/carousel.js",
 	"Q/infinitescroll": "{{Q}}/js/tools/infinitescroll.js",
 	"Q/parallax": "{{Q}}/js/tools/parallax.js",
-	"Q/lazyload": "{{Q}}/js/tools/lazyload.js",
+	"Q/lazyload": {
+		js: "{{Q}}/js/tools/lazyload.js",
+		css: null,
+		text: false
+	},
 	"Q/audio": {
 		js: "{{Q}}/js/tools/audio.js",
 		css: "{{Q}}/css/tools/audio.css"

@@ -1,77 +1,68 @@
-(function (window, Q, $, undefined) {
-	
+(function (Q, $, window, undefined) {
+
+var Users = Q.Users;
+
 /**
- * @module Q
+ * @module Streams-tools
  */
-	
+
 /**
- * YUIDoc description goes here
- * @class Q image
+ * Renders an album of related images
+ * @class Streams/image/album
  * @constructor
- * @param {Object} [options] Override various options for this tool
- *  @param {string} options.url Source to get image from. Can be remote url or "blob:" for local files
- *  @param {boolean} [options.useViewport=true] If true apply Q/viewport on image
- *
+ * @param {Object} [options] options for the tool
+ *   @param {Object} [options.related] Options forwarded to Streams/related
+ *   @param {Object} [options.previews] Options forwarded to each Streams/image/preview
  */
-Q.Tool.define("Q/image", function (options) {
+Q.Tool.define("Streams/image/album", function (options) {
 	var tool = this;
 	var state = tool.state;
 
-	if (state.url) {
-		state.url = state.url.interpolate({ "baseUrl": Q.info.baseUrl });
+	if (!Users.loggedInUser) {
+		throw new Q.Error("Streams/image/album: You are not logged in.");
+	}
+	if ((!state.publisherId || !state.streamName)
+		&& (!state.stream || Q.typeOf(state.stream) !== 'Streams.Stream')) {
+		throw new Q.Error("Streams/image/album: missing publisherId or streamName");
 	}
 
-	tool.cache = Q.Cache.document('Q/image');
-	tool.cacheKey = Q.normalize(state.url);
+	// merge related defaults with any overrides
+	var relatedOpts = Q.extend({
+		publisherId: state.publisherId,
+		streamName: state.streamName,
+		relationType: 'Streams/images',
+		isCategory: true,
+		realtime: false,
+		editable: true,
+		closeable: true,
+		creatable: {
+			'Streams/image': { title: "New Image" }
+		},
+		previewOptions: Q.extend({}, state.previews)
+	}, state.related);
 
-	tool.refresh();
-},
+	// Set up the related tool inside this tool’s element
+	Q.Tool.setUpElement(
+		'div',
+		'Streams/related',
+		relatedOpts,
+		tool.prefix + "_related"
+	);
 
-{
-	url: null,
-	useViewport: true
-},
-
-{
-	/**
-	 * Refreshes the appearance of the tool completely
-	 * @method implement
-	 */
-	refresh: function () {
-		var tool = this;
-		var state = this.state;
-		var $toolElement = $(this.element);
-		var $img;
-
-		tool.cacheData = Q.getObject(['params', 0], tool.cache && tool.cache.get(tool.cacheKey));
-		if (tool.cacheData && !Q.isEmpty(tool.cacheData.img)) {
-			$img = $(tool.cacheData.img).appendTo(tool.element);
-			if (state.useViewport) {
-				// apply Q/viewport once image loaded
-				$img.plugin('Q/viewport', {
-					width: $toolElement.width(),
-				});
-			}
-		} else {
-			$img = $("<img />").prop({
-				"src": state.url,
-				class: "Q_no_lazyload"
-			}).appendTo(tool.element);
-			tool.cacheData = {
-				img: $img[0]
-			};
-			$img.on("load", function () {
-				tool.cache.set(tool.cacheKey, 0, null, [tool.cacheData]);
-
-				if (state.useViewport) {
-					// apply Q/viewport once image loaded
-					$img.plugin('Q/viewport', {
-						width: $toolElement.width(),
-					});
-				}
-			});
+}, {
+	// defaults
+	publisherId: null,
+	streamName: null,
+	related: {},
+	previews: {}
+}, {
+	// methods
+	refresh: function (onUpdate) {
+		var relatedTool = this.child("Streams_related");
+		if (relatedTool) {
+			relatedTool.refresh(onUpdate);
 		}
 	}
 });
 
-})(window, Q, Q.jQuery);
+})(Q, Q.jQuery, window);
