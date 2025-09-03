@@ -192,6 +192,8 @@ EOT;
 		return;
 	}
 
+	Q_Response::exportSchemas(); // only if not AJAX
+
 	// If this is a request for a regular webpage,
 	// fill the usual slots and render a layout.
 
