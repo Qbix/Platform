@@ -1,5 +1,3 @@
-Can you redo the php with original comments restored, or updated where needed
-
 <?php
 
 /**
