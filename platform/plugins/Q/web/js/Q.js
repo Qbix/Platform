@@ -1910,24 +1910,10 @@ Q.copy = function _Q_copy(x, fields, levels) {
  *  Arrays can be extended by other arrays or objects.
  *  (If an array is being extended by an object with a "replace" property,
  *   the array is replaced by the value of that property.)
+ *  Arrays can also handle {add, remove, updates} objects for keyed diffs.
  *  You can also extend recursively, see the levels parameter.
  * @static
  * @method extend
- * @param target {Object}
- *  This is the first object. It winds up being modified, and also returned
- *  as the return value of the function.
-  * @param deep {Boolean}
- *  Optional. Precede any Object with a boolean true to indicate that we should
- *  also copy the properties it inherits through its prototype chain.
- * @param levels {Number}
- *  Optional. Precede any Object with an integer to indicate that we should 
- *  also copy that many additional levels inside the object.
- * @param anotherObject {Object}
- *  Put as many objects here as you want, and they will extend the original one.
- * @param namespace {String}
- *  Optional namespace to use when extending encountered Q.Event objects
- * @return
- *  The extended object.
  */
 Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... [, namespace] */ ) {
 	var length = arguments.length;
@@ -1943,44 +1929,72 @@ Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... [
 	var type = Q.typeOf(target);
 	var targetIsEvent = (type === 'Q.Event');
 	var i, arg, k, argk, m, ttk, tak;
+
 	for (i=1; i<length; ++i) {
 		arg = arguments[i];
-		if (!arg) {
-			continue;
-		}
-		if (arg === true) {
-			deep = true;
-			continue;
-		}
-		if (typeof arg === 'number' && arg) {
-			levels = arg;
-			continue;
-		}
+		if (!arg) continue;
+		if (arg === true) { deep = true; continue; }
+		if (typeof arg === 'number' && arg) { levels = arg; continue; }
+
 		if (target === undefined) {
-			if (Q.isArrayLike(arg)) {
-				target = [];
-				type = 'array';
-			} else {
-				target = {};
-				type = 'object';
-			}
+			if (Q.isArrayLike(arg)) { target=[]; type='array'; }
+			else { target={}; type='object'; }
 		}
+
 		if (targetIsEvent) {
 			if (arg && arg.constructor === Object) {
-				for (m in arg) {
-					target.set(arg[m], m);
-				}
+				for (m in arg) target.set(arg[m], m);
 			} else {
 				target.set(arg, namespace);
 			}
 			continue;
 		}
-		if (type === 'array' && Q.isArrayLike(arg)) {
-			target = Array.prototype.concat.call(target, arg)
-			.filter(function (item, i, ar) {
-				return ar.indexOf(item) === i;
-			});
+
+		// --- array extension handling ---
+		if (type === 'array') {
+			if (Q.isArrayLike(arg)) {
+				target = Array.prototype.concat.call(target, arg)
+					.filter(function (item, i, ar) {
+						return ar.indexOf(item) === i;
+					});
+			} else if (Q.isPlainObject(arg)) {
+				// keyed diff semantics
+				if (arg.replace) {
+					target = Q.copy(arg.replace);
+				} else {
+					if (arg.updates) {
+						var keyField = arg.updates[0];
+						var updates = arg.updates.slice(1);
+						updates.forEach(function (upd) {
+							for (var j=0;j<target.length;j++) {
+								if (target[j][keyField] === upd[keyField]) {
+									target[j] = Q.extend(target[j], true, levels-1, upd);
+								}
+							}
+						});
+					}
+					if (arg.add) {
+						target = target.concat(arg.add);
+					}
+					if (arg.remove) {
+						var keyField = (arg.updates && arg.updates[0]) || null;
+						if (keyField) {
+							target = target.filter(function (item) {
+								return !arg.remove.some(function (r) {
+									return item[keyField] === r[keyField];
+								});
+							});
+						} else {
+							// remove by value if no keyField
+							target = target.filter(function (item) {
+								return arg.remove.indexOf(item) === -1;
+							});
+						}
+					}
+				}
+			}
 		} else {
+			// --- object extension handling ---
 			for (k in arg) {
 				if (deep !== true 
 				&& (!arg.hasOwnProperty || !arg.hasOwnProperty(k))
@@ -1990,18 +2004,15 @@ Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... [
 				argk = arg[k];
 				ttk = (k in target) && Q.typeOf(target[k]);
 				tak = Q.typeOf(argk);
+
 				if (ttk === 'Q.Event') {
 					if (argk && argk.typename === 'Q.Event') {
-						argk = argk.handlers; // happens if event was serialized to JSON before
+						argk = argk.handlers;
 					}
 					if (argk && argk.constructor === Object) {
-						for (m in argk) {
-							target[k].set(argk[m], m);
-						}
+						for (m in argk) target[k].set(argk[m], m);
 					} else if (tak === 'Q.Event') {
-						for (m in argk.handlers) {
-							target[k].set(argk.handlers[m], m);
-						}
+						for (m in argk.handlers) target[k].set(argk.handlers[m], m);
 					} else {
 						target[k].set(argk, namespace);
 					}
@@ -2010,38 +2021,19 @@ Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... [
 				&& (typeof target[k] === 'object' || typeof target[k] === 'function') 
 				&& tak !== 'Q.Event'
 				&& (Q.isPlainObject(argk) || (ttk === 'array' && tak === 'array'))) {
-					if ((ttk === 'array' && (('replace' in argk) || ('remove' in argk)))) {
-						if ('replace' in argk) {
-							target[k] = Q.copy(argk.replace);
-						} else if ('remove' in argk) {
-							var arr = Q.diff(target[k], argk.remove);
-							if (argk.add) {
-								var r = arr.slice(), b = argk.add;
-								for (var i = 0; i < b.length; i++) {
-									if (r.indexOf(b[i]) < 0) {
-										r.push(b[i]);
-									}
-								}
-								target[k] = r;	
-							} else {
-								target[k] = arr;
-							}
-						}
-					} else {
-						target[k] = Q.extend(target[k], deep, levels-1, argk);
-					}
+					target[k] = (ttk === 'array' && ('replace' in argk))
+						? Q.copy(argk.replace)
+						: Q.extend(target[k], deep, levels-1, argk);
 				} else {
 					target[k] = Q.extend.dontCopy[Q.typeOf(argk)]
 						? argk
 						: Q.copy(argk, null, levels);
 				}
-				if (argk === undefined) {
-					delete target[k];
-				}
+				if (argk === undefined) delete target[k];
 			}
 		}
-		deep = false;
-		levels = 0;
+
+		deep = false; levels = 0;
 	}
 	return target;
 };

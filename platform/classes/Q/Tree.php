@@ -1,3 +1,5 @@
+Can you redo the php with original comments restored, or updated where needed
+
 <?php
 
 /**
@@ -211,13 +213,12 @@ class Q_Tree
 		}
 	}
 	
-	/**
+/**
 	 * Calculates a diff between this tree and another tree
 	 * @method diff
 	 * @param {Q_Tree} $tree
-	 * @param {bool} [$skipUndefinedValues=false] Skip if the value is now undefined
-	 *    don't save null in that spot, so the value won't be overwritten with null.
-	 * @return {Q_Tree} This tree holds the results of the diff
+	 * @param {bool} [$skipUndefinedValues=false]
+	 * @return {Q_Tree}
 	 */
 	function diff($tree, $skipUndefinedValues = true)
 	{
@@ -230,58 +231,112 @@ class Q_Tree
 		$tree->depthFirst(array($tree, '_diffFrom'), $context);
 		return $context->diff;
 	}
-	
+
 	private function _diffTo($path, $value, $array, $context)
 	{
-		if (empty($path)) {
-			return false;
-		}
-		$args1 = $path;
-		$args1[] = null;
-		$valueTo = call_user_func_array(array($context->to, 'get'), $args1);
-		if ((!Q::isAssociative($value) or !Q::isAssociative($valueTo))
-		and $valueTo !== $value) {  // including if $value2 === null
-			if (is_array($value) and !Q::isAssociative($value)
-			and is_array($valueTo) and !Q::isAssociative($valueTo)) {
-				$valueTo = array('replace' => $valueTo);
+		if (empty($path)) return false;
+
+		$args = $path;
+		$args[] = null;
+		$valueTo = call_user_func_array(array($context->to, 'get'), $args);
+		if ((!Q::isAssociative($value) || !Q::isAssociative($valueTo))
+		&& $valueTo !== $value) {
+			if (is_array($value) && !Q::isAssociative($value)
+			&& is_array($valueTo) && !Q::isAssociative($valueTo)) {
+				// detect keyed array diff
+				$keyField = self::detectKeyField($value, $valueTo);
+				if ($keyField) {
+					$diff = self::diffByKey($value, $valueTo, $keyField);
+					if (!empty($diff)) {
+						call_user_func_array(array($context->diff, 'set'), array_merge($path, array($diff)));
+					}
+					return false;
+				} else {
+					$valueTo = array('replace' => $valueTo);
+				}
 			}
 			$args2 = $path;
 			$args2[] = $valueTo;
-			if ($context->skipUndefinedValues) {
-				$key = end($path);
-				if (count($path) == 1) {
-					if (array_key_exists($key, $context->to->parameters)) {
-						return false;
-					}
-				} else {
-					$args = array_slice($path, 0, -1);
-					$arr = call_user_func_array(array($context->to, 'get'), $path);
-					if (!array_key_exists($key, $arr)) {
-						return false;
-					}
-				}
-			}
 			call_user_func_array(array($context->diff, 'set'), $args2);
 		}
-		if (!isset($valueTo)) {
-			return false;
-		}
 	}
-	
+
 	private function _diffFrom($path, $value, $array, $context)
 	{
-		if (empty($path)) {
-			return false;
-		}
-		$args1 = $path;
-		$args1[] = null;
-		$valueFrom = call_user_func_array(array($context->from, 'get'), $args1);
+		if (empty($path)) return false;
+		$args = $path;
+		$args[] = null;
+		$valueFrom = call_user_func_array(array($context->from, 'get'), $args);
 		if (!isset($valueFrom)) {
 			$args2 = $path;
 			$args2[] = $value;
 			call_user_func_array(array($context->diff, 'set'), $args2);
 			return false;
 		}
+	}
+
+	/**
+	 * Computes a keyed diff between two arrays of associative objects
+	 */
+	protected static function diffByKey($old, $new, $keyField)
+	{
+		$oldIndex = array();
+		foreach ($old as $o) if (isset($o[$keyField])) $oldIndex[$o[$keyField]] = $o;
+		$newIndex = array();
+		foreach ($new as $n) if (isset($n[$keyField])) $newIndex[$n[$keyField]] = $n;
+
+		$add = array(); $remove = array(); $updates = array($keyField);
+
+		foreach ($newIndex as $k => $n) {
+			if (!isset($oldIndex[$k])) {
+				$add[] = $n;
+			} else {
+				$diff = self::objectDiff($oldIndex[$k], $n);
+				if (!empty($diff)) {
+					$diff[$keyField] = $k;
+					$updates[] = $diff;
+				}
+			}
+		}
+		foreach ($oldIndex as $k => $o) {
+			if (!isset($newIndex[$k])) {
+				$remove[] = array($keyField => $k);
+			}
+		}
+
+		$result = array();
+		if (!empty($add)) $result['add'] = $add;
+		if (!empty($remove)) $result['remove'] = $remove;
+		if (count($updates) > 1) $result['updates'] = $updates;
+		return $result;
+	}
+
+	protected static function objectDiff($old, $new)
+	{
+		$diff = array();
+		foreach ($new as $k => $v) {
+			if (!array_key_exists($k, $old) || $old[$k] !== $v) {
+				$diff[$k] = $v;
+			}
+		}
+		return $diff;
+	}
+
+	protected static function detectKeyField($arr1, $arr2)
+	{
+		// crude detection: find common string key across both
+		$keys = array();
+		foreach (array_merge($arr1, $arr2) as $obj) {
+			if (is_array($obj)) {
+				foreach ($obj as $k => $v) {
+					if (is_string($k) && $k !== '' && isset($obj[$k])) {
+						$keys[$k] = isset($keys[$k]) ? $keys[$k]+1 : 1;
+					}
+				}
+			}
+		}
+		arsort($keys);
+		return key($keys);
 	}
 	
 	/**
@@ -558,42 +613,49 @@ class Q_Tree
 	 * @param {boolean} [$noNumericArrays=false] Set to true to treat all arrays as associative
 	 * $return {array}
 	 */
-	protected static function merge_internal ($array1 = array(), $array2 = array(), $noNumericArrays = false)
+	/**
+	 * merge_internal now supports keyed updates
+	 */
+	protected static function merge_internal($array1 = array(), $array2 = array(), $noNumericArrays = false)
 	{
 		if (!Q::isAssociative($array1)) {
-			if (isset($array2['replace'])) {
-				return $array2['replace'];
-			}
-			if (isset($array2['remove'])) {
-				$array3 = $array1;
-				$array3 = array_values(array_diff($array1, $array2['remove']));
-				if (!isset($array2['add'])) {
-					return $array3;
+			// keyed array handling
+			if (isset($array2['updates'])) {
+				$keyField = $array2['updates'][0];
+				$updates = array_slice($array2['updates'], 1);
+				foreach ($updates as $upd) {
+					foreach ($array1 as &$obj) {
+						if (isset($obj[$keyField]) && $obj[$keyField] === $upd[$keyField]) {
+							$obj = array_merge($obj, $upd);
+						}
+					}
 				}
-				$array3 = array_unique(array_merge($array3, $array2['add']));
-				return $array3;
+				if (isset($array2['add'])) $array1 = array_merge($array1, $array2['add']);
+				if (isset($array2['remove'])) {
+					$array1 = array_filter($array1, function($o) use($array2,$keyField) {
+						foreach ($array2['remove'] as $r) {
+							if ($o[$keyField] === $r[$keyField]) return false;
+						}
+						return true;
+					});
+					$array1 = array_values($array1);
+				}
+				return $array1;
 			}
+			if (isset($array2['replace'])) return $array2['replace'];
 		}
+
 		$result = $array1;
 		foreach ($array2 as $key => $value) {
-			if (!$noNumericArrays and !Q::isAssociative($array2)) {
-				// merge in values if they are not in array yet
-				// if array contains scalar values only unique values are kept
-				if (!in_array($value, $result)) {
-					// numeric key, just insert anyway, might be diff
-					// resulting key in the result
-					$result[] = $value;
-				}
+			if (!$noNumericArrays && !Q::isAssociative($array2)) {
+				if (!in_array($value, $result)) $result[] = $value;
 			} else if (array_key_exists($key, $result)) {
-				if (is_array($value) and is_array($result[$key])) {
-					// key already in result and both values are arrays
+				if (is_array($value) && is_array($result[$key])) {
 					$result[$key] = self::merge_internal($result[$key], $value, $noNumericArrays);
 				} else {
-					// key already in result but one of the values is a scalar
 					$result[$key] = $value;
 				}
 			} else {
-				// key is not in result so just add it
 				$result[$key] = $value;
 			}
 		}
