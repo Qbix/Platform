@@ -11,7 +11,10 @@ class Q_Models {
 	 */
 	static function schemaFromClassName($className)
 	{
-		static $config = Q_Config::get('Q', 'models', 'schemas', array());
+		static $config = null;
+		if (!isset($config)) {
+			$config = Q_Config::get('Q', 'models', 'schemas', array());
+		}
 		if (!isset($config[$className]) or $config[$className] === false) {
 			return null;
 		}
