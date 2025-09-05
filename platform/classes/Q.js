@@ -1933,67 +1933,107 @@ Q.copy = function _Q_copy(x, fields, levels) {
 
 /**
  * Extends an object by merging other objects on top. Among other things,
- *  Q.Events can be extended with Q.Events or objects of {key: handler} pairs,
- *  Arrays can be extended by other arrays or objects.
- *  (If an array is being extended by an object with a "replace" property,
- *   the array is replaced by the value of that property.)
+ *  Arrays can be extended by other arrays or by objects using:
+ *    - { replace: [...] }
+ *    - { add: [...], remove: [...], updates: ["keyField", {...}, {...}] }
  *  You can also extend recursively, see the levels parameter.
  * @method extend
  * @param {Object} target
- *  This is the first object. It winds up being modified, and also returned
- *  as the return value of the function.
  * @param {Boolean} deep
- *  Optional. Precede any Object with a boolean true to indicate that we should
- *  also copy the properties it inherits through its prototype chain.
  * @param {Number} levels
- *  Optional. Precede any Object with an integer to indicate that we should 
- *  also copy that many additional levels inside the object.
  * @param {Object} anotherObject
- *  Put as many objects here as you want, and they will extend the original one.
  * @return {Object} The extended object.
  */
 Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... */ ) {
 	var length = arguments.length;
-	var namespace = undefined;
+	var namespace = undefined; // kept for compatibility with client-side variant
 	if (typeof arguments[length-1] === 'string') {
 		namespace = arguments[length-1];
 		--length;
 	}
-	if (length === 0) {
-		return {};
-	}
+	if (length === 0) return {};
+
 	var deep = false, levels = 0, arg;
 	var type = Q.typeOf(target);
-	for (var i=1; i<length; ++i) {
-		arg = arguments[i];
-		if (!arg) {
-			continue;
+
+	function _mergeArrayWithDiff(arr, diff, levelsLeft) {
+		// Full replace
+		if (diff && diff.replace) {
+			return Q.copy(diff.replace, null, levelsLeft);
 		}
-		if (arg === true) {
-			deep = true;
-			continue;
-		}
-		if (typeof(arg) === 'number' && arg) {
-			levels = arg;
-			continue;
-		}
-		if (target === undefined) {
-			if (Q.isArrayLike(arg)) {
-				target = [];
-				type = 'array';
-			} else {
-				target = {};
-				type = 'object';
+		var out = arr.slice();
+
+		// Updates: ["keyField", { keyField: X, ...partial... }, ...]
+		if (diff && diff.updates && diff.updates.length > 1) {
+			var keyField = diff.updates[0];
+			for (var i = 1; i < diff.updates.length; i++) {
+				var upd = diff.updates[i];
+				if (upd && Object.prototype.hasOwnProperty.call(upd, keyField)) {
+					var keyVal = upd[keyField];
+					for (var j = 0; j < out.length; j++) {
+						if (out[j] && out[j][keyField] === keyVal) {
+							// recursive extend into the matched object
+							out[j] = Q.extend(out[j], true, levelsLeft > 0 ? levelsLeft - 1 : 0, upd);
+							break;
+						}
+					}
+				}
 			}
 		}
-		if (Q.isArrayLike(target) && Q.isArrayLike(arg)) {
-			target = target.concat(arg)
-				.filter(function (item, i, ar) {
-					return ar.indexOf(item) === i;
+		// Add
+		if (diff && diff.add && Q.isArrayLike(diff.add)) {
+			out = out.concat(diff.add);
+		}
+		// Remove
+		if (diff && diff.remove && Q.isArrayLike(diff.remove)) {
+			// Prefer keyed removal if we can infer the keyField from updates
+			var inferredKey = (diff.updates && diff.updates[0]) || null;
+			if (inferredKey) {
+				out = out.filter(function (item) {
+					for (var r = 0; r < diff.remove.length; r++) {
+						var rem = diff.remove[r];
+						if (rem && Object.prototype.hasOwnProperty.call(rem, inferredKey)) {
+							if (item && item[inferredKey] === rem[inferredKey]) return false;
+						}
+					}
+					return true;
 				});
+			} else {
+				// Fallback: remove by exact value
+				out = out.filter(function (item) {
+					return diff.remove.indexOf(item) === -1;
+				});
+			}
+		}
+		return out;
+	}
+
+	for (var i = 1; i < length; ++i) {
+		arg = arguments[i];
+		if (!arg) continue;
+		if (arg === true) { deep = true; continue; }
+		if (typeof(arg) === 'number' && arg) { levels = arg; continue; }
+
+		if (target === undefined) {
+			if (Q.isArrayLike(arg)) { target = []; type = 'array'; }
+			else { target = {}; type = 'object'; }
+		}
+
+		// Array target
+		if (Q.isArrayLike(target)) {
+			if (Q.isArrayLike(arg)) {
+				// concat + unique (scalar or object reference uniqueness)
+				target = target.concat(arg).filter(function (item, idx, ar) {
+					return ar.indexOf(item) === idx;
+				});
+			} else if (Q.isPlainObject(arg)) {
+				// keyed-diff style extension onto array
+				target = _mergeArrayWithDiff(target, arg, levels);
+			}
 		} else {
+			// Object target
 			for (var k in arg) {
-				if (deep !== true 
+				if (deep !== true
 				&& (!arg.hasOwnProperty || !arg.hasOwnProperty(k))
 				&& (arg.hasOwnProperty && (k in arg))) {
 					continue;
@@ -2001,23 +2041,31 @@ Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... *
 				var argk = arg[k];
 				var ttk = Q.typeOf(target[k]);
 				var tak = Q.typeOf(argk);
-				if (levels 
+
+				if (levels
 				&& target[k]
-				&& (typeof target[k] === 'object' || typeof target[k] === 'function') 
-				&& (Q.isPlainObject(argk) || (ttk === 'array' && tak === 'array'))) {
-					target[k] = (ttk === 'array' && ('replace' in argk))
-						? Q.copy(argk.replace)
-						: Q.extend(target[k], deep, levels-1, argk);
+				&& (typeof target[k] === 'object' || typeof target[k] === 'function')
+				&& (Q.isPlainObject(argk) || (ttk === 'array' && (tak === 'array' || tak === 'object')))) {
+
+					// Special case: array field receiving keyed diff object
+					if (ttk === 'array' && Q.isPlainObject(argk)
+					&& (('updates' in argk) || ('replace' in argk) || ('add' in argk) || ('remove' in argk))) {
+						target[k] = _mergeArrayWithDiff(target[k], argk, levels - 1);
+					} else {
+						// Regular deep merge
+						target[k] = (ttk === 'array' && ('replace' in argk))
+							? Q.copy(argk.replace, null, levels - 1)
+							: Q.extend(target[k], deep, levels - 1, argk);
+					}
 				} else {
 					target[k] = Q.extend.dontCopy[Q.typeOf(argk)]
 						? argk
-						: Q.copy(argk, null, levels-1);
+						: Q.copy(argk, null, levels - 1);
 				}
-				if (argk === undefined) {
-					delete target[k];
-				}
+				if (argk === undefined) delete target[k];
 			}
 		}
+
 		deep = false;
 		levels = 0;
 	}
