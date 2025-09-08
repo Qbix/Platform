@@ -16574,7 +16574,10 @@ Q.Tool.jQuery({
 	"Q/textfill": "{{Q}}/js/fn/textfill.js",
 	"Q/autogrow": "{{Q}}/js/fn/autogrow.js",
 	"Q/dialog": "{{Q}}/js/fn/dialog.js",
-	"Q/flip": "{{Q}}/js/fn/flip.js",
+	"Q/flip": {
+		js: "{{Q}}/js/fn/flip.js",
+		css: "{{Q}}/css/fn/flip.css"
+	},
 	"Q/gallery": "{{Q}}/js/fn/gallery.js",
 	"Q/zoomer": "{{Q}}/js/fn/zoomer.js",
 	"Q/fisheye": "{{Q}}/js/fn/fisheye.js",
@@ -16592,7 +16595,11 @@ Q.Tool.jQuery({
 	"Q/scrollbarsAutoHide": "{{Q}}/js/fn/scrollbarsAutoHide.js",
 	"Q/sortable": "{{Q}}/js/fn/sortable.js",
 	"Q/validator": "{{Q}}/js/fn/validator.js",
-	"Q/touchscroll": "{{Q}}/js/fn/touchscroll.js"
+	"Q/touchscroll": "{{Q}}/js/fn/touchscroll.js",
+	"Q/emojis": {
+		js: "{{Q}}/js/fn/emojis.js",
+		css: "{{Q}}/css/fn/emojis.css"
+	}
 });
 
 Q.onJQuery.add(function ($) {
