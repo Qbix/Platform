@@ -9345,7 +9345,7 @@ Q.req = function _Q_req(uri, slotNames, callback, options) {
  * @param {boolean} [options.timestamp] whether to include a timestamp (e.g. as a cache-breaker)
  * @param {boolean} [options.timeout=5000] milliseconds to wait for response, before showing cancel button and triggering onTimeout event, if any, passed to the options
  * @param {boolean} [options.ignoreRedirect=false] if true, doesn't honor redirects and tries to process the scripts, css, etc. from the response
- * @param {Function|null} [options.onRedirect=Q.handle] if set and response data.redirect.url is not empty, automatically call this function. Set to null to block redirecting.
+ * @param {Function|null} [options.onRedirect=Q.handle] if set and response data.redirect.url is not empty, automatically call this function. Set to null to block redirecting. Receives url, options.
  * @param {Array} [options.beforeRequest] array of handlers to call before the request, they receive url, slotNames, options, callback and must call the callback passing (possibly altered) url, slotNames, options
  * @param {Q.Event} [options.onTimeout] handler to call when timeout is reached. First argument is a function which can be called to cancel loading.
  * @param {Q.Event} [options.onResponse] handler to call when the response comes back but before it is processed
@@ -9419,7 +9419,7 @@ Q.request = function (url, slotNames, callback, options) {
 				return; // don't redirect
 			}
 			if (!o.ignoreRedirect && response && response.redirect && response.redirect.url) {
-				Q.handle(o.onRedirect, Q, [response.redirect.url]);
+				Q.handle(o.onRedirect, Q, [response.redirect.url, options]);
 			}
 		};
 
@@ -16876,7 +16876,7 @@ Q.request.options = {
 	asJSON: false,
 	parse: 'json',
 	timeout: 5000,
-	onRedirect: new Q.Event(function (url) {
+	onRedirect: new Q.Event(function (url, options) {
 		if (!url.startsWith(Q.baseUrl())) {
 			location.href = url; // just redirect to another site
 		} else {
@@ -16884,7 +16884,7 @@ Q.request.options = {
 				target: '_self',
 				quiet: true,
 				dontTransformUrl: true
-			});
+			}, options);
 		}
 	}, "Q"),
 	resultFunction: "result",
