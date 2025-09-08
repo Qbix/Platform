@@ -950,8 +950,8 @@ html.Q_dialog_shown #dashboard_slot {
 	filter:blur(5px);
 }
 
-.Q_notMobile #dashboard_slot * { color: var(--dashboard-main-color); font-size: 20px; }
-.Q_mobile #dashboard_slot * { color: var(--dashboard-mobile-color, var(--dashboard-main-color)); }
+.Q_notMobile #dashboard_slot>* { color: var(--dashboard-main-color); font-size: 20px; }
+.Q_mobile #dashboard_slot>* { color: var(--dashboard-mobile-color, var(--dashboard-main-color)); }
 
 @keyframes Q_showAfterLoaded {
 	0% {
