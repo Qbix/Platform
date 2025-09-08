@@ -1008,7 +1008,7 @@ class Q_Uri
 	}
 
 	/**
-	 * May append a "Q.cacheBust" parameter to URL's querystring, and also
+	 * May append a "Q.cb" parameter to URL's querystring, and also
 	 * returns the content digest hash for that particular URL, 
 	 * if it corresponds to a file processed by the urls.php script.
 	 * This function is very useful to use with clients like PhoneGap which can
