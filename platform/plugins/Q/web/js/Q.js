@@ -9591,7 +9591,7 @@ Q.request = function (url, slotNames, callback, options) {
 						+ encodeURIComponent(o.callbackName) + '='
 						+ encodeURIComponent('Q.request.callbacks['+i+']');
 				} else {
-					url2 = (o.extend === false || o.dontTransformUrl)
+					url2 = (o.extend === false)
 						? url
 						: Q.ajaxExtend(url, slotNames, Q.extend(o, {
 							callback: 'Q.request.callbacks['+i+']'
@@ -16880,11 +16880,11 @@ Q.request.options = {
 		if (!url.startsWith(Q.baseUrl())) {
 			location.href = url; // just redirect to another site
 		} else {
-			Q.loadUrl(url, {
+			Q.loadUrl(url, Q.extend({}, options, {
 				target: '_self',
 				quiet: true,
 				dontTransformUrl: true
-			}, options);
+			}));
 		}
 	}, "Q"),
 	resultFunction: "result",
