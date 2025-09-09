@@ -220,7 +220,7 @@
 			},
 			"serviceWorker": {
 				"modules": {
-					"Q": "Q/serviceWorker.js"
+					"Q": "Q/serviceWorker"
 				},
 				"latest": {
 					"Q": {
