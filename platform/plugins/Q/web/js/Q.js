@@ -2841,7 +2841,7 @@ Q.element = function (tagName, attributes, elementsToAppend) {
  * @return {Iterator|Array}
  */
 Q.$ = function (selector, container, toArray) {
-	var list = (container || document).querySelectorAll(selector);
+	var list = (container || document.body).querySelectorAll(selector);
 	return toArray ? Array.prototype.slice.call(list) : list.values();
 };
 
