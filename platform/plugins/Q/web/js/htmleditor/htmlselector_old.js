@@ -6657,7 +6657,7 @@ function HTMLselector(el,options) {
             if(_debug) console.log('_setSelectionStartFromXY 5', _start.startContainer, _start.startOffset, _start.endContainer, _start.endOffset);
             if(_debug) console.log('_setSelectionStartFromXY 5.1', _range.startContainer, _range.startOffset, _range.endContainer, _range.endOffset);
 
-            let tryingTiSetStartAfterEnd = !isSwappingCarets && _range.endContainer && ((_start.startContainer.isSameNode(_range.endContainer) && _start.startOffset > _range.endOffset) || _range.endContainer.compareDocumentPosition(_start.startContainer) === Node.DOCUMENT_POSITION_FOLLOWING);
+            let tryingTiSetStartAfterEnd = !isSwappingCarets && _range.endContainer && ((_start.startContainer === _range.endContainer && _start.startOffset > _range.endOffset) || _range.endContainer.compareDocumentPosition(_start.startContainer) === Node.DOCUMENT_POSITION_FOLLOWING);
 
             if(!preserveRange) {
                 if(_debug) console.log('_setSelectionStartFromXY 6');
