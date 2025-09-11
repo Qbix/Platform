@@ -123,6 +123,7 @@ function () {
 				'left': 0,
 				'top': 0,
 				'margin': 0,
+				'overflow': this.css('overflow'),
 				'padding-left': parseInt(props['padding-left'])+3+'px',
 				'padding-right': props['padding-right'],
 				'padding-top': props['padding-top'],
