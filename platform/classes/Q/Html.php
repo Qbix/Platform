@@ -9,6 +9,71 @@
  */
 class Q_Html
 {
+/**
+	 * Convert HTML into very basic markdown-like text.
+	 * Handles paragraphs, line breaks, bold, italic, lists, and links.
+	 *
+	 * @param {string} $html   Input HTML fragment
+	 * @param {int|null} $limit Optional max length of returned text
+	 * @return {string}
+	 */
+	public static function toSimpleMarkdown($html, $limit = null)
+	{
+		$doc = new DOMDocument();
+
+		// Suppress warnings for malformed HTML fragments
+		@$doc->loadHTML('<?xml encoding="UTF-8">' . $html, LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
+
+		$walker = function (DOMNode $node) use (&$walker) {
+			$out = '';
+
+			if ($node instanceof DOMText) {
+				return preg_replace('/\s+/', ' ', $node->wholeText);
+			}
+
+			if ($node instanceof DOMElement) {
+				$children = '';
+				foreach ($node->childNodes as $child) {
+					$children .= $walker($child);
+				}
+
+				switch (strtolower($node->nodeName)) {
+					case 'br':
+						return "\n";
+					case 'p':
+						return trim($children) . "\n\n";
+					case 'li':
+						return '- ' . trim($children) . "\n";
+					case 'ul':
+					case 'ol':
+						return $children . "\n";
+					case 'strong':
+					case 'b':
+						return '**' . $children . '**';
+					case 'em':
+					case 'i':
+						return '*' . $children . '*';
+					case 'a':
+						$href = $node->getAttribute('href');
+						return $href ? "[$children]($href)" : $children;
+					default:
+						return $children;
+				}
+			}
+			return '';
+		};
+
+		$text = $walker($doc->documentElement);
+		$text = preg_replace("/[ \t]+/", ' ', $text);
+		$text = preg_replace("/\n{3,}/", "\n\n", $text);
+		$text = trim($text);
+
+		if ($limit !== null) {
+			$text = mb_substr($text, 0, $limit);
+		}
+		return $text;
+	}
+
 	/**
 	 * Generates a querystring based on the current $_GET
 	 * @method query
