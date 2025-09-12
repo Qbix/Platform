@@ -652,120 +652,11 @@ class Db_Mysql implements Db_Interface
 	}
 
 	/**
-	 * Drain rows from a table into a CSV file (optionally zipped) and delete them.
-	 *
-	 * The file is named after the table, field, and the min/max values in the drained batch,
-	 * so the filename itself encodes the range of rows exported. This makes it easy to
-	 * build a "data lake" of historical data while keeping the live table small.
-	 *
-	 * @method drain
-	 * @param {PDO}    $pdo         Active PDO connection
-	 * @param {string} $table       Table name
-	 * @param {string} $field       Indexed field to order by (e.g. "id", "insertedTime")
-	 * @param {array}  [$options]   Optional parameters:
-	 *   @param {int}    [$options.limit=10000]          Number of rows per batch
-	 *   @param {string} [$options.outdir="/var/www/dumps"] Directory to write dump files
-	 *   @param {bool}   [$options.desc=false]           If true, order by DESC (default ASC)
-	 *   @param {string} [$options.prefix=""]            Optional prefix for filename
-	 *   @param {bool}   [$options.dontZip=false]        If true, leave CSV uncompressed
-	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
-	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
-	 */
-	function drain($pdo, $table, $field, $options = array())
-	{
-		// Defaults
-		$limit   = isset($options['limit'])   ? $options['limit']   : 10000;
-		$outdir  = isset($options['outdir'])  ? $options['outdir']  : '/var/www/dumps';
-		$desc    = isset($options['desc'])    ? $options['desc']    : false;
-		$prefix  = isset($options['prefix'])  ? $options['prefix']  : $table;
-		$dontZip = isset($options['dontZip']) ? $options['dontZip'] : false;
-
-		// Ensure outdir exists
-		if (!is_dir($outdir)) {
-			if (!mkdir($outdir, 0770, true)) {
-				throw new Exception("Failed to create directory: " . $outdir);
-			}
-		}
-
-		// Check index
-		$checkSql = "SHOW INDEX FROM `" . $table . "` WHERE Column_name = :field";
-		$stmt = $pdo->prepare($checkSql);
-		$stmt->execute(array(':field' => $field));
-		if ($stmt->rowCount() === 0) {
-			throw new Exception("Field " . $field . " is not indexed in " . $table);
-		}
-
-		$order = $desc ? "DESC" : "ASC";
-
-		// Fetch rows
-		$sql = "SELECT * FROM `" . $table . "` ORDER BY `" . $field . "` " . $order . " LIMIT " . intval($limit);
-		$stmt = $pdo->prepare($sql);
-		$stmt->execute();
-		$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-		if (!$rows) {
-			return false; // nothing to drain
-		}
-
-		// Init min/max with first row’s value
-		$firstRowVal = $rows[0][$field];
-		$minVal = $firstRowVal;
-		$maxVal = $firstRowVal;
-
-		// Build CSV file path
-		foreach ($rows as $row) {
-			$val = $row[$field];
-			if ($val < $minVal) $minVal = $val;
-			if ($val > $maxVal) $maxVal = $val;
-		}
-
-		// Normalize to filename-safe tokens
-		$first = preg_replace('/[^A-Za-z0-9T:_-]/', '_', (string) ($desc ? $maxVal : $minVal));
-		$last  = preg_replace('/[^A-Za-z0-9T:_-]/', '_', (string) ($desc ? $minVal : $maxVal));
-
-		$csvPath = sprintf(
-			"%s/%s---%s---%s---%s.csv",
-			rtrim($outdir, '/'),
-			$prefix,
-			$field,
-			$first,
-			$last
-		);
-
-		// Write CSV
-		$fh = fopen($csvPath, 'w');
-		if (!$fh) {
-			throw new Exception("Cannot write to file: " . $csvPath);
-		}
-		fputcsv($fh, array_keys($rows[0])); // headers
-		foreach ($rows as $row) {
-			fputcsv($fh, $row);
-		}
-		fclose($fh);
-
-		// Delete exported rows
-		$deleteSql = "DELETE FROM `" . $table . "` WHERE `" . $field . "` BETWEEN :min AND :max";
-		$del = $pdo->prepare($deleteSql);
-		$del->execute(array(
-			':min' => $minVal,
-			':max' => $maxVal
-		));
-
-		// Optionally zip
-		if (!$dontZip && class_exists('Q_Zip')) {
-			$zipPath = $csvPath . '.zip';
-			$zipper = new Q_Zip();
-			$zipper->zip_files($csvPath, $zipPath);
-			unlink($csvPath);
-			return $zipPath;
-		}
-
-		return $csvPath;
-	}
-
-	/**
 	 * Drain rows from a table into a CSV file and delete them in batches.
 	 * Safely handles non-unique indexed fields by cutting off at a value boundary.
+	 *
+	 * This method is DBMS-agnostic — actual SQL differences are handled
+	 * by the query adapter (Db_Query_Mysql, Db_Query_Postgres, Db_Query_Sqlite).
 	 *
 	 * @method drain
 	 * @param {string} $table
@@ -790,8 +681,6 @@ class Db_Mysql implements Db_Interface
 	 */
 	public function drain($table, $field, $limit = 10000, $options = array())
 	{
-		$pdo = $this->reallyConnect();
-
 		// merge options with defaults
 		$options = array_merge(array(
 			'outdir'  => '/var/www/dumps',
@@ -807,22 +696,17 @@ class Db_Mysql implements Db_Interface
 			}
 		}
 
+		// build query adapter
+		$query = $this->newQuery(Db_Query::TYPE_SELECT);
+
 		// check index on field
-		$idx = $pdo->prepare("SHOW INDEX FROM `$table` WHERE Column_name = :field");
-		$idx->execute([':field' => $field]);
-		if ($idx->rowCount() === 0) {
+		if (!$query->isIndexed($table, $field)) {
 			throw new Exception("Field $field is not indexed in $table");
 		}
 
-		$order = $options['desc'] ? "DESC" : "ASC";
-
 		// fetch batch
-		$sql = "SELECT * FROM `$table` ORDER BY `$field` $order LIMIT :lim";
-		$stmt = $pdo->prepare($sql);
-		$stmt->bindValue(':lim', (int)$limit, PDO::PARAM_INT);
-		$stmt->execute();
-		$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+		$order = $options['desc'] ? 'DESC' : 'ASC';
+		$rows = $query->selectBatch($table, $field, $limit, $order);
 		if (!$rows) {
 			return false; // nothing to drain
 		}
@@ -871,7 +755,7 @@ class Db_Mysql implements Db_Interface
 		$outPath = $csvPath;
 
 		// zip if requested
-		if (!$options['dontZip']) {
+		if (!$options['dontZip'] && class_exists('Q_Zip')) {
 			$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
 			$zip = new Q_Zip();
 			$zip->zip_files($csvPath, $zipPath);
@@ -879,13 +763,17 @@ class Db_Mysql implements Db_Interface
 			$outPath = $zipPath;
 		}
 
-		// delete exported rows
+		// build Db_Range for deletion
 		if ($options['desc']) {
-			$del = $pdo->prepare("DELETE FROM `$table` WHERE `$field` > :boundary");
+			// delete all rows with $field > cutoff (keep cutoff group and below)
+			$range = new Db_Range($cutoff, false, true, null);
 		} else {
-			$del = $pdo->prepare("DELETE FROM `$table` WHERE `$field` < :boundary");
+			// delete all rows with $field < cutoff (keep cutoff group and above)
+			$range = new Db_Range(null, false, false, $cutoff);
 		}
-		$del->execute([':boundary' => $cutoff]);
+
+		// delete exported rows via adapter
+		$query->deleteRange($table, $field, $range);
 
 		return $outPath;
 	}
