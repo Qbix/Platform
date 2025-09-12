@@ -600,6 +600,59 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
+	 * Computes the adapter class name for a given Db instance.
+	 * Example: Db_Mysql → Db_Query_Mysql
+	 *
+	 * @method adapterClass
+	 * @static
+	 * @param {Db} $db The Db adapter instance
+	 * @return {string} The resolved adapter class name
+	 */
+	public static function adapterClass(Db_Interface $db)
+	{
+		$parts = explode('_', get_class($db));
+
+		if ($parts[0] === 'Db') {
+			$parts[0] = 'Db_Query';
+		}
+
+		return implode('_', $parts);
+	}
+
+	/**
+	 * Resolves the adapter class name for a given Db instance.
+	 *
+	 * @method adapter
+	 * @static
+	 * @param {Db} $db The Db adapter instance (e.g. instance of Db_Mysql)
+	 * @param {mixed} ...$args Optional extra arguments (query type, clauses, etc.)
+	 * @return {string} The resolved Db_Query_* adapter class name
+	 * @throws {Exception} If the adapter class does not exist
+	 *
+	 * @example
+	 *     $db = new Db_Mysql("main");
+	 *     Db_Query::adapter($db); // "Db_Query_Mysql"
+	 */
+	public static function adapter(Db_Interface $db)
+	{
+		// Collect optional args (PHP 5.2–style)
+		$args = func_get_args();
+		array_shift($args); // remove $db
+
+		// Ask helper to compute the adapter class
+		$adapter = self::adapterClass($db);
+
+		// Verify class exists
+		if (!class_exists($adapter)) {
+			throw new Exception("Query adapter class '$adapter' not found");
+		}
+
+		// For now just return the adapter class name.
+		// Future: $args can be used for more granular resolution.
+		return $adapter;
+	}
+
+	/**
 	 * This class lets you create and use Db queries
 	 * @class Db_Query
 	 * @extends Db_Query
