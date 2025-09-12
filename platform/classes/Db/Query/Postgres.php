@@ -129,4 +129,28 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 	{
 		return $this->build_insert_onDuplicateKeyUpdate();
 	}
+
+	/**
+	 * Check if a column is indexed in a PostgreSQL table.
+	 *
+	 * Uses the `pg_indexes` catalog to determine if the column appears in any index.
+	 *
+	 * @method isIndexed_internal
+	 * @protected
+	 * @param {string} $table Table name
+	 * @param {string} $field Column name
+	 * @return {bool} True if the column is indexed, false otherwise
+	 */
+	protected function isIndexed_internal($table, $field)
+	{
+		$sql = "
+			SELECT 1
+			FROM pg_indexes
+			WHERE tablename = :table
+			AND indexdef ILIKE '%' || :field || '%'
+			LIMIT 1";
+		$stmt = $this->db->reallyConnect()->prepare($sql);
+		$stmt->execute(array(':table' => $table, ':field' => $field));
+		return (bool) $stmt->fetchColumn();
+	}
 }

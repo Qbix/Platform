@@ -652,6 +652,103 @@ class Db_Mysql implements Db_Interface
 	}
 
 	/**
+	 * Drain rows from a table into a CSV file (optionally zipped) and delete them.
+	 *
+	 * Uses Db_Query_Mysql helpers (`isIndexed`, `selectBatch`, `deleteRange`)
+	 * to remain DBMS-agnostic at the higher level.
+	 *
+	 * @method drain
+	 * @param {string} $table Table name
+	 * @param {string} $field Indexed field to order by (e.g. "id", "insertedTime")
+	 * @param {array} [$options=array()] Optional parameters:
+	 *   @param {int}    [$options.limit=10000] Number of rows per batch
+	 *   @param {string} [$options.outdir="/var/www/dumps"] Directory to write dump files
+	 *   @param {bool}   [$options.desc=false] If true, order by DESC (default ASC)
+	 *   @param {string} [$options.prefix=""] Optional prefix for filename
+	 *   @param {bool}   [$options.dontZip=false] If true, leave CSV uncompressed
+	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
+	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
+	 */
+	public function drain($table, $field, array $options = array())
+	{
+		// Defaults
+		$limit   = isset($options['limit'])   ? $options['limit']   : 10000;
+		$outdir  = isset($options['outdir'])  ? $options['outdir']  : '/var/www/dumps';
+		$desc    = isset($options['desc'])    ? $options['desc']    : false;
+		$prefix  = isset($options['prefix'])  ? $options['prefix']  : $table;
+		$dontZip = isset($options['dontZip']) ? $options['dontZip'] : false;
+
+		$pdo = $this->reallyConnect();
+		$query = new Db_Query_Mysql($this, Db_Query::TYPE_SELECT);
+
+		// Ensure outdir exists
+		if (!is_dir($outdir)) {
+			if (!mkdir($outdir, 0770, true)) {
+				throw new Exception("Failed to create directory: $outdir");
+			}
+		}
+
+		// Check index
+		if (!$query->isIndexed($table, $field)) {
+			throw new Exception("Field $field is not indexed in $table");
+		}
+
+		// Fetch rows
+		$rows = $query->selectBatch($table, $field, $limit, $desc ? 'DESC' : 'ASC');
+		if (!$rows) {
+			return false;
+		}
+
+		// Compute min/max field values on the fly
+		$minVal = null;
+		$maxVal = null;
+		foreach ($rows as $row) {
+			$value = $row[$field];
+			if ($minVal === null || $value < $minVal) $minVal = $value;
+			if ($maxVal === null || $value > $maxVal) $maxVal = $value;
+		}
+
+		// Normalize for filenames
+		$first = preg_replace('/[^A-Za-z0-9T:_-]/', '_', (string) ($desc ? $maxVal : $minVal));
+		$last  = preg_replace('/[^A-Za-z0-9T:_-]/', '_', (string) ($desc ? $minVal : $maxVal));
+
+		// Build file paths
+		$csvPath = sprintf(
+			"%s/%s---%s---%s---%s.csv",
+			rtrim($outdir, '/'),
+			$prefix,
+			$field,
+			$first,
+			$last
+		);
+
+		// Write CSV
+		$fh = fopen($csvPath, 'w');
+		if (!$fh) {
+			throw new Exception("Cannot write to file: $csvPath");
+		}
+		fputcsv($fh, array_keys($rows[0])); // headers
+		foreach ($rows as $row) {
+			fputcsv($fh, $row);
+		}
+		fclose($fh);
+
+		// Delete exported rows
+		$query->deleteRange($table, $field, $minVal, $maxVal);
+
+		// Optionally zip
+		if (!$dontZip && class_exists('Q_Zip')) {
+			$zipPath = $csvPath . '.zip';
+			$zipper = new Q_Zip();
+			$zipper->zip_files($csvPath, $zipPath);
+			unlink($csvPath);
+			return $zipPath;
+		}
+
+		return $csvPath;
+	}
+
+	/**
 	 * Creates a query to update rows. Needs to be used with {@link Db_Query::set}
 	 * @method update
 	 * @param {string} $table The table to update

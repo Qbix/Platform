@@ -43,6 +43,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		}
 		return $repres;
 	}
+	
 
 	/**
 	 * MySQL uses backticks for quoting
@@ -130,4 +131,24 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 
 		return $updates;
 	}
+
+	/**
+	 * Check if a column is indexed in a MySQL table.
+	 *
+	 * Uses `SHOW INDEX` to verify if the given column has an index.
+	 *
+	 * @method isIndexed_internal
+	 * @protected
+	 * @param {string} $table Table name
+	 * @param {string} $field Column name
+	 * @return {bool} True if the column is indexed, false otherwise
+	 */
+	protected function isIndexed_internal($table, $field)
+	{
+		$sql = "SHOW INDEX FROM " . static::quoted($table) . " WHERE Column_name = :field";
+		$stmt = $this->db->reallyConnect()->prepare($sql);
+		$stmt->execute(array(':field' => $field));
+		return ($stmt->rowCount() > 0);
+	}
+
 }

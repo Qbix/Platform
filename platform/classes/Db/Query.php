@@ -3146,6 +3146,76 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
+	 * Check if a field is indexed in a given table.
+	 *
+	 * This method delegates to an adapter-specific implementation.
+	 *
+	 * @method isIndexed
+	 * @param {string} $table Table name
+	 * @param {string} $field Column name
+	 * @return {bool}
+	 */
+	public function isIndexed($table, $field)
+	{
+		return $this->isIndexed_internal($table, $field);
+	}
+
+	/**
+	 * Adapter-specific implementation of isIndexed.
+	 *
+	 * @method isIndexed_internal
+	 * @protected
+	 * @param {string} $table Table name
+	 * @param {string} $field Column name
+	 * @return {bool}
+	 * @throws {Exception} if not implemented in the subclass
+	 */
+	protected function isIndexed_internal($table, $field)
+	{
+		throw new Exception(get_class($this) . " must implement isIndexed_internal");
+	}
+
+	/**
+	 * Select a batch of rows ordered by an indexed field.
+	 *
+	 * @method selectBatch
+	 * @param {string} $table Table name
+	 * @param {string} $field Field to order by
+	 * @param {int} $limit Number of rows
+	 * @param {string} $order "ASC" or "DESC"
+	 * @return {array} Rows as associative arrays
+	 */
+	public function selectBatch($table, $field, $limit, $order = 'ASC')
+	{
+		$sql = "SELECT * FROM " . self::quoted($table) .
+			" ORDER BY " . self::quoted($field) . " $order LIMIT :limit";
+		$stmt = $this->db->reallyConnect()->prepare($sql);
+		$stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+		$stmt->execute();
+		return $stmt->fetchAll(PDO::FETCH_ASSOC);
+	}
+
+	/**
+	 * Delete rows in a field range.
+	 *
+	 * @method deleteRange
+	 * @param {string} $table Table name
+	 * @param {string} $field Field to filter by
+	 * @param {mixed} $min Lower bound (inclusive)
+	 * @param {mixed} $max Upper bound (inclusive)
+	 * @return {int} Number of rows deleted
+	 */
+	public function deleteRange($table, $field, $min, $max)
+	{
+		$sql = "DELETE FROM " . self::quoted($table) .
+			" WHERE " . self::quoted($field) . " BETWEEN :min AND :max";
+		$stmt = $this->db->reallyConnect()->prepare($sql);
+		$stmt->execute(array(':min' => $min, ':max' => $max));
+		return $stmt->rowCount();
+	}
+
+
+	/**
 	 * Make partition from array of points
 	 * @method map_shard
 	 * @protected

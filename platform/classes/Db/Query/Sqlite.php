@@ -150,4 +150,34 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
 		}
 		return parent::orderBy_expression($expression, $ascending);
 	}
+
+    /**
+     * Check if a column is indexed in a SQLite table.
+     *
+     * Uses `PRAGMA index_list` and `PRAGMA index_info` to find indexes
+     * defined on the specified table and see if the column is included.
+     *
+     * @method isIndexed_internal
+     * @protected
+     * @param {string} $table Table name
+     * @param {string} $field Column name
+     * @return {bool} True if the column is indexed, false otherwise
+     */
+    protected function isIndexed_internal($table, $field)
+    {
+        $pdo = $this->db->reallyConnect();
+        $stmt = $pdo->query("PRAGMA index_list(" . static::quoted($table) . ")");
+        $indexes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($indexes as $index) {
+            $info = $pdo->query("PRAGMA index_info(" . static::quoted($index['name']) . ")")
+                        ->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($info as $col) {
+                if ($col['name'] === $field) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
 }
