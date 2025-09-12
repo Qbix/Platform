@@ -148,6 +148,28 @@ interface Db_Interface
 	function insertManyAndExecute ($table_into, array $rows = array(), $options = array());
 
 	/**
+	 * Drain rows from a table into a CSV file (optionally zipped) and delete them.
+	 *
+	 * The file is named after the table, field, and the min/max values in the drained batch,
+	 * so the filename itself encodes the range of rows exported. This makes it easy to
+	 * build a "data lake" of historical data while keeping the live table small.
+	 *
+	 * @method drain
+	 * @param {PDO}    $pdo         Active PDO connection
+	 * @param {string} $table       Table name
+	 * @param {string} $field       Indexed field to order by (e.g. "id", "insertedTime")
+	 * @param {array}  [$options]   Optional parameters:
+	 *   @param {int}    [$options.limit=10000]          Number of rows per batch
+	 *   @param {string} [$options.outdir="/var/www/dumps"] Directory to write dump files
+	 *   @param {bool}   [$options.desc=false]           If true, order by DESC (default ASC)
+	 *   @param {string} [$options.prefix=""]            Optional prefix for filename
+	 *   @param {bool}   [$options.dontZip=false]        If true, leave CSV uncompressed
+	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
+	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
+	 */
+	function drain($pdo, $table, $field, $options = array());
+
+	/**
 	 * Creates a query to update rows. Needs to be used with Db_Query::set()
 	 * @method update
 	 * @param {string} $table
