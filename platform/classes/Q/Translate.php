@@ -6,7 +6,7 @@
 class Q_Translate
 {
 
-	private $adapter;
+	public $adapter;
 
 	function __construct($options)
 	{

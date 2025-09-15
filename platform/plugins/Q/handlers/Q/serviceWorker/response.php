@@ -81,16 +81,28 @@ var Q = {
 		const newRequest = new Request(original.url, init);
 
 		event.respondWith(
-			fetch(newRequest).then(response => {
-				const clone = response.clone();
-				const setCookieHeader = clone.headers.get("Set-Cookie-JS");
-				if (setCookieHeader) {
-					setCookieHeader.split(';').forEach(kv => {
-						const [k, v] = kv.trim().split('=');
-						if (k && v) cookies[k] = v;
+			caches.open("Q").then(cache => {
+				return cache.match(event.request).then(cached => {
+					if (cached) {
+						console.log("cached: " + event.request.url);
+						return cached;
+					}
+					// Not in cache → go to network
+					return fetch(newRequest).then(response => {
+						// Save a clone in the cache for future requests
+						cache.put(event.request, response.clone());
+
+						// Update local cookie store if server sends Set-Cookie-JS
+						const setCookieHeader = response.headers.get("Set-Cookie-JS");
+						if (setCookieHeader) {
+							setCookieHeader.split(';').forEach(kv => {
+								const [k, v] = kv.trim().split('=');
+								if (k && v) cookies[k] = v;
+							});
+						}
+						return response;
 					});
-				}
-				return response;
+				});
 			})
 		);
 	});
