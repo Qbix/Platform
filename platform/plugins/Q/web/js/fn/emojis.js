@@ -409,7 +409,7 @@ Q.Tool.define("Q/emojis", function (options) {
 	}, true), false);
 
 	/* ----- Load data and initial render ----- */
-	Q.Text.get(o.textName || "Q/emojis", function (err, text) {
+	Q.Text.get(o.textName || "Q/sources/emojis", function (err, text) {
 		if (err) { st.data = { groups: [], skins: {} }; }
 		else {
 			try {
