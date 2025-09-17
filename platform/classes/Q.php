@@ -1831,28 +1831,6 @@ class Q
 		return null;
 	}
 	
-	private static function toArrays($value, $depth = 0, $maxDepth = 100)
-	{
-		if ($depth > $maxDepth) {
-			return '*DEPTH_LIMIT_REACHED*';
-		}
-
-		$result = Q::event('Q/json_encode_toArrays', compact('value'), 'before', false, $value);
-
-		if (is_object($result) && method_exists($result, 'toArray')) {
-			$result = $result->toArray();
-		}
-
-		if (is_array($result)) {
-			foreach ($result as $k => &$v) {
-				$v = self::toArrays($v, $depth + 1, $maxDepth);
-			}
-		}
-
-		return $result;
-	}
-
-	
 	/**
 	 * A wrapper for json_encode
 	 * @method json_encode
@@ -1861,53 +1839,9 @@ class Q
 	 */
 	static function json_encode($value, $options = 0, $depth = 512)
 	{
-		$args = func_get_args();
-		if ($options & Q::JSON_FORCE_OBJECT) {
-			if (is_array($value) && array_keys($value) === range(0, count($value) - 1)) {
-				$value = (object) $value;
-			}
-			$options &= ~Q::JSON_FORCE_OBJECT;
-		}
-		$value = self::utf8ize($value);
-		$args[0] = self::toArrays($value, 0, $depth);
-		$result = call_user_func_array('json_encode', $args);
-		if ($result === false) {
-			if (is_callable('json_last_error')) {
-				throw new Q_Exception_JsonEncode(array(
-					'message' => json_last_error_msg()
-				), null, json_last_error());
-			}
-			throw new Q_Exception_JsonEncode(array(
-				'message' => 'Invalid JSON'
-			), null, -1);
-		}
-		$result = preg_replace_callback(
-			'/^(?: {4})+/m',
-			array('Q', 'json_replace'),
-			$result
-		);
-		return str_replace("\\/", '/', $result);
+		return Q_Json::encode($value, $options, $depth);
 	}
 
-	private static function json_replace($m)
-	{
-		return str_repeat("\t", strlen($m[0]) / 4);
-	}
-
-	/**
-	 * Use it for json_encode some corrupt UTF-8 chars
- 	 * useful for = malformed utf-8 characters possibly incorrectly encoded by json_encode
-	 */
-	static function utf8ize($mixed) {
-		if (is_array($mixed)) {
-			foreach ($mixed as $key => $value) {
-				$mixed[$key] = self::utf8ize($value);
-			}
-		} elseif (is_string($mixed)) {
-			return mb_convert_encoding($mixed, "UTF-8", "UTF-8");
-		}
-		return $mixed;
-	}
 	/**
 	 * A wrapper for json_decode with enhanced character handling
 	 * 
@@ -1925,69 +1859,8 @@ class Q
 	 */
 	static function json_decode($json, $assoc = false, $depth = 512, $options = 0)
 	{
-		if (empty($json)) {
-			return $json;
-		}
-
-		// Handle problematic characters before decoding if flag is set
-		if ($options & JSON_DECODE_CLEAN) {
-			$json = self::utf8ize($json);
-			$json = strtr($json, [
-				"\n" => "@@NEWLINE@@",
-				"\r" => "@@CARRIAGERETURN@@",
-				"\0" => "@@NULL@@",
-				"\x1F" => "@@CONTROL@@"
-			]);
-		}
-
-		$result = json_decode($json, $assoc, $depth, $options & ~JSON_DECODE_CLEAN);
-
-		// Error Handling - Exception Throwing
-		if (is_callable('json_last_error')) {
-			if ($code = json_last_error()) {
-				throw new Q_Exception_JsonDecode([
-					'message' => json_last_error_msg()
-				], [], $code);
-			}
-		} elseif (!isset($result) && strtolower(trim($json)) !== 'null') {
-			throw new Q_Exception_JsonDecode([
-				'message' => 'Invalid JSON'
-			], null, -1);
-		}
-
-		// Restore problematic characters after decoding if flag is set
-		if ($options & JSON_DECODE_CLEAN) {
-			$result = self::decodeProblematicChars($result);
-		}
-
-		return $result;
+		return Q_Json::decode($json, $assoc, $depth, $options);
 	}
-
-	/**
-	 * Restore problematic characters like \n, \r, etc. after json_decode
-	 * 
-	 * @param mixed $data The decoded data
-	 * @return mixed The data with problematic characters restored
-	 */
-	static function decodeProblematicChars($data)
-	{
-		if (is_string($data)) {
-			return strtr($data, [
-				"@@NEWLINE@@" => "\n",
-				"@@CARRIAGERETURN@@" => "\r",
-				"@@NULL@@" => "\0",
-				"@@CONTROL@@" => "\x1F"
-			]);
-		} elseif (is_array($data)) {
-			return array_map(array('Q', 'decodeProblematicChars'), $data);
-		} elseif (is_object($data)) {
-			foreach ($data as $key => $value) {
-				$data->$key = self::decodeProblematicChars($value);
-			}
-		}
-		return $data;
-	}
-
 
 	/**
 	 * Exports a simple variable into something that looks nice, nothing fancy (for now)
