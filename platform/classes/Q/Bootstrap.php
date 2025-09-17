@@ -108,9 +108,9 @@ class Q_Bootstrap
 		if ( !function_exists('json_decode') ) {
 			function json_decode($content, $assoc=false){
 				if ( $assoc ){
-					$json = new Q_Json(SERVICES_JSON_LOOSE_TYPE);
+					$json = new Q_JSON(SERVICES_JSON_LOOSE_TYPE);
 				} else {
-					$json = new Q_Json;
+					$json = new Q_JSON;
 				}
 				return $json->decode($content);
 			}
@@ -118,7 +118,7 @@ class Q_Bootstrap
 
 		if ( !function_exists('json_encode') ) {
 			function json_encode($content){
-				$json = new Q_Json;
+				$json = new Q_JSON;
 				return $json->encode($content);
 			}
 		}

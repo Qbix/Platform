@@ -1839,7 +1839,7 @@ class Q
 	 */
 	static function json_encode($value, $options = 0, $depth = 512)
 	{
-		return Q_Json::encode($value, $options, $depth);
+		return Q_JSON::encode($value, $options, $depth);
 	}
 
 	/**
@@ -1859,7 +1859,7 @@ class Q
 	 */
 	static function json_decode($json, $assoc = false, $depth = 512, $options = 0)
 	{
-		return Q_Json::decode($json, $assoc, $depth, $options);
+		return Q_JSON::decode($json, $assoc, $depth, $options);
 	}
 
 	/**
