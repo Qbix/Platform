@@ -4,7 +4,7 @@
  * Modern JSON utility built on Q::json_encode/json_decode.
  * Adds streaming for large arrays and objects in JSON files.
  */
-class Q_Json
+class Q_JSON
 {
 	/**
 	 * A wrapper for encode
@@ -36,7 +36,7 @@ class Q_Json
 		}
 		$result = preg_replace_callback(
 			'/^(?: {4})+/m',
-			['Q_Json', 'json_replace'],
+			['Q_JSON', 'json_replace'],
 			$result
 		);
 		return str_replace("\\/", '/', $result);
@@ -177,7 +177,7 @@ class Q_Json
 	{
 		// if callback is set, run immediately (no Iterator needed)
 		if (isset($options['callback']) && is_callable($options['callback'])) {
-			$it = new Q_Json_StreamIterator($filename, $options);
+			$it = new Q_JSON_StreamIterator($filename, $options);
 			foreach ($it as $row) {
 				// formatYield already structured $row, but callback wants raw args
 				$key   = isset($row['key'])   ? $row['key']   : null;
@@ -189,11 +189,11 @@ class Q_Json
 		}
 
 		// otherwise return Iterator for foreach
-		return new Q_Json_StreamIterator($filename, $options);
+		return new Q_JSON_StreamIterator($filename, $options);
 	}
 }
 
-class Q_Json_StreamIterator implements Iterator
+class Q_JSON_StreamIterator implements Iterator
 {
 	private $handle;
 	private $filename;
@@ -246,7 +246,7 @@ class Q_Json_StreamIterator implements Iterator
 			$buffer .= $ch;
 
 			// toggle quotes
-			if ($ch === '"' && Q_Json::notEscaped(substr($buffer, 0, -1))) {
+			if ($ch === '"' && Q_JSON::notEscaped(substr($buffer, 0, -1))) {
 				if (!empty($this->stack) && end($this->stack) === '"') {
 					array_pop($this->stack);
 				} else {
@@ -284,7 +284,7 @@ class Q_Json_StreamIterator implements Iterator
 			return;
 		}
 
-		$val = Q_Json::decode($json, true);
+		$val = Q_JSON::decode($json, true);
 
 		// if top-level array/object, walk into it
 		if (is_array($val)) {
