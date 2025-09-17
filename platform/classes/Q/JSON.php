@@ -212,6 +212,7 @@ class Q_JSON_StreamIterator implements Iterator
 		$this->openHandle();
 	}
 
+	#[\ReturnTypeWillChange]
 	private function openHandle()
 	{
 		$this->handle = fopen($this->filename, 'r');
@@ -226,6 +227,7 @@ class Q_JSON_StreamIterator implements Iterator
 		$this->index = 0;
 	}
 
+	#[\ReturnTypeWillChange]
 	public function rewind()
 	{
 		if ($this->handle) fclose($this->handle);
@@ -233,10 +235,14 @@ class Q_JSON_StreamIterator implements Iterator
 		$this->next();
 	}
 
+	#[\ReturnTypeWillChange]
 	public function current() { return $this->current; }
+	#[\ReturnTypeWillChange]
 	public function key()     { return $this->key; }
+	#[\ReturnTypeWillChange]
 	public function valid()   { return $this->current !== null; }
 
+	#[\ReturnTypeWillChange]
 	public function next()
 	{
 		$this->current = null;
