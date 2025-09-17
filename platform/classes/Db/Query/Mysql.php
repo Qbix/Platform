@@ -2086,8 +2086,8 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					}
 					$updates_list[] = "$column = $value";
 				} else if (is_array($value)) {
-					$basedOn = isset($this->basedOn[$column])
-						? $this->basedOn[$column]
+					$basedOn = isset($this->basedOn[$field])
+						? self::column($this->basedOn[$field])
 						: $column;
 					$cases = "$column = (CASE";
 					foreach ($value as $k => $v) {
