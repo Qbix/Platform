@@ -457,123 +457,138 @@ class Db_Mysql implements Db_Interface
 			$odku_clause .= implode(",\n\t", $parts);
 		}
 
-		// simulate beforeSave on all rows
-		$className = isset($options['className']) ? $options['className'] : null;
-		$rowObjects = array();
-		if ($className) {
-			$isCallable = is_callable(array($className, 'beforeInsertManyAndExecute'));
-			foreach ($rows as $k => $row) {
-				if (is_array($row)) {
-					$rowObject = new $className($row);
-				} else {
-					$rowObject = $row;
-					$row = $row->fields;
-				}
-				$rowObjects[] = $rowObject;
-				if (!$isCallable) {
-					$rowObject->beforeSave($row);
-				}
-				$rows[$k] = $rowObject->fields;
-			}
-			if ($isCallable) {
-				call_user_func(array($className, 'beforeInsertManyAndExecute'), $rowObjects);
-				$rows = array();
-				foreach ($rowObjects as $k => $rowObject) {
-					$rows[$k] = $rowObject->fields;
-				}
-			}
-		}
-		
-		
-		// Start filling
-		$queries = array();
-		$queryCounts = array();
-		$bindings = array();
-		$last_q = array();
-		$last_queries = array();
-		foreach ($rows as $row) {
-			if ($row instanceof Db_Row) {
-				if (class_exists('Q') and class_exists($className)) {
-					Q::event("Db/Row/$className/save", array(
-						'row' => $row
-					), 'before'); 
-				}
-				$callback = array($row, "beforeSave");
-				if (is_callable($callback)) {
-					call_user_func(
-						$callback, $row->fields, false, false
-					);
-				}
-				$fieldNames = method_exists($row, 'fieldNames')
-					? $row->fieldNames()
-					: null;
-				$record = array();
-				if (is_array($fieldNames)) {
-					foreach ($fieldNames as $name) {
-						if (array_key_exists($name, $row->fields)) {
-							$record[$name] = $row->fields[$name];
-						} else if (in_array($name, $possibleMagicInsertFields)) {
-							$record[$name] = new Db_Expression('CURRENT_TIMESTAMP');
-						}
+		// Process in outer chunks
+		foreach (array_chunk($rows, $chunkSize) as $rowsChunk) {
+			$rowObjects = array();
+			if ($className) {
+				$isCallable = is_callable(array($className, 'beforeInsertManyAndExecute'));
+				foreach ($rowsChunk as $k => $row) {
+					if (is_array($row)) {
+						$rowObject = new $className($row);
+					} else {
+						$rowObject = $row;
+						$row = $row->fields;
 					}
-				} else {
-					foreach ($row->fields as $name => $value) {
-						$record[$name] = $value;
+					$rowObjects[] = $rowObject;
+					if (!$isCallable) {
+						$rowObject->beforeSave($row);
+					}
+					$rowsChunk[$k] = $rowObject->fields;
+				}
+				if ($isCallable) {
+					call_user_func(array($className, 'beforeInsertManyAndExecute'), $rowObjects);
+					$rowsChunk = array();
+					foreach ($rowObjects as $rowObject) {
+						$rowsChunk[] = $rowObject->fields;
 					}
 				}
-			} else {
-				$record = $row;
-				if ($className) {
-					$fieldNames = call_user_func(array($className, 'fieldNames'));
-					foreach ($fieldNames as $fn) {
-						if (in_array($fn, $possibleMagicInsertFields)) {
-							$record[$fn] = new Db_Expression('CURRENT_TIMESTAMP');
-							break;
-						}
-					}
-				}
-			}
-			$query = new Db_Query_Mysql($this, Db_Query::TYPE_INSERT);
-			// get shard, if any
-			$shard = '';
-			if (isset($className)) {
-				$query->className = $className;
-				$sharded = $query->shard(null, $record);
-				if (count($sharded) > 1 or $shard === '*') { // should be only one shard
-					throw new Exception("Db_Mysql::insertManyAndExecute row should be stored on exactly one shard: " . json_encode($record));
-				}
-				$shard = key($sharded);
 			}
 			
-			// start filling out the query data
-			$qc = empty($queryCounts[$shard]) ? 1 : $queryCounts[$shard] + 1;
-			if (!isset($bindings[$shard])) {
-				$bindings[$shard] = array();
-			}
-			$valuesList = array();
-			$index = 0;
-			foreach ($columnsList as $column) {
-				++$index;
-				$raw = $rawColumns[$column];
-				$value = isset($record[$raw]) ? $record[$raw] : null;
-				if ($value instanceof Db_Expression) {
-					$valuesList[] = "$value";
+			// Start filling
+			$queries = array();
+			$queryCounts = array();
+			$bindings = array();
+			$last_q = array();
+			$last_queries = array();
+			foreach ($rowsChunk as $row) {
+				if ($row instanceof Db_Row) {
+					if (class_exists('Q') and class_exists($className)) {
+						Q::event("Db/Row/$className/save", array(
+							'row' => $row
+						), 'before'); 
+					}
+					$fieldNames = method_exists($row, 'fieldNames')
+						? $row->fieldNames()
+						: null;
+					$record = array();
+					if (is_array($fieldNames)) {
+						foreach ($fieldNames as $name) {
+							if (array_key_exists($name, $row->fields)) {
+								$record[$name] = $row->fields[$name];
+							} else if (in_array($name, $possibleMagicInsertFields)) {
+								$record[$name] = new Db_Expression('CURRENT_TIMESTAMP');
+							}
+						}
+					} else {
+						foreach ($row->fields as $name => $value) {
+							$record[$name] = $value;
+						}
+					}
 				} else {
-					$valuesList[] = ':_'.$qc.'_'.$index;
-					$bindings[$shard]['_'.$qc.'_'.$index] = $value;
+					$record = $row;
+					if ($className) {
+						$fieldNames = call_user_func(array($className, 'fieldNames'));
+						foreach ($fieldNames as $fn) {
+							if (in_array($fn, $possibleMagicInsertFields)) {
+								$record[$fn] = new Db_Expression('CURRENT_TIMESTAMP');
+								break;
+							}
+						}
+					}
+				}
+				$query = new Db_Query_Mysql($this, Db_Query::TYPE_INSERT);
+				// get shard, if any
+				$shard = '';
+				if (isset($className)) {
+					$query->className = $className;
+					$sharded = $query->shard(null, $record);
+					if (count($sharded) > 1 or $shard === '*') { // should be only one shard
+						throw new Exception("Db_Mysql::insertManyAndExecute row should be stored on exactly one shard: " . json_encode($record));
+					}
+					$shard = key($sharded);
+				}
+				
+				// start filling out the query data
+				$qc = empty($queryCounts[$shard]) ? 1 : $queryCounts[$shard] + 1;
+				if (!isset($bindings[$shard])) {
+					$bindings[$shard] = array();
+				}
+				$valuesList = array();
+				$index = 0;
+				foreach ($columnsList as $column) {
+					++$index;
+					$raw = $rawColumns[$column];
+					$value = isset($record[$raw]) ? $record[$raw] : null;
+					if ($value instanceof Db_Expression) {
+						$valuesList[] = "$value";
+					} else {
+						$valuesList[] = ':_'.$qc.'_'.$index;
+						$bindings[$shard]['_'.$qc.'_'.$index] = $value;
+					}
+				}
+				$valuesString = implode(', ', $valuesList);
+				if (empty($queryCounts[$shard])) {
+					$q = $queries[$shard] = "INSERT INTO $into\nVALUES ($valuesString) ";
+					$queryCounts[$shard] = 1;
+				} else {
+					$q = $queries[$shard] .= ",\n       ($valuesString) ";
+					++$queryCounts[$shard];
+				}
+
+				// if chunk filled up for this shard, execute it
+				if ($qc === $chunkSize) {
+					if ($onDuplicateKeyUpdate) {
+						$q .= $odku_clause;
+					}
+					$query = $this->rawQuery($q)->bind($bindings[$shard]);
+					if ($onDuplicateKeyUpdate) {
+						$query = $query->bind($update_fields);
+					}
+					if (isset($last_q[$shard]) and $last_q[$shard] === $q) {
+						// re-use the prepared statement, save round-trips to the db
+						$query->reuseStatement($last_queries[$shard]);
+					}
+					$query->execute(true, $shard);
+					$last_q[$shard] = $q;
+					$last_queries[$shard] = $query; // save for re-use
+					$bindings[$shard] = $queries[$shard] = array();
+					$queryCounts[$shard] = 0;
 				}
 			}
-			$valuesString = implode(', ', $valuesList);
-			if (empty($queryCounts[$shard])) {
-				$q = $queries[$shard] = "INSERT INTO $into\nVALUES ($valuesString) ";
-				$queryCounts[$shard] = 1;
-			} else {
-				$q = $queries[$shard] .= ",\n       ($valuesString) ";
-				++$queryCounts[$shard];
-			}
-
-			// if chunk filled up for this shard, execute it
-			if ($qc === $chunkSize) {
+			
+			// Now execute the remaining queries, if any
+			foreach ($queries as $shard => $q) {
+				if (!$q) continue;
 				if ($onDuplicateKeyUpdate) {
 					$q .= $odku_clause;
 				}
@@ -586,69 +601,42 @@ class Db_Mysql implements Db_Interface
 					$query->reuseStatement($last_queries[$shard]);
 				}
 				$query->execute(true, $shard);
-				$last_q[$shard] = $q;
-				$last_queries[$shard] = $query; // save for re-use
-				$bindings[$shard] = $queries[$shard] = array();
-				$queryCounts[$shard] = 0;
 			}
-		}
-		
-		// Now execute the remaining queries, if any
-		foreach ($queries as $shard => $q) {
-			if (!$q) continue;
-			if ($onDuplicateKeyUpdate) {
-				$q .= $odku_clause;
-			}
-			$query = $this->rawQuery($q)->bind($bindings[$shard]);
-			if ($onDuplicateKeyUpdate) {
-				$query = $query->bind($update_fields);
-			}
-			if (isset($last_q[$shard]) and $last_q[$shard] === $q) {
-				// re-use the prepared statement, save round-trips to the db
-				$query->reuseStatement($last_queries[$shard]);
-			}
-			$query->execute(true, $shard);
-		}
-		
-		foreach ($rows as $row) {
-			if ($row instanceof Db_Row) {
-				$row->wasInserted(true);
-				$row->wasRetrieved(true);
-			}
-		}
-
-		// simulate afterSaveExecute on all rows
-		if ($className) {
-			$callAfterInsertManyAndExecute = false;
-			$args = array();
-			if (is_callable(array($className, 'afterInsertManyAndExecute'))) {
-				call_user_func(array($className, 'afterInsertManyAndExecute'), $rowObjects);
-			} else {
-				foreach ($rowObjects as $rowObject) {
-					try {
-						$rowObject->wasModified(false);
-						$query = self::insert($table_into, $rowObject->fields);
-						$q = $query->build();
-						$stmt = null;
-						$result = new Db_Result($stmt, $query);
-						$rowObject->afterSaveExecute(
-							$result, $query, $rowObject->fields,
-							$rowObject->calculatePKValue(true),
-							'insertManyAndExecute'
-						);
-					} catch (Exception $e) {
-						// swallow errors and continue the simulation
-					}
+			
+			foreach ($rowsChunk as $row) {
+				if ($row instanceof Db_Row) {
+					$row->wasInserted(true);
+					$row->wasRetrieved(true);
 				}
 			}
-			/**
-			 * @event Db/Row/$class_name/insertManyAndExecute {after}
-			 * @param {array} rows
-			 */
-			Q::event("Db/Row/$className/insertManyAndExecute", array(
-				'rows' => $rowObjects,
-			), 'after');
-		}
+
+			// simulate afterSaveExecute on all rows in this chunk
+			if ($className) {
+				if (is_callable(array($className, 'afterInsertManyAndExecute'))) {
+					call_user_func(array($className, 'afterInsertManyAndExecute'), $rowObjects);
+				} else {
+					foreach ($rowObjects as $rowObject) {
+						try {
+							$rowObject->wasModified(false);
+							$query = self::insert($table_into, $rowObject->fields);
+							$q = $query->build();
+							$stmt = null;
+							$result = new Db_Result($stmt, $query);
+							$rowObject->afterSaveExecute(
+								$result, $query, $rowObject->fields,
+								$rowObject->calculatePKValue(true),
+								'insertManyAndExecute'
+							);
+						} catch (Exception $e) {
+							// swallow errors and continue the simulation
+						}
+					}
+				}
+				Q::event("Db/Row/$className/insertManyAndExecute", array(
+					'rows' => $rowObjects,
+				), 'after');
+			}
+		} // end outer chunk
 	}
 
 	/**
