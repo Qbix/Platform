@@ -896,20 +896,24 @@ abstract class Db_Query extends Db_Expression
 	 * because it may replace more than you want!
 	 * @method replace
 	 * @param {array} [$replacements=array()] This must be an array.
+	 * @return {Db_Query} The current object, for chainable interface.
 	 */
 	function replace(array $replacements = array())
 	{
 		$this->replacements = array_merge($this->replacements, $replacements);
+		return $this;
 	}
 
 	/**
 	 * Override which column to base the CASE statements on
 	 * @method basedOn
 	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 * @return {Db_Query} The current object, for chainable interface.
 	 */
 	function basedOn(array $basedOn = array())
 	{
 		$this->basedOn = array_merge($this->basedOn, $basedOn);
+		return $this;
 	}
 
 	/**
