@@ -497,10 +497,12 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	 * because it may replace more than you want!
 	 * @method replace
 	 * @param {array} [$replacements=array()] This must be an array.
+	 * @return {Db_Query_Mysql} The resulting object implementing Db_Query_Interface.
 	 */
 	function replace(array $replacements = array())
 	{
 		$this->replacements = array_merge($this->replacements, $replacements);
+		return $this;
 	}
 
 	/**
