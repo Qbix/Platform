@@ -74,6 +74,13 @@ interface Db_Query_Interface
 	function replace(array $replacements = array());
 
 	/**
+	 * Override which column to base the CASE statements on
+	 * @method basedOn
+	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 */
+	function basedOn(array $basedOn = array());
+
+	/**
 	 * You can bind more parameters to the query manually using this method.
 	 * These parameters are bound in the order they are passed to the query.
 	 * Here is an example:

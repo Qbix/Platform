@@ -184,6 +184,14 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	protected $replacements = array();
 
 	/**
+	 * Can be used to set which column to base the CASE statements on
+	 * @property $replacements
+	 * @type array
+	 * @default array()
+	 */
+	protected $basedOn = array();
+
+	/**
 	 * Whether to use the cache or not
 	 * @property $ignoreCache
 	 * @type boolean
@@ -493,6 +501,16 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	function replace(array $replacements = array())
 	{
 		$this->replacements = array_merge($this->replacements, $replacements);
+	}
+
+	/**
+	 * Override which column to base the CASE statements on
+	 * @method basedOn
+	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 */
+	function basedOn(array $basedOn = array())
+	{
+		$this->basedOn = array_merge($this->basedOn, $basedOn);
 	}
 
 	/**
@@ -2068,12 +2086,15 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					}
 					$updates_list[] = "$column = $value";
 				} else if (is_array($value)) {
+					$basedOn = isset($this->basedOn[$column])
+						? $this->basedOn[$column]
+						: $column;
 					$cases = "$column = (CASE";
 					foreach ($value as $k => $v) {
 						if (!$k) {
 							continue;
 						}
-						$cases .= "\n\tWHEN $column = :_set_$i THEN :_set_".($i+1);
+						$cases .= "\n\tWHEN $basedOn = :_set_$i THEN :_set_".($i+1);
 						$this->parameters["_set_$i"] = $k;
 						$this->parameters["_set_".($i+1)] = $v;
 						$i += 2;
