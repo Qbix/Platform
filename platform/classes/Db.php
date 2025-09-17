@@ -154,7 +154,7 @@ interface Db_Interface
 	 * so the filename itself encodes the range of rows exported. This makes it easy to
 	 * build a "data lake" of historical data while keeping the live table small.
 	 *
-	 * @method drain
+	 * @method archive
 	 * @param {PDO}    $pdo         Active PDO connection
 	 * @param {string} $table       Table name
 	 * @param {string} $field       Indexed field to order by (e.g. "id", "insertedTime")
@@ -167,7 +167,7 @@ interface Db_Interface
 	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
 	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
 	 */
-	function drain($pdo, $table, $field, $options = array());
+	function archive($pdo, $table, $field, $options = array());
 
 	/**
 	 * Creates a query to update rows. Needs to be used with Db_Query::set()

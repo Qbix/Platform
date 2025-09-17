@@ -100,6 +100,7 @@ if (!defined('JSON_PRETTY_PRINT')) define('JSON_PRETTY_PRINT', 0);
 require_once(Q_CLASSES_DIR.DS.'Q.php');
 
 Q::milliseconds();
+require_once(Q_CLASSES_DIR.DS.'Q'.DS.'JSON.php');
 require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Cache.php');
 require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Bootstrap.php');
 require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Tree.php');

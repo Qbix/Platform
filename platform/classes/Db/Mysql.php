@@ -646,7 +646,7 @@ class Db_Mysql implements Db_Interface
 	 * This method is DBMS-agnostic — actual SQL differences are handled
 	 * by the query adapter (Db_Query_Mysql, Db_Query_Postgres, Db_Query_Sqlite).
 	 *
-	 * @method drain
+	 * @method archive
 	 * @param {string} $table
 	 *   Table name
 	 * @param {string} $field
@@ -664,10 +664,10 @@ class Db_Mysql implements Db_Interface
 	 *   @param {bool} [$options.dontZip=false]
 	 *     If true, produce .csv only. If false (default), produce .zip with the CSV inside.
 	 * @return {string|false}
-	 *   Full path to the file created (.csv or .zip), or false if nothing drained.
+	 *   Full path to the file created (.csv or .zip), or false if nothing archived.
 	 * @throws {Exception} if field not indexed or file I/O fails.
 	 */
-	public function drain($table, $field, $limit = 10000, $options = array())
+	public function archive($table, $field, $limit = 10000, $options = array())
 	{
 		// merge options with defaults
 		$options = array_merge(array(
@@ -709,7 +709,7 @@ class Db_Mysql implements Db_Interface
 		}
 		if ($cutIndex === count($rows) - 1) {
 			// every row in batch shares the same field value
-			throw new Exception("Drain aborted: entire batch has identical `$field` = $cutoff");
+			throw new Exception("Archive aborted: entire batch has identical `$field` = $cutoff");
 		}
 
 		// truncate rows to cutoff boundary
