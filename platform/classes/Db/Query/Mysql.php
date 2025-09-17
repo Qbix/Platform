@@ -84,6 +84,31 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		}
 		return parent::orderBy_expression($expression, $ascending);
 	}
+	
+	/**
+	 * Generates CASE-based assignment for array updates (MySQL).
+	 * Fallback defaults to an empty string when no match is found.
+	 * @method set_array_internal
+	 * @protected
+	 * @param {string} $column The column being updated.
+	 * @param {array} $value Mapping of "WHEN column=value THEN result".
+	 * @param {int} &$i Reference counter for bound parameters.
+	 * @return {string} The CASE expression SQL fragment.
+	 */
+	protected function set_array_internal($column, array $value, &$i)
+	{
+		$cases = "$column = (CASE";
+		foreach ($value as $k => $v) {
+			if ($k === '' || $k === null) continue;
+			$cases .= "\n\tWHEN $column = :_set_$i THEN :_set_" . ($i+1);
+			$this->parameters["_set_$i"]     = $k;
+			$this->parameters["_set_" . ($i+1)] = $v;
+			$i += 2;
+		}
+		// MySQL fallback: empty string
+		$cases .= "\n\tELSE '' END)";
+		return $cases;
+	}
 
 	/**
 	 * Calculates an ON DUPLICATE KEY UPDATE clause

@@ -152,6 +152,93 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
 	}
 
     /**
+     * Generates CASE-based assignment for array updates (SQLite).
+     * Fallback preserves the existing column value when no match is found.
+     * @method set_array_internal
+     * @protected
+     * @param {string} $column The column being updated.
+     * @param {array} $value Mapping of "WHEN column=value THEN result".
+     * @param {int} &$i Reference counter for bound parameters.
+     * @return {string} The CASE expression SQL fragment.
+     */
+    protected function set_array_internal($column, array $value, &$i)
+    {
+        $cases = "$column = (CASE";
+        foreach ($value as $k => $v) {
+            if ($k === '' || $k === null) continue;
+            $cases .= "\n\tWHEN $column = :_set_$i THEN :_set_" . ($i+1);
+            $this->parameters["_set_$i"]     = $k;
+            $this->parameters["_set_" . ($i+1)] = $v;
+            $i += 2;
+        }
+        // SQLite fallback: keep current value
+        $cases .= "\n\tELSE $column END)";
+        return $cases;
+    }
+
+    /**
+     * Calculates SET clause for SQLite
+     * @method set_internal
+     * @protected
+     * @param {array} $updates An associative array of column => value pairs.
+     * The values are automatically escaped using PDO placeholders.
+     * @return {string}
+     */
+    protected function set_internal($updates)
+    {
+        switch ($this->type) {
+            case Db_Query::TYPE_UPDATE:
+                break;
+            default:
+                throw new Exception("The SET clause does not belong in this context.", -1);
+        }
+
+        static $i = 1;
+        if (is_array($updates)) {
+            $updates_list = [];
+            foreach ($updates as $field => $value) {
+                $column = static::column($field);
+
+                if ($value instanceof Db_Expression) {
+                    if (is_array($value->parameters)) {
+                        $this->parameters = array_merge($this->parameters, $value->parameters);
+                    }
+                    $updates_list[] = "$column = $value";
+
+                } else if (is_array($value)) {
+                    // CASE expression for bulk updates
+                    $cases = "$column = (CASE";
+                    foreach ($value as $k => $v) {
+                        if ($k === '' || $k === null) {
+                            continue;
+                        }
+                        $cases .= "\n\tWHEN $column = :_set_$i THEN :_set_" . ($i+1);
+                        $this->parameters["_set_$i"]     = $k;
+                        $this->parameters["_set_" . ($i+1)] = $v;
+                        $i += 2;
+                    }
+                    // In SQLite, safe fallback is to keep the current column value
+                    $cases .= "\n\tELSE $column END)";
+                    $updates_list[] = $cases;
+
+                } else {
+                    $updates_list[] = "$column = :_set_$i";
+                    $this->parameters["_set_$i"] = $value;
+                    ++$i;
+                }
+            }
+            $updates = count($updates_list) > 0
+                ? implode(", \n", $updates_list)
+                : '';
+        }
+        if (!is_string($updates)) {
+            throw new Exception("The SET updates need to be specified correctly.", -1);
+        }
+
+        return $updates;
+    }
+
+    /**
      * Check if a column is indexed in a SQLite table.
      *
      * Uses `PRAGMA index_list` and `PRAGMA index_info` to find indexes

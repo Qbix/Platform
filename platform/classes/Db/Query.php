@@ -1739,25 +1739,7 @@ abstract class Db_Query extends Db_Expression
 					}
 					$updates_list[] = "$column = $value";
 				} else if (is_array($value)) {
-					$cases = "$column = (CASE";
-					foreach ($value as $k => $v) {
-						if (!$k) {
-							continue;
-						}
-						$cases .= "\n\tWHEN $column = :_set_$i THEN :_set_".($i+1);
-						$this->parameters["_set_$i"] = $k;
-						$this->parameters["_set_".($i+1)] = $v;
-						$i += 2;
-					}
-					if (isset($value[''])) {
-						$cases .= "\n\tELSE :_set_$i";
-						$this->parameters["_set_$i"] = $k;
-					} else {
-						$cases .= "\n\tELSE ''";
-					}
-					++$i;
-					$cases .= "\nEND)";
-					$updates_list[] = $cases;
+					$updates_list[] = $this->set_array_internal($column, $value, $i);
 				} else {
 					$updates_list[] = "$column = :_set_$i";
 					$this->parameters["_set_$i"] = $value;
