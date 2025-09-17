@@ -185,7 +185,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 
 	/**
 	 * Can be used to set which column to base the CASE statements on
-	 * @property $replacements
+	 * @property $basedOn
 	 * @type array
 	 * @default array()
 	 */
@@ -507,10 +507,12 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	 * Override which column to base the CASE statements on
 	 * @method basedOn
 	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 * @return {Db_Query_Mysql} The resulting object implementing Db_Query_Interface.
 	 */
 	function basedOn(array $basedOn = array())
 	{
 		$this->basedOn = array_merge($this->basedOn, $basedOn);
+		return $this;
 	}
 
 	/**
