@@ -159,14 +159,18 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
      * @param {string} $column The column being updated.
      * @param {array} $value Mapping of "WHEN column=value THEN result".
      * @param {int} &$i Reference counter for bound parameters.
+     * @param {string} $field The field name being updated.
      * @return {string} The CASE expression SQL fragment.
      */
-    protected function set_array_internal($column, array $value, &$i)
+    protected function set_array_internal($column, array $value, &$i, $field)
     {
+        $basedOn = isset($this->basedOn[$field])
+			? Db_Query::column($this->basedOn[$field])
+			: $column;
         $cases = "$column = (CASE";
         foreach ($value as $k => $v) {
             if ($k === '' || $k === null) continue;
-            $cases .= "\n\tWHEN $column = :_set_$i THEN :_set_" . ($i+1);
+            $cases .= "\n\tWHEN $basedOn = :_set_$i THEN :_set_" . ($i+1);
             $this->parameters["_set_$i"]     = $k;
             $this->parameters["_set_" . ($i+1)] = $v;
             $i += 2;

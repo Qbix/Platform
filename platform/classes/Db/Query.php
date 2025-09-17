@@ -81,6 +81,13 @@ interface Db_Query_Interface
 	function replace(array $replacements = array());
 
 	/**
+	 * Override which column to base the CASE statements on
+	 * @method basedOn
+	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 */
+	function basedOn(array $basedOn = array());
+
+	/**
 	 * You can bind more parameters to the query manually using this method.
 	 * These parameters are bound in the order they are passed to the query.
 	 * Here is an example:
@@ -487,6 +494,14 @@ abstract class Db_Query extends Db_Expression
 	protected $replacements = array();
 
 	/**
+	 * Can be used to set which column to base the CASE statements on
+	 * @property $basedOn
+	 * @type array
+	 * @default array()
+	 */
+	protected $basedOn = array();
+
+	/**
 	 * Whether to use the cache or not
 	 * @property $ignoreCache
 	 * @type boolean
@@ -885,6 +900,16 @@ abstract class Db_Query extends Db_Expression
 	function replace(array $replacements = array())
 	{
 		$this->replacements = array_merge($this->replacements, $replacements);
+	}
+
+	/**
+	 * Override which column to base the CASE statements on
+	 * @method basedOn
+	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 */
+	function basedOn(array $basedOn = array())
+	{
+		$this->basedOn = array_merge($this->basedOn, $basedOn);
 	}
 
 	/**
@@ -1739,7 +1764,7 @@ abstract class Db_Query extends Db_Expression
 					}
 					$updates_list[] = "$column = $value";
 				} else if (is_array($value)) {
-					$updates_list[] = $this->set_array_internal($column, $value, $i);
+					$updates_list[] = $this->set_array_internal($column, $value, $i, $field);
 				} else {
 					$updates_list[] = "$column = :_set_$i";
 					$this->parameters["_set_$i"] = $value;
@@ -2005,6 +2030,14 @@ abstract class Db_Query extends Db_Expression
 		return call_user_func_array($callback, $args);
 	}
 
+	/**
+	 * Quotes a column name, possibly qualified with table name.
+	 * If the column is a Db_Expression, it is returned as is.
+	 * @method column
+	 * @static
+	 * @param {Db_Expression|string} $column
+	 * @return {Db_Expression|string}
+	 */
 	static function column($column)
 	{
 		if ($column instanceof Db_Expression) {
