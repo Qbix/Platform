@@ -1431,6 +1431,50 @@ class Q_Request
 				? ':'.$_SERVER['SERVER_PORT'] : '',
 			$app_root);
 	}
+
+	/**
+	 * Determines whether the given IP address is a public IP address
+	 * @method isPublicIP
+	 * @static
+	 * @param {string} $ip The IP address to check
+	 * @return {boolean} true if the IP is a public IP address, false otherwise
+	 */
+	static function isPublicIP($ip)
+	{
+		if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
+	 * Returns the IP address of the user, taking into account trusted proxies
+	 * @method ip
+	 * @static
+	 * @return {string} The IP address of the user
+	 */
+	static function ip()
+	{
+		$trustProxies = Q_Config::get('Metrics', 'visit', 'ip', 'trustProxies', false);
+		$ip = Q::ifset($_SERVER, 'REMOTE_ADDR', '');
+
+		if ($trustProxies) {
+			if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+				$ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+				foreach ($ips as $candidate) {
+					$candidate = trim($candidate);
+					if ($candidate && strtolower($candidate) !== 'unknown') {
+						$ip = $candidate;
+						break;
+					}
+				}
+			} elseif (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+				$ip = $_SERVER['HTTP_CLIENT_IP'];
+			}
+		}
+
+		return $ip;
+	}
 	
 	/**
 	 * @property $url
