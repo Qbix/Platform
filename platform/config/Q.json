@@ -131,7 +131,7 @@
 			"ip": {
 				"trustProxies": false
 			}
-		}
+		},
 		"response": {
 			"isBuffered": true,
 			"layout": {

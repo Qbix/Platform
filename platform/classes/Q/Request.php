@@ -1437,7 +1437,7 @@ class Q_Request
 	 * as well as the type and whether it is public
 	 * @method ip
 	 * @static
-	 * @return {array} Returns array of (ip, protocol, isPublic)
+	 * @return {array} Returns array of (ip, protocol, isPublic, packed)
 	 */
 	static function ip()
 	{
@@ -1461,7 +1461,11 @@ class Q_Request
 		$protocol = Q_Utils::protocolOfIP($ip);
 		$isPublic = Q_Utils::isPublicIP($ip);
 
-		return array($ip, $protocol, $isPublic);
+		$packed = ($protocol === 'v4')
+			? sprintf('%u', ip2long($ip))
+			: inet_pton($ip);
+
+		return array($ip, $protocol, $isPublic, $packed);
 	}
 	
 	/**

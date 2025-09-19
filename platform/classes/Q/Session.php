@@ -346,7 +346,7 @@ class Q_Session
 					header_remove("Set-Cookie"); // we will set it ourselves, thank you
 				}
 				$started = true;
-				if (!self::$sessionExists) {
+				if (!self::$sessionExisted) {
 					if ($throwIfMissingOrInvalid) {
 						self::throwInvalidSession();
 					}
@@ -645,10 +645,10 @@ class Q_Session
 	 * @method readHandler
 	 * @static
 	 * @param {string} $id
-	 * @param {boolean} &$sessionExists Reference to a variable to fill with a boolean
+	 * @param {boolean} &$sessionExisted Reference to a variable to fill with a boolean
 	 * @return {string}
 	 */
-	static function readHandler ($id, &$sessionExists = null)
+	static function readHandler ($id, &$sessionExisted = null)
 	{
 		/**
 		 * @event Q/session/read {before}
@@ -669,7 +669,7 @@ class Q_Session
 		if (empty(self::$session_save_path)) {
 			self::$session_save_path = self::savePath();
 		}
-		self::$sessionExists = $sessionExists = false;
+		self::$sessionExisted = $sessionExisted = false;
 		if (! empty(self::$session_db_connection)) {
 			$id_field = self::$session_db_id_field;
 			$data_field = self::$session_db_data_field;
@@ -679,11 +679,11 @@ class Q_Session
 				$row = new $class();
 				$row->$id_field = $id;
 				if ($row->retrieve()) {
-					self::$sessionExists = $sessionExists = true;
+					self::$sessionExisted = $sessionExisted = true;
 				}
 				self::$session_db_row = $row;
 			} else {
-				self::$sessionExists = $sessionExists = true;
+				self::$sessionExisted = $sessionExisted = true;
 			}
 			if (!empty(self::$session_db_row->content)) {
 				$arr = self::decodeSessionJSON(self::$session_db_row->content);
@@ -692,6 +692,9 @@ class Q_Session
 				$result = isset(self::$session_db_row->$data_field)
 					? self::$session_db_row->$data_field : '';
 			}
+			list($ip, $protocol, $isPublic, $packed) = Q_Request::ip();
+			$field = "ip$protocol";
+			self::$session_db_row->$field = $packed;
 		} else {
 			$duration_name = self::durationName();
 			$id1 = substr($id, 0, 4);
@@ -701,7 +704,7 @@ class Q_Session
 				$result = '';
 			} else {
 				$result = (string) file_get_contents($sess_file);
-				self::$sessionExists = $sessionExists = true;
+				self::$sessionExisted = $sessionExisted = true;
 			}
 		}
 		self::$sess_data = $result;
@@ -868,6 +871,7 @@ class Q_Session
 					}
 					$result = true;
 				} else {
+					$params['new'] = !self::$sessionExisted;
 					Q::event('Q/session/save', $params, 'before');
 					if (! empty(self::$session_db_connection)) {
 						$row->$data_field = $merged_data ? $merged_data : '';
@@ -1423,5 +1427,5 @@ class Q_Session
 	 */
 	public static $preventWrite = false;
 	
-	protected static $sessionExists = null;
+	protected static $sessionExisted = null;
 }
