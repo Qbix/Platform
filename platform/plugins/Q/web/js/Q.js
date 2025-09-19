@@ -17555,6 +17555,33 @@ Q.stackTrace = function() {
 	return obj.stack.replace('Error', 'Stack Trace');
 };
 
+Q.setTimeout = function (callback, delay) {
+	var timer = setTimeout(function () {
+		cleanup();
+		callback("timeout");
+	}, delay);
+	function onUnload() {
+		if (timer) {
+			clearTimeout(timer);
+			cleanup();
+			callback("unload");
+		}
+	}
+	function cleanup() {
+		window.removeEventListener("pagehide", onUnload);
+		window.removeEventListener("beforeunload", onUnload);
+		timer = null;
+	}
+	window.addEventListener("pagehide", onUnload);
+	window.addEventListener("beforeunload", onUnload);
+	return function () {
+		if (timer) {
+			clearTimeout(timer);
+			cleanup();
+		}
+	};
+};
+
 /**
  * Use it like this: foo.bar = Q.hook(foo.bar, console.trace);
  * Supports sync and async functions transparently.
