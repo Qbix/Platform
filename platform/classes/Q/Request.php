@@ -1455,7 +1455,7 @@ class Q_Request
 	 */
 	static function ip()
 	{
-		$trustProxies = Q_Config::get('Metrics', 'visit', 'ip', 'trustProxies', false);
+		$trustProxies = Q_Config::get('Q', 'request', 'ip', 'trustProxies', false);
 		$ip = Q::ifset($_SERVER, 'REMOTE_ADDR', '');
 
 		if ($trustProxies) {
