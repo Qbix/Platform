@@ -1433,25 +1433,11 @@ class Q_Request
 	}
 
 	/**
-	 * Determines whether the given IP address is a public IP address
-	 * @method isPublicIP
-	 * @static
-	 * @param {string} $ip The IP address to check
-	 * @return {boolean} true if the IP is a public IP address, false otherwise
-	 */
-	static function isPublicIP($ip)
-	{
-		if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-			return true;
-		}
-		return false;
-	}
-
-	/**
-	 * Returns the IP address of the user, taking into account trusted proxies
+	 * Returns the IP address of the user, taking into account trusted proxies,
+	 * as well as the type and whether it is public
 	 * @method ip
 	 * @static
-	 * @return {string} The IP address of the user
+	 * @return {array} Returns array of (ip, protocol, isPublic)
 	 */
 	static function ip()
 	{
@@ -1472,8 +1458,10 @@ class Q_Request
 				$ip = $_SERVER['HTTP_CLIENT_IP'];
 			}
 		}
+		$protocol = Q_Utils::protocolOfIP($ip);
+		$isPublic = Q_Utils::isPublicIP($ip);
 
-		return $ip;
+		return array($ip, $protocol, $isPublic);
 	}
 	
 	/**
