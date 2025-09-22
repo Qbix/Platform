@@ -3407,7 +3407,6 @@ $field_hints
 			}
 			\$fields = implode(',', \$fieldNames);
 		}
-		\$alias = isset(\$alias) ? ' '.\$alias : '';
 		\$q = self::db()->select(\$fields, self::table(true, \$alias));
 		\$q->className = $class_name_var;
 		return \$q;
