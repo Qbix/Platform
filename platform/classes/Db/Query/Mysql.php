@@ -2022,28 +2022,36 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 						$criteria_list[] = self::column($expr) . " IN ($value_list)";
 					}
 				} else if ($value instanceof Db_Range) {
-					$ranges = array_merge(array($value), $value->additionalRanges);
+					$ranges = array_merge([$value], $value->additionalRanges);
 					$rangeCriteria = [];
+
 					foreach ($ranges as $range) {
-						$rc = '';
+						$parts = [];
+
 						if (isset($range->min)) {
-							$c_min = $range->includeMin ? '>=' : '>';
-							$rc = self::column($expr) . " $c_min :_where_$i";
+							$op = $range->includeMin ? '>=' : '>';
+							$parts[] = self::column($expr) . " $op :_where_$i";
 							$this->parameters["_where_$i"] = $range->min;
-							++ $i;
+							++$i;
 						}
 						if (isset($range->max)) {
-							$c_max = $range->includeMax ? '<=' : '<';
-							$rc = ($rc ? "$rc AND " : '') .
-								self::column($expr) . " $c_max :_where_$i";
+							$op = $range->includeMax ? '<=' : '<';
+							$parts[] = self::column($expr) . " $op :_where_$i";
 							$this->parameters["_where_$i"] = $range->max;
-							++ $i;
+							++$i;
 						}
-						if ($rc) {
-							$rangeCriteria[] = "($rc)";
+
+						if (!empty($parts)) {
+							// join min/max with AND, no extra () if only one
+							$rangeCriteria[] = implode(' AND ', $parts);
 						}
 					}
-					$criteria_list[] = '(' . implode("\n\t OR ", $rangeCriteria) . ')';
+
+					if (count($rangeCriteria) > 1) {
+						$criteria_list[] = '(' . implode(' OR ', $rangeCriteria) . ')';
+					} else if (count($rangeCriteria) === 1) {
+						$criteria_list[] = $rangeCriteria[0];
+					}
 				} else {
 					$eq = preg_match('/\W/', substr($expr, -1)) ? '' : ' = ';
 					$criteria_list[] = self::column($expr) . "$eq:_where_$i";
