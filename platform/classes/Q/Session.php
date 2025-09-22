@@ -727,6 +727,7 @@ class Q_Session
 			false,
 			$result
 		);
+		$row->clear('ipWasJustSet');
 		return $result ? $result : '';
 	}
 
