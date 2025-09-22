@@ -11,10 +11,10 @@
 		"cloudconvert/cloudconvert-php": "3.2.3",
 		"paragonie/ecc": "^2.0",
 		"vimeo/vimeo-api": "3.0.10",
-		"paragonie/sodium_compat": "1.18.*"
+		"paragonie/sodium_compat": "1.15.*"
 	},
 	"conflict": {
-        "paragonie/sodium_compat": ">=1.19.0"
+        "paragonie/sodium_compat": ">=1.16.0"
     },
 	"config": {
 		"allow-plugins": {
