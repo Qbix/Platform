@@ -681,6 +681,9 @@ class Q_Session
 				if ($row->retrieve()) {
 					self::$sessionExisted = $sessionExisted = true;
 				}
+				list($ip, $protocol, $isPublic, $packed) = Q_Request::ip();
+				$field = "ip$protocol";
+				$row->$field = $packed;
 				self::$session_db_row = $row;
 			} else {
 				self::$sessionExisted = $sessionExisted = true;
@@ -692,9 +695,6 @@ class Q_Session
 				$result = isset(self::$session_db_row->$data_field)
 					? self::$session_db_row->$data_field : '';
 			}
-			list($ip, $protocol, $isPublic, $packed) = Q_Request::ip();
-			$field = "ip$protocol";
-			self::$session_db_row->$field = $packed;
 		} else {
 			$duration_name = self::durationName();
 			$id1 = substr($id, 0, 4);
@@ -804,6 +804,7 @@ class Q_Session
 				$sess_file = $ssp . DS . "$duration_name/$id1/$id2";
 				$dir = $ssp . DS . "$duration_name/$id1/";
 			}
+			$new = false;
 			if ($changed) {
 				$params = array(
 					'changed' => $changed,
@@ -871,7 +872,7 @@ class Q_Session
 					}
 					$result = true;
 				} else {
-					$params['new'] = !self::$sessionExisted;
+					$new = $params['new'] = !self::$sessionExisted;
 					Q::event('Q/session/save', $params, 'before');
 					if (! empty(self::$session_db_connection)) {
 						$row->$data_field = $merged_data ? $merged_data : '';
@@ -900,7 +901,7 @@ class Q_Session
 				'Q/session/write',
 				@compact(
 					'id', 'data_field', 'updated_field', 'duration_field', 'platform_field',
-					'sess_file', 'row',
+					'sess_file', 'row', 'new',
 					'changed', 'sess_data', 'old_data', 'existing_data', 'merged_data'
 				),
 				'after',
