@@ -3012,12 +3012,26 @@ abstract class Db_Query extends Db_Expression
 				++$i;
 			}
 			if ($conditions) {
-				$rangeCriteria[] = '(' . implode(' AND ', $conditions) . ')';
+				// if both min and max: "(col >= ? AND col <= ?)"
+				// if only one: "col >= ?" or "col <= ?"
+				$rangeCriteria[] = count($conditions) > 1
+					? '(' . implode(' AND ', $conditions) . ')'
+					: $conditions[0];
 			}
 		}
 
-		return '(' . implode("\n\t OR ", $rangeCriteria) . ')';
+		if (count($rangeCriteria) > 1) {
+			// multiple ranges combined with OR
+			return '(' . implode(' OR ', $rangeCriteria) . ')';
+		} elseif (count($rangeCriteria) === 1) {
+			// just one condition, return directly
+			return $rangeCriteria[0];
+		} else {
+			// no conditions at all
+			return '1=1';
+		}
 	}
+
 
 	/**
 	 * Returns an array of field names that are "magic" when used
