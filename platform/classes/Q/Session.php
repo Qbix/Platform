@@ -683,7 +683,10 @@ class Q_Session
 				}
 				list($ip, $protocol, $isPublic, $packed) = Q_Request::ip();
 				$field = "ip$protocol";
-				$row->$field = $packed;
+				if (empty($row->$field)) {
+					$row->$field = $packed;
+					$row->set('ipWasJustSet', compact('ip', 'protocol', 'isPublic'));
+				}
 				self::$session_db_row = $row;
 			} else {
 				self::$sessionExisted = $sessionExisted = true;
