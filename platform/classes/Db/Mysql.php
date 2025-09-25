@@ -1142,7 +1142,7 @@ class Db_Mysql implements Db_Interface
 		if (class_exists('Q_Config')) {
 			$separator = Q_Config::expect('Db', 'sql', 'querySeparator');
 		} else {
-			$separator = "-------- NEXT QUERY STARTS HERE --------";
+			$separator = "# -------- NEXT QUERY STARTS HERE --------";
 		}
 		$found = strpos($script, $separator);
 		if ($found !== false) {

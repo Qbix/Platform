@@ -365,7 +365,7 @@
 	},
 	"Db": {
 		"sql": {
-			"querySeparator": "-------- NEXT QUERY STARTS HERE --------"
+			"querySeparator": "# -------- NEXT QUERY STARTS HERE --------"
 		},
 		"survive": {
 			"mysql": true
