@@ -681,15 +681,18 @@ class Q_Session
 				if ($row->retrieve()) {
 					self::$sessionExisted = $sessionExisted = true;
 				}
-				list($ip, $protocol, $isPublic, $packed) = Q_Request::ip();
-				$field = "ip$protocol";
-				if (empty($row->$field)) {
-					$row->$field = $packed;
-					$row->set('ipWasJustSet', compact('ip', 'protocol', 'isPublic'));
-				}
 				self::$session_db_row = $row;
 			} else {
 				self::$sessionExisted = $sessionExisted = true;
+			}
+			if (self::$session_db_row) {
+				$row = self::$session_db_row;
+				list($ip, $protocol, $isPublic, $packed) = Q_Request::ip();
+				$field = "ip$protocol";
+				if (empty($row->$field) or $row->$field !== $packed) {
+					$row->$field = $packed;
+					$row->set('ipWasJustSet', compact('ip', 'protocol', 'isPublic'));
+				}
 			}
 			if (!empty(self::$session_db_row->content)) {
 				$arr = self::decodeSessionJSON(self::$session_db_row->content);
@@ -727,7 +730,9 @@ class Q_Session
 			false,
 			$result
 		);
-		$row->clear('ipWasJustSet');
+		if (self::$session_db_row) {
+			self::$session_db_row->clear('ipWasJustSet');
+		}
 		return $result ? $result : '';
 	}
 
