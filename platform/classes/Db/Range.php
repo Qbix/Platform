@@ -98,16 +98,37 @@ class Db_Range
 		return $result;
 	}
 
-	public static function between($min, $max, $includeMin = true, $includeMax = true)
+	/**
+	 * Generate a Db_Range for values starting with $min through $max (inclusive).
+	 * Works for numbers and strings of any length, treating them as prefixes
+	 * of other strings, or decimal expansions.
+	 *
+	 * @param string|int|float $min
+	 * @param string|int|float $max
+	 * @return Db_Range
+	 */
+	public static function startingWith($min, $max)
 	{
-		// If caller passed characters, we want < max+1 semantics
-		if (is_string($min) && is_string($max) && strlen($min) === 1 && strlen($max) === 1) {
-			// do "inclusive A–Z" as  A <= id < '['
-			return new Db_Range($min, $includeMin, false, chr(ord($max) + 1));
+		if (is_numeric($min) && is_numeric($max)) {
+			// numeric half-open: floor(min) <= value < ceil(max)+1
+			$minVal = floor($min);
+			$maxVal = ceil($max);
+			return new Db_Range($minVal, true, false, $maxVal);
 		}
 
-		// default numeric or string range with both ends honored
-		return new Db_Range($min, $includeMin, $includeMax, $max);
+		if (is_string($min) && is_string($max)) {
+			// Compute the "next string" after $max
+			$len = strlen($max);
+			$lastChar = ord($max[$len - 1]);
+			$nextChar = chr($lastChar + 1);
+			$maxNext = substr($max, 0, $len - 1) . $nextChar;
+
+			return new Db_Range($min, true, false, $maxNext);
+		}
+
+		throw new InvalidArgumentException(
+			"startingWith(): min and max must both be numbers or both be strings"
+		);
 	}
 
 	/**
