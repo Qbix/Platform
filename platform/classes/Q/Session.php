@@ -730,9 +730,6 @@ class Q_Session
 			false,
 			$result
 		);
-		if (self::$session_db_row) {
-			self::$session_db_row->clear('ipWasJustSet');
-		}
 		return $result ? $result : '';
 	}
 
@@ -812,9 +809,10 @@ class Q_Session
 				$ssp = self::$session_save_path;
 				$sess_file = $ssp . DS . "$duration_name/$id1/$id2";
 				$dir = $ssp . DS . "$duration_name/$id1/";
+				$row = null;
 			}
 			$new = false;
-			if ($changed) {
+			if ($changed or ($row and $row->get('ipWasJustSet'))) {
 				$params = array(
 					'changed' => $changed,
 					'sess_data' => $sess_data,
@@ -872,7 +870,8 @@ class Q_Session
 					$params['merged_data'] = $merged_data;
 				}
 
-				if ($params['existing_data'] === $params['merged_data']) {
+				if ($params['existing_data'] === $params['merged_data']
+				and (!$row or !$row->get('ipWasJustSet'))) {
 					if (! empty(self::$session_db_connection)) {
 						$row->executeCommit();
 					} else {
@@ -917,8 +916,14 @@ class Q_Session
 				false,
 				$result
 			);
+			if (self::$session_db_row) {
+				self::$session_db_row->clear('ipWasJustSet');
+			}
 			return $result;
 		} catch (Exception $e) {
+			if (self::$session_db_row) {
+				self::$session_db_row->clear('ipWasJustSet');
+			}
 			Q::log("Exception when writing session $id: " . $e->getMessage());
 			throw $e;
 		}
