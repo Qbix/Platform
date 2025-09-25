@@ -98,6 +98,18 @@ class Db_Range
 		return $result;
 	}
 
+	public static function between($min, $max, $includeMin = true, $includeMax = true)
+	{
+		// If caller passed characters, we want < max+1 semantics
+		if (is_string($min) && is_string($max) && strlen($min) === 1 && strlen($max) === 1) {
+			// do "inclusive A–Z" as  A <= id < '['
+			return new Db_Range($min, $includeMin, false, chr(ord($max) + 1));
+		}
+
+		// default numeric or string range with both ends honored
+		return new Db_Range($min, $includeMin, $includeMax, $max);
+	}
+
 	/**
 	 * Minimal value of the range
 	 * @property $min
