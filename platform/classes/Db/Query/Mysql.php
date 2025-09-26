@@ -2104,19 +2104,30 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 						: $column;
 					$cases = "$column = (CASE";
 					foreach ($value as $k => $v) {
-						if (!$k) {
+						if ($k === null || $k === '') {
 							continue;
 						}
-						$cases .= "\n\tWHEN $basedOn = :_set_$i THEN :_set_".($i+1);
-						$this->parameters["_set_$i"] = $k;
-						$this->parameters["_set_".($i+1)] = $v;
-						$i += 2;
+						$cases .= "\n\tWHEN $basedOn = :_set_$i THEN ";
+						if ($v === null) {
+							$cases .= "NULL";
+							$this->parameters["_set_$i"] = $k;
+							$i++;
+						} else {
+							$cases .= ":_set_".($i+1);
+							$this->parameters["_set_$i"] = $k;
+							$this->parameters["_set_".($i+1)] = $v;
+							$i += 2;
+						}
 					}
 					if (isset($value[''])) {
-						$cases .= "\n\tELSE :_set_$i";
-						$this->parameters["_set_$i"] = $k;
+						if ($value[''] === null) {
+							$cases .= "\n\tELSE NULL";
+						} else {
+							$cases .= "\n\tELSE :_set_$i";
+							$this->parameters["_set_$i"] = $value[''];
+						}
 					} else {
-						$cases .= "\n\tELSE ''";
+						$cases .= "\n\tELSE NULL";
 					}
 					++$i;
 					$cases .= "\nEND)";
