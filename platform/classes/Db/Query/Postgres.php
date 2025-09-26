@@ -79,16 +79,32 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 		$basedOn = isset($this->basedOn[$field])
 			? Db_Query::column($this->basedOn[$field])
 			: $column;
+
 		$cases = "$column = (CASE";
+
 		foreach ($value as $k => $v) {
-			if ($k === '' || $k === null) continue;
-			$cases .= "\n\tWHEN $basedOn = :_set_$i THEN :_set_" . ($i+1);
-			$this->parameters["_set_$i"]     = $k;
-			$this->parameters["_set_" . ($i+1)] = $v;
-			$i += 2;
+			if ($k === '' || $k === null) {
+				continue;
+			}
+
+			$cases .= "\n\tWHEN $basedOn = :_set_$i THEN ";
+
+			if ($v === null) {
+				// Emit literal NULL in Postgres
+				$cases .= "NULL";
+				$this->parameters["_set_$i"] = $k;
+				$i++;
+			} else {
+				$cases .= ":_set_" . ($i+1);
+				$this->parameters["_set_$i"]     = $k;
+				$this->parameters["_set_" . ($i+1)] = $v;
+				$i += 2;
+			}
 		}
-		// Postgres fallback: keep current value
+
+		// Postgres fallback: preserve current column value
 		$cases .= "\n\tELSE $column END)";
+
 		return $cases;
 	}
 

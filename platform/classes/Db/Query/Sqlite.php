@@ -211,17 +211,29 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
 
                 } else if (is_array($value)) {
                     // CASE expression for bulk updates
+                    $basedOn = isset($this->basedOn[$field])
+                        ? static::column($this->basedOn[$field])
+                        : $column;
+
                     $cases = "$column = (CASE";
                     foreach ($value as $k => $v) {
                         if ($k === '' || $k === null) {
                             continue;
                         }
-                        $cases .= "\n\tWHEN $column = :_set_$i THEN :_set_" . ($i+1);
-                        $this->parameters["_set_$i"]     = $k;
-                        $this->parameters["_set_" . ($i+1)] = $v;
-                        $i += 2;
+
+                        $cases .= "\n\tWHEN $basedOn = :_set_$i THEN ";
+                        if ($v === null) {
+                            $cases .= "NULL";
+                            $this->parameters["_set_$i"] = $k;
+                            $i++;
+                        } else {
+                            $cases .= ":_set_" . ($i+1);
+                            $this->parameters["_set_$i"] = $k;
+                            $this->parameters["_set_" . ($i+1)] = $v;
+                            $i += 2;
+                        }
                     }
-                    // In SQLite, safe fallback is to keep the current column value
+                    // In SQLite: safe fallback is to keep current value
                     $cases .= "\n\tELSE $column END)";
                     $updates_list[] = $cases;
 
