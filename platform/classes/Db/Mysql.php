@@ -437,12 +437,12 @@ class Db_Mysql implements Db_Interface
 					$onDuplicateKeyUpdate[$column] = in_array($column, $possibleMagicUpdateFields)
 						? new Db_Expression("CURRENT_TIMESTAMP")
 						: new Db_Expression("VALUES($column)");
+					break; // need only one
 				}
 				$fieldNames = call_user_func(array($options['className'], 'fieldNames'));
 				foreach ($possibleMagicUpdateFields as $column) {
 					if (in_array($column, $fieldNames)) {
 						$onDuplicateKeyUpdate[$column] = new Db_Expression("CURRENT_TIMESTAMP");
-						break; // only need one field
 					}
 				}
 			}
