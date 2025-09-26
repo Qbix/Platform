@@ -605,6 +605,7 @@ class Db
 				foreach ($possibleMagicUpdateFields as $column) {
 					if (in_array($column, $fieldNames)) {
 						$onDuplicateKeyUpdate[$column] = new Db_Expression("CURRENT_TIMESTAMP");
+						break; // only need one
 					}
 				}
 			}
