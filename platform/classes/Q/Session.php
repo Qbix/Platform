@@ -916,13 +916,13 @@ class Q_Session
 				false,
 				$result
 			);
-			if (self::$session_db_row) {
-				self::$session_db_row->clear('ipWasJustSet');
+			if ($row) {
+				$row->clear('ipWasJustSet');
 			}
 			return $result;
 		} catch (Exception $e) {
-			if (self::$session_db_row) {
-				self::$session_db_row->clear('ipWasJustSet');
+			if ($row) {
+				$row->clear('ipWasJustSet');
 			}
 			Q::log("Exception when writing session $id: " . $e->getMessage());
 			throw $e;
