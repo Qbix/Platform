@@ -101,16 +101,32 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		$basedOn = isset($this->basedOn[$field])
 			? Db_Query::column($this->basedOn[$field])
 			: $column;
+
 		$cases = "$column = (CASE";
+
 		foreach ($value as $k => $v) {
-			if ($k === '' || $k === null) continue;
-			$cases .= "\n\tWHEN $baseOn = :_set_$i THEN :_set_" . ($i+1);
-			$this->parameters["_set_$i"]     = $k;
-			$this->parameters["_set_" . ($i+1)] = $v;
-			$i += 2;
+			if ($k === '' || $k === null) {
+				continue;
+			}
+
+			$cases .= "\n\tWHEN $basedOn = :_set_$i THEN ";
+
+			if ($v === null) {
+				// emit literal NULL in SQL
+				$cases .= "NULL";
+				$this->parameters["_set_$i"] = $k;
+				$i++;
+			} else {
+				$cases .= ":_set_" . ($i+1);
+				$this->parameters["_set_$i"]     = $k;
+				$this->parameters["_set_" . ($i+1)] = $v;
+				$i += 2;
+			}
 		}
-		// MySQL fallback: empty string
-		$cases .= "\n\tELSE '' END)";
+
+		// fallback: emit NULL instead of empty string
+		$cases .= "\n\tELSE NULL END)";
+
 		return $cases;
 	}
 
