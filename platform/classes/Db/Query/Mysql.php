@@ -2156,18 +2156,18 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	 * @private
 	 * @param {array|bool} $updates Either an associative array of column => value pairs,
 	 *                              or true to auto-generate one safe update.
-	 * @return {string}
+	 * @return {string} SQL fragment for ON DUPLICATE KEY UPDATE
 	 */
 	private function onDuplicateKeyUpdate_internal($updates)
 	{
-		if ($this->type != Db_Query::TYPE_INSERT) {
+		if ($this->type !== Db_Query::TYPE_INSERT) {
 			throw new Exception(
 				"The ON DUPLICATE KEY UPDATE clause does not belong in this context.",
 				-1
 			);
 		}
 
-		static $i = 1;
+		$i = 1; // reset per query
 
 		// Magic field names commonly updated on conflict
 		$possibleMagicUpdateFields = array('updatedTime', 'updated_time');
@@ -2180,11 +2180,10 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					-1
 				);
 			}
-			$row = new $this->className;
+			$row        = new $this->className;
 			$primaryKey = $row->getPrimaryKey();
 			$fieldNames = call_user_func(array($this->className, 'fieldNames'));
 
-			// Default result
 			$updates = array();
 
 			// Prefer "magic update" field if available
@@ -2207,7 +2206,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			}
 		}
 
-		// At this point $updates is an array
+		// At this point $updates must be an array
 		if (is_array($updates)) {
 			$updates_list = array();
 			foreach ($updates as $field => $value) {
@@ -2226,7 +2225,10 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		}
 
 		if (!is_string($updates)) {
-			throw new Exception("The ON DUPLICATE KEY updates need to be specified correctly.", -1);
+			throw new Exception(
+				"The ON DUPLICATE KEY updates need to be specified correctly.",
+				-1
+			);
 		}
 
 		return $updates;
