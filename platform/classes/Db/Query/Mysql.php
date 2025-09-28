@@ -2127,7 +2127,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 							$this->parameters["_set_$i"] = $value[''];
 						}
 					} else {
-						$cases .= "\n\tELSE NULL";
+						$cases .= "\n\tELSE $column";
 					}
 					++$i;
 					$cases .= "\nEND)";
@@ -2154,36 +2154,80 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	 * Calculates an ON DUPLICATE KEY UPDATE clause
 	 * @method onDuplicateKeyUpdate_internal
 	 * @private
-	 * @param {array} $updates An associative array of column => value pairs.
-	 * The values are automatically escaped using PDO placeholders.
+	 * @param {array|bool} $updates Either an associative array of column => value pairs,
+	 *                              or true to auto-generate one safe update.
 	 * @return {string}
 	 */
-	private function onDuplicateKeyUpdate_internal ($updates)
+	private function onDuplicateKeyUpdate_internal($updates)
 	{
 		if ($this->type != Db_Query::TYPE_INSERT) {
-			throw new Exception("The ON DUPLICATE KEY UPDATE clause does not belong in this context.", -1);
+			throw new Exception(
+				"The ON DUPLICATE KEY UPDATE clause does not belong in this context.",
+				-1
+			);
 		}
 
 		static $i = 1;
+
+		// Magic field names commonly updated on conflict
+		$possibleMagicUpdateFields = array('updatedTime', 'updated_time');
+
+		// If caller passed true, auto-generate update of just one non-PK field
+		if ($updates === true) {
+			if (empty($this->className)) {
+				throw new Exception(
+					"Need className when onDuplicateKeyUpdate === true",
+					-1
+				);
+			}
+			$row = new $this->className;
+			$primaryKey = $row->getPrimaryKey();
+			$fieldNames = call_user_func(array($this->className, 'fieldNames'));
+
+			// Default result
+			$updates = array();
+
+			// Prefer "magic update" field if available
+			foreach ($possibleMagicUpdateFields as $magic) {
+				if (in_array($magic, $fieldNames)) {
+					$updates[$magic] = new Db_Expression("CURRENT_TIMESTAMP");
+					break;
+				}
+			}
+
+			// Otherwise just pick the first non-PK column
+			if (empty($updates)) {
+				foreach ($fieldNames as $column) {
+					if (in_array($column, $primaryKey)) {
+						continue;
+					}
+					$updates[$column] = new Db_Expression("VALUES(" . self::column($column) . ")");
+					break; // only need one
+				}
+			}
+		}
+
+		// At this point $updates is an array
 		if (is_array($updates)) {
 			$updates_list = array();
 			foreach ($updates as $field => $value) {
 				if ($value instanceof Db_Expression) {
 					if (is_array($value->parameters)) {
-						$this->parameters = array_merge($this->parameters,
-							$value->parameters);
+						$this->parameters = array_merge($this->parameters, $value->parameters);
 					}
 					$updates_list[] = self::column($field) . " = $value";
 				} else {
 					$updates_list[] = self::column($field) . " = :_dupUpd_$i";
 					$this->parameters["_dupUpd_$i"] = $value;
-					++ $i;
+					++$i;
 				}
 			}
 			$updates = implode(", ", $updates_list);
 		}
-		if (! is_string($updates))
+
+		if (!is_string($updates)) {
 			throw new Exception("The ON DUPLICATE KEY updates need to be specified correctly.", -1);
+		}
 
 		return $updates;
 	}
