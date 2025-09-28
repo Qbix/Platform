@@ -108,54 +108,85 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 		return $cases;
 	}
 
-    protected function onDuplicateKeyUpdate_internal($updates)
-    {
-        if ($this->type !== Db_Query::TYPE_INSERT) {
-            throw new Exception("The ON CONFLICT DO UPDATE clause does not belong in this context.", -1);
-        }
+    /**
+	 * Calculates an ON CONFLICT DO UPDATE clause (PostgreSQL)
+	 * @method onDuplicateKeyUpdate_internal
+	 * @protected
+	 * @param {array|bool} $updates Either an associative array of column => value pairs,
+	 *                              or true to auto-generate one safe update.
+	 * @return {string} SQL fragment for DO UPDATE SET ...
+	 */
+	protected function onDuplicateKeyUpdate_internal($updates)
+	{
+		if ($this->type !== Db_Query::TYPE_INSERT) {
+			throw new Exception(
+				"The ON CONFLICT DO UPDATE clause does not belong in this context.",
+				-1
+			);
+		}
 
-        static $i = 1;
-        if (!is_array($updates)) {
-            throw new Exception("Updates must be an associative array.", -1);
-        }
+		$i = 1; // reset per call
+		$updates_list     = [];
+		$conflictColumns  = [];
 
-        $updates_list = [];
-        $conflictColumns = [];
+		// If caller passed true, auto-generate update of one safe column
+		if ($updates === true) {
+			if (empty($this->className)) {
+				throw new Exception(
+					"Need className when onDuplicateKeyUpdate === true",
+					-1
+				);
+			}
+			$row        = new $this->className;
+			$primaryKey = $row->getPrimaryKey();
+			$fieldNames = call_user_func([$this->className, 'fieldNames']);
 
-        foreach ($updates as $field => $value) {
-            $conflictColumns[] = $field;
+			// Prefer updatedTime if present
+			foreach (['updatedTime', 'updated_time'] as $magic) {
+				if (in_array($magic, $fieldNames, true)) {
+					$updates = [$magic => new Db_Expression("CURRENT_TIMESTAMP")];
+					break;
+				}
+			}
 
-            if ($value === self::DONT_CHANGE()) {
-                $updates_list[] = self::column($field) . " = " . self::column($field);
-            } elseif ($value instanceof Db_Expression) {
-                if (is_array($value->parameters)) {
-                    $this->parameters = array_merge($this->parameters, $value->parameters);
-                }
-                $updates_list[] = self::column($field) . " = $value";
-            } else {
-                $updates_list[] = self::column($field) . " = :_dupUpd_$i";
-                $this->parameters["_dupUpd_$i"] = $value;
-                ++$i;
-            }
-        }
+			// Otherwise pick the first non-PK field
+			if ($updates === true) {
+				foreach ($fieldNames as $col) {
+					if (in_array($col, $primaryKey, true)) continue;
+					$updates = [$col => new Db_Expression("EXCLUDED." . self::column($col))];
+					break;
+				}
+			}
+		}
 
-        // Only infer ON CONFLICT TARGET if not already set
-        if (empty($this->clauses['ON CONFLICT TARGET']) && !empty($conflictColumns)) {
-            $this->clauses['ON CONFLICT TARGET'] =
-                '(' . implode(', ', array_map([self::class, 'column'], $conflictColumns)) . ')';
-        }
+		if (!is_array($updates)) {
+			throw new Exception("Updates must be an associative array.", -1);
+		}
 
-        $updates_sql = implode(', ', $updates_list);
+		// Build update expressions
+		foreach ($updates as $field => $value) {
+			$conflictColumns[] = $field;
 
-        // Append to existing clause if necessary
-        if (empty($this->clauses['ON DUPLICATE KEY UPDATE'])) {
-            $this->clauses['ON DUPLICATE KEY UPDATE'] = $updates_sql;
-        } else {
-            $this->clauses['ON DUPLICATE KEY UPDATE'] .= ", $updates_sql";
-        }
+			if ($value instanceof Db_Expression) {
+				if (is_array($value->parameters)) {
+					$this->parameters = array_merge($this->parameters, $value->parameters);
+				}
+				$updates_list[] = self::column($field) . " = $value";
+			} else {
+				$updates_list[] = self::column($field) . " = :_dupUpd_$i";
+				$this->parameters["_dupUpd_$i"] = $value;
+				++$i;
+			}
+		}
 
-        return $updates_sql;
-    }
+		// Auto-infer conflict target if not explicitly set
+		if (empty($this->clauses['ON CONFLICT TARGET']) && !empty($conflictColumns)) {
+			$this->clauses['ON CONFLICT TARGET'] =
+				'(' . implode(', ', array_map([self::class, 'column'], $conflictColumns)) . ')';
+		}
+
+		return implode(', ', $updates_list); // caller wraps with "DO UPDATE SET ..."
+	}
 
 
 	protected function build_insert_onDuplicateKeyUpdate()

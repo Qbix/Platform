@@ -78,18 +78,25 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
 		return '"' . str_replace('"', '""', $identifier) . '"';
 	}
 
+    /**
+     * Collects ON CONFLICT DO UPDATE assignments for SQLite.
+     *
+     * @param array $updates Associative array of column => value pairs.
+     * @return string SQL fragment with "col = ..." expressions.
+     * @throws Exception
+     */
     protected function onDuplicateKeyUpdate_internal($updates)
     {
         if ($this->type !== Db_Query::TYPE_INSERT) {
-            throw new Exception("ON DUPLICATE KEY UPDATE only applies to INSERT queries.", -1);
+            throw new Exception("ON CONFLICT DO UPDATE only applies to INSERT queries.", -1);
         }
 
-        static $i = 1;
         if (!is_array($updates)) {
             throw new Exception("Updates must be an associative array.", -1);
         }
 
-        $updates_list = [];
+        $i               = 1;
+        $updates_list    = [];
         $conflictColumns = [];
 
         foreach ($updates as $field => $value) {
@@ -109,7 +116,7 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
             }
         }
 
-        // Only infer ON CONFLICT TARGET if not already set
+        // Only infer ON CONFLICT target if not already provided
         if (empty($this->clauses['ON CONFLICT TARGET']) && !empty($conflictColumns)) {
             $this->clauses['ON CONFLICT TARGET'] =
                 '(' . implode(', ', array_map([self::class, 'column'], $conflictColumns)) . ')';
@@ -117,7 +124,7 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
 
         $updates_sql = implode(', ', $updates_list);
 
-        // Append to existing updates if already called once
+        // Save the assignments for build step
         if (empty($this->clauses['ON DUPLICATE KEY UPDATE'])) {
             $this->clauses['ON DUPLICATE KEY UPDATE'] = $updates_sql;
         } else {
@@ -127,17 +134,24 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
         return $updates_sql;
     }
 
-    protected function build_onDuplicateKeyUpdate() {
+    /**
+     * Builds the ON CONFLICT DO UPDATE clause for SQLite.
+     *
+     * @return string Full ON CONFLICT clause or empty string.
+     * @throws Exception
+     */
+    protected function build_onDuplicateKeyUpdate()
+    {
         if (empty($this->clauses['ON DUPLICATE KEY UPDATE'])) {
             return '';
         }
         if (empty($this->clauses['ON CONFLICT TARGET'])) {
             throw new Exception("SQLite requires ON CONFLICT target.");
         }
+
         return "\nON CONFLICT " . $this->clauses['ON CONFLICT TARGET']
             . " DO UPDATE SET " . $this->clauses['ON DUPLICATE KEY UPDATE'];
     }
-
 
 	/**
 	 * SQLite-compatible ORDER BY expression handler
