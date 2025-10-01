@@ -6,6 +6,8 @@
  */
 class Q_JSON
 {
+	const JSON_PRETTY_TABS = 1048576; // custom flag, unused by PHP
+
 	/**
 	 * A wrapper for encode
 	 * @method encode
@@ -15,32 +17,43 @@ class Q_JSON
 	static function encode($value, $options = 0, $depth = 512)
 	{
 		$args = func_get_args();
+
+		// Handle FORCE_OBJECT workaround
 		if ($options & Q::JSON_FORCE_OBJECT) {
 			if (is_array($value) && array_keys($value) === range(0, count($value) - 1)) {
 				$value = (object) $value;
 			}
 			$options &= ~Q::JSON_FORCE_OBJECT;
 		}
+
 		$value = self::utf8ize($value);
 		$args[0] = self::toArrays($value, 0, $depth);
+
 		$result = call_user_func_array('json_encode', $args);
+
 		if ($result === false) {
 			if (is_callable('json_last_error')) {
 				throw new Q_Exception_JsonEncode(array(
 					'message' => json_last_error_msg(),
-					'value' => $value
-                ), null, json_last_error());
+					'value'   => $value
+				), null, json_last_error());
 			}
 			throw new Q_Exception_JsonEncode(array(
 				'message' => 'Invalid JSON',
-				'value' => $value
-            ), null, -1);
+				'value'   => $value
+			), null, -1);
 		}
-		$result = preg_replace_callback(
-			'/^(?: {4})+/m',
-			['Q_JSON', 'json_replace'],
-			$result
-		);
+		// Replace 4 spaces with tabs if requested
+		if ($options & self::JSON_PRETTY_TABS) {
+			$result = preg_replace_callback(
+				'/^(?: {4})+/m',
+				function ($m) {
+					return str_repeat("\t", strlen($m[0]) / 4);
+				},
+				$result
+			);
+		}
+		// Normalize slashes
 		return str_replace("\\/", '/', $result);
 	}
 

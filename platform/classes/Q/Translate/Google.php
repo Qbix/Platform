@@ -8,103 +8,6 @@ class Q_Translate_Google {
 		$this->parent = $parent;
 	}
 
-	function saveAll() {
-		$parts = preg_split("/(_|-)/", $this->parent->options['source']);
-		$fromLang = $parts[0];
-		$locale = count($parts) > 1 ? $parts[1] : null;
-		$in = $this->parent->getSrc($fromLang, $locale, true);
-		$useLocale = Q_Config::get('Q', 'text', 'useLocale', false);
-		foreach ($this->parent->locales as $toLang => $localeNames) {
-			$b1 = "\033[1m";
-			$b2 = "\033[0m";
-			echo $b1."Processing $fromLang->$toLang" . $b2;
-			if ($useLocale) {
-				echo '  (' . implode(' ', $localeNames) . ')';
-			}
-			echo PHP_EOL;
-			if ($toLang !== $fromLang) {
-				$out = $this->parent->getSrc($toLang, $locale, false);
-				$toRemove = $this->parent->toRemove($out);
-				foreach ($toRemove as $n => $parts) {
-					unset($res[$n]);
-				}
-				$res = $this->translate($fromLang, $toLang, $in, $out, $toRemove, 100);
-			} else if ($this->parent->options['out']) {
-				$res = $in;
-				$toRemove = $this->parent->toRemove($in);
-				foreach ($toRemove as $n => $parts) {
-					unset($res[$n]);
-				}
-			}
-			if (isset($res) and is_array($res)) {
-				$this->saveJson($toLang, $res, $jsonFiles);
-			}
-			if (!$useLocale) {
-				continue;
-			}
-			if (!empty($this->parent->options['in'])
-			&& !empty($this->parent->options['out'])
-			&& ($fromLang == $toLang)
-			&& ($this->parent->options['in'] === $this->parent->options['out'])) {
-				foreach ($localeNames as $localeName) {
-					$this->saveLocale($toLang, $localeName, $res, $jsonFiles, $toRemove);
-				}
-				continue;
-			}
-			if (isset($this->parent->options['locales'])) {
-				foreach ($localeNames as $localeName) {
-					$this->saveLocale($toLang, $localeName, $res, $jsonFiles, $toRemove);
-				}
-			}
-		}
-	}
-	
-	private function saveLocale($lang, $locale, $res, $jsonFiles, $toRemove)
-	{
-		foreach ($jsonFiles as $dirname => $content) {
-			$directory = $this->parent->createDirectory($dirname);
-			$langFile = $directory . DS . "$lang.json";
-			$localeFile = $directory . DS . "$lang-$locale.json";
-			if (file_exists($localeFile)) {
-				$arr = $content;
-				$tree = new Q_Tree();
-				$tree->load($localeFile);
-				$tree->merge($arr, false, true);
-				foreach ($toRemove as $n => $parts) {
-					call_user_func_array(array($tree, 'clear'), $parts);
-				}
-				$tree->save($localeFile, array(), null, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
-			} else {
-				copy($langFile, $localeFile);
-			}
-		}
-	}
-
-	private function saveJson($lang, $data, &$jsonFiles)
-	{
-		$jsonFiles = array();
-		foreach ($data as $d) {
-			$dirname = $d['dirname'];
-			$arr =& $jsonFiles[$dirname];
-			if (!$arr or !sizeof($arr)) {
-				$arr = array();
-			}
-			array_push($d['key'], $d['value']);
-			$tree = new Q_Tree($arr);
-			$tree->merge(Q_Translate::arrayToBranch($d['key']), false, true);
-		}
-		$filenames = array();
-		foreach ($jsonFiles as $dirname => $content) {
-			$dir = $this->parent->createDirectory($dirname);
-			$filename = $this->parent->joinPaths($dir, $lang . '.json');
-			$filenames[] = $filename;
-			$fp = fopen($filename, 'w');
-			fwrite($fp, json_encode($content, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-			fclose($fp);
-		}
-		return $filenames;
-	}
-
 	private function replaceTagsByNumbers($data, $startNumber = 999) {
 		foreach ($data as $k => &$v) {
 			if (!preg_match_all("/(?<=\{{)(?:.*?)(?!.\}})(?=}})/", $v['value'], $matches)) {
@@ -137,20 +40,20 @@ class Q_Translate_Google {
 		return $data;
 	}
 
-	private function translate($fromLang, $toLang, $in, &$out = array(), $toRemove = array(), $chunkSize = 100)
+	function translate($fromLang, $toLang, $in, &$out = array(), $toRemove = array(), $chunkSize = 100)
 	{
 		$in = $this->replaceTagsByNumbers($in);
-		$in2 = array();
 		$o = $this->parent->options;
 		$rt = Q::ifset($o, 'retranslate', Q::ifset($o, 'r', array()));
 		$rta = Q::ifset($o, 'retranslate-all', Q::ifset($o, 'a', null));
 		$translateAll = isset($rta);
 		$rt = is_array($rt) ? $rt : array($rt);
+
+		$in2 = array();
 		foreach ($in as $n => $v) {
 			$key = $v['dirname'] . "\t" . implode("\t", $v['key']);
-			$key2 = implode("/", $v['key']);
 			$doIt = false;
-			if (empty($out[$key]) or $translateAll) {
+			if (empty($out[$key]) || $translateAll) {
 				$doIt = true;
 			} else {
 				foreach ($rt as $v2) {
@@ -168,36 +71,56 @@ class Q_Translate_Google {
 				$in2[] = $v;
 			}
 		}
-		$translations = array();
-		if (!$toRemove and !$in2) {
+
+		if (!$toRemove && !$in2) {
 			return array();
 		}
+
 		$res = $out;
 		if (!$in2) {
 			return $res;
 		}
+
 		$chunks = array_chunk($in2, $chunkSize);
 		$count = 0;
+
 		foreach ($chunks as $chunk) {
-			$qArr = array_map(function ($item) {
-				return $item['value'];
-			}, $chunk);
+			$qArr = array();
+			$map  = array();
+
+			// collect only items that pass filter
+			foreach ($chunk as $idx => $item) {
+				$val = $item['value'];
+				if (is_string($val) && Q_Translate::filter($val)) {
+					$qArr[] = $val;
+					$map[]  = $idx; // map API index → $chunk index
+				} else {
+					// skip translation, keep original
+					$res[$item['originalKey']] = $item;
+				}
+			}
+
+			if (!$qArr) {
+				continue;
+			}
+
 			print "Requesting google translation api\n";
 			$url = 'https://translation.googleapis.com/language/translate/v2?key=' . $this->apiKey;
 			$postFields = array(
-				"q" => $qArr, 
-				"source" => $fromLang, 
-				"target" => $toLang, 
+				"q"      => $qArr,
+				"source" => $fromLang,
+				"target" => $toLang,
 				"format" => $this->parent->options['google-format']
 			);
-			// $content = Q_Utils::multipartFormData($postFields);
+
 			$json = Q_Utils::post($url, $postFields, null, array(), array(
 				'Expect: 100-Continue',
 				'Content-Type: application/json'
 			));
 			$response = json_decode($json, true);
+
 			if (!$response) {
-				throw new Q_Exception ("Bad translation response");
+				throw new Q_Exception("Bad translation response");
 			}
 			if (!empty($response['error']['message'])) {
 				if (Q::startsWith($response['error']['message'], 'Bad language pair')) {
@@ -208,15 +131,21 @@ class Q_Translate_Google {
 					throw new Q_Exception($response['error']['message'] . PHP_EOL . $more);
 				}
 			}
-			$count += sizeof($chunk);
+
+			$count += count($qArr);
 			echo "Translated " . $count . " queries of " . $toLang . "\n";
-			$translations = array_merge($translations, $response['data']['translations']);
+
+			$translations = $response['data']['translations'];
+
+			// apply translations back using $map
+			foreach ($map as $i => $chunkIdx) {
+				$item = $chunk[$chunkIdx];
+				$originalKey = $item['originalKey'];
+				$res[$originalKey] = $item;
+				$res[$originalKey]['value'] = $translations[$i]['translatedText'];
+			}
 		}
-		foreach ($in2 as $n => $d) {
-			$originalKey = $d['originalKey'];
-			$res[$originalKey] = $d;
-			$res[$originalKey]['value'] = $translations[$n]['translatedText'];
-		}
+
 		return $this->revertTags($res);
 	}
 
