@@ -366,28 +366,32 @@ Sp.queryField = function Q_queryField(name, value) {
 	var count = prefixes.length;
 	var prefix = '';
 	var i, k, l, p, keys, parsed, ret, result;
-	for (i=0; i<count; ++i) {
+
+	// Strip leading prefix
+	for (i = 0; i < count; ++i) {
 		l = prefixes[i].length;
 		p = this.substring(0, l);
-		if (p == prefixes[i]) {
+		if (p === prefixes[i]) {
 			prefix = p;
 			what = this.substring(l);
 			break;
 		}
 	}
+
 	if (!name) {
 		ret = [];
-		parsed = Q.parseQueryString(what, keys);
+		parsed = expandNested(Q.parseQueryString(what, keys));
 		for (k in parsed) {
 			if (parsed[k] == null || parsed[k] === '') {
 				ret.push(k);
 			}
 		}
 		return ret;
-	} if (Q.isArrayLike(name)) {
+	}
+	if (Q.isArrayLike(name)) {
 		ret = {}, keys = [];
-		parsed = Q.parseQueryString(what, keys);
-		for (i=0, l=name.length; i<l; ++i) {
+		parsed = expandNested(Q.parseQueryString(what, keys));
+		for (i = 0, l = name.length; i < l; ++i) {
 			if (name[i] in parsed) {
 				ret[name[i]] = parsed[name[i]];
 			}
@@ -400,7 +404,8 @@ Sp.queryField = function Q_queryField(name, value) {
 		});
 		return result;
 	} else if (value === undefined) {
-		return Q.parseQueryString(what) [ name ];
+		parsed = expandNested(Q.parseQueryString(what));
+		return parsed[name];
 	} else if (value === null) {
 		keys = [];
 		parsed = Q.parseQueryString(what, keys);
@@ -421,6 +426,55 @@ Sp.queryField = function Q_queryField(name, value) {
 		return prefix + Q.queryString(parsed, keys);
 	}
 };
+
+// helper: expand nested query keys like foo[bar][baz] → obj.foo.bar.baz
+function expandNested(obj) {
+	var out = {};
+	for (var key in obj) {
+		var val = obj[key];
+		var parts = [];
+		var m = key.match(/^([^\[]+)((?:\[[^\]]*\])*)$/);
+
+		if (!m) {
+			out[key] = val;
+			continue;
+		}
+		parts.push(m[1]);
+		if (m[2]) {
+			var inner = m[2].match(/\[([^\]]*)\]/g) || [];
+			for (var j = 0; j < inner.length; j++) {
+				parts.push(inner[j].slice(1, -1)); // strip [ ]
+			}
+		}
+		var cur = out;
+		for (var j = 0; j < parts.length; j++) {
+			var part = parts[j];
+			var nextPart = parts[j + 1];
+
+			if (j === parts.length - 1) {
+				// last
+				if (part === "") { // []
+					if (!Array.isArray(cur)) cur = [];
+					cur.push(val);
+				} else {
+					cur[part] = val;
+				}
+			} else {
+				if (part === "") {
+					if (!Array.isArray(cur)) cur = [];
+					if (!cur[cur.length - 1]) cur.push({});
+					cur = cur[cur.length - 1];
+				} else {
+					if (!(part in cur)) {
+						cur[part] = (nextPart === "" || /^\d+$/.test(nextPart)) ? [] : {};
+					}
+					cur = cur[part];
+				}
+			}
+		}
+	}
+	return out;
+}
 
 /**
  * Convert ascii string to hex
