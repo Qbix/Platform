@@ -14,11 +14,15 @@
 		"paragonie/sodium_compat": "1.15.*"
 	},
 	"conflict": {
-        "paragonie/sodium_compat": ">=1.16.0"
+        "paragonie/sodium_compat": ">=1.16.0",
+		"paragonie/random_compat": ">=3.0"
     },
 	"config": {
 		"allow-plugins": {
 			"php-http/discovery": true
+		},
+		"platform": {
+			"php": "7"
 		}
 	}
 }
