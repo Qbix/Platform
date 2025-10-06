@@ -1212,6 +1212,8 @@ Q.Tool.define("Q/video", function (options) {
 		beforeRemove: function () {
 			this.clearPlayInterval();
 
+			this.pause();
+
 			// if videojs, call dispose to kill this player with events, triggers, dom etc
 			if (Q.getObject("player.dispose", this.state)) {
 				this.state.player.dispose();
