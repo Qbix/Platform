@@ -20,9 +20,6 @@
 	"config": {
 		"allow-plugins": {
 			"php-http/discovery": true
-		},
-		"platform": {
-			"php": "7.4"
 		}
 	}
 }
