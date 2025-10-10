@@ -670,12 +670,12 @@ class Db_Mysql implements Db_Interface
 	 */
 	public function archive($table, $field, $limit = 10000, $options = array())
 	{
-		// merge options with defaults
 		$options = array_merge(array(
-			'outdir'  => '/var/www/dumps',
+			'outdir'  => APP_FILES_DIR.DS.'archives',
 			'desc'    => false,
 			'prefix'  => $table,
-			'dontZip' => false
+			'dontZip' => false,
+			'dryRun'  => false
 		), $options);
 
 		// ensure outdir exists
@@ -685,86 +685,96 @@ class Db_Mysql implements Db_Interface
 			}
 		}
 
+		$order = $options['desc'] ? 'DESC' : 'ASC';
+		$txnKey = "archive_{$table}_{$field}";
+
 		// build query adapter
 		$query = $this->newQuery(Db_Query::TYPE_SELECT);
-
-		// check index on field
 		if (!$query->isIndexed($table, $field)) {
 			throw new Exception("Field $field is not indexed in $table");
 		}
 
-		// fetch batch
-		$order = $options['desc'] ? 'DESC' : 'ASC';
-		$rows = $query->selectBatch($table, $field, $limit, $order);
-		if (!$rows) {
-			return false; // nothing to drain
-		}
+		// Begin transaction before any read
+		$this->newQuery(Db_Query::TYPE_BEGIN)
+			->begin(false, $txnKey)
+			->execute();
 
-		// find cutoff boundary
-		$cutoff = $rows[count($rows) - 1][$field];
-		$cutIndex = count($rows) - 1;
-		for (; $cutIndex >= 0; $cutIndex--) {
-			if ($rows[$cutIndex][$field] !== $cutoff) {
-				break;
+		try {
+			// Fetch rows within transaction (snapshot isolation)
+			$rows = $query->selectBatch($table, $field, $limit, $order);
+			if (!$rows || !count($rows)) {
+				// nothing to archive
+				$this->newQuery(Db_Query::TYPE_COMMIT)
+					->commit($txnKey)
+					->execute();
+				return false;
 			}
+
+			// Determine cutoff boundary
+			$cutoff = $rows[count($rows) - 1][$field];
+			$cutIndex = count($rows) - 1;
+			for (; $cutIndex >= 0; $cutIndex--) {
+				if ($rows[$cutIndex][$field] !== $cutoff) break;
+			}
+			if ($cutIndex === count($rows) - 1) {
+				throw new Exception("Archive aborted: all rows share `$field` = $cutoff");
+			}
+
+			$exportRows = array_slice($rows, 0, $cutIndex + 1);
+			unset($rows);
+
+			// Create sanitized filename
+			$sanitize = function ($val) {
+				$str = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string)$val);
+				return trim($str, '_');
+			};
+			$firstSafe = $sanitize($exportRows[0][$field]);
+			$lastSafe  = $sanitize($exportRows[$cutIndex][$field]);
+			$basename  = "{$options['prefix']}---{$firstSafe}---{$lastSafe}.csv";
+			$csvPath   = rtrim($options['outdir'], '/').'/'.$basename;
+
+			// Stream CSV
+			$fh = fopen($csvPath, 'w');
+			if (!$fh) throw new Exception("Cannot write to $csvPath");
+			fputcsv($fh, array_keys($exportRows[0]));
+			foreach ($exportRows as $row) fputcsv($fh, $row);
+			fclose($fh);
+			unset($exportRows);
+
+			$outPath = $csvPath;
+			if (!$options['dontZip'] && class_exists('Q_Zip')) {
+				$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
+				$zip = new Q_Zip();
+				$zip->zip_files($csvPath, $zipPath);
+				unlink($csvPath);
+				$outPath = $zipPath;
+			}
+
+			// Delete exported rows (still in same transaction)
+			if (!$options['dryRun']) {
+				$range = $options['desc']
+					? new Db_Range($cutoff, false, true, null)
+					: new Db_Range(null, false, false, $cutoff);
+
+				$this->newQuery(Db_Query::TYPE_DELETE)
+					->deleteRange($table, $field, $range)
+					->execute();
+			}
+
+			// Commit transaction
+			$this->newQuery(Db_Query::TYPE_COMMIT)
+				->commit($txnKey)
+				->execute();
+
+			return $outPath;
+
+		} catch (Exception $e) {
+			// Rollback on failure
+			$this->newQuery(Db_Query::TYPE_ROLLBACK)
+				->rollback()
+				->execute();
+			throw new Exception("Archive failed, rolled back: ".$e->getMessage(), 0, $e);
 		}
-		if ($cutIndex === count($rows) - 1) {
-			// every row in batch shares the same field value
-			throw new Exception("Archive aborted: entire batch has identical `$field` = $cutoff");
-		}
-
-		// truncate rows to cutoff boundary
-		$exportRows = array_slice($rows, 0, $cutIndex + 1);
-		$firstVal = $exportRows[0][$field];
-		$lastVal  = $exportRows[$cutIndex][$field];
-
-		// sanitize values for filenames
-		$sanitize = function ($val) {
-			$str = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string)$val);
-			return trim($str, '_');
-		};
-		$firstSafe = $sanitize($firstVal);
-		$lastSafe  = $sanitize($lastVal);
-
-		// generate filename
-		$basename = "{$options['prefix']}---{$firstSafe}---{$lastSafe}.csv";
-		$csvPath  = rtrim($options['outdir'], '/').'/'.$basename;
-
-		// write CSV
-		$fh = fopen($csvPath, 'w');
-		if (!$fh) {
-			throw new Exception("Cannot write to $csvPath");
-		}
-		fputcsv($fh, array_keys($exportRows[0]));
-		foreach ($exportRows as $row) {
-			fputcsv($fh, $row);
-		}
-		fclose($fh);
-
-		$outPath = $csvPath;
-
-		// zip if requested
-		if (!$options['dontZip'] && class_exists('Q_Zip')) {
-			$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
-			$zip = new Q_Zip();
-			$zip->zip_files($csvPath, $zipPath);
-			unlink($csvPath);
-			$outPath = $zipPath;
-		}
-
-		// build Db_Range for deletion
-		if ($options['desc']) {
-			// delete all rows with $field > cutoff (keep cutoff group and below)
-			$range = new Db_Range($cutoff, false, true, null);
-		} else {
-			// delete all rows with $field < cutoff (keep cutoff group and above)
-			$range = new Db_Range(null, false, false, $cutoff);
-		}
-
-		// delete exported rows via adapter
-		$query->deleteRange($table, $field, $range);
-
-		return $outPath;
 	}
 
 	/**
