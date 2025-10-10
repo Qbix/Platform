@@ -1029,14 +1029,15 @@ class Db
 		return $dbtime + (time() - $phptime);
 	}
 
-
 	/**
-	 * Drain rows from a table into a CSV file (optionally zipped) and delete them.
+	 * Drain rows from a table into a CSV file and delete them in batches.
+	 * Entire process (select + delete) runs in a single transaction,
+	 * guaranteeing no new rows slip between phases.
 	 *
-	 * Uses Db_Query_Mysql helpers (`isIndexed`, `selectBatch`, `deleteRange`)
+	 * Uses Db_Query helpers (`isIndexed`, `selectBatch`, `deleteRange`)
 	 * to remain DBMS-agnostic at the higher level.
 	 *
-	 * @method drain
+	 * @method archive
 	 * @param {string} $table Table name
 	 * @param {string} $field Indexed field to order by (e.g. "id", "insertedTime")
 	 * @param {array} [$options=array()] Optional parameters:
@@ -1048,79 +1049,135 @@ class Db
 	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
 	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
 	 */
-	public function drain($table, $field, array $options = array())
+	public function archive($table, $field, $limit = 10000, $options = array())
 	{
-		$limit   = isset($options['limit'])   ? $options['limit']   : 10000;
-		$outdir  = isset($options['outdir'])  ? $options['outdir']  : '/var/www/dumps';
-		$desc    = isset($options['desc'])    ? $options['desc']    : false;
-		$prefix  = isset($options['prefix'])  ? $options['prefix']  : $table;
-		$dontZip = isset($options['dontZip']) ? $options['dontZip'] : false;
+		$options = array_merge(array(
+			'outdir'  => APP_FILES_DIR.DS.'archives',
+			'desc'    => false,
+			'prefix'  => $table,
+			'dontZip' => false,
+			'dryRun'  => false
+		), $options);
 
-		$adapter = Db_Query::adapterClass($this);
-		$query   = new $adapter($this, Db_Query::TYPE_SELECT);
-
-		if (!is_dir($outdir)) {
-			if (!mkdir($outdir, 0770, true)) {
-				throw new Exception("Failed to create directory: $outdir");
+		// ensure outdir exists
+		if (!is_dir($options['outdir'])) {
+			if (!mkdir($options['outdir'], 0770, true)) {
+				throw new Exception("Failed to create directory: {$options['outdir']}");
 			}
 		}
 
+		$order = $options['desc'] ? 'DESC' : 'ASC';
+		$txnKey = "archive_{$table}_{$field}";
+
+		// build query adapter
+		$query = $this->newQuery(Db_Query::TYPE_SELECT);
 		if (!$query->isIndexed($table, $field)) {
 			throw new Exception("Field $field is not indexed in $table");
 		}
 
-		$rows = $query->selectBatch($table, $field, $limit, $desc ? 'DESC' : 'ASC');
-		if (!$rows) {
-			return false;
+		// Begin transaction before any read
+		$this->newQuery(Db_Query::TYPE_BEGIN)
+			->begin(false, $txnKey)
+			->execute();
+
+		try {
+			// Fetch rows within transaction (snapshot isolation)
+			$rows = $query->selectBatch($table, $field, $limit, $order);
+			if (!$rows || !count($rows)) {
+				// nothing to archive
+				$this->newQuery(Db_Query::TYPE_COMMIT)
+					->commit($txnKey)
+					->execute();
+				return false;
+			}
+
+			// Determine cutoff boundary
+			$cutoff = $rows[count($rows) - 1][$field];
+			$cutIndex = count($rows) - 1;
+			for (; $cutIndex >= 0; $cutIndex--) {
+				if ($rows[$cutIndex][$field] !== $cutoff) break;
+			}
+			if ($cutIndex === count($rows) - 1) {
+				throw new Exception("Archive aborted: all rows share `$field` = $cutoff");
+			}
+
+			$exportRows = array_slice($rows, 0, $cutIndex + 1);
+			unset($rows);
+
+			// Create sanitized filename
+			$sanitize = function ($val) {
+				$str = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string)$val);
+				return trim($str, '_');
+			};
+			$firstSafe = $sanitize($exportRows[0][$field]);
+			$lastSafe  = $sanitize($exportRows[$cutIndex][$field]);
+			$basename  = "{$options['prefix']}---{$firstSafe}---{$lastSafe}.csv";
+			$csvPath   = rtrim($options['outdir'], '/').'/'.$basename;
+
+			// Stream CSV with UTF-8 normalization
+			$fh = fopen($csvPath, 'w');
+			if (!$fh) throw new Exception("Cannot write to $csvPath");
+			fputcsv($fh, array_keys($exportRows[0]));
+			foreach ($exportRows as $row) {
+				foreach ($row as $col => $val) {
+					// ensure proper UTF-8 encoding
+					if (!mb_check_encoding($val, 'UTF-8')) {
+						$row[$col] = mb_convert_encoding($val, 'UTF-8', 'auto');
+					}
+				}
+				fputcsv($fh, $row);
+			}
+			fclose($fh);
+			unset($exportRows);
+
+			$outPath = $csvPath;
+
+			// Compress if requested, using Q_Zip or ZipArchive fallback
+			if (!$options['dontZip']) {
+				if (class_exists('Q_Zip')) {
+					$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
+					$zip = new Q_Zip();
+					$zip->zip_files($csvPath, $zipPath);
+					unlink($csvPath);
+					$outPath = $zipPath;
+				} else if (class_exists('ZipArchive')) {
+					$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
+					$zip = new ZipArchive();
+					if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+						throw new Exception("Cannot create zip: $zipPath");
+					}
+					$zip->addFile($csvPath, basename($csvPath));
+					$zip->close();
+					unlink($csvPath);
+					$outPath = $zipPath;
+				}
+			}
+
+			// Delete exported rows (still in same transaction)
+			if (!$options['dryRun']) {
+				$range = $options['desc']
+					? new Db_Range($cutoff, false, true, null)
+					: new Db_Range(null, false, false, $cutoff);
+
+				$this->newQuery(Db_Query::TYPE_DELETE)
+					->deleteRange($table, $field, $range)
+					->execute();
+			}
+
+			// Commit transaction
+			$this->newQuery(Db_Query::TYPE_COMMIT)
+				->commit($txnKey)
+				->execute();
+
+			return $outPath;
+
+		} catch (Exception $e) {
+			// Rollback on failure
+			$this->newQuery(Db_Query::TYPE_ROLLBACK)
+				->rollback()
+				->execute();
+			throw new Exception("Archive failed, rolled back: ".$e->getMessage(), 0, $e);
 		}
-
-		// Compute min/max field values on the fly
-		$minVal = null;
-		$maxVal = null;
-		foreach ($rows as $row) {
-			$value = $row[$field];
-			if ($minVal === null || $value < $minVal) $minVal = $value;
-			if ($maxVal === null || $value > $maxVal) $maxVal = $value;
-		}
-
-		// Normalize for filenames
-		$first = preg_replace('/[^A-Za-z0-9T:_-]/', '_', (string) ($desc ? $maxVal : $minVal));
-		$last  = preg_replace('/[^A-Za-z0-9T:_-]/', '_', (string) ($desc ? $minVal : $maxVal));
-
-		// Build file paths
-		$csvPath = sprintf(
-			"%s/%s---%s---%s---%s.csv",
-			rtrim($outdir, '/'),
-			$prefix,
-			$field,
-			$first,
-			$last
-		);
-
-		// Write CSV
-		$fh = fopen($csvPath, 'w');
-		if (!$fh) {
-			throw new Exception("Cannot write to file: $csvPath");
-		}
-		fputcsv($fh, array_keys($rows[0])); // headers
-		foreach ($rows as $row) {
-			fputcsv($fh, $row);
-		}
-		fclose($fh);
-
-		// Delete exported rows
-		$query->deleteRange($table, $field, $minVal, $maxVal);
-
-		// Optionally zip
-		if (!$dontZip && class_exists('Q_Zip')) {
-			$zipPath = $csvPath . '.zip';
-			$zipper = new Q_Zip();
-			$zipper->zip_files($csvPath, $zipPath);
-			unlink($csvPath);
-			return $zipPath;
-		}
-
-		return $csvPath;
 	}
 
 	/**
