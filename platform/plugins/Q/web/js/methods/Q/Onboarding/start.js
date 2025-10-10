@@ -21,8 +21,16 @@ Q.exports(function (Q) {
      *
      */
     return function _Q_Onboarding_start(instructions) {
+        // Added: track whether onboarding actually started
+        var started = false;
+        var resolveStarted;
+        var startedPromise = new Promise(function (resolve) {
+            resolveStarted = resolve;
+        });
+
         if (!instructions) {
-            return false;
+            resolveStarted(false);
+            return startedPromise;
         }
         if (typeof Q.Onboarding.textName === 'string') {
             Q.Text.get(Q.Onboarding.textName).then(function (text) {
@@ -83,12 +91,11 @@ Q.exports(function (Q) {
                 var appeared = [];
                 var visible = false;
                 for (var i=0; i<elementsToAppear.length; ++i) {
-					var e = elementsToAppear[i];
-                    var r = e.getBoundingClientRect();
+                    var r = elementsToAppear[i].getBoundingClientRect();
                     var s = Q.Onboarding.treatAsVisible;
                     var elements = Array.prototype.slice.call(document.querySelectorAll(s));
                     var treatAsVisible = elements.includes(elementsToAppear[i]);
-                    if (treatAsVisible || (r.width && r.height && !_isOverlapped(e))) {
+                    if (treatAsVisible || (r.width && r.height)) {
                         visible = true;
                         appeared.push(elementsToAppear[i]);
                     }
@@ -109,26 +116,28 @@ Q.exports(function (Q) {
                     if (!after || proceed) {
                         Q.Onboarding.waitToDisappear[k] = false;
                         Q.handle(events[k], instructions, [appeared, k]);
+                        // Added: resolve when onboarding first starts
+                        if (!started) {
+                            started = true;
+                            resolveStarted(true);
+                        }
                     }
                 }
                 if (!events[k].occurred || events[k].stopped) {
                     continue;
                 }
                 if (selectorToDisappear === selectorToAppear) {
-                    if (selectorToDisappear === selectorToAppear) {
-                        // event will stop onHide of the hints
-                        continue; // nothing to wait for
-                    }
+					// event will stop onHide of the hints
+                    continue; // nothing to wait for
                 }
                 visible = false;
                 var elementsToDisappear = document.querySelectorAll(selectorToDisappear);
                 for (var i=0; i<elementsToDisappear.length; ++i) {
-					var e = elementsToDisappear[i];
-                    var r = e.getBoundingClientRect();
+                    var r = elementsToDisappear[i].getBoundingClientRect();
                     var s = Q.Onboarding.treatAsVisible;
                     var elements = Array.prototype.slice.call(document.querySelectorAll(s));
                     var treatAsVisible = elements.includes(elementsToDisappear[i]);
-                    if (treatAsVisible || (r.width && r.height && !_isOverlapped(e))) {
+                    if (treatAsVisible || (r.width && r.height)) {
                         visible = true;
                         break;
                     }
@@ -143,18 +152,14 @@ Q.exports(function (Q) {
                 }
             }
         }, 100);
-        function _isOverlapped(el) {
-			const rect = el.getBoundingClientRect();
-			const points = [
-				[rect.left, rect.top],
-				[rect.right, rect.top],
-				[rect.left, rect.bottom],
-				[rect.right, rect.bottom],
-				[(rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2]
-			];
 
-			return !points.every(([x, y]) => document.elementFromPoint(x, y) === el);
-		}
+        // Added: if nothing ever started after a grace period, resolve false
+        setTimeout(function () {
+            if (!started) {
+                resolveStarted(false);
+            }
+        }, 1000);
 
+        return startedPromise;
     };
 });

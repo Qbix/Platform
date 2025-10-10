@@ -2723,11 +2723,21 @@ Q.debounce = function (original, milliseconds, immediate, defaultValue) {
  */
 Q.preventRecursion = function (name, original, defaultValue) {
 	return function () {
-		var n = '__preventRecursion_'+name;
+		var n = '__preventRecursion_' + name;
 		if (this[n]) return defaultValue;
 		this[n] = true;
-		var ret = original.apply(this, arguments);
-		delete this[n];
+		var ret;
+		try {
+			ret = original.apply(this, arguments);
+		} catch (e) {
+			delete this[n];
+			throw e;
+		}
+		var self = this;
+		setTimeout(function () {
+			delete self[n];
+		}, 0);
+
 		return ret;
 	};
 };
