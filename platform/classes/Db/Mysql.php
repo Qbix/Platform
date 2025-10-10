@@ -642,31 +642,23 @@ class Db_Mysql implements Db_Interface
 
 	/**
 	 * Drain rows from a table into a CSV file and delete them in batches.
-	 * Safely handles non-unique indexed fields by cutting off at a value boundary.
+	 * Entire process (select + delete) runs in a single transaction,
+	 * guaranteeing no new rows slip between phases.
 	 *
-	 * This method is DBMS-agnostic — actual SQL differences are handled
-	 * by the query adapter (Db_Query_Mysql, Db_Query_Postgres, Db_Query_Sqlite).
+	 * Uses Db_Query helpers (`isIndexed`, `selectBatch`, `deleteRange`)
+	 * to remain DBMS-agnostic at the higher level.
 	 *
 	 * @method archive
-	 * @param {string} $table
-	 *   Table name
-	 * @param {string} $field
-	 *   Indexed field to order by (e.g. timestamp, id). Must be indexed for performance.
-	 * @param {int} $limit
-	 *   Approximate number of rows to drain per run. Actual rows exported may be fewer if
-	 *   the last batch shares the same $field value.
-	 * @param {array} [$options=array()] Optional arguments:
-	 *   @param {string} [$options.outdir="/var/www/dumps"]
-	 *     Directory to write CSV/ZIP files into. Created if missing.
-	 *   @param {bool} [$options.desc=false]
-	 *     If true, order by DESC. Otherwise ASC.
-	 *   @param {string} [$options.prefix=$table]
-	 *     Optional prefix for file names.
-	 *   @param {bool} [$options.dontZip=false]
-	 *     If true, produce .csv only. If false (default), produce .zip with the CSV inside.
-	 * @return {string|false}
-	 *   Full path to the file created (.csv or .zip), or false if nothing archived.
-	 * @throws {Exception} if field not indexed or file I/O fails.
+	 * @param {string} $table Table name
+	 * @param {string} $field Indexed field to order by (e.g. "id", "insertedTime")
+	 * @param {array} [$options=array()] Optional parameters:
+	 *   @param {int}    [$options.limit=10000] Number of rows per batch
+	 *   @param {string} [$options.outdir="/var/www/dumps"] Directory to write dump files
+	 *   @param {bool}   [$options.desc=false] If true, order by DESC (default ASC)
+	 *   @param {string} [$options.prefix=""] Optional prefix for filename
+	 *   @param {bool}   [$options.dontZip=false] If true, leave CSV uncompressed
+	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
+	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
 	 */
 	public function archive($table, $field, $limit = 10000, $options = array())
 	{
@@ -733,21 +725,43 @@ class Db_Mysql implements Db_Interface
 			$basename  = "{$options['prefix']}---{$firstSafe}---{$lastSafe}.csv";
 			$csvPath   = rtrim($options['outdir'], '/').'/'.$basename;
 
-			// Stream CSV
+			// Stream CSV with UTF-8 normalization
 			$fh = fopen($csvPath, 'w');
 			if (!$fh) throw new Exception("Cannot write to $csvPath");
 			fputcsv($fh, array_keys($exportRows[0]));
-			foreach ($exportRows as $row) fputcsv($fh, $row);
+			foreach ($exportRows as $row) {
+				foreach ($row as $col => $val) {
+					// ensure proper UTF-8 encoding
+					if (!mb_check_encoding($val, 'UTF-8')) {
+						$row[$col] = mb_convert_encoding($val, 'UTF-8', 'auto');
+					}
+				}
+				fputcsv($fh, $row);
+			}
 			fclose($fh);
 			unset($exportRows);
 
 			$outPath = $csvPath;
-			if (!$options['dontZip'] && class_exists('Q_Zip')) {
-				$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
-				$zip = new Q_Zip();
-				$zip->zip_files($csvPath, $zipPath);
-				unlink($csvPath);
-				$outPath = $zipPath;
+
+			// Compress if requested, using Q_Zip or ZipArchive fallback
+			if (!$options['dontZip']) {
+				if (class_exists('Q_Zip')) {
+					$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
+					$zip = new Q_Zip();
+					$zip->zip_files($csvPath, $zipPath);
+					unlink($csvPath);
+					$outPath = $zipPath;
+				} else if (class_exists('ZipArchive')) {
+					$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
+					$zip = new ZipArchive();
+					if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+						throw new Exception("Cannot create zip: $zipPath");
+					}
+					$zip->addFile($csvPath, basename($csvPath));
+					$zip->close();
+					unlink($csvPath);
+					$outPath = $zipPath;
+				}
 			}
 
 			// Delete exported rows (still in same transaction)
