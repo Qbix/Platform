@@ -303,7 +303,14 @@ class Q_Translate
 			$filenames[] = $filename;
 
 			$fp = fopen($filename, 'w');
-			fwrite($fp, Q::json_encode($content, JSON_PRETTY_PRINT | Q_JSON::JSON_PRETTY_TABS));
+			$flags = JSON_PRETTY_PRINT | Q_JSON::JSON_PRETTY_TABS;
+			if ($this->options['dontEscapeSlashes']) {
+				$flags |= JSON_UNESCAPED_SLASHES;
+			}
+			if ($this->options['dontEscapeUnicode']) {
+				$flags |= JSON_UNESCAPED_UNICODE;
+			}
+			fwrite($fp, Q::json_encode($content, $flags));
 			fclose($fp);
 		}
 		return $filenames;

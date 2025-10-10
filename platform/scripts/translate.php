@@ -68,11 +68,21 @@ Options include:
 
 --locales-file    Use this to indicate the alternative filename to config/Q/locales.json
 
+--dont-escape-unicode
+				  By default unicode characters are escaped in the output json files.
+				  Use this option to prevent that.
+
+--dont-escape-slashes
+				  By default slashes are escaped in the output json files.
+				  Use this option to prevent that.
+
+--help           Show this help message and exit.
+
 EOT;
 
 // get all CLI options
 $opts = array( 'h:', 's:', 'i:', 'o:', 'n:', 'f:', 'g:', 'r:', 'a:', 'l:', 'p:');
-$longopts = array('help', 'source:', 'in:', 'out:', 'null:', 'format:', 'google-format:', 'retranslate:', 'retranslate-all', 'remove:', 'locales:', 'locales-file:', 'plugins', 'plugin:', 'all', 'app');
+$longopts = array('help', 'source:', 'in:', 'out:', 'null:', 'format:', 'google-format:', 'retranslate:', 'retranslate-all', 'remove:', 'locales:', 'locales-file:', 'plugins', 'plugin:', 'all', 'app', 'dont-escape-slashes', 'dont-escape-unicode');
 $options = getopt(implode('', $opts), $longopts);
 if (isset($options['help'])) {
 	echo $help;
@@ -109,6 +119,8 @@ foreach ($plugins as $plugin) {
 	$PLUGIN_DIR = constant($PLUGIN . '_PLUGIN_DIR');
 	foreach (glob($PLUGIN_DIR . DS . 'text' . DS . '*') as $textFolder) {
 		$o['in'] = $o['out'] = $textFolder;
+		$o['dontEscapeSlashes'] = isset($options['dont-escape-slashes']);
+		$o['dontEscapeUnicode'] = isset($options['dont-escape-unicode']);
 		echo PHP_EOL . PHP_EOL . "Translating $textFolder" . PHP_EOL;
 		$translate = new Q_Translate($o);
 		$translate->saveAll();
@@ -132,6 +144,8 @@ if ($app) {
 			$options['out'] = APP_SCRIPTS_DIR . DS . 'Q' . DS .$options['out'];
 		}
 	};
+	$options['dontEscapeSlashes'] = isset($options['dont-escape-slashes']);
+	$options['dontEscapeUnicode'] = isset($options['dont-escape-unicode']);
 
 	echo PHP_EOL . PHP_EOL . "Translating $textFolder" . PHP_EOL;
 	$translate = new Q_Translate($options);
