@@ -11066,6 +11066,21 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 	
 	Q.beforeActivate.handle.call(root, elem); // things to do before things are activated
 	
+	var promise = {};
+	var _resolve = null;
+	var _reject = null;
+	if (Q.Promise) {
+		promise = new Q.Promise(function (resolve, reject) {
+			_resolve = resolve;
+			_reject = reject;
+		});
+	}
+	promise.cancel = function () {
+		shared.canceled = true;
+		_reject && _reject();
+	};
+	promise.element = elem;
+
 	var shared = {
 		tool: null,
 		tools: {},
@@ -11086,20 +11101,6 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 		
 	Q.Tool.beingActivated = ba;
 	
-	var promise = {};
-	var _resolve = null;
-	var _reject = null;
-	if (Q.Promise) {
-		promise = new Q.Promise(function (resolve, reject) {
-			_resolve = resolve;
-			_reject = reject;
-		});
-	}
-	promise.cancel = function () {
-		shared.canceled = true;
-		_reject && _reject();
-	};
-	promise.element = elem;
 	return promise;
 	
 	function _activated() {
