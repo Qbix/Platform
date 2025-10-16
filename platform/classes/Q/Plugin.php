@@ -965,7 +965,7 @@ EOT;
 		echo "Installing npm modules into $dir".DS."node_modules\n";
 		$cwd = getcwd();
 		chdir($dir);
-		shell_exec("npm install");
+		shell_exec("npm install --ignore-scripts");
 		chdir($cwd);
 		return true;
 	}
