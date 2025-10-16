@@ -979,7 +979,7 @@ EOT;
 		echo "Installing composer packages into $dir".DS."vendor\n";
 		$cwd = getcwd();
 		chdir($dir);
-		shell_exec("composer update --ignore-platform-reqs");
+		shell_exec("composer update");
 		chdir($cwd);
 		return true;
 	}
