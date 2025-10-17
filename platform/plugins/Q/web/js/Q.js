@@ -6035,6 +6035,7 @@ Q.Tool.byId = function _Q_Tool_byId(id, name) {
 	}
 	var tool = Q.Tool.active[id] ? Q.first(Q.Tool.active[id]) : null;
 	if (!tool) {
+		console.warn("Tool " + toolName + " was removed while activating itself on", toolElement);
 		return undefined;
 	}
 	var q = tool.element.Q;
