@@ -15615,11 +15615,6 @@ Q.Dialogs = {
 				Q.handle(o.onClose.original, dialog, [dialog, options]);
 			}, 'Q.Dialogs');
 			o.onClose.original = _onClose;
-			try {
-				$dialog.plugin('Q/dialog', o);
-			} catch (e) {
-				console.warn(e);
-			}
 			var topDialog = null;
 			var dialogs = Q.Dialogs.dialogs;
 			dialog.isFullscreen = o.fullscreen;
@@ -15636,6 +15631,11 @@ Q.Dialogs = {
 				setTimeout(function () {
 					$dialog.close();
 				}, o.closeAfterDelay);
+			}
+			try {
+				$dialog.plugin('Q/dialog', o);
+			} catch (e) {
+				console.warn(e);
 			}
 		}
 	},
