@@ -1373,11 +1373,15 @@ class Q_Response
 					Q::includeFile($filename);
 				} catch (Exception $e) {}
 				$src_json = json_encode($src, JSON_UNESCAPED_SLASHES);
+				$content = $ob->getClean();
+				if (!trim($content)) {
+					continue;
+				}
 				$currentScriptCode = "window._Q_currentScript_src = $src_json;\n\n";
 				$currentScriptEndCode = "\n\ndelete window._Q_currentScript_src";
 				$scripts_for_slots[$slot][$src] = ''
 					. $currentScriptCode
-			 		. $ob->getClean()
+			 		. $content
 					. $currentScriptEndCode;
 			}
 		}
@@ -1637,6 +1641,9 @@ class Q_Response
 					$src = parse_url($href, PHP_URL_PATH);
 					$content = $ob->getClean();
 					$relativePathPrefix = null;
+					if (!trim($content)) {
+						continue;
+					}
 					$content = Q_Utils::adjustRelativePaths($content, $src, $dest, 'css', $relativePathPrefix);
 					$sheets_for_slots[$stylesheet['slot']][$href] = "\n$content";
 					$relativePathPrefixes_for_slots[$stylesheet['slot']][$href] = $relativePathPrefix;
