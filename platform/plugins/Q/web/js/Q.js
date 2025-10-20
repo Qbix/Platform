@@ -3852,7 +3852,7 @@ Q.beforeReplace = new Q.Event();
  * @return {Object} object with properties "src", "path" and "file"
  */
 Q.currentScript = function (stackLevels) {
-	var src = window._Q_currentScript_src || Q.getObject('document.currentScript.src');
+	var src = root._Q_currentScript_src || Q.getObject('document.currentScript.src');
 	if (!src) {
 		var index = 0, lines, i, l;
 		try {
@@ -3868,12 +3868,27 @@ Q.currentScript = function (stackLevels) {
 		}
 		src = lines[index];
 	}
-	var parts = src.match(/((http[s]?:\/\/.+\/|file:\/\/\/.+\/)([^\/]+\.(?:js|html|php)[^:]*))/);
+	var reLeadingGarbage = new RegExp("^[^a-zA-Z0-9]+(?=(https?:\\/\\/|file:\\/\\/))");
+	var reTrailingSuffix = new RegExp("(:[A-Za-z0-9_-]+){1,2}$");
+	var reMatchSrc       = new RegExp("^((?:https?:\\/\\/|file:\\/\\/\\/?)[^?#\\n]+\\/)([^\\/?#]+\\.js(?:[?#][^\\n]*)?)$", "i");
+	if (typeof src !== "string") {
+		console.warn("parseSrc: invalid type", typeof src);
+		return null;
+	}
+	src = src
+		.replace(reLeadingGarbage, "")
+		.replace(reTrailingSuffix, "")
+		.trim();
+	var parts = src.match(reMatchSrc);
+	if (!parts) {
+		console.warn("parseSrc: could not parse src", src);
+		return null;
+	}
 	return {
-		src: parts[1].split('?')[0],
-		srcWithQuerystring: parts[1],
-		path: parts[2],
-		file: parts[3]
+		src: parts[1] + parts[2].split(/[?#]/)[0],   // clean URL (no query/hash)
+		srcWithQuerystring: parts[1] + parts[2],     // keep full URL
+		path: parts[1],                              // directory path
+		file: parts[2].split(/[?#]/)[0]              // filename only
 	};
 };
 
@@ -6035,7 +6050,6 @@ Q.Tool.byId = function _Q_Tool_byId(id, name) {
 	}
 	var tool = Q.Tool.active[id] ? Q.first(Q.Tool.active[id]) : null;
 	if (!tool) {
-		console.warn("Tool " + toolName + " was removed while activating itself on", toolElement);
 		return undefined;
 	}
 	var q = tool.element.Q;
@@ -13873,11 +13887,11 @@ function _detectOrientation(e) {
 	if ((m && m("(orientation: landscape)").matches) || x > y) {
 		h.removeClass('Q_verticalOrientation')
 			.addClass('Q_horizontalOrientation');
-		Q.info.isVertical = false;
+		if (Q.info) Q.info.isVertical = false;
 	} else {
 		h.removeClass('Q_horizontalOrientation')
 			.addClass('Q_verticalOrientation');
-		Q.info.isVertical = true;
+		if (Q.info) Q.info.isVertical = true;
 	}
 }
 
