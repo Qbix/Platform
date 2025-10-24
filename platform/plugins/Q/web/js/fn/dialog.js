@@ -427,7 +427,8 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 				alignParent: (o.alignByParent && !Q.info.isMobile ? $this.parent() : null),
 				fadeInOut: o.fadeInOut && function (callback) {
 					o.onActivate.add(callback, "Q/overlay");
-				}
+				},
+				fadeTime: o.fadeTime
 			});
 			$this.data('Q/dialog', $this.data('Q/overlay'));
 		} else {

@@ -26,6 +26,51 @@ var _isOnline = navigator.onLine;
 var _isCordova = null;
 var _documentIsUnloading = null;
 
+// minimal jQuery-like implementation for dialogs, tools, etc.
+// you can load jQuery or similar library to override this
+if(!root.$){
+	function c(a){this.length=a.length;for(var b=0;b<a.length;b++)this[b]=a[b];}
+	if(!root.jQuery){
+		c.prototype={
+			each:function(a){for(var b=0;b<this.length;b++)a.call(this[b],b,this[b]);return this;},
+			html:function(a){if(a===undefined)return this[0]&&this[0].innerHTML;return this.each(function(){this.innerHTML=a;});},
+			append:function(a){return this.each(function(){var b=this;if(a instanceof c){a.each(function(){b.appendChild(this);});}else if(a instanceof Element){b.appendChild(a);}else if(typeof a==="string"){b.insertAdjacentHTML("beforeend",a);}});},
+			prepend:function(a){return this.each(function(){var b=this;if(a instanceof c){a.each(function(){b.insertBefore(this,b.firstChild);});}else if(a instanceof Element){b.insertBefore(a,b.firstChild);}else if(typeof a==="string"){b.insertAdjacentHTML("afterbegin",a);}});},
+			addClass:function(a){return this.each(function(){this.classList.add(a);});},
+			removeClass:function(a){return this.each(function(){this.classList.remove(a);});},
+			hasClass:function(a){return this[0]?this[0].classList.contains(a):false;},
+			attr:function(a,b){if(b===undefined)return this[0]&&this[0].getAttribute(a);return this.each(function(){this.setAttribute(a,b);});},
+			css:function(a,b){if(b===undefined)return this[0]&&getComputedStyle(this[0])[a];return this.each(function(){this.style[a]=b;});},
+			on:function(a,b){return this.each(function(){this.addEventListener(a,b);});},
+			off:function(a,b){return this.each(function(){this.removeEventListener(a,b);});},
+			trigger:function(a){return this.each(function(){this.dispatchEvent(new Event(a));});},
+			hide:function(){return this.each(function(){this.style.display="none";});},
+			show:function(){return this.each(function(){this.style.display="";});},
+			empty:function(){return this.each(function(){this.innerHTML="";});},
+			remove:function(){return this.each(function(){this.remove();});},
+			find:function(a){return new c(this[0]?this[0].querySelectorAll(a):[]);},
+			closest:function(a){return new c(this[0]?[this[0].closest(a)]:[]);},
+			height:function(){return this[0]?this[0].offsetHeight:0;},
+			outerHeight:function(){if(!this[0])return 0;var s=getComputedStyle(this[0]);return this[0].offsetHeight+parseFloat(s.marginTop||0)+parseFloat(s.marginBottom||0);},
+			data:function(a,b){if(!this[0])return;if(!this[0].__data)this[0].__data={};if(b===undefined)return this[0].__data[a];this.each(function(){this.__data[a]=b;});return this;},
+			is:function(a){if(!this[0])return!1;if(a===":visible")return this[0].offsetParent!==null;return this[0].matches(a);}
+		};
+		c.prototype.plugin=function(){return this;};
+		c.prototype.state=function(){return{};};
+		root.$=root.jQuery=function(a){
+			if(typeof a==="string"&&a.trim().startsWith("<")){
+				a=a.trim();var tagMatch=a.match(/^<([a-z0-9-]+)/i);
+				if(tagMatch){var tag=tagMatch[1];var attrMatch=a.match(/<[^>]+>/);var attrs={};(attrMatch?attrMatch[0]:"").replace(/([a-zA-Z_:][-a-zA-Z0-9_:.]*)="([^"]*)"/g,function(_,key,val){attrs[key]=val;});return new c([Q.element?Q.element(tag,attrs):Object.assign(document.createElement(tag),attrs)]);}
+				var div=document.createElement("div");div.innerHTML=a;return new c(Array.from(div.children));
+			}
+			if(typeof a==="string")return new c(document.querySelectorAll(a));
+			if(a instanceof Element||a===root||a===document)return new c([a]);
+			if(a&&a.length)return new c(a);
+			return new c([]);
+		};
+	}
+}
+
 /**
  * @class Q
  * @constructor
@@ -2516,17 +2561,22 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 			} else if (!(ai instanceof Function)) {
 				args.push(ai);
 			} else {
-				function _promisified(err, second) {
-					if (ai instanceof Function) {
-						return ai.apply(this, arguments);
-					}
-					if (err) {
-						return reject(err);
-					}
-					resolve(useThis ? this : second);
-				}
 				found = true;
-				args.push(_promisified)
+				args.push(function _promisified(err, second) {
+					if (ai instanceof Function) {
+						try {
+							ai.apply(this, arguments);
+						} catch (e) {
+							// swallow user callback exceptions
+						}
+					}
+					// always resolve on success if caller didn’t handle error
+					if (!err) {
+						resolve(useThis ? this : second);
+					} else if (!(ai instanceof Function)) {
+						reject(err);
+					}
+				});
 			}
 		});
 		if (callbackIndex instanceof Array) {
@@ -4675,12 +4725,9 @@ Q.getter = function _Q_getter(original, options) {
 	
 	var ignoreCache = false;
 	gw.force = function _force() {
-		var key = Q.Cache.key(arguments);
-		_waiting[key] = [];
 		ignoreCache = true;
 		return gw.apply(this, arguments);
 	};
-	
 
 	if (original.batch) {
 		gw.batch = original.batch;
@@ -5383,6 +5430,7 @@ var Tp = Q.Tool.prototype;
 Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
 	var tool = this;
 	if (typeof fields === 'function') {
+		options = callback;
 		callback = fields;
 		fields = {};
 	}
@@ -7594,13 +7642,13 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 });
 Q.IndexedDB.put = Q.promisify(function (store, value, callback) {
 	_DB_addEvents(store, store.put(value), callback);
-});
+}, false, 2);
 Q.IndexedDB.get = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.get(key), callback);
-});
+}, false, 2);
 Q.IndexedDB['delete'] = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.delete(key), callback);
-});
+}, false, 2);
 
 function _DB_addEvents(store, request, callback) {
 	request.onsuccess = function (event) {
@@ -7788,7 +7836,7 @@ Q.init = function _Q_init(options) {
 		return false;
 	}
 	Q.init.called = true;
-	Q.info.baseUrl = Q.info.baseUrl || location.href.split('/').slice(0, -1).join('/');
+	Q.info.baseUrl = Q.info.baseUrl || new URL('.', document.baseURI).href;
 	Q.info.imgLoading = Q.info.imgLoading || Q.url('{{Q}}/img/throbbers/loading.gif');
 	Q.loadUrl.options.slotNames = Q.info.slotNames;
 	_startCachingWithServiceWorker();
@@ -12427,6 +12475,14 @@ Q.globalMemoryWalk = new Q.Method();
 Q.Method.define(Q);
 
 /**
+ * Sandboxed code execution utilities
+ * @class Q.Sandbox
+ */
+Q.Sandbox = Q.Method.define({
+	run: new Q.Method()
+});
+
+/**
  * Methods for working with data
  * @class Q.Data
  */
@@ -12455,6 +12511,13 @@ Q.Data = Q.Method.define({
 			u8arr[n] = bstr.charCodeAt(n);
 		}
 		return new Blob([u8arr], {type:mime});
+	},
+	randomString: function (count) {
+		var str = "";
+		while (str.length < count) {
+			str += Math.random().toString(36).slice(2);
+		}
+		return str.slice(0, count);
 	},
 	variant: function(sessionId, index, segments, seed) {
 		segments = segments || 2;
@@ -13759,7 +13822,7 @@ function _setNotch() {
 	}
 	Q.info.hasNotch = false;
 }
-if (document.readyState === "complete") {
+if (document.readyState !== "loading") {
 	_setNotch();
 } else {
 	document.addEventListener("DOMContentLoaded", _setNotch);
@@ -14404,41 +14467,59 @@ Q.Visual = Q.Pointer = {
 		return observer;
 	},
 	/**
-	 * Works together with Q.Visual.animationStarted
-	 * Calls the callback after all current animations have ended.
+	 * Tracks transient animations and executes a callback once all have ended.
+	 * Works together with Q.Visual.animationStarted().
 	 * @static
 	 * @method waitUntilAnimationsEnd
-	 * @param {Function} callback The callback may synchronously call 
-	 *   animationStarted(), which will delay any subsequent callbacks,
-	 *   so any such callbacks would start animations sequentially.
-	 * @param {Array} params The parameters to send to the callback, if any
+	 * @param {Function} callback The callback to invoke once no animations are active.
+	 * @param {Array} [params] Optional parameters passed to the callback.
 	 */
 	waitUntilAnimationsEnd: function (callback, params) {
-		setTimeout(_executeIfAnimationsEnded, 0);
-		function _executeIfAnimationsEnded() {
+		// Slight delay so that any animationStarted() calls in the same tick register first
+		setTimeout(_check, 0);
+
+		function _check() {
 			var a = Q.Visual.animationStarted;
-			if ((a.animationsEnding || 0) < Date.now()) {
+
+			// If no animations have been started yet, run callback immediately
+			if (!a || !a.animationsEnding) {
 				Q.handle(callback, Q.Visual, params);
-			} else {
-				setTimeout(_executeIfAnimationsEnded, a.animationsEnding - Date.now);
+				return;
 			}
+
+			var now = Date.now();
+
+			// If current time is past the end of all animations, call callback
+			if (now >= a.animationsEnding) {
+				// Double-check in case callback itself starts a new animation
+				if (!a.animationsEnding || Date.now() >= a.animationsEnding) {
+					Q.handle(callback, Q.Visual, params);
+					return;
+				}
+			}
+
+			// Otherwise, recheck after the remaining duration
+			setTimeout(_check, Math.max(0, a.animationsEnding - now));
 		}
 	},
+
 	/**
-	 * Just call this to indicate that a transient animation has started,
-	 * in case someone wants to wait for all transient animations to end
-	 * they will call waitUntilAnimationsEnd()
-	 * @param {Number} duration in milliseconds
+	 * Call this whenever a transient animation starts.
+	 * It updates the global animation end timestamp.
+	 * @static
+	 * @method animationStarted
+	 * @param {Number} duration Duration of the animation in milliseconds.
 	 */
 	animationStarted: function (duration) {
 		var a = Q.Visual.animationStarted;
+
+		// Initialize tracking fields if missing
 		a.animationsEnding = a.animationsEnding || 0;
-		if (a.animationsEnding < Date.now()) {
-			a.animationsStarted = Date.now();
-			a.animationsEnding = a.animationsStarted + duration;
-		} else {
-			a.animationsEnding += duration;
-		}
+
+		var now = Date.now();
+
+		// Extend end time only from the later of now or existing end time
+		a.animationsEnding = Math.max(a.animationsEnding, now) + duration;
 	},
 	/**
 	 * Returns the x coordinate of an event relative to the document
@@ -15607,16 +15688,18 @@ Q.Dialogs = {
 			var $dialog = $(dialog);
 			if (o.title) {
 				if (typeof o.title === 'string') {
-					$(h2).html(o.title);
+					h2.innerHTML = o.title;
 				} else {
-					$(h2).empty().append(o.title);
+					h2.innerHTML = '';
+					h2.appendChild(o.title);
 				}
 			}
 			if (content) {
 				if (typeof o.title === 'string') {
-					$(contentElement).html(content);
+					contentElement.innerHTML = content;
 				} else {
-					$(contentElement).empty().append(content);
+					contentElement.innerHTML = '';
+					contentElement.appendChild(content);
 				}
 			}
 			dialog.style.display = 'none';
@@ -15745,7 +15828,7 @@ Q.Dialogs.push.options = {
 	content: '',
 	className: null,
 	fullscreen: Q.info.useFullscreen,
-	appendTo: document.body,
+	appendTo: null,
 	alignByParent: false,
 	beforeLoad: new Q.Event(),
 	onActivate: new Q.Event(),

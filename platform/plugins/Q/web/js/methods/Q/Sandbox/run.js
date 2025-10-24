@@ -6,18 +6,16 @@ Q.exports(function (Q) {
 	 */
 
 	/**
-	 * Runs code safely inside a sandboxed iframe.
-	 * If `options.name` is provided, a persistent runner is reused.
+	 * Runs code safely inside a sandboxed Web Worker.
+	 * If `options.name` is provided, a persistent worker is reused.
 	 *
 	 * @static
 	 * @method run
 	 * @param {String} code JavaScript source to execute
 	 * @param {Object} [context] Variables accessible inside the sandbox
 	 * @param {Object} [options] Additional sandbox configuration
-	 * @param {String} [options.name] Reuse a persistent sandbox runner under this name
+	 * @param {String} [options.name] Reuse a persistent sandbox worker under this name
 	 * @param {Number} [options.timeout=2000] Timeout in milliseconds before aborting execution
-	 * @param {String} [options.sandbox="allow-scripts"] Sandbox attribute value controlling allowed features
-	 * @param {String} [options.style="display:none;"] CSS style applied to the iframe element
 	 * @return {Q.Promise} Resolves with result or rejects on error
 	 */
 	return function Q_Sandbox_run(code, context, options) {
@@ -27,80 +25,92 @@ Q.exports(function (Q) {
 		// Persistent runners by name
 		if (!Q.Sandbox._runners) Q.Sandbox._runners = {};
 
+		// --- Worker-based sandbox runner ---
 		function SandboxRunner(defaults) {
-			defaults = defaults || {};
 			this.defaults = {
-				timeout: defaults.timeout || 2000,
-				sandbox: defaults.sandbox || "allow-scripts",
-				style: defaults.style || "display:none;"
+				timeout: (defaults && defaults.timeout) || 2000
 			};
-			this.iframe = null;
+			this.worker = null;
+			this.url = null;
 		}
 
-		SandboxRunner.prototype.createSandbox = function (opts) {
-			opts = Q.extend({}, this.defaults, opts || {});
-			var iframe = document.createElement("iframe");
-			iframe.sandbox = opts.sandbox;
-			if (opts.style) iframe.style = opts.style;
+		SandboxRunner.prototype.createWorker = function () {
+			const script = `
+				self.onmessage = async function(e) {
+					try {
+						const { code, context } = e.data;
 
-			iframe.srcdoc =
-				'<!DOCTYPE html><html><body>' +
-				'<script>' +
-				'window.addEventListener("message",function(e){' +
-				' try{' +
-				'   var code=e.data.code,ctx=e.data.context;' +
-				'   var sandbox=Object.create(null);' +
-				'   for(var k in ctx)sandbox[k]=ctx[k];' +
-				'   var fn=new Function("sandbox","\\"use strict\\";\\n"+code);' +
-				'   var r=fn(sandbox);' +
-				'   if(r&&typeof r.then==="function")r.then(function(v){parent.postMessage({ok:true,result:v},"*");})' +
-				'     .catch(function(e){parent.postMessage({ok:false,error:String(e)},"*");});' +
-				'   else parent.postMessage({ok:true,result:r},"*");' +
-				' }catch(e){parent.postMessage({ok:false,error:String(e)},"*");}' +
-				'});<\/script></body></html>';
+						// Build an isolated evaluation function
+						const safeEval = async (code, ctx) => {
+							const keys = Object.keys(ctx || {});
+							const values = Object.values(ctx || {});
+							const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+							const fn = new AsyncFunction(...keys, '"use strict"; return (async () => { ' + code + ' })()');
+							return fn(...values);
+						};
 
-			document.body.appendChild(iframe);
-			this.iframe = iframe;
-			return iframe;
-		};
-
-		SandboxRunner.prototype.runIn = function (iframe, code, ctx, timeoutMs) {
-			ctx = ctx || {};
-			var self = this;
-			return new Q.Promise(function (resolve, reject) {
-				var target = iframe.contentWindow;
-				if (!target) return reject(new Error("iframe not ready"));
-				function listener(ev) {
-					if (ev.source === target) {
-						window.removeEventListener("message", listener);
-						clearTimeout(timer);
-						return ev.data.ok ? resolve(ev.data.result) : reject(ev.data.error);
+						const result = await safeEval(code, context);
+						self.postMessage({ ok: true, result });
+					} catch (err) {
+						self.postMessage({ ok: false, error: String(err && err.message || err) });
 					}
-				}
-				window.addEventListener("message", listener);
-				var timer = setTimeout(function () {
-					window.removeEventListener("message", listener);
-					reject(new Error("Sandbox timeout / infinite loop"));
-				}, timeoutMs || self.defaults.timeout);
-				target.postMessage({ code: code, context: ctx }, "*");
-			});
+				};
+			`;
+
+			const blob = new Blob([script], { type: "application/javascript" });
+			this.url = URL.createObjectURL(blob);
+			this.worker = new Worker(this.url);
+			return this.worker;
 		};
 
 		SandboxRunner.prototype.run = function (code, ctx, opts) {
-			opts = opts || {};
-			var iframe = this.iframe || this.createSandbox(opts);
-			var self = this;
-			return this.runIn(iframe, code, ctx, opts.timeout).then(function (r) {
-				if (!opts.name && iframe.parentNode) iframe.parentNode.removeChild(iframe);
-				return r;
-			}, function (e) {
-				if (!opts.name && iframe.parentNode) iframe.parentNode.removeChild(iframe);
-				throw e;
+			const self = this;
+			const worker = this.worker || this.createWorker();
+			const timeoutMs = (opts && opts.timeout) || this.defaults.timeout;
+
+			// Deep clone context to avoid prototype pollution / unserializable data
+			let safeCtx;
+			try {
+				safeCtx = JSON.parse(JSON.stringify(ctx));
+			} catch (e) {
+				console.warn("[Q.Sandbox] Failed to clone context, using shallow copy");
+				safeCtx = Object.assign({}, ctx);
+			}
+
+			return new Q.Promise(function (resolve, reject) {
+				let timer;
+
+				const cleanup = () => {
+					clearTimeout(timer);
+					if (!opts.name) {
+						try {
+							URL.revokeObjectURL(self.url);
+							worker.terminate();
+						} catch {}
+					}
+				};
+
+				worker.onmessage = function (e) {
+					cleanup();
+					e.data.ok ? resolve(e.data.result) : reject(e.data.error);
+				};
+
+				worker.onerror = function (err) {
+					cleanup();
+					reject(err.message || String(err));
+				};
+
+				timer = setTimeout(function () {
+					cleanup();
+					reject(new Error("Worker timeout / infinite loop"));
+				}, timeoutMs);
+
+				worker.postMessage({ code, context: safeCtx });
 			});
 		};
 
-		// choose runner
-		var runner;
+		// --- Choose or create a runner ---
+		let runner;
 		if (options.name) {
 			runner = Q.Sandbox._runners[options.name];
 			if (!runner) {
@@ -111,7 +121,7 @@ Q.exports(function (Q) {
 			runner = new SandboxRunner(options);
 		}
 
-		// return the result (Q.Method will resolve Promises automatically)
+		// Q.Method will resolve the returned promise automatically
 		return runner.run(code, context, options);
 	};
 });
