@@ -15688,18 +15688,18 @@ Q.Dialogs = {
 			var $dialog = $(dialog);
 			if (o.title) {
 				if (typeof o.title === 'string') {
-					h2.innerHTML = o.title;
+					$(h2).html(o.title);
 				} else {
-					h2.innerHTML = '';
-					h2.appendChild(o.title);
+					$(h2).empty().append(o.title);
+
 				}
 			}
 			if (content) {
 				if (typeof o.title === 'string') {
-					contentElement.innerHTML = content;
+					$(contentElement).html(content);
 				} else {
-					contentElement.innerHTML = '';
-					contentElement.appendChild(content);
+					$(contentElement).empty().append(content);
+
 				}
 			}
 			dialog.style.display = 'none';
