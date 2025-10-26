@@ -269,14 +269,16 @@ JSON.isValid = function (str) {
  * @class Array
  * @description Q extended methods for Arrays
  */
-Object.defineProperty(Array.prototype, "toHex", {
-	enumerable: false,
-	value: function () {
-		return this.map(function (x) { 
-			return x.toString(16).padStart(2, '0');
-		}).join('');
-	}
-  });
+if (!Array.prototype.toHex) {
+	Object.defineProperty(Array.prototype, "toHex", {
+		enumerable: false,
+		value: function () {
+			return this.map(function (x) { 
+				return x.toString(16).padStart(2, '0');
+			}).join('');
+		}
+	});
+}
 
 /**
  * @class String
