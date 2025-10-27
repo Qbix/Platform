@@ -7838,7 +7838,7 @@ Q.init = function _Q_init(options) {
 		return false;
 	}
 	Q.init.called = true;
-	Q.info.baseUrl = Q.info.baseUrl || new URL('.', document.baseURI).href;
+	Q.info.baseUrl = Q.info.baseUrl || new URL('.', document.baseURI).href.slice(0, -1);
 	Q.info.imgLoading = Q.info.imgLoading || Q.url('{{Q}}/img/throbbers/loading.gif');
 	Q.loadUrl.options.slotNames = Q.info.slotNames;
 	_startCachingWithServiceWorker();

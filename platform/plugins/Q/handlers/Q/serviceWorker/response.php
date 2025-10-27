@@ -78,6 +78,10 @@ var Q = {
 			init.body = original.clone().body;
 		}
 
+		if (init.mode === 'navigate') {
+			event.respondWith(fetch(event.request));
+			return;
+		}
 		const newRequest = new Request(original.url, init);
 
 		event.respondWith(
