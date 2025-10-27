@@ -64,6 +64,7 @@
 					"'unsafe-eval'",
 					"{{host}}", "*.{{host}}", "*.{{host}}:*", "{{host}}:*",
 					"'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='", /* hash of empty string */
+					"'sha256-+DLpYKpOowitqzgnHlbJ6domBEfO5iS3HhNhDTrZ0f0='", /* code adding CSS class Q_js */ 
 					"'sha256-Ip0AQ5VFrINoc5xwRVyrIlwPrKPh7koOFOskM7jAU2k='" /* code adding CSS class Q_js */
 				],
 				"style": [
