@@ -974,7 +974,8 @@ class Q_Html
 	 * @param {array} [$attributes=null] Any additional attributes. Also can include:
 	 * @param {boolean} [$attributes.cdata] Defaults to false. Whether to enclose in CDATA tags.
 	 * @param {string} [$attributes.comment]  Whether to enclose in HTML comments
-	 * @param {boolean} [$attributes.raw]  Set to true to skip HTML encoding even if cdata and comment are false
+	 * @param {boolean} [$attributes.raw=true]  Set to false HTML encode even if cdata and comment are false.
+	 * 	Used to be false by default, but modern browsers actually require raw = true now.
  	 * @param {integer} [$attributes.cacheBust] Milliseconds, to use Q_Uri::cacheBust on the src.
 	 * @return {string} The generated markup.
 	 */
@@ -982,6 +983,9 @@ class Q_Html
 		$script, 
 		$attributes = array())
 	{
+		if (!isset($attributes['raw'])) {
+			$attributes['raw'] = true;
+		}
 		if (empty($attributes['type'])) {
 			$attributes['type'] = 'text/javascript';
 		}
