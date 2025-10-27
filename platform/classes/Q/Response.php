@@ -331,6 +331,16 @@ class Q_Response
 				'value' => 'Content-Security-Policy',
 				'content' => Q_Response::contentSecurityPolicy()
 			));
+			$noTransform = 'no-transform';
+		} else {
+			$noTransform = Q_Config::get('Q', 'web', 'headers', 'noTransform', false)
+				? 'no-transform'
+				: '';
+		}
+		if (Q_Dispatcher::$startedResponse) {
+			$publicPrivate = Q_Session::isAuthenticated() ? 'private' : 'public';
+			$directives = array($publicPrivate, $noTransform);
+			header("Cache-Control: " . implode(', ', $directives));
 		}
 
 		$app = Q::app();

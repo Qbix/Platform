@@ -972,7 +972,7 @@ class Q_Html
 	 * @static
 	 * @param {string} $script The actual script, as text
 	 * @param {array} [$attributes=null] Any additional attributes. Also can include:
-	 * @param {boolean} [$attributes.cdata] Defaults to true. Whether to enclose in CDATA tags.
+	 * @param {boolean} [$attributes.cdata] Defaults to false. Whether to enclose in CDATA tags.
 	 * @param {string} [$attributes.comment]  Whether to enclose in HTML comments
 	 * @param {boolean} [$attributes.raw]  Set to true to skip HTML encoding even if cdata and comment are false
  	 * @param {integer} [$attributes.cacheBust] Milliseconds, to use Q_Uri::cacheBust on the src.
@@ -986,7 +986,7 @@ class Q_Html
 			$attributes['type'] = 'text/javascript';
 		}
 		if (!isset($attributes['cdata'])) {
-			$attributes['cdata'] = true;
+			$attributes['cdata'] = false;
 		}
 		$cdata = !empty($attributes['cdata']);
 		unset($attributes['cdata']);
