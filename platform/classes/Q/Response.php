@@ -338,7 +338,7 @@ class Q_Response
 				: '';
 		}
 		if (Q_Dispatcher::$startedResponse) {
-			$publicPrivate = Q_Session::isAuthenticated() ? 'private' : 'public';
+			$publicPrivate = Q_Session::isAuthenticated() ? 'no-cache' : 'public';
 			$directives = array($publicPrivate, $noTransform);
 			header("Cache-Control: " . implode(', ', $directives));
 		}
