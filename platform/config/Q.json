@@ -263,9 +263,11 @@
 				}
 			},
 			"": {
-				"live": {
-					"caching": true,
-					"integrity": false
+				"urls": {
+					"live": {
+						"caching": true,
+						"integrity": false
+					}
 				}
 			}
 		},
