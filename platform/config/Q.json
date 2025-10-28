@@ -257,10 +257,16 @@
 						},
 						"timeout": 600
 					}
+				},
+				"prepare": {
+					"{{Q}}": ["js", "css"]
 				}
 			},
-			"prepare": {
-				"{{Q}}": ["js", "css"]
+			"": {
+				"live": {
+					"caching": true,
+					"integrity": false
+				}
 			}
 		},
 		"uploads": {
