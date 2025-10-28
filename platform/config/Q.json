@@ -264,10 +264,8 @@
 			},
 			"": {
 				"urls": {
-					"live": {
-						"caching": true,
-						"integrity": false
-					}
+					"caching": true,
+					"integrity": false
 				}
 			}
 		},
