@@ -80,7 +80,8 @@
 			"metas": {
 				"robots": "nosnippet",
 				"googlebot": "nosnippet",
-				"googlebot-news": "nosnippet"
+				"googlebot-news": "nosnippet",
+				"twitter:card": "summary" /* can be summary or summary_large_image */
 			}
 		},
 		"proxies": {},
