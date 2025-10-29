@@ -1141,6 +1141,7 @@ body.Q_columns_animationFX {
 	opacity: 0.5;
 	min-width: 200px;
 	transition: transform 200ms, opacity 200ms;
+	transform: scale(0.8) translateZ(0);
 }
 .Q_dialogs_animationFX .Q_overlay.Q_overlay_open {
 	opacity: 1;
