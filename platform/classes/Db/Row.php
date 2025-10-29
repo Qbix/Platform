@@ -581,8 +581,7 @@ class Db_Row
 		$relationName, 
 		$to_class_name, 
 		$alias, 
-		Db_Relation $relation, 
-		Db_Relation $relation2 = null)
+		Db_Relation $relation, /*Db_Relation relation2, etc. */ )
 	{
 		$args = func_get_args();
 		array_unshift($args, get_class($this));
@@ -608,8 +607,7 @@ class Db_Row
 		$relationName, 
 		$to_class_name, 
 		$alias, 
-		Db_Relation $relation, 
-		Db_Relation $relation2 = null)
+		Db_Relation $relation, /*Db_Relation relation2, etc. */ )
 	{
 		$args = func_get_args();
 		$count = count($args);
@@ -647,7 +645,7 @@ class Db_Row
 		$relationName, 
 		$to_class_name,
 		$from_alias, 
-		Db_Relation $relation)
+		Db_Relation $relation, /*Db_Relation relation2, etc. */ )
 	{
 		$args = func_get_args();
 		$count = count($args);
