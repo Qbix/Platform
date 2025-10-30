@@ -247,13 +247,18 @@ class Q_Tree
 
 		if ((!Q::isAssociative($value) || !Q::isAssociative($valueTo)) && $valueTo !== $value) {
 			// handle keyed arrays if keyField is specified
-			if (is_array($value) && !Q::isAssociative($value) && is_array($valueTo) && !Q::isAssociative($valueTo) && $context->keyField) {
-				$diff = self::diffByKey($value, $valueTo, $context->keyField);
-				if (!empty($diff)) {
-					call_user_func_array(array($context->diff, 'set'), array_merge($path, array($diff)));
+			if (is_array($value) && !Q::isAssociative($value)
+			|| is_array($valueTo) && !Q::isAssociative($valueTo)) {
+				if ($keyField = $this->detectKeyField(
+					is_array($value) ? $value : array(),
+					is_array($valueTo) ? $valueTo : array()
+				)) {
+					$diff = self::diffByKey($value, $valueTo, $context->keyField);
+					if (!empty($diff)) {
+						call_user_func_array(array($context->diff, 'set'), array_merge($path, array($diff)));
+					}
+					return false;
 				}
-				return false;
-			} else {
 				$valueTo = array('replace' => $valueTo);
 			}
 			$args2 = $path;
