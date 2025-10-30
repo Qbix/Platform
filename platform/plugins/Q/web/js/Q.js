@@ -6576,6 +6576,7 @@ Q.Links.whatsapp = Q.Links.whatsApp;
  *  method function, such as { options: { a: "b" , c: "d" }}
  * @param {Object} [options] More information about the method
  * @param {boolean} [options.isGetter] set to true to indicate that the method will be wrapped with Q.getter()
+ * @param {boolean} [options.customPath] set to a custom path to load the method from, instead of the default
  */
 Q.Method = function (properties, options) {
 	Q.extend(this, properties);
@@ -6641,34 +6642,49 @@ Q.Method.onLoad = new Q.Event();
  */
 Q.Method.define = function (o, prefix, closure) {
 	if (!prefix) {
-		prefix = Q.currentScriptPath()+'/'+Q.Method.define.options.siblingFolder;
+		prefix = Q.currentScriptPath() + '/' + Q.Method.define.options.siblingFolder;
 	}
 	Q.each(o, function (k) {
 		if (!o.hasOwnProperty(k) || !(o[k] instanceof Q.Method)) {
 			return;
 		}
-		// method stub is still there
+
 		var method = o[k];
-		o[k] = function _Q_Method_shim () {
-			var url = Q.url(prefix + '/' + k + '.js');
+
+		o[k] = function _Q_Method_shim() {
+			var url = Q.url(
+				(method.__options && method.__options.customPath)
+					? method.__options.customPath
+					: (prefix + '/' + k + '.js')
+			);
 			var t = this, a = arguments;
 			return Q.Method.load(o, k, url, closure)
-			.then(function (f) {
-				return f.apply(t, a);
-			});
+				.then(function (f) {
+					return f.apply(t, a);
+				});
 		};
+
 		Q.extend(o[k], method);
+
 		if (method.__options.isGetter) {
-			o[k].force = function _Q_Method_force_shim () {
-				var url = Q.url(prefix + '/' + k + '.js');
+			o[k].force = function _Q_Method_force_shim() {
+				var url = Q.url(
+					(method.__options && method.__options.customPath)
+						? method.__options.customPath
+						: (prefix + '/' + k + '.js')
+				);
 				var t = this, a = arguments;
 				return Q.Method.load(o, k, url, closure)
-				.then(function (f) {
-					return f.force.apply(t, a);
-				});
+					.then(function (f) {
+						return f.force.apply(t, a);
+					});
 			};
-			o[k].forget = function _Q_Method_forget_shim () {
-				var url = Q.url(prefix + '/' + k + '.js');
+			o[k].forget = function _Q_Method_forget_shim() {
+				var url = Q.url(
+					(method.__options && method.__options.customPath)
+						? method.__options.customPath
+						: (prefix + '/' + k + '.js')
+				);
 				var t = this, a = arguments;
 				return Q.Method.load(o, k, url, closure)
 					.then(function (f) {
@@ -6676,6 +6692,7 @@ Q.Method.define = function (o, prefix, closure) {
 					});
 			};
 		}
+
 		if (method.__options.cache) {
 			o[k].cache = method.__options.cache;
 		}
