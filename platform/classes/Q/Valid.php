@@ -269,9 +269,9 @@ class Q_Valid
 	 * @static
 	 * @method verifyExpiration
 	 * @param {integer} $timestamp
-	 * @param {boolean} [$throwIfExpired=false] If true, throws Telegram_Exception_Expired if expired
+	 * @param {boolean} [$throwIfExpired=false] If true, throws Q_Exception_Expired if expired
 	 * @param {string} [$durationKey="Q"] Pass the durationKey under "Q"/"expirations" config
-	 * @throws {Telegram_Exception_Expired}
+	 * @throws {Q_Exception_Expired}
 	 * @return {boolean}
 	 */
 	static function expiration($timestamp = null, $throwIfExpired = false, $durationKey = 'Q')
