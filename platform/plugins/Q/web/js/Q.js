@@ -1462,7 +1462,8 @@ Q.typeOf = function _Q_typeOf(value) {
 			return 'array';
 		} else if (typeof value.constructor != 'undefined'
 		&& typeof value.constructor.name != 'undefined') {
-			if (value.constructor.name == 'Object') {
+			if (value.constructor.name == 'Object'
+			|| value.constructor.name == '') {
 				return 'object';
 			}
 			return value.constructor.name;
