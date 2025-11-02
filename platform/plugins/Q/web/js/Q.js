@@ -6591,6 +6591,9 @@ Q.Method.load = function (o, k, url, closure) {
 	return new Promise(function (resolve, reject) {
 		Q.require(url, function (exported) {
 			if (exported) {
+				if (o.__loaded) {
+					o = o.__loaded; // in case o was replaced
+				}
 				var args = closure ? closure() : [];
 				if (!exported.Q_Method_load_executed) {
 					var m = exported.apply(o, args);
@@ -6609,6 +6612,7 @@ Q.Method.load = function (o, k, url, closure) {
 					v[property] = original[property];
 				}
 			}
+			original.__loaded = v;
 			resolve(v);
 			Q.Method.onLoad.handle(o, k, o[k], closure);
 		}, true);
