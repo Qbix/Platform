@@ -10137,8 +10137,8 @@ Q.updateUrls = function(callback) {
 				} catch (e) {}
 				if (!Q.isEmpty(urls)) {
 					Q.updateUrls.urls = urls;
-					Q.extend(Q.updateUrls.urls, 100, result);
 				}
+				Q.extend(Q.updateUrls.urls, 100, result);
 				json = JSON.stringify(Q.updateUrls.urls);
 				root.localStorage.setItem(Q.updateUrls.urlsKey, json);
 				if (timestamp = result['@timestamp']) {
