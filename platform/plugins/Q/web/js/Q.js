@@ -6593,6 +6593,8 @@ Q.Method.load = function (o, k, url, closure) {
 			if (exported) {
 				if (o.__loaded) {
 					o = o.__loaded; // in case o was replaced
+				} else if (o.__shim && o.__shim.__loaded) {
+					o = o.__shim.__loaded; // in case o[k] was replaced
 				}
 				var args = closure ? closure() : [];
 				if (!exported.Q_Method_load_executed) {
@@ -6656,7 +6658,7 @@ Q.Method.define = function (o, prefix, closure) {
 
 		var method = o[k];
 
-		o[k] = function _Q_Method_shim() {
+		o[k] = method.__shim = function _Q_Method_shim() {
 			var url = Q.url(
 				(method.__options && method.__options.customPath)
 					? method.__options.customPath
