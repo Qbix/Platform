@@ -1433,19 +1433,28 @@ class Q_Request
 	}
 
 	/**
-	 * Returns the IP address of the user, taking into account trusted proxies,
-	 * as well as the type and whether it is public
+	 * Returns the IP address of the user, taking into account reverse proxies
+	 * (e.g. Cloudflare, Nginx, AWS ALB). By default, trusts proxy headers unless
+	 * explicitly disabled.
 	 * @method ip
 	 * @static
-	 * @return {array} Returns array of (ip, protocol, isPublic, packed)
+	 * @return array Returns array of (ip, protocol, isPublic, packed)
 	 */
 	static function ip()
 	{
-		$trustProxies = Q_Config::get('Q', 'request', 'ip', 'trustProxies', false);
+		$dontTrustProxies = Q_Config::get('Q', 'request', 'ip', 'dontTrustProxies', false);
 		$ip = Q::ifset($_SERVER, 'REMOTE_ADDR', '');
 
-		if ($trustProxies) {
-			if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+		if (!$dontTrustProxies) {
+
+			// Cloudflare-specific headers (preferred)
+			if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+				$ip = $_SERVER['HTTP_CF_CONNECTING_IP'];
+			} elseif (!empty($_SERVER['HTTP_TRUE_CLIENT_IP'])) {
+				$ip = $_SERVER['HTTP_TRUE_CLIENT_IP'];
+
+			// Generic reverse proxy chain
+			} elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
 				$ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
 				foreach ($ips as $candidate) {
 					$candidate = trim($candidate);
@@ -1458,9 +1467,9 @@ class Q_Request
 				$ip = $_SERVER['HTTP_CLIENT_IP'];
 			}
 		}
+
 		$protocol = Q_Utils::protocolOfIP($ip);
 		$isPublic = Q_Utils::isPublicIP($ip);
-
 		$packed = ($protocol === 'v4')
 			? sprintf('%u', ip2long($ip))
 			: inet_pton($ip);
