@@ -128,7 +128,7 @@
 		},
 		"request": {
 			"ip": {
-				"trustProxies": false
+				"dontTrustProxies": false
 			}
 		},
 		"response": {
