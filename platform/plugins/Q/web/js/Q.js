@@ -2831,33 +2831,41 @@ Q.timeRemaining = function (timestamp) {
  * Used so you can add 1 to this to move one of the children atop them all.
  * @method zIndexTopmost
  * @static
- * @param {Element} [container=document.body] 
+ * @param {Element} [container=document.body]
  * @param {Function} [filter] By default, filters out elements with Q_click_mask and pointer-events:none
  * @returns Number
  */
 Q.zIndexTopmost = function (container, filter) {
 	container = container || document.body;
 	filter = filter || function (element) {
-		return element.computedStyle().pointerEvents !== 'none'
+		var style = element.computedStyle();
+		return style.pointerEvents !== 'none'
 			&& !element.hasClass('Q_click_mask')
 			&& element.getAttribute('id') !== 'notices_slot';
-	}
-	var topZ = -1;
-	Q.each(container.children, function () {
-		if (!filter(this)) {
-			return;
-		}
-		var z = parseInt(this.computedStyle().zIndex);
-		if (!isNaN(z)) {
-			// if z-index is max allowed, skip this element
-			if (z >= 2147483647) {
+	};
+
+	function getTopZ(el) {
+		var topZ = -1;
+		Q.each(el.children, function () {
+			if (!filter(this)) {
 				return;
 			}
+			var style = this.computedStyle();
+			var z = style.zIndex;
+			if (z === 'auto') {
+				// recurse into children, since stacking may come from them
+				topZ = Math.max(topZ, getTopZ(this));
+			} else {
+				z = parseInt(z);
+				if (!isNaN(z) && z < 2147483647) {
+					topZ = Math.max(topZ, z);
+				}
+			}
+		});
+		return topZ;
+	}
 
-			topZ = Math.max(topZ, z)
-		}
-	});
-	return topZ;
+	return getTopZ(container);
 };
 
 /**
@@ -7863,7 +7871,7 @@ Q.init = function _Q_init(options) {
 	}
 	Q.init.called = true;
 	Q.info.baseUrl = Q.info.baseUrl || new URL('.', document.baseURI).href.slice(0, -1);
-	Q.info.imgLoading = Q.info.imgLoading || Q.url('{{Q}}/img/throbbers/loading.gif');
+	Q.info.imgLoading = Q.url(Q.info.imgLoading || '{{Q}}/img/throbbers/loading.gif');
 	Q.loadUrl.options.slotNames = Q.info.slotNames;
 	_startCachingWithServiceWorker();
 	_detectOrientation();

@@ -86,7 +86,7 @@ Q.Tool.jQuery('Q/contextual', function _Q_contextual() {
 		state.id = cid;
 		state.contextual = contextual;
 		// set contextual max z-index
-		contextual.css("z-index", Q.zIndexTopmost());
+		contextual.css("z-index", Math.max(99999, Q.zIndexTopmost()));
 		$(document.body).append(contextual);
 		Q.handle(state.onConstruct, $this, [contextual[0], cid]);
 	}, { slotName: 'Q' });
