@@ -2369,6 +2369,38 @@ class Q_Response
 		self::$cookiesToRemove = array();
 	}
 
+	/**
+	 * Clear all cookies related to app domain
+	 * @method clearAllCookies
+	 * @static
+	 */
+	static function clearAllCookies () {
+		if (empty($_COOKIE)) {
+			return;
+		}
+
+		foreach ($_COOKIE as $name => $value) {
+			// Try deleting the cookie for the current path
+			setcookie($name, '', time() - 3600, '/');
+
+			// Try deleting for common subpaths (optional, safer for apps with deep paths)
+			$pathParts = explode('/', trim($_SERVER['REQUEST_URI'], '/'));
+			$path = '';
+			foreach ($pathParts as $part) {
+				$path .= '/' . $part;
+				setcookie($name, '', time() - 3600, $path);
+			}
+
+			// Try deleting for current domain and parent domains
+			$domainParts = explode('.', $_SERVER['HTTP_HOST']);
+			$count = count($domainParts);
+			for ($i = 0; $i < $count - 1; $i++) {
+				$domain = implode('.', array_slice($domainParts, $i));
+				setcookie($name, '', time() - 3600, '/', $domain);
+			}
+		}
+	}
+
 	static function flushAndContinue($timeLimit = 30)
 	{
 		self::setIgnoreUserAbort(true);
