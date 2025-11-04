@@ -16606,7 +16606,6 @@ Q.onInit.add(function () {
 	} else {
 		Q.onHashChange.set(Q_hashChangeHandler, 'Q.loadUrl');
 	}
-	Q.info.imgLoading = Q.url(Q.info.imgLoading || '{{Q}}/img/throbbers/loading.gif');
 	Q.onReady.set(function () {
 		// renew sockets when reverting to online
 		Q.onOnline.set(Q.Socket.reconnectAll, 'Q.Socket');
@@ -16628,6 +16627,7 @@ Q.onInit.add(function () {
 	for (var k in substitutions) {
 		sfu[k] = Q.url(substitutions[k]);
 	}
+	Q.info.imgLoading = Q.url(Q.info.imgLoading || '{{Q}}/img/throbbers/loading.gif');
 
 	var QtQw = Q.text.Q.words;
 	Q.Pointer.ClickOrTap = QtQw.ClickOrTap = useTouchEvents ? QtQw.Tap : QtQw.Click;
