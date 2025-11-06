@@ -227,7 +227,7 @@ function Row(fields, retrieved /* false */) {
 		if (shouldSaveNow) _do_save.call(this, modifiedFields);
 
 		function _do_save(modifiedFields) {
-			if (!modifiedFields) {
+			if (Q.isEmpty(modifiedFields)) {
 				callback && callback.call(self, new Error(self.className+".beforeSave callback cancelled save")); // nothing saved
 				return;
 			}

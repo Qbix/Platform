@@ -243,10 +243,10 @@ Q.Tool.define("Q/badge", function () {
 
 			if (!state.skipOverlapped) {
 				var badgeRect = $badgeElement[0].getBoundingClientRect();
-				var scrolligParent = tool.element.scrollingParent(false, 'vertical', true);
+				var scrollingParent = tool.element.scrollingParent(false, 'vertical', true);
 				var $jq = $te.parents().addBack()
 					.filter(function (i, e) {
-						if (e.isSameNode(scrolligParent) || e.contains(scrolligParent)) {
+						if (e === scrollingParent || e.contains(scrollingParent)) {
 							return false;
 						}
 

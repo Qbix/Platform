@@ -437,6 +437,7 @@ class Db_Mysql implements Db_Interface
 					$onDuplicateKeyUpdate[$column] = in_array($column, $possibleMagicUpdateFields)
 						? new Db_Expression("CURRENT_TIMESTAMP")
 						: new Db_Expression("VALUES($column)");
+					break; // need only one
 				}
 				$fieldNames = call_user_func(array($options['className'], 'fieldNames'));
 				foreach ($possibleMagicUpdateFields as $column) {
@@ -457,123 +458,138 @@ class Db_Mysql implements Db_Interface
 			$odku_clause .= implode(",\n\t", $parts);
 		}
 
-		// simulate beforeSave on all rows
-		$className = isset($options['className']) ? $options['className'] : null;
-		$rowObjects = array();
-		if ($className) {
-			$isCallable = is_callable(array($className, 'beforeInsertManyAndExecute'));
-			foreach ($rows as $k => $row) {
-				if (is_array($row)) {
-					$rowObject = new $className($row);
-				} else {
-					$rowObject = $row;
-					$row = $row->fields;
-				}
-				$rowObjects[] = $rowObject;
-				if (!$isCallable) {
-					$rowObject->beforeSave($row);
-				}
-				$rows[$k] = $rowObject->fields;
-			}
-			if ($isCallable) {
-				call_user_func(array($className, 'beforeInsertManyAndExecute'), $rowObjects);
-				$rows = array();
-				foreach ($rowObjects as $k => $rowObject) {
-					$rows[$k] = $rowObject->fields;
-				}
-			}
-		}
-		
-		
-		// Start filling
-		$queries = array();
-		$queryCounts = array();
-		$bindings = array();
-		$last_q = array();
-		$last_queries = array();
-		foreach ($rows as $row) {
-			if ($row instanceof Db_Row) {
-				if (class_exists('Q') and class_exists($className)) {
-					Q::event("Db/Row/$className/save", array(
-						'row' => $row
-					), 'before'); 
-				}
-				$callback = array($row, "beforeSave");
-				if (is_callable($callback)) {
-					call_user_func(
-						$callback, $row->fields, false, false
-					);
-				}
-				$fieldNames = method_exists($row, 'fieldNames')
-					? $row->fieldNames()
-					: null;
-				$record = array();
-				if (is_array($fieldNames)) {
-					foreach ($fieldNames as $name) {
-						if (array_key_exists($name, $row->fields)) {
-							$record[$name] = $row->fields[$name];
-						} else if (in_array($name, $possibleMagicInsertFields)) {
-							$record[$name] = new Db_Expression('CURRENT_TIMESTAMP');
-						}
+		// Process in outer chunks
+		foreach (array_chunk($rows, $chunkSize) as $rowsChunk) {
+			$rowObjects = array();
+			if ($className) {
+				$isCallable = is_callable(array($className, 'beforeInsertManyAndExecute'));
+				foreach ($rowsChunk as $k => $row) {
+					if (is_array($row)) {
+						$rowObject = new $className($row);
+					} else {
+						$rowObject = $row;
+						$row = $row->fields;
 					}
-				} else {
-					foreach ($row->fields as $name => $value) {
-						$record[$name] = $value;
+					$rowObjects[] = $rowObject;
+					if (!$isCallable) {
+						$rowObject->beforeSave($row);
+					}
+					$rowsChunk[$k] = $rowObject->fields;
+				}
+				if ($isCallable) {
+					call_user_func(array($className, 'beforeInsertManyAndExecute'), $rowObjects);
+					$rowsChunk = array();
+					foreach ($rowObjects as $rowObject) {
+						$rowsChunk[] = $rowObject->fields;
 					}
 				}
-			} else {
-				$record = $row;
-				if ($className) {
-					$fieldNames = call_user_func(array($className, 'fieldNames'));
-					foreach ($fieldNames as $fn) {
-						if (in_array($fn, $possibleMagicInsertFields)) {
-							$record[$fn] = new Db_Expression('CURRENT_TIMESTAMP');
-							break;
-						}
-					}
-				}
-			}
-			$query = new Db_Query_Mysql($this, Db_Query::TYPE_INSERT);
-			// get shard, if any
-			$shard = '';
-			if (isset($className)) {
-				$query->className = $className;
-				$sharded = $query->shard(null, $record);
-				if (count($sharded) > 1 or $shard === '*') { // should be only one shard
-					throw new Exception("Db_Mysql::insertManyAndExecute row should be stored on exactly one shard: " . json_encode($record));
-				}
-				$shard = key($sharded);
 			}
 			
-			// start filling out the query data
-			$qc = empty($queryCounts[$shard]) ? 1 : $queryCounts[$shard] + 1;
-			if (!isset($bindings[$shard])) {
-				$bindings[$shard] = array();
-			}
-			$valuesList = array();
-			$index = 0;
-			foreach ($columnsList as $column) {
-				++$index;
-				$raw = $rawColumns[$column];
-				$value = isset($record[$raw]) ? $record[$raw] : null;
-				if ($value instanceof Db_Expression) {
-					$valuesList[] = "$value";
+			// Start filling
+			$queries = array();
+			$queryCounts = array();
+			$bindings = array();
+			$last_q = array();
+			$last_queries = array();
+			foreach ($rowsChunk as $row) {
+				if ($row instanceof Db_Row) {
+					if (class_exists('Q') and class_exists($className)) {
+						Q::event("Db/Row/$className/save", array(
+							'row' => $row
+						), 'before'); 
+					}
+					$fieldNames = method_exists($row, 'fieldNames')
+						? $row->fieldNames()
+						: null;
+					$record = array();
+					if (is_array($fieldNames)) {
+						foreach ($fieldNames as $name) {
+							if (array_key_exists($name, $row->fields)) {
+								$record[$name] = $row->fields[$name];
+							} else if (in_array($name, $possibleMagicInsertFields)) {
+								$record[$name] = new Db_Expression('CURRENT_TIMESTAMP');
+							}
+						}
+					} else {
+						foreach ($row->fields as $name => $value) {
+							$record[$name] = $value;
+						}
+					}
 				} else {
-					$valuesList[] = ':_'.$qc.'_'.$index;
-					$bindings[$shard]['_'.$qc.'_'.$index] = $value;
+					$record = $row;
+					if ($className) {
+						$fieldNames = call_user_func(array($className, 'fieldNames'));
+						foreach ($fieldNames as $fn) {
+							if (in_array($fn, $possibleMagicInsertFields)) {
+								$record[$fn] = new Db_Expression('CURRENT_TIMESTAMP');
+								break;
+							}
+						}
+					}
+				}
+				$query = new Db_Query_Mysql($this, Db_Query::TYPE_INSERT);
+				// get shard, if any
+				$shard = '';
+				if (isset($className)) {
+					$query->className = $className;
+					$sharded = $query->shard(null, $record);
+					if (count($sharded) > 1 or $shard === '*') { // should be only one shard
+						throw new Exception("Db_Mysql::insertManyAndExecute row should be stored on exactly one shard: " . json_encode($record));
+					}
+					$shard = key($sharded);
+				}
+				
+				// start filling out the query data
+				$qc = empty($queryCounts[$shard]) ? 1 : $queryCounts[$shard] + 1;
+				if (!isset($bindings[$shard])) {
+					$bindings[$shard] = array();
+				}
+				$valuesList = array();
+				$index = 0;
+				foreach ($columnsList as $column) {
+					++$index;
+					$raw = $rawColumns[$column];
+					$value = isset($record[$raw]) ? $record[$raw] : null;
+					if ($value instanceof Db_Expression) {
+						$valuesList[] = "$value";
+					} else {
+						$valuesList[] = ':_'.$qc.'_'.$index;
+						$bindings[$shard]['_'.$qc.'_'.$index] = $value;
+					}
+				}
+				$valuesString = implode(', ', $valuesList);
+				if (empty($queryCounts[$shard])) {
+					$q = $queries[$shard] = "INSERT INTO $into\nVALUES ($valuesString) ";
+					$queryCounts[$shard] = 1;
+				} else {
+					$q = $queries[$shard] .= ",\n       ($valuesString) ";
+					++$queryCounts[$shard];
+				}
+
+				// if chunk filled up for this shard, execute it
+				if ($qc === $chunkSize) {
+					if ($onDuplicateKeyUpdate) {
+						$q .= $odku_clause;
+					}
+					$query = $this->rawQuery($q)->bind($bindings[$shard]);
+					if ($onDuplicateKeyUpdate) {
+						$query = $query->bind($update_fields);
+					}
+					if (isset($last_q[$shard]) and $last_q[$shard] === $q) {
+						// re-use the prepared statement, save round-trips to the db
+						$query->reuseStatement($last_queries[$shard]);
+					}
+					$query->execute(true, $shard);
+					$last_q[$shard] = $q;
+					$last_queries[$shard] = $query; // save for re-use
+					$bindings[$shard] = $queries[$shard] = array();
+					$queryCounts[$shard] = 0;
 				}
 			}
-			$valuesString = implode(', ', $valuesList);
-			if (empty($queryCounts[$shard])) {
-				$q = $queries[$shard] = "INSERT INTO $into\nVALUES ($valuesString) ";
-				$queryCounts[$shard] = 1;
-			} else {
-				$q = $queries[$shard] .= ",\n       ($valuesString) ";
-				++$queryCounts[$shard];
-			}
-
-			// if chunk filled up for this shard, execute it
-			if ($qc === $chunkSize) {
+			
+			// Now execute the remaining queries, if any
+			foreach ($queries as $shard => $q) {
+				if (!$q) continue;
 				if ($onDuplicateKeyUpdate) {
 					$q .= $odku_clause;
 				}
@@ -586,68 +602,192 @@ class Db_Mysql implements Db_Interface
 					$query->reuseStatement($last_queries[$shard]);
 				}
 				$query->execute(true, $shard);
-				$last_q[$shard] = $q;
-				$last_queries[$shard] = $query; // save for re-use
-				$bindings[$shard] = $queries[$shard] = array();
-				$queryCounts[$shard] = 0;
 			}
-		}
-		
-		// Now execute the remaining queries, if any
-		foreach ($queries as $shard => $q) {
-			if (!$q) continue;
-			if ($onDuplicateKeyUpdate) {
-				$q .= $odku_clause;
+			
+			foreach ($rowsChunk as $row) {
+				if ($row instanceof Db_Row) {
+					$row->wasInserted(true);
+					$row->wasRetrieved(true);
+				}
 			}
-			$query = $this->rawQuery($q)->bind($bindings[$shard]);
-			if ($onDuplicateKeyUpdate) {
-				$query = $query->bind($update_fields);
+
+			// simulate afterSaveExecute on all rows in this chunk
+			if ($className) {
+				if (is_callable(array($className, 'afterInsertManyAndExecute'))) {
+					call_user_func(array($className, 'afterInsertManyAndExecute'), $rowObjects);
+				} else {
+					foreach ($rowObjects as $rowObject) {
+						try {
+							$rowObject->wasModified(false);
+							$query = self::insert($table_into, $rowObject->fields);
+							$q = $query->build();
+							$stmt = null;
+							$result = new Db_Result($stmt, $query);
+							$rowObject->afterSaveExecute(
+								$result, $query, $rowObject->fields,
+								$rowObject->calculatePKValue(true),
+								'insertManyAndExecute'
+							);
+						} catch (Exception $e) {
+							// swallow errors and continue the simulation
+						}
+					}
+				}
+				Q::event("Db/Row/$className/insertManyAndExecute", array(
+					'rows' => $rowObjects,
+				), 'after');
 			}
-			if (isset($last_q[$shard]) and $last_q[$shard] === $q) {
-				// re-use the prepared statement, save round-trips to the db
-				$query->reuseStatement($last_queries[$shard]);
-			}
-			$query->execute(true, $shard);
-		}
-		
-		foreach ($rows as $row) {
-			if ($row instanceof Db_Row) {
-				$row->wasInserted(true);
-				$row->wasRetrieved(true);
+		} // end outer chunk
+	}
+
+	/**
+	 * Drain rows from a table into a CSV file and delete them in batches.
+	 * Entire process (select + delete) runs in a single transaction,
+	 * guaranteeing no new rows slip between phases.
+	 *
+	 * Uses Db_Query helpers (`isIndexed`, `selectBatch`, `deleteRange`)
+	 * to remain DBMS-agnostic at the higher level.
+	 *
+	 * @method archive
+	 * @param {string} $table Table name
+	 * @param {string} $field Indexed field to order by (e.g. "id", "insertedTime")
+	 * @param {array} [$options=array()] Optional parameters:
+	 *   @param {int}    [$options.limit=10000] Number of rows per batch
+	 *   @param {string} [$options.outdir="/var/www/dumps"] Directory to write dump files
+	 *   @param {bool}   [$options.desc=false] If true, order by DESC (default ASC)
+	 *   @param {string} [$options.prefix=""] Optional prefix for filename
+	 *   @param {bool}   [$options.dontZip=false] If true, leave CSV uncompressed
+	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
+	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
+	 */
+	public function archive($table, $field, $limit = 10000, $options = array())
+	{
+		$options = array_merge(array(
+			'outdir'  => APP_FILES_DIR.DS.'archives',
+			'desc'    => false,
+			'prefix'  => $table,
+			'dontZip' => false,
+			'dryRun'  => false
+		), $options);
+
+		// ensure outdir exists
+		if (!is_dir($options['outdir'])) {
+			if (!mkdir($options['outdir'], 0770, true)) {
+				throw new Exception("Failed to create directory: {$options['outdir']}");
 			}
 		}
 
-		// simulate afterSaveExecute on all rows
-		if ($className) {
-			$callAfterInsertManyAndExecute = false;
-			$args = array();
-			if (is_callable(array($className, 'afterInsertManyAndExecute'))) {
-				call_user_func(array($className, 'afterInsertManyAndExecute'), $rowObjects);
-			} else {
-				foreach ($rowObjects as $rowObject) {
-					try {
-						$rowObject->wasModified(false);
-						$query = self::insert($table_into, $rowObject->fields);
-						$q = $query->build();
-						$stmt = null;
-						$result = new Db_Result($stmt, $query);
-						$rowObject->afterSaveExecute(
-							$result, $query, $rowObject->fields,
-							$rowObject->calculatePKValue(true),
-							'insertManyAndExecute'
-						);
-					} catch (Exception $e) {
-						// swallow errors and continue the simulation
+		$order = $options['desc'] ? 'DESC' : 'ASC';
+		$txnKey = "archive_{$table}_{$field}";
+
+		// build query adapter
+		$query = $this->newQuery(Db_Query::TYPE_SELECT);
+		if (!$query->isIndexed($table, $field)) {
+			throw new Exception("Field $field is not indexed in $table");
+		}
+
+		// Begin transaction before any read
+		$this->newQuery(Db_Query::TYPE_BEGIN)
+			->begin(false, $txnKey)
+			->execute();
+
+		try {
+			// Fetch rows within transaction (snapshot isolation)
+			$rows = $query->selectBatch($table, $field, $limit, $order);
+			if (!$rows || !count($rows)) {
+				// nothing to archive
+				$this->newQuery(Db_Query::TYPE_COMMIT)
+					->commit($txnKey)
+					->execute();
+				return false;
+			}
+
+			// Determine cutoff boundary
+			$cutoff = $rows[count($rows) - 1][$field];
+			$cutIndex = count($rows) - 1;
+			for (; $cutIndex >= 0; $cutIndex--) {
+				if ($rows[$cutIndex][$field] !== $cutoff) break;
+			}
+			if ($cutIndex === count($rows) - 1) {
+				throw new Exception("Archive aborted: all rows share `$field` = $cutoff");
+			}
+
+			$exportRows = array_slice($rows, 0, $cutIndex + 1);
+			unset($rows);
+
+			// Create sanitized filename
+			$sanitize = function ($val) {
+				$str = preg_replace('/[^A-Za-z0-9._-]+/', '_', (string)$val);
+				return trim($str, '_');
+			};
+			$firstSafe = $sanitize($exportRows[0][$field]);
+			$lastSafe  = $sanitize($exportRows[$cutIndex][$field]);
+			$basename  = "{$options['prefix']}---{$firstSafe}---{$lastSafe}.csv";
+			$csvPath   = rtrim($options['outdir'], '/').'/'.$basename;
+
+			// Stream CSV with UTF-8 normalization
+			$fh = fopen($csvPath, 'w');
+			if (!$fh) throw new Exception("Cannot write to $csvPath");
+			fputcsv($fh, array_keys($exportRows[0]));
+			foreach ($exportRows as $row) {
+				foreach ($row as $col => $val) {
+					// ensure proper UTF-8 encoding
+					if (!mb_check_encoding($val, 'UTF-8')) {
+						$row[$col] = mb_convert_encoding($val, 'UTF-8', 'auto');
 					}
 				}
+				fputcsv($fh, $row);
 			}
-			/**
-			 * @event Db/Row/$class_name/insertManyAndExecute {after}
-			 * @param {array} rows
-			 */
-			Q::event("Db/Row/$className/insertManyAndExecute", array(
-				'rows' => $rowObjects,
-			), 'after');
+			fclose($fh);
+			unset($exportRows);
+
+			$outPath = $csvPath;
+
+			// Compress if requested, using Q_Zip or ZipArchive fallback
+			if (!$options['dontZip']) {
+				if (class_exists('Q_Zip')) {
+					$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
+					$zip = new Q_Zip();
+					$zip->zip_files($csvPath, $zipPath);
+					unlink($csvPath);
+					$outPath = $zipPath;
+				} else if (class_exists('ZipArchive')) {
+					$zipPath = preg_replace('/\.csv$/', '.zip', $csvPath);
+					$zip = new ZipArchive();
+					if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+						throw new Exception("Cannot create zip: $zipPath");
+					}
+					$zip->addFile($csvPath, basename($csvPath));
+					$zip->close();
+					unlink($csvPath);
+					$outPath = $zipPath;
+				}
+			}
+
+			// Delete exported rows (still in same transaction)
+			if (!$options['dryRun']) {
+				$range = $options['desc']
+					? new Db_Range($cutoff, false, true, null)
+					: new Db_Range(null, false, false, $cutoff);
+
+				$this->newQuery(Db_Query::TYPE_DELETE)
+					->deleteRange($table, $field, $range)
+					->execute();
+			}
+
+			// Commit transaction
+			$this->newQuery(Db_Query::TYPE_COMMIT)
+				->commit($txnKey)
+				->execute();
+
+			return $outPath;
+
+		} catch (Exception $e) {
+			// Rollback on failure
+			$this->newQuery(Db_Query::TYPE_ROLLBACK)
+				->rollback()
+				->execute();
+			throw new Exception("Archive failed, rolled back: ".$e->getMessage(), 0, $e);
 		}
 	}
 
@@ -1027,7 +1167,7 @@ class Db_Mysql implements Db_Interface
 		if (class_exists('Q_Config')) {
 			$separator = Q_Config::expect('Db', 'sql', 'querySeparator');
 		} else {
-			$separator = "-------- NEXT QUERY STARTS HERE --------";
+			$separator = "# -------- NEXT QUERY STARTS HERE --------";
 		}
 		$found = strpos($script, $separator);
 		if ($found !== false) {
@@ -2662,7 +2802,6 @@ $field_hints
 			}
 			\$fields = implode(',', \$fieldNames);
 		}
-		\$alias = isset(\$alias) ? ' '.\$alias : '';
 		\$q = self::db()->select(\$fields, self::table(true, \$alias));
 		\$q->className = $class_name_var;
 		return \$q;

@@ -353,6 +353,19 @@ class Q_Dispatcher
 					Q::event('Q/validate', self::$routed);
 				}
 
+				// Time to instantiate some app objects from the request
+				$eventName = 'Q/objects';
+				self::startSessionBeforeEvent($eventName);
+				if (!isset(self::$skip[$eventName])) {
+					/**
+					 * Gives the app a chance to fetch objects needed for handling
+					 * the request.
+					 * @event Q/objects
+					 * @param {array} $routed
+					 */
+					Q::event($eventName, self::$routed, true);
+				}
+
 				if ($try === 0) {
 					// We might want to reroute the request
 					$eventName = 'Q/reroute';
@@ -374,19 +387,6 @@ class Q_Dispatcher
 
 					// send cookies
 					self::cookies();
-				}
-				
-				// Time to instantiate some app objects from the request
-				$eventName = 'Q/objects';
-				self::startSessionBeforeEvent($eventName);
-				if (!isset(self::$skip[$eventName])) {
-					/**
-					 * Gives the app a chance to fetch objects needed for handling
-					 * the request.
-					 * @event Q/objects
-					 * @param {array} $routed
-					 */
-					Q::event($eventName, self::$routed, true);
 				}
 
 				$eventName = 'Q/errors';

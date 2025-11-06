@@ -6,18 +6,13 @@
 class Q_Translate
 {
 
-	private $adapter;
+	public $adapter;
 
 	function __construct($options)
 	{
 		$this->options = $options;
 		$this->initAdapter();
 		$this->locales = $this->getLocales();
-	}
-	
-	function saveAll()
-	{
-		$this->adapter->saveAll();
 	}
 
 	function getSrc($lang, $locale, $throwIfMissing = false, &$objects = null)
@@ -87,6 +82,21 @@ class Q_Translate
 		return preg_replace('#/+#', DS, join(DS, $paths));
 	}
 
+	static function filter($str)
+	{
+		$result = null;
+		Q::event('Q/translate/filter', compact('str'), 'before', false, $result);
+		if (isset($result)) {
+			return $result;
+		}
+		if (!is_string($str)) {
+			return false;
+		}
+		$lettersOnly = preg_replace('/[^\p{L}]+/u', '', $str);
+		return (mb_strlen($lettersOnly, 'UTF-8') > 1);
+	}
+
+
 	static function arrayToBranch($arr)
 	{
 		$key = array_shift($arr);
@@ -141,24 +151,29 @@ class Q_Translate
 		return $result;
 	}
 
-	protected function flatten($filename, $arr, & $res = null, & $key = [])
+	protected function flatten($filename, $arr, & $res = null, & $key = array())
 	{
 		foreach ($arr as $itemKey => $item) {
 			$key[] = $itemKey;
+
 			if (is_array($item)) {
+				// Pass down whether this array is associative
 				$this->flatten($filename, $item, $res, $key);
 			} else {
 				$pathinfo = pathinfo($filename);
-				$dirname = $pathinfo['dirname'];
+				$dirname  = $pathinfo['dirname'];
 				$k = $dirname . "\t" . implode("\t", $key);
+
 				$res[$k] = array(
 					"filename" => $filename,
-					"dirname" => $dirname,
-					"key" => $key,
-					"value" => $item,
-					"original" => $item
+					"dirname"  => $dirname,
+					"key"      => $key,
+					"value"    => $item,
+					"original" => $item,
+					"parentIsAssoc" => Q::isAssociative($arr)
 				);
 			}
+
 			array_pop($key);
 		}
 	}
@@ -176,6 +191,160 @@ class Q_Translate
 				break;
 			default:
 				throw new Q_Exception("Unknown format value\n");
+		}
+	}
+
+	function saveAll() {
+		$parts = preg_split("/(_|-)/", $this->options['source']);
+		$fromLang = $parts[0];
+		$locale = count($parts) > 1 ? $parts[1] : null;
+		$in = $this->getSrc($fromLang, $locale, true);
+		$useLocale = Q_Config::get('Q', 'text', 'useLocale', false);
+		foreach ($this->locales as $toLang => $localeNames) {
+			$b1 = "\033[1m";
+			$b2 = "\033[0m";
+			echo $b1."Processing $fromLang->$toLang" . $b2;
+			if ($useLocale) {
+				echo '  (' . implode(' ', $localeNames) . ')';
+			}
+			echo PHP_EOL;
+			if ($toLang !== $fromLang) {
+				$out = $this->getSrc($toLang, $locale, false);
+				$toRemove = $this->toRemove($out);
+				$res = $this->adapter->translate($fromLang, $toLang, $in, $out, $toRemove, 100);
+				foreach ($toRemove as $n => $parts) {
+					unset($res[$n]);
+				}
+			} else if ($this->options['out']) {
+				$res = $in;
+				$toRemove = $this->toRemove($in);
+				foreach ($toRemove as $n => $parts) {
+					unset($res[$n]);
+				}
+			}
+			if (isset($res) and is_array($res)) {
+				$this->saveJson($toLang, $res, $jsonFiles);
+			}
+			if (!$useLocale) {
+				continue;
+			}
+			if (!empty($this->options['in'])
+			&& !empty($this->options['out'])
+			&& ($fromLang == $toLang)
+			&& ($this->options['in'] === $this->options['out'])) {
+				foreach ($localeNames as $localeName) {
+					$this->saveLocale($toLang, $localeName, $res, $jsonFiles, $toRemove);
+				}
+				continue;
+			}
+			if (isset($this->options['locales'])) {
+				foreach ($localeNames as $localeName) {
+					$this->saveLocale($toLang, $localeName, $res, $jsonFiles, $toRemove);
+				}
+			}
+		}
+	}
+	
+	private function saveLocale($lang, $locale, $res, $jsonFiles, $toRemove)
+	{
+		foreach ($jsonFiles as $dirname => $content) {
+			$directory = $this->createDirectory($dirname);
+			$langFile = $directory . DS . "$lang.json";
+			$localeFile = $directory . DS . "$lang-$locale.json";
+			if (file_exists($localeFile)) {
+				$arr = $content;
+				$tree = new Q_Tree();
+				$tree->load($localeFile);
+				$tree->merge($arr, false, true);
+				foreach ($toRemove as $n => $parts) {
+					call_user_func_array(array($tree, 'clear'), $parts);
+				}
+				$tree->save($localeFile, array(), null, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+			} else {
+				copy($langFile, $localeFile);
+			}
+		}
+	}
+
+	private function saveJson($lang, $data, &$jsonFiles)
+	{
+		$jsonFiles = array();
+		$assocHints = array();
+
+		// Collect flattened data and assoc hints
+		foreach ($data as $d) {
+			$dirname = $d['dirname'];
+			$arr =& $jsonFiles[$dirname];
+			if (!$arr || !sizeof($arr)) {
+				$arr = array();
+			}
+
+			// Track the parent path for this leaf
+			if (isset($d['parentIsAssoc'])) {
+				$parentPath = implode("\t", array_slice($d['key'], 0, -1));
+				$assocHints[$dirname][$parentPath] = $d['parentIsAssoc'];
+			}
+
+			// Merge into tree
+			array_push($d['key'], $d['value']);
+			$tree = new Q_Tree($arr);
+			$tree->merge(Q_Translate::arrayToBranch($d['key']), false, true);
+		}
+
+		$filenames = array();
+		foreach ($jsonFiles as $dirname => $content) {
+			// Apply assoc hints recursively before saving
+			if (!empty($assocHints[$dirname])) {
+				$this->applyAssocHints($content, array(), $assocHints[$dirname]);
+			}
+
+			$dir = $this->createDirectory($dirname);
+			$filename = $this->joinPaths($dir, $lang . '.json');
+			$filenames[] = $filename;
+
+			$fp = fopen($filename, 'w');
+			$flags = JSON_PRETTY_PRINT | Q_JSON::JSON_PRETTY_TABS;
+			if ($this->options['dontEscapeSlashes']) {
+				$flags |= JSON_UNESCAPED_SLASHES;
+			}
+			if ($this->options['dontEscapeUnicode']) {
+				$flags |= JSON_UNESCAPED_UNICODE;
+			}
+			fwrite($fp, Q::json_encode($content, $flags));
+			fclose($fp);
+		}
+		return $filenames;
+	}
+
+	/**
+	 * Recursively walk content and normalize arrays using assoc hints.
+	 *
+	 * @param mixed $node   Current subtree (modified in place)
+	 * @param array $path   Current key path
+	 * @param array $hints  Map of "path string" → isAssoc
+	 */
+	private function applyAssocHints(&$node, $path, $hints)
+	{
+		$pathStr = implode("\t", $path);
+
+		if (isset($hints[$pathStr]) && $hints[$pathStr] === false && is_array($node)) {
+			// Ensure numeric ordering
+			ksort($node, SORT_NUMERIC);
+
+			// Recurse into children first
+			foreach ($node as $k => &$child) {
+				$this->applyAssocHints($child, array_merge($path, array($k)), $hints);
+			}
+
+			// Finally, reindex sequentially
+			$node = array_values($node);
+			return;
+		}
+
+		if (is_array($node)) {
+			foreach ($node as $k => &$child) {
+				$this->applyAssocHints($child, array_merge($path, array($k)), $hints);
+			}
 		}
 	}
 

@@ -604,7 +604,7 @@ class Q_Request
 		if ($loadExtras && $type === 'response') {
 			return true; // if any extras are requested, then send responseExtras
 		}
-		if (filter_var($loadExtras, FILTER_VALIDATE_BOOLEAN)) {
+		if (filter_var($loadExtras, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) === true) {
 			$loadExtras = 'all';
 		}
 		if (!$loadExtras) {
@@ -1430,6 +1430,51 @@ class Q_Request
 			$_SERVER['SERVER_PORT'] != (!empty($_SERVER['HTTPS']) ? 443 : 80) 
 				? ':'.$_SERVER['SERVER_PORT'] : '',
 			$app_root);
+	}
+
+	/**
+	 * Returns the IP address of the user, taking into account reverse proxies
+	 * (e.g. Cloudflare, Nginx, AWS ALB). By default, trusts proxy headers unless
+	 * explicitly disabled.
+	 * @method ip
+	 * @static
+	 * @return array Returns array of (ip, protocol, isPublic, packed)
+	 */
+	static function ip()
+	{
+		$dontTrustProxies = Q_Config::get('Q', 'request', 'ip', 'dontTrustProxies', false);
+		$ip = Q::ifset($_SERVER, 'REMOTE_ADDR', '');
+
+		if (!$dontTrustProxies) {
+
+			// Cloudflare-specific headers (preferred)
+			if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+				$ip = $_SERVER['HTTP_CF_CONNECTING_IP'];
+			} elseif (!empty($_SERVER['HTTP_TRUE_CLIENT_IP'])) {
+				$ip = $_SERVER['HTTP_TRUE_CLIENT_IP'];
+
+			// Generic reverse proxy chain
+			} elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+				$ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+				foreach ($ips as $candidate) {
+					$candidate = trim($candidate);
+					if ($candidate && strtolower($candidate) !== 'unknown') {
+						$ip = $candidate;
+						break;
+					}
+				}
+			} elseif (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+				$ip = $_SERVER['HTTP_CLIENT_IP'];
+			}
+		}
+
+		$protocol = Q_Utils::protocolOfIP($ip);
+		$isPublic = Q_Utils::isPublicIP($ip);
+		$packed = ($protocol === 'v4')
+			? sprintf('%u', ip2long($ip))
+			: inet_pton($ip);
+
+		return array($ip, $protocol, $isPublic, $packed);
 	}
 	
 	/**

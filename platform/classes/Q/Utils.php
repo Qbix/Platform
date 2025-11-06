@@ -1776,6 +1776,39 @@ class Q_Utils
 	}
 
 	/**
+	 * Determines type (version) of IP protocol.
+	 * @method protocolOfIP
+	 * @static
+	 * @param {string} $ip The IP address to check
+	 * @return {string|false} "v4", "v6", or false if not valid
+	 */
+	static function protocolOfIP($ip)
+	{
+		if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+			return 'v4';
+		}
+		if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6)) {
+			return 'v6';
+		}
+		return false;
+	}
+
+	/**
+	 * Determines whether the given IP address is a public IP address
+	 * @method isPublicIP
+	 * @static
+	 * @param {string} $ip The IP address to check
+	 * @return {boolean} true if the IP is a public IP address, false otherwise
+	 */
+	static function isPublicIP($ip)
+	{
+		if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+			return true;
+		}
+		return false;
+	}
+
+	/**
 	 * Find out whether we are running in a Windows environment
 	 * @method isWindows
 	 * @static

@@ -972,9 +972,10 @@ class Q_Html
 	 * @static
 	 * @param {string} $script The actual script, as text
 	 * @param {array} [$attributes=null] Any additional attributes. Also can include:
-	 * @param {boolean} [$attributes.cdata] Defaults to true. Whether to enclose in CDATA tags.
+	 * @param {boolean} [$attributes.cdata] Defaults to false. Whether to enclose in CDATA tags.
 	 * @param {string} [$attributes.comment]  Whether to enclose in HTML comments
-	 * @param {boolean} [$attributes.raw]  Set to true to skip HTML encoding even if cdata and comment are false
+	 * @param {boolean} [$attributes.raw=true]  Set to false HTML encode even if cdata and comment are false.
+	 * 	Used to be false by default, but modern browsers actually require raw = true now.
  	 * @param {integer} [$attributes.cacheBust] Milliseconds, to use Q_Uri::cacheBust on the src.
 	 * @return {string} The generated markup.
 	 */
@@ -982,11 +983,14 @@ class Q_Html
 		$script, 
 		$attributes = array())
 	{
+		if (!isset($attributes['raw'])) {
+			$attributes['raw'] = true;
+		}
 		if (empty($attributes['type'])) {
 			$attributes['type'] = 'text/javascript';
 		}
 		if (!isset($attributes['cdata'])) {
-			$attributes['cdata'] = true;
+			$attributes['cdata'] = false;
 		}
 		$cdata = !empty($attributes['cdata']);
 		unset($attributes['cdata']);
@@ -1706,6 +1710,85 @@ class Q_Html
 				$obj->removeAttribute($attributeName);
 			}	
 		}
+	}
+	/**
+	 * Convert HTML into very basic markdown-like text.
+	 * Handles paragraphs, line breaks, bold, italic, lists, and links.
+	 *
+	 * @param string   $html   Input HTML fragment
+	 * @param int|null $limit  Optional max length of returned text
+	 * @return string
+	 */
+	public static function toSimpleMarkdown($html, $limit = null)
+	{
+		$doc = new DOMDocument();
+		// Suppress warnings for malformed HTML
+		@$doc->loadHTML(
+			'<?xml encoding="UTF-8"><body>' . $html . '</body>',
+			LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD
+		);
+
+		// Find <body>
+		$body = $doc->getElementsByTagName('body')->item(0);
+		if (!$body) {
+			return '';
+		}
+
+		$text = self::_walkMarkdown($body);
+
+		// normalize whitespace
+		$text = preg_replace('/[ \t]+/', ' ', $text);
+		$text = preg_replace('/\n{3,}/', "\n\n", $text);
+		$text = trim($text);
+
+		if (!is_null($limit)) {
+			if (function_exists('mb_substr')) {
+				$text = mb_substr($text, 0, $limit);
+			} else {
+				$text = substr($text, 0, $limit);
+			}
+		}
+		return $text;
+	}
+
+	protected static function _walkMarkdown($node)
+	{
+		$out = '';
+
+		if ($node->nodeType === XML_TEXT_NODE) {
+			return preg_replace('/\s+/', ' ', $node->nodeValue);
+		}
+
+		if ($node->nodeType === XML_ELEMENT_NODE) {
+			$children = '';
+			for ($i = 0; $i < $node->childNodes->length; $i++) {
+				$children .= self::_walkMarkdown($node->childNodes->item($i));
+			}
+
+			switch (strtolower($node->nodeName)) {
+				case 'br':
+					return "\n";
+				case 'p':
+					return trim($children) . "\n\n";
+				case 'li':
+					return '- ' . trim($children) . "\n";
+				case 'ul':
+				case 'ol':
+					return $children . "\n";
+				case 'strong':
+				case 'b':
+					return '**' . $children . '**';
+				case 'em':
+				case 'i':
+					return '*' . $children . '*';
+				case 'a':
+					$href = $node->getAttribute('href');
+					return $href ? '[' . $children . '](' . $href . ')' : $children;
+				default:
+					return $children;
+			}
+		}
+		return $out;
 	}
 
 	/**

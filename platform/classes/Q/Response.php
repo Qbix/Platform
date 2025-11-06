@@ -331,6 +331,16 @@ class Q_Response
 				'value' => 'Content-Security-Policy',
 				'content' => Q_Response::contentSecurityPolicy()
 			));
+			$noTransform = 'no-transform';
+		} else {
+			$noTransform = Q_Config::get('Q', 'web', 'headers', 'noTransform', false)
+				? 'no-transform'
+				: '';
+		}
+		if (Q_Dispatcher::$startedResponse) {
+			$publicPrivate = Q_Session::isAuthenticated() ? 'no-cache' : 'public';
+			$directives = array($publicPrivate, $noTransform);
+			header("Cache-Control: " . implode(', ', $directives));
 		}
 
 		$app = Q::app();
@@ -601,13 +611,18 @@ class Q_Response
 	 * @param {string} [$metas.keywords] Keywords for indexing
 	 * @param {string} [$metas.image] The image to use for the summary
 	 * @param {string} [$metas.url] The canonical URL of the page
-	 * @param {string} [$metas.card] Used by Twitter, Telegram etc, defaults to "summary_large_image"
+	 * @param {string} [$metas.twitter:card] Used by Twitter, Telegram etc, defaults to "summary_large_image"
+	 * @param {boolean} [$skipConfigMetas=false] If true, doesn't use default metas from config
 	 */
-	static function setCommonMetas($metas)
+	static function setCommonMetas($metas, $skipConfigMetas = false)
 	{
-		foreach (array(
-			'title', 'description', 'keywords', 'image', 'url'
-		) as $k) {
+		$keys = array('title', 'description', 'keywords', 'image', 'url');
+		$cm = Q_config::get('Q', 'web', 'metas', array());
+		$keys2 = array_unique(array_merge($keys, array_keys($cm)));
+		if (!$skipConfigMetas) {
+			$metas = array_merge($metas, $cm);
+		}
+		foreach ($keys2 as $k) {
 			if (!isset($metas[$k])) {
 				continue;
 			}
@@ -618,12 +633,16 @@ class Q_Response
 			} else {
 				Q_Response::setMeta(array('name' => 'name', 'value' => $k, 'content' => $v));
 			}
-			Q_Response::setMeta(array('name' => 'property', 'value' => "og:$k", 'content' => $v));
-			Q_Response::setMeta(array('name' => 'property', 'value' => "twitter:$k", 'content' => $v));
+			if (in_array($k, $keys)) {
+				Q_Response::setMeta(array('name' => 'property', 'value' => "og:$k", 'content' => $v));
+				Q_Response::setMeta(array('name' => 'property', 'value' => "twitter:$k", 'content' => $v));
+			}
 		}
-		if (isset($metas['image'])) {
-			$card = Q::ifset($metas, 'card', 'summary_large_image');
-			Q_Response::setMeta(array('name' => 'property', 'value' => 'twitter:card', 'content' => $card));
+		if (isset($metas['image'])) {;
+			$card = Q::ifset($metas, 'twitter:card', Q_Config::get(
+				'Q', 'metas', 'twitter:card', 'summary'
+			));
+			Q_Response::setMeta(array('name' => 'name', 'value' => 'twitter:card', 'content' => $card));
 		}
 	}
 
@@ -1373,11 +1392,15 @@ class Q_Response
 					Q::includeFile($filename);
 				} catch (Exception $e) {}
 				$src_json = json_encode($src, JSON_UNESCAPED_SLASHES);
+				$content = $ob->getClean();
+				if (!trim($content)) {
+					continue;
+				}
 				$currentScriptCode = "window._Q_currentScript_src = $src_json;\n\n";
 				$currentScriptEndCode = "\n\ndelete window._Q_currentScript_src";
 				$scripts_for_slots[$slot][$src] = ''
 					. $currentScriptCode
-			 		. $ob->getClean()
+			 		. $content
 					. $currentScriptEndCode;
 			}
 		}
@@ -1637,6 +1660,9 @@ class Q_Response
 					$src = parse_url($href, PHP_URL_PATH);
 					$content = $ob->getClean();
 					$relativePathPrefix = null;
+					if (!trim($content)) {
+						continue;
+					}
 					$content = Q_Utils::adjustRelativePaths($content, $src, $dest, 'css', $relativePathPrefix);
 					$sheets_for_slots[$stylesheet['slot']][$href] = "\n$content";
 					$relativePathPrefixes_for_slots[$stylesheet['slot']][$href] = $relativePathPrefix;

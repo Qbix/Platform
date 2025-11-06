@@ -64,10 +64,8 @@
 					"'unsafe-eval'",
 					"{{host}}", "*.{{host}}", "*.{{host}}:*", "{{host}}:*",
 					"'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='", /* hash of empty string */
-					"'sha256-+DLpYKpOowitqzgnHlbJ6domBEfO5iS3HhNhDTrZ0f0='",
-					"https://w.soundcloud.com",
-					"https://cdnjs.cloudflare.com",
-					"https://cdn.jsdelivr.net"   
+					"'sha256-+DLpYKpOowitqzgnHlbJ6domBEfO5iS3HhNhDTrZ0f0='", /* code adding CSS class Q_js */ 
+					"'sha256-Ip0AQ5VFrINoc5xwRVyrIlwPrKPh7koOFOskM7jAU2k='" /* code adding CSS class Q_js */
 				],
 				"style": [
 					"'unsafe-eval'", "'unsafe-inline'",
@@ -82,7 +80,8 @@
 			"metas": {
 				"robots": "nosnippet",
 				"googlebot": "nosnippet",
-				"googlebot-news": "nosnippet"
+				"googlebot-news": "nosnippet",
+				"twitter:card": "summary" /* can be summary or summary_large_image */
 			}
 		},
 		"proxies": {},
@@ -126,6 +125,11 @@
 		},
 		"metrics": {
 			"gather": false
+		},
+		"request": {
+			"ip": {
+				"dontTrustProxies": false
+			}
 		},
 		"response": {
 			"isBuffered": true,
@@ -254,10 +258,16 @@
 						},
 						"timeout": 600
 					}
+				},
+				"prepare": {
+					"{{Q}}": ["js", "css"]
 				}
 			},
-			"prepare": {
-				"{{Q}}": ["js", "css"]
+			"": {
+				"urls": {
+					"caching": true,
+					"integrity": false
+				}
 			}
 		},
 		"uploads": {
@@ -360,7 +370,7 @@
 	},
 	"Db": {
 		"sql": {
-			"querySeparator": "-------- NEXT QUERY STARTS HERE --------"
+			"querySeparator": "# -------- NEXT QUERY STARTS HERE --------"
 		},
 		"survive": {
 			"mysql": true

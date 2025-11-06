@@ -74,6 +74,13 @@ interface Db_Query_Interface
 	function replace(array $replacements = array());
 
 	/**
+	 * Override which column to base the CASE statements on
+	 * @method basedOn
+	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 */
+	function basedOn(array $basedOn = array());
+
+	/**
 	 * You can bind more parameters to the query manually using this method.
 	 * These parameters are bound in the order they are passed to the query.
 	 * Here is an example:
@@ -724,6 +731,92 @@ abstract class Db_Query extends Db_Expression
 		} else {
 			return array_slice($partition, $lower, $upper-$lower+1);
 		}
+	}
+
+	/**
+	 * Check if a field is indexed in a given table.
+	 *
+	 * This method delegates to an adapter-specific implementation.
+	 *
+	 * @method isIndexed
+	 * @param {string} $table Table name
+	 * @param {string} $field Column name
+	 * @return {bool}
+	 */
+	public function isIndexed($table, $field)
+	{
+		return $this->isIndexed_internal($table, $field);
+	}
+
+	/**
+	 * Adapter-specific implementation of isIndexed.
+	 *
+	 * @method isIndexed_internal
+	 * @protected
+	 * @param {string} $table Table name
+	 * @param {string} $field Column name
+	 * @return {bool}
+	 * @throws {Exception} if not implemented in the subclass
+	 */
+	protected function isIndexed_internal($table, $field)
+	{
+		throw new Exception(get_class($this) . " must implement isIndexed_internal");
+	}
+
+	/**
+	 * Select a batch of rows ordered by an indexed field.
+	 *
+	 * @method selectBatch
+	 * @param {string} $table Table name
+	 * @param {string} $field Field to order by
+	 * @param {int} $limit Number of rows
+	 * @param {string} $order "ASC" or "DESC"
+	 * @return {array} Rows as associative arrays
+	 */
+	public function selectBatch($table, $field, $limit, $order = 'ASC')
+	{
+		$sql = "SELECT * FROM " . self::quoted($table) .
+			" ORDER BY " . self::quoted($field) . " $order LIMIT :limit";
+		$stmt = $this->db->reallyConnect()->prepare($sql);
+		$stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
+		$stmt->execute();
+		return $stmt->fetchAll(PDO::FETCH_ASSOC);
+	}
+
+	/**
+	 * Delete rows from a table within a given range.
+	 *
+	 * Works across MySQL, PostgreSQL, and SQLite. Relies on each adapter’s
+	 * implementation of static::quoted() for identifier quoting.
+	 *
+	 * @method deleteRange
+	 * @param {string}   $table Table name
+	 * @param {string}   $field Column to filter on
+	 * @param {Db_Range} $range Range object defining min/max + inclusivity
+	 * @return {int} Number of rows deleted
+	 */
+	public function deleteRange($table, $field, Db_Range $range)
+	{
+		$clauses = [];
+		$params  = [];
+
+		if ($range->min !== null) {
+			$op = $range->includeMin ? '>=' : '>';
+			$clauses[] = static::quoted($field) . " $op :min";
+			$params[':min'] = $range->min;
+		}
+		if ($range->max !== null) {
+			$op = $range->includeMax ? '<=' : '<';
+			$clauses[] = static::quoted($field) . " $op :max";
+			$params[':max'] = $range->max;
+		}
+
+		$where = $clauses ? ('WHERE ' . implode(' AND ', $clauses)) : '';
+		$sql   = "DELETE FROM " . static::quoted($table) . " $where";
+
+		$stmt = $this->db->reallyConnect()->prepare($sql);
+		$stmt->execute($params);
+		return $stmt->rowCount();
 	}
 
 	/**

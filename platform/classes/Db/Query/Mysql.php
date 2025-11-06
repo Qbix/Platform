@@ -184,6 +184,14 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	protected $replacements = array();
 
 	/**
+	 * Can be used to set which column to base the CASE statements on
+	 * @property $basedOn
+	 * @type array
+	 * @default array()
+	 */
+	protected $basedOn = array();
+
+	/**
 	 * Whether to use the cache or not
 	 * @property $ignoreCache
 	 * @type boolean
@@ -489,10 +497,25 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	 * because it may replace more than you want!
 	 * @method replace
 	 * @param {array} [$replacements=array()] This must be an array.
+	 * @return {Db_Query_Mysql} The resulting object implementing Db_Query_Interface.
 	 */
 	function replace(array $replacements = array())
 	{
 		$this->replacements = array_merge($this->replacements, $replacements);
+		return $this;
+	}
+
+	/**
+	 * Override which column to base the CASE statements on.
+	 * Call this BEFORE calling ->set(array($key => array($when => $then, ...), ...))
+	 * @method basedOn
+	 * @param {array} [$basedOn=array()] This must be an associative array where the keys are the column names and the values are the column names to base the CASE statements on. If a key is missing, it is assumed that the column name is the same as the basedOn value.
+	 * @return {Db_Query_Mysql} The resulting object implementing Db_Query_Interface.
+	 */
+	function basedOn(array $basedOn = array())
+	{
+		$this->basedOn = array_merge($this->basedOn, $basedOn);
+		return $this;
 	}
 
 	/**
@@ -1999,28 +2022,36 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 						$criteria_list[] = self::column($expr) . " IN ($value_list)";
 					}
 				} else if ($value instanceof Db_Range) {
-					$ranges = array_merge(array($value), $value->additionalRanges);
+					$ranges = array_merge([$value], $value->additionalRanges);
 					$rangeCriteria = [];
+
 					foreach ($ranges as $range) {
-						$rc = '';
+						$parts = [];
+
 						if (isset($range->min)) {
-							$c_min = $range->includeMin ? '>=' : '>';
-							$rc = self::column($expr) . " $c_min :_where_$i";
+							$op = $range->includeMin ? '>=' : '>';
+							$parts[] = self::column($expr) . " $op :_where_$i";
 							$this->parameters["_where_$i"] = $range->min;
-							++ $i;
+							++$i;
 						}
 						if (isset($range->max)) {
-							$c_max = $range->includeMax ? '<=' : '<';
-							$rc = ($rc ? "$rc AND " : '') .
-								self::column($expr) . " $c_max :_where_$i";
+							$op = $range->includeMax ? '<=' : '<';
+							$parts[] = self::column($expr) . " $op :_where_$i";
 							$this->parameters["_where_$i"] = $range->max;
-							++ $i;
+							++$i;
 						}
-						if ($rc) {
-							$rangeCriteria[] = "($rc)";
+
+						if (!empty($parts)) {
+							// join min/max with AND, no extra () if only one
+							$rangeCriteria[] = implode(' AND ', $parts);
 						}
 					}
-					$criteria_list[] = '(' . implode("\n\t OR ", $rangeCriteria) . ')';
+
+					if (count($rangeCriteria) > 1) {
+						$criteria_list[] = '(' . implode(' OR ', $rangeCriteria) . ')';
+					} else if (count($rangeCriteria) === 1) {
+						$criteria_list[] = $rangeCriteria[0];
+					}
 				} else {
 					$eq = preg_match('/\W/', substr($expr, -1)) ? '' : ' = ';
 					$criteria_list[] = self::column($expr) . "$eq:_where_$i";
@@ -2068,21 +2099,35 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					}
 					$updates_list[] = "$column = $value";
 				} else if (is_array($value)) {
+					$basedOn = isset($this->basedOn[$field])
+						? self::column($this->basedOn[$field])
+						: $column;
 					$cases = "$column = (CASE";
 					foreach ($value as $k => $v) {
-						if (!$k) {
+						if ($k === null || $k === '') {
 							continue;
 						}
-						$cases .= "\n\tWHEN $column = :_set_$i THEN :_set_".($i+1);
-						$this->parameters["_set_$i"] = $k;
-						$this->parameters["_set_".($i+1)] = $v;
-						$i += 2;
+						$cases .= "\n\tWHEN $basedOn = :_set_$i THEN ";
+						if ($v === null) {
+							$cases .= "NULL";
+							$this->parameters["_set_$i"] = $k;
+							$i++;
+						} else {
+							$cases .= ":_set_".($i+1);
+							$this->parameters["_set_$i"] = $k;
+							$this->parameters["_set_".($i+1)] = $v;
+							$i += 2;
+						}
 					}
 					if (isset($value[''])) {
-						$cases .= "\n\tELSE :_set_$i";
-						$this->parameters["_set_$i"] = $k;
+						if ($value[''] === null) {
+							$cases .= "\n\tELSE NULL";
+						} else {
+							$cases .= "\n\tELSE :_set_$i";
+							$this->parameters["_set_$i"] = $value[''];
+						}
 					} else {
-						$cases .= "\n\tELSE ''";
+						$cases .= "\n\tELSE $column";
 					}
 					++$i;
 					$cases .= "\nEND)";
@@ -2109,38 +2154,103 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	 * Calculates an ON DUPLICATE KEY UPDATE clause
 	 * @method onDuplicateKeyUpdate_internal
 	 * @private
-	 * @param {array} $updates An associative array of column => value pairs.
-	 * The values are automatically escaped using PDO placeholders.
-	 * @return {string}
+	 * @param {array|bool} $updates Either an associative array of column => value pairs,
+	 *                              or true to auto-generate one safe update.
+	 * @return {string} SQL fragment for ON DUPLICATE KEY UPDATE
 	 */
-	private function onDuplicateKeyUpdate_internal ($updates)
+	private function onDuplicateKeyUpdate_internal($updates)
 	{
-		if ($this->type != Db_Query::TYPE_INSERT) {
-			throw new Exception("The ON DUPLICATE KEY UPDATE clause does not belong in this context.", -1);
+		if ($this->type !== Db_Query::TYPE_INSERT) {
+			throw new Exception(
+				"The ON DUPLICATE KEY UPDATE clause does not belong in this context.",
+				-1
+			);
 		}
 
-		static $i = 1;
+		$i = 1; // reset per query
+
+		// Magic field names commonly updated on conflict
+		$possibleMagicUpdateFields = array('updatedTime', 'updated_time');
+
+		// If caller passed true, auto-generate update of just one non-PK field
+		if ($updates === true) {
+			if (empty($this->className)) {
+				throw new Exception(
+					"Need className when onDuplicateKeyUpdate === true",
+					-1
+				);
+			}
+			$row        = new $this->className;
+			$primaryKey = $row->getPrimaryKey();
+			$fieldNames = call_user_func(array($this->className, 'fieldNames'));
+
+			$updates = array();
+
+			// Prefer "magic update" field if available
+			foreach ($possibleMagicUpdateFields as $magic) {
+				if (in_array($magic, $fieldNames)) {
+					$updates[$magic] = new Db_Expression("CURRENT_TIMESTAMP");
+					break;
+				}
+			}
+
+			// Otherwise just pick the first non-PK column
+			if (empty($updates)) {
+				foreach ($fieldNames as $column) {
+					if (in_array($column, $primaryKey)) {
+						continue;
+					}
+					$updates[$column] = new Db_Expression("VALUES(" . self::column($column) . ")");
+					break; // only need one
+				}
+			}
+		}
+
+		// At this point $updates must be an array
 		if (is_array($updates)) {
 			$updates_list = array();
 			foreach ($updates as $field => $value) {
 				if ($value instanceof Db_Expression) {
 					if (is_array($value->parameters)) {
-						$this->parameters = array_merge($this->parameters,
-							$value->parameters);
+						$this->parameters = array_merge($this->parameters, $value->parameters);
 					}
 					$updates_list[] = self::column($field) . " = $value";
 				} else {
 					$updates_list[] = self::column($field) . " = :_dupUpd_$i";
 					$this->parameters["_dupUpd_$i"] = $value;
-					++ $i;
+					++$i;
 				}
 			}
 			$updates = implode(", ", $updates_list);
 		}
-		if (! is_string($updates))
-			throw new Exception("The ON DUPLICATE KEY updates need to be specified correctly.", -1);
+
+		if (!is_string($updates)) {
+			throw new Exception(
+				"The ON DUPLICATE KEY updates need to be specified correctly.",
+				-1
+			);
+		}
 
 		return $updates;
+	}
+
+	/**
+	 * Check if a column is indexed in a MySQL table.
+	 *
+	 * Uses `SHOW INDEX` to verify if the given column has an index.
+	 *
+	 * @method isIndexed_internal
+	 * @protected
+	 * @param {string} $table Table name
+	 * @param {string} $field Column name
+	 * @return {bool} True if the column is indexed, false otherwise
+	 */
+	protected function isIndexed_internal($table, $field)
+	{
+		$sql = "SHOW INDEX FROM " . static::quoted($table) . " WHERE Column_name = :field";
+		$stmt = $this->db->reallyConnect()->prepare($sql);
+		$stmt->execute(array(':field' => $field));
+		return ($stmt->rowCount() > 0);
 	}
 
 	/**

@@ -26,6 +26,51 @@ var _isOnline = navigator.onLine;
 var _isCordova = null;
 var _documentIsUnloading = null;
 
+// minimal jQuery-like implementation for dialogs, tools, etc.
+// you can load jQuery or similar library to override this
+if(!root.$){
+	function c(a){this.length=a.length;for(var b=0;b<a.length;b++)this[b]=a[b];}
+	if(!root.jQuery){
+		c.prototype={
+			each:function(a){for(var b=0;b<this.length;b++)a.call(this[b],b,this[b]);return this;},
+			html:function(a){if(a===undefined)return this[0]&&this[0].innerHTML;return this.each(function(){this.innerHTML=a;});},
+			append:function(a){return this.each(function(){var b=this;if(a instanceof c){a.each(function(){b.appendChild(this);});}else if(a instanceof Element){b.appendChild(a);}else if(typeof a==="string"){b.insertAdjacentHTML("beforeend",a);}});},
+			prepend:function(a){return this.each(function(){var b=this;if(a instanceof c){a.each(function(){b.insertBefore(this,b.firstChild);});}else if(a instanceof Element){b.insertBefore(a,b.firstChild);}else if(typeof a==="string"){b.insertAdjacentHTML("afterbegin",a);}});},
+			addClass:function(a){return this.each(function(){this.classList.add(a);});},
+			removeClass:function(a){return this.each(function(){this.classList.remove(a);});},
+			hasClass:function(a){return this[0]?this[0].classList.contains(a):false;},
+			attr:function(a,b){if(b===undefined)return this[0]&&this[0].getAttribute(a);return this.each(function(){this.setAttribute(a,b);});},
+			css:function(a,b){if(b===undefined)return this[0]&&getComputedStyle(this[0])[a];return this.each(function(){this.style[a]=b;});},
+			on:function(a,b){return this.each(function(){this.addEventListener(a,b);});},
+			off:function(a,b){return this.each(function(){this.removeEventListener(a,b);});},
+			trigger:function(a){return this.each(function(){this.dispatchEvent(new Event(a));});},
+			hide:function(){return this.each(function(){this.style.display="none";});},
+			show:function(){return this.each(function(){this.style.display="";});},
+			empty:function(){return this.each(function(){this.innerHTML="";});},
+			remove:function(){return this.each(function(){this.remove();});},
+			find:function(a){return new c(this[0]?this[0].querySelectorAll(a):[]);},
+			closest:function(a){return new c(this[0]?[this[0].closest(a)]:[]);},
+			height:function(){return this[0]?this[0].offsetHeight:0;},
+			outerHeight:function(){if(!this[0])return 0;var s=getComputedStyle(this[0]);return this[0].offsetHeight+parseFloat(s.marginTop||0)+parseFloat(s.marginBottom||0);},
+			data:function(a,b){if(!this[0])return;if(!this[0].__data)this[0].__data={};if(b===undefined)return this[0].__data[a];this.each(function(){this.__data[a]=b;});return this;},
+			is:function(a){if(!this[0])return!1;if(a===":visible")return this[0].offsetParent!==null;return this[0].matches(a);}
+		};
+		c.prototype.plugin=function(){return this;};
+		c.prototype.state=function(){return{};};
+		root.$=root.jQuery=function(a){
+			if(typeof a==="string"&&a.trim().startsWith("<")){
+				a=a.trim();var tagMatch=a.match(/^<([a-z0-9-]+)/i);
+				if(tagMatch){var tag=tagMatch[1];var attrMatch=a.match(/<[^>]+>/);var attrs={};(attrMatch?attrMatch[0]:"").replace(/([a-zA-Z_:][-a-zA-Z0-9_:.]*)="([^"]*)"/g,function(_,key,val){attrs[key]=val;});return new c([Q.element?Q.element(tag,attrs):Object.assign(document.createElement(tag),attrs)]);}
+				var div=document.createElement("div");div.innerHTML=a;return new c(Array.from(div.children));
+			}
+			if(typeof a==="string")return new c(document.querySelectorAll(a));
+			if(a instanceof Element||a===root||a===document)return new c([a]);
+			if(a&&a.length)return new c(a);
+			return new c([]);
+		};
+	}
+}
+
 /**
  * @class Q
  * @constructor
@@ -224,14 +269,16 @@ JSON.isValid = function (str) {
  * @class Array
  * @description Q extended methods for Arrays
  */
-Object.defineProperty(Array.prototype, "toHex", {
-	enumerable: false,
-	value: function () {
-		return this.map(function (x) { 
-			return x.toString(16).padStart(2, '0');
-		}).join('');
-	}
-  });
+if (!Array.prototype.toHex) {
+	Object.defineProperty(Array.prototype, "toHex", {
+		enumerable: false,
+		value: function () {
+			return this.map(function (x) { 
+				return x.toString(16).padStart(2, '0');
+			}).join('');
+		}
+	});
+}
 
 /**
  * @class String
@@ -363,63 +410,83 @@ Sp.replaceAllPlaceholders = function (pairs) {
 Sp.queryField = function Q_queryField(name, value) {
 	var what = this;
 	var prefixes = ['#!', '#', '?', '!'];
-	var count = prefixes.length;
 	var prefix = '';
-	var i, k, l, p, keys, parsed, ret, result;
-	for (i=0; i<count; ++i) {
-		l = prefixes[i].length;
-		p = this.substring(0, l);
-		if (p == prefixes[i]) {
+	for (var i = 0; i < prefixes.length; ++i) {
+		var p = prefixes[i];
+		if (this.startsWith(p)) {
 			prefix = p;
-			what = this.substring(l);
+			what = this.substring(p.length);
 			break;
 		}
 	}
-	if (!name) {
-		ret = [];
-		parsed = Q.parseQueryString(what, keys);
-		for (k in parsed) {
-			if (parsed[k] == null || parsed[k] === '') {
-				ret.push(k);
+
+	// Parse into flat key-value pairs
+	var parsed = Q.parseQueryString(what || "");
+
+	// Minimal nesting support:
+	// Turns { "Q.payload[foo][bar]": "x" } → { Q: { payload: { foo: { bar: "x" }}}}
+	var nested = {};
+	for (var fullKey in parsed) {
+		var val = parsed[fullKey];
+		var parts = fullKey.split(/\[|\]/).filter(Boolean); // e.g. ["Q.payload", "foo", "bar"]
+		var cur = nested;
+		for (var j = 0; j < parts.length; j++) {
+			var part = parts[j];
+			if (j === parts.length - 1) {
+				cur[part] = val;
+			} else {
+				if (!(part in cur)) cur[part] = {};
+				cur = cur[part];
 			}
 		}
-		return ret;
-	} if (Q.isArrayLike(name)) {
-		ret = {}, keys = [];
-		parsed = Q.parseQueryString(what, keys);
-		for (i=0, l=name.length; i<l; ++i) {
-			if (name[i] in parsed) {
-				ret[name[i]] = parsed[name[i]];
-			}
-		}
-		return ret;
-	} else if (Q.isPlainObject(name)) {
-		result = what;
-		Q.each(name, function (key, value) {
-			result = result.queryField(key, value);
-		});
-		return result;
-	} else if (value === undefined) {
-		return Q.parseQueryString(what) [ name ];
-	} else if (value === null) {
-		keys = [];
-		parsed = Q.parseQueryString(what, keys);
-		var reg = new RegExp(name);
-		for (k in parsed) {
-			if (reg.test(k)) {
-				delete parsed[k];
-			}
-		}
-		return prefix + Q.queryString(parsed, keys);
-	} else {
-		keys = [];
-		parsed = Q.parseQueryString(what, keys);
-		if (!(name in parsed)) {
-			keys.push(name);
-		}
-		parsed[name] = value;
-		return prefix + Q.queryString(parsed, keys);
 	}
+
+	// Handle different cases
+	if (!name) {
+		var ret = [];
+		for (var k in nested) {
+			if (nested[k] == null || nested[k] === '') ret.push(k);
+		}
+		return ret;
+	}
+
+	if (Q.isArrayLike(name)) {
+		var out = {};
+		for (var n = 0; n < name.length; ++n) {
+			out[name[n]] = nested[name[n]];
+		}
+		return out;
+	}
+
+	if (Q.isPlainObject(name)) {
+		var result = what;
+		for (var key in name) {
+			result = result.queryField(key, name[key]);
+		}
+		return result;
+	}
+
+	if (value === undefined) {
+		// Support partial matches like "Q.payload"
+		var parts = name.split(/\[|\]/).filter(Boolean);
+		var cur = nested;
+		for (var i2 = 0; i2 < parts.length; i2++) {
+			if (cur == null) return undefined;
+			cur = cur[parts[i2]];
+		}
+		return cur;
+	}
+
+	if (value === null) {
+		var reg = new RegExp(name);
+		for (var k in parsed) {
+			if (reg.test(k)) delete parsed[k];
+		}
+		return prefix + Q.queryString(parsed);
+	}
+
+	parsed[name] = value;
+	return prefix + Q.queryString(parsed);
 };
 
 /**
@@ -1387,13 +1454,16 @@ Q.typeOf = function _Q_typeOf(value) {
 			s = 'window';
 		} else if (typeof value.typename != 'undefined' ) {
 			return value.typename;
+		} else if (value.constructor && Q.typeOf.treatAsObject[value.constructor.name]) {
+			return 'object';
 		} else if (value[Symbol.iterator] === 'function'
 		|| (typeof (l=value.length) == 'number' && (l%1==0)
 		&& (l > 0 && ((l-1) in value)))) {
 			return 'array';
 		} else if (typeof value.constructor != 'undefined'
 		&& typeof value.constructor.name != 'undefined') {
-			if (value.constructor.name == 'Object') {
+			if (value.constructor.name == 'Object'
+			|| value.constructor.name == '') {
 				return 'object';
 			}
 			return value.constructor.name;
@@ -1404,6 +1474,16 @@ Q.typeOf = function _Q_typeOf(value) {
 		}
 	}
 	return s;
+};
+
+Q.typeOf.treatAsObject = Q.typeOf.treatAsObject = {
+	CSSStyleDeclaration: true,
+	NamedNodeMap: true,
+	MediaList: true,
+	StyleSheet: true,
+	StyleSheetList: true,
+	MimeTypeArray: true,
+	PluginArray: true
 };
 
 /**
@@ -2484,17 +2564,22 @@ Q.promisify = function (getter, useThis, callbackIndex) {
 			} else if (!(ai instanceof Function)) {
 				args.push(ai);
 			} else {
-				function _promisified(err, second) {
-					if (ai instanceof Function) {
-						return ai.apply(this, arguments);
-					}
-					if (err) {
-						return reject(err);
-					}
-					resolve(useThis ? this : second);
-				}
 				found = true;
-				args.push(_promisified)
+				args.push(function _promisified(err, second) {
+					if (ai instanceof Function) {
+						try {
+							ai.apply(this, arguments);
+						} catch (e) {
+							// swallow user callback exceptions
+						}
+					}
+					// always resolve on success if caller didn’t handle error
+					if (!err) {
+						resolve(useThis ? this : second);
+					} else if (!(ai instanceof Function)) {
+						reject(err);
+					}
+				});
 			}
 		});
 		if (callbackIndex instanceof Array) {
@@ -2657,11 +2742,21 @@ Q.debounce = function (original, milliseconds, immediate, defaultValue) {
  */
 Q.preventRecursion = function (name, original, defaultValue) {
 	return function () {
-		var n = '__preventRecursion_'+name;
+		var n = '__preventRecursion_' + name;
 		if (this[n]) return defaultValue;
 		this[n] = true;
-		var ret = original.apply(this, arguments);
-		delete this[n];
+		var ret;
+		try {
+			ret = original.apply(this, arguments);
+		} catch (e) {
+			delete this[n];
+			throw e;
+		}
+		var self = this;
+		setTimeout(function () {
+			delete self[n];
+		}, 0);
+
 		return ret;
 	};
 };
@@ -2736,33 +2831,41 @@ Q.timeRemaining = function (timestamp) {
  * Used so you can add 1 to this to move one of the children atop them all.
  * @method zIndexTopmost
  * @static
- * @param {Element} [container=document.body] 
+ * @param {Element} [container=document.body]
  * @param {Function} [filter] By default, filters out elements with Q_click_mask and pointer-events:none
  * @returns Number
  */
 Q.zIndexTopmost = function (container, filter) {
 	container = container || document.body;
 	filter = filter || function (element) {
-		return element.computedStyle().pointerEvents !== 'none'
+		var style = element.computedStyle();
+		return style.pointerEvents !== 'none'
 			&& !element.hasClass('Q_click_mask')
 			&& element.getAttribute('id') !== 'notices_slot';
-	}
-	var topZ = -1;
-	Q.each(container.children, function () {
-		if (!filter(this)) {
-			return;
-		}
-		var z = parseInt(this.computedStyle().zIndex);
-		if (!isNaN(z)) {
-			// if z-index is max allowed, skip this element
-			if (z >= 2147483647) {
+	};
+
+	function getTopZ(el) {
+		var topZ = -1;
+		Q.each(el.children, function () {
+			if (!filter(this)) {
 				return;
 			}
+			var style = this.computedStyle();
+			var z = style.zIndex;
+			if (z === 'auto') {
+				// recurse into children, since stacking may come from them
+				topZ = Math.max(topZ, getTopZ(this));
+			} else {
+				z = parseInt(z);
+				if (!isNaN(z) && z < 2147483647) {
+					topZ = Math.max(topZ, z);
+				}
+			}
+		});
+		return topZ;
+	}
 
-			topZ = Math.max(topZ, z)
-		}
-	});
-	return topZ;
+	return getTopZ(container);
 };
 
 /**
@@ -2841,7 +2944,7 @@ Q.element = function (tagName, attributes, elementsToAppend) {
  * @return {Iterator|Array}
  */
 Q.$ = function (selector, container, toArray) {
-	var list = (container || document).querySelectorAll(selector);
+	var list = (container || document.body).querySelectorAll(selector);
 	return toArray ? Array.prototype.slice.call(list) : list.values();
 };
 
@@ -3810,7 +3913,7 @@ Q.beforeReplace = new Q.Event();
  * @return {Object} object with properties "src", "path" and "file"
  */
 Q.currentScript = function (stackLevels) {
-	var src = window._Q_currentScript_src || Q.getObject('document.currentScript.src');
+	var src = root._Q_currentScript_src || Q.getObject('document.currentScript.src');
 	if (!src) {
 		var index = 0, lines, i, l;
 		try {
@@ -3826,12 +3929,27 @@ Q.currentScript = function (stackLevels) {
 		}
 		src = lines[index];
 	}
-	var parts = src.match(/((http[s]?:\/\/.+\/|file:\/\/\/.+\/)([^\/]+\.(?:js|html|php)[^:]*))/);
+	var reLeadingGarbage = new RegExp("^[^a-zA-Z0-9]+(?=(https?:\\/\\/|file:\\/\\/))");
+	var reTrailingSuffix = new RegExp("(:[A-Za-z0-9_-]+){1,2}$");
+	var reMatchSrc       = new RegExp("^((?:https?:\\/\\/|file:\\/\\/\\/?)[^?#\\n]+\\/)([^\\/?#]+\\.js(?:[?#][^\\n]*)?)$", "i");
+	if (typeof src !== "string") {
+		console.warn("parseSrc: invalid type", typeof src);
+		return null;
+	}
+	src = src
+		.replace(reLeadingGarbage, "")
+		.replace(reTrailingSuffix, "")
+		.trim();
+	var parts = src.match(reMatchSrc);
+	if (!parts) {
+		console.warn("parseSrc: could not parse src", src);
+		return null;
+	}
 	return {
-		src: parts[1].split('?')[0],
-		srcWithQuerystring: parts[1],
-		path: parts[2],
-		file: parts[3]
+		src: parts[1] + parts[2].split(/[?#]/)[0],   // clean URL (no query/hash)
+		srcWithQuerystring: parts[1] + parts[2],     // keep full URL
+		path: parts[1],                              // directory path
+		file: parts[2].split(/[?#]/)[0]              // filename only
 	};
 };
 
@@ -4618,12 +4736,9 @@ Q.getter = function _Q_getter(original, options) {
 	
 	var ignoreCache = false;
 	gw.force = function _force() {
-		var key = Q.Cache.key(arguments);
-		_waiting[key] = [];
 		ignoreCache = true;
 		return gw.apply(this, arguments);
 	};
-	
 
 	if (original.batch) {
 		gw.batch = original.batch;
@@ -5326,6 +5441,7 @@ var Tp = Q.Tool.prototype;
 Tp.renderTemplate = Q.promisify(function (name, fields, callback, options) {
 	var tool = this;
 	if (typeof fields === 'function') {
+		options = callback;
 		callback = fields;
 		fields = {};
 	}
@@ -6083,14 +6199,16 @@ Tp.toString = function _Q_Tool_prototype_toString() {
  * @param {Boolean} [options.placeholder=false] used internally to set placeholder HTML for tools waiting for activation
  * @return {boolean} whether the script needed to be loaded
  */
-function _loadToolScript(toolElement, callback, shared, parentId, options) {
+function _loadToolScript(toolElement, callback, shared, parentId, options, whitelist) {
 	var toolId = Q.Tool.calculateId(toolElement.id);
 	var classNames = toolElement.className.split(' ');
 	var toolNames = [];
 	for (var i=0, nl = classNames.length; i<nl; ++i) {
 		var className = classNames[i];
+		whitelist = whitelist || Q.activate.whitelist;
 		if (className === 'Q_tool'
-		|| className.slice(-5) !== '_tool') {
+		|| className.slice(-5) !== '_tool'
+		|| whitelist && !whitelist[className]) {
 			continue;
 		}
 		toolNames.push(Q.normalize.memoized(className.substring(0, className.length-5)));
@@ -6467,6 +6585,7 @@ Q.Links.whatsapp = Q.Links.whatsApp;
  *  method function, such as { options: { a: "b" , c: "d" }}
  * @param {Object} [options] More information about the method
  * @param {boolean} [options.isGetter] set to true to indicate that the method will be wrapped with Q.getter()
+ * @param {boolean} [options.customPath] set to a custom path to load the method from, instead of the default
  */
 Q.Method = function (properties, options) {
 	Q.extend(this, properties);
@@ -6480,6 +6599,11 @@ Q.Method.load = function (o, k, url, closure) {
 	return new Promise(function (resolve, reject) {
 		Q.require(url, function (exported) {
 			if (exported) {
+				if (o.__loaded) {
+					o = o.__loaded; // in case o was replaced
+				} else if (o.__shim && o.__shim.__loaded) {
+					o = o.__shim.__loaded; // in case o[k] was replaced
+				}
 				var args = closure ? closure() : [];
 				if (!exported.Q_Method_load_executed) {
 					var m = exported.apply(o, args);
@@ -6498,6 +6622,7 @@ Q.Method.load = function (o, k, url, closure) {
 					v[property] = original[property];
 				}
 			}
+			original.__loaded = v;
 			resolve(v);
 			Q.Method.onLoad.handle(o, k, o[k], closure);
 		}, true);
@@ -6532,34 +6657,49 @@ Q.Method.onLoad = new Q.Event();
  */
 Q.Method.define = function (o, prefix, closure) {
 	if (!prefix) {
-		prefix = Q.currentScriptPath()+'/'+Q.Method.define.options.siblingFolder;
+		prefix = Q.currentScriptPath() + '/' + Q.Method.define.options.siblingFolder;
 	}
 	Q.each(o, function (k) {
 		if (!o.hasOwnProperty(k) || !(o[k] instanceof Q.Method)) {
 			return;
 		}
-		// method stub is still there
+
 		var method = o[k];
-		o[k] = function _Q_Method_shim () {
-			var url = Q.url(prefix + '/' + k + '.js');
+
+		o[k] = method.__shim = function _Q_Method_shim() {
+			var url = Q.url(
+				(method.__options && method.__options.customPath)
+					? method.__options.customPath
+					: (prefix + '/' + k + '.js')
+			);
 			var t = this, a = arguments;
 			return Q.Method.load(o, k, url, closure)
-			.then(function (f) {
-				return f.apply(t, a);
-			});
+				.then(function (f) {
+					return f.apply(t, a);
+				});
 		};
+
 		Q.extend(o[k], method);
+
 		if (method.__options.isGetter) {
-			o[k].force = function _Q_Method_force_shim () {
-				var url = Q.url(prefix + '/' + k + '.js');
+			o[k].force = function _Q_Method_force_shim() {
+				var url = Q.url(
+					(method.__options && method.__options.customPath)
+						? method.__options.customPath
+						: (prefix + '/' + k + '.js')
+				);
 				var t = this, a = arguments;
 				return Q.Method.load(o, k, url, closure)
-				.then(function (f) {
-					return f.force.apply(t, a);
-				});
+					.then(function (f) {
+						return f.force.apply(t, a);
+					});
 			};
-			o[k].forget = function _Q_Method_forget_shim () {
-				var url = Q.url(prefix + '/' + k + '.js');
+			o[k].forget = function _Q_Method_forget_shim() {
+				var url = Q.url(
+					(method.__options && method.__options.customPath)
+						? method.__options.customPath
+						: (prefix + '/' + k + '.js')
+				);
 				var t = this, a = arguments;
 				return Q.Method.load(o, k, url, closure)
 					.then(function (f) {
@@ -6567,6 +6707,7 @@ Q.Method.define = function (o, prefix, closure) {
 					});
 			};
 		}
+
 		if (method.__options.cache) {
 			o[k].cache = method.__options.cache;
 		}
@@ -7535,13 +7676,13 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 });
 Q.IndexedDB.put = Q.promisify(function (store, value, callback) {
 	_DB_addEvents(store, store.put(value), callback);
-});
+}, false, 2);
 Q.IndexedDB.get = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.get(key), callback);
-});
+}, false, 2);
 Q.IndexedDB['delete'] = Q.promisify(function (store, key, callback) {
 	_DB_addEvents(store, store.delete(key), callback);
-});
+}, false, 2);
 
 function _DB_addEvents(store, request, callback) {
 	request.onsuccess = function (event) {
@@ -7729,8 +7870,7 @@ Q.init = function _Q_init(options) {
 		return false;
 	}
 	Q.init.called = true;
-	Q.info.baseUrl = Q.info.baseUrl || location.href.split('/').slice(0, -1).join('/');
-	Q.info.imgLoading = Q.info.imgLoading || Q.url('{{Q}}/img/throbbers/loading.gif');
+	Q.info.baseUrl = Q.info.baseUrl || new URL('.', document.baseURI).href.slice(0, -1);
 	Q.loadUrl.options.slotNames = Q.info.slotNames;
 	_startCachingWithServiceWorker();
 	_detectOrientation();
@@ -9345,7 +9485,7 @@ Q.req = function _Q_req(uri, slotNames, callback, options) {
  * @param {boolean} [options.timestamp] whether to include a timestamp (e.g. as a cache-breaker)
  * @param {boolean} [options.timeout=5000] milliseconds to wait for response, before showing cancel button and triggering onTimeout event, if any, passed to the options
  * @param {boolean} [options.ignoreRedirect=false] if true, doesn't honor redirects and tries to process the scripts, css, etc. from the response
- * @param {Function|null} [options.onRedirect=Q.handle] if set and response data.redirect.url is not empty, automatically call this function. Set to null to block redirecting.
+ * @param {Function|null} [options.onRedirect=Q.handle] if set and response data.redirect.url is not empty, automatically call this function. Set to null to block redirecting. Receives url, options.
  * @param {Array} [options.beforeRequest] array of handlers to call before the request, they receive url, slotNames, options, callback and must call the callback passing (possibly altered) url, slotNames, options
  * @param {Q.Event} [options.onTimeout] handler to call when timeout is reached. First argument is a function which can be called to cancel loading.
  * @param {Q.Event} [options.onResponse] handler to call when the response comes back but before it is processed
@@ -9419,7 +9559,7 @@ Q.request = function (url, slotNames, callback, options) {
 				return; // don't redirect
 			}
 			if (!o.ignoreRedirect && response && response.redirect && response.redirect.url) {
-				Q.handle(o.onRedirect, Q, [response.redirect.url]);
+				Q.handle(o.onRedirect, Q, [response.redirect.url, options]);
 			}
 		};
 
@@ -9591,7 +9731,7 @@ Q.request = function (url, slotNames, callback, options) {
 						+ encodeURIComponent(o.callbackName) + '='
 						+ encodeURIComponent('Q.request.callbacks['+i+']');
 				} else {
-					url2 = (o.extend === false || o.dontTransformUrl)
+					url2 = (o.extend === false)
 						? url
 						: Q.ajaxExtend(url, slotNames, Q.extend(o, {
 							callback: 'Q.request.callbacks['+i+']'
@@ -10010,8 +10150,8 @@ Q.updateUrls = function(callback) {
 				} catch (e) {}
 				if (!Q.isEmpty(urls)) {
 					Q.updateUrls.urls = urls;
-					Q.extend(Q.updateUrls.urls, 100, result);
 				}
+				Q.extend(Q.updateUrls.urls, 100, result);
 				json = JSON.stringify(Q.updateUrls.urls);
 				root.localStorage.setItem(Q.updateUrls.urlsKey, json);
 				if (timestamp = result['@timestamp']) {
@@ -10968,6 +11108,8 @@ Q.find = function _Q_find(elem, filter, callbackBefore, callbackAfter, options, 
  * @param {Object} [internal] stuff for internal use
  * @param {Boolean} [internal.lazyload] used by Q/lazyload tool
  * @param {Function} [internal.progress] function to call with incremental progress, to debug Q.activate()
+ * @param {Object} [internal.whitelist] list names of CSS class names like Foo_bar_tool, 
+ *  with value true, to filter which tools will be recognized and activated
  * @return {Q.Promise} Returns a promise with an extra .cancel() method to cancel the action.
  *  Also has .element to facilitate chaining (e.g. append(Q.activate(element).element))
  */
@@ -10990,6 +11132,21 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 	
 	Q.beforeActivate.handle.call(root, elem); // things to do before things are activated
 	
+	var promise = {};
+	var _resolve = null;
+	var _reject = null;
+	if (Q.Promise) {
+		promise = new Q.Promise(function (resolve, reject) {
+			_resolve = resolve;
+			_reject = reject;
+		});
+	}
+	promise.cancel = function () {
+		shared.canceled = true;
+		_reject && _reject();
+	};
+	promise.element = elem;
+
 	var shared = {
 		tool: null,
 		tools: {},
@@ -11010,20 +11167,6 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 		
 	Q.Tool.beingActivated = ba;
 	
-	var promise = {};
-	var _resolve = null;
-	var _reject = null;
-	if (Q.Promise) {
-		promise = new Q.Promise(function (resolve, reject) {
-			_resolve = resolve;
-			_reject = reject;
-		});
-	}
-	promise.cancel = function () {
-		shared.canceled = true;
-		_reject && _reject();
-	};
-	promise.element = elem;
 	return promise;
 	
 	function _activated() {
@@ -11901,7 +12044,7 @@ function _activateTools(toolElement, options, shared) {
 				pendingCurrentEvent.removeAllHandlers();
 			});
 		}
-	}, shared, null, { placeholder: true });
+	}, shared, null, { placeholder: true }, shared.whitelist);
 }
 
 _activateTools.alreadyActivated = {};
@@ -11934,7 +12077,7 @@ function _initTools(toolElement, options, shared) {
 	_loadToolScript(toolElement,
 	function _initTools_doInit(toolElement, toolConstructor, toolName) {
 		currentEvent.add(_doInit, currentId + ' ' + toolName);
-	}, null, parentId);
+	}, null, parentId, {}, shared.whitelist);
 	
 	function _doInit() {
 		var tool = this;
@@ -12365,6 +12508,14 @@ Q.globalMemoryWalk = new Q.Method();
 Q.Method.define(Q);
 
 /**
+ * Sandboxed code execution utilities
+ * @class Q.Sandbox
+ */
+Q.Sandbox = Q.Method.define({
+	run: new Q.Method()
+});
+
+/**
  * Methods for working with data
  * @class Q.Data
  */
@@ -12393,6 +12544,13 @@ Q.Data = Q.Method.define({
 			u8arr[n] = bstr.charCodeAt(n);
 		}
 		return new Blob([u8arr], {type:mime});
+	},
+	randomString: function (count) {
+		var str = "";
+		while (str.length < count) {
+			str += Math.random().toString(36).slice(2);
+		}
+		return str.slice(0, count);
 	},
 	variant: function(sessionId, index, segments, seed) {
 		segments = segments || 2;
@@ -12549,6 +12707,7 @@ Q.Text = {
 	 * @param {Function} callback Receives (err, content), may be called sync or async,
 	 *  where content is an Object formed by merging all the named text sources.
 	 * @param {Object} [options] Options to use for Q.request . May also include:
+	 * @param {String} [options.language] Try to fetch in a different language than the default one
 	 * @param {Boolean} [options.ignoreCache=false] If true, reloads the text source even if it's been already cached.
 	 * @param {Boolean} [options.merge=false] For Q.Text.set if content is loaded
 	 * @return {Q.Promise} Returns a promise, that is already resolved if the content
@@ -12558,7 +12717,7 @@ Q.Text = {
 		options = options || {};
 		return new Q.Promise(function (resolve, reject) {
 			var dir = Q.Text.dir;
-			var lls = Q.Text.languageLocaleString;
+			var lls = options.language || Q.Text.languageLocaleString;
 			var content = Q.getObject([lls, name], Q.Text.collection);
 			if (content) {
 				Q.handle(callback, Q.Text, [null, content]);
@@ -13696,7 +13855,7 @@ function _setNotch() {
 	}
 	Q.info.hasNotch = false;
 }
-if (document.readyState === "complete") {
+if (document.readyState !== "loading") {
 	_setNotch();
 } else {
 	document.addEventListener("DOMContentLoaded", _setNotch);
@@ -13824,11 +13983,11 @@ function _detectOrientation(e, secondCall) {
 	if ((m && m("(orientation: landscape)").matches) || x > y) {
 		h.removeClass('Q_verticalOrientation')
 			.addClass('Q_horizontalOrientation');
-		Q.info.isVertical = false;
+		if (Q.info) Q.info.isVertical = false;
 	} else {
 		h.removeClass('Q_horizontalOrientation')
 			.addClass('Q_verticalOrientation');
-		Q.info.isVertical = true;
+		if (Q.info) Q.info.isVertical = true;
 	}
 
 	if(!secondCall) {
@@ -14347,41 +14506,59 @@ Q.Visual = Q.Pointer = {
 		return observer;
 	},
 	/**
-	 * Works together with Q.Visual.animationStarted
-	 * Calls the callback after all current animations have ended.
+	 * Tracks transient animations and executes a callback once all have ended.
+	 * Works together with Q.Visual.animationStarted().
 	 * @static
 	 * @method waitUntilAnimationsEnd
-	 * @param {Function} callback The callback may synchronously call 
-	 *   animationStarted(), which will delay any subsequent callbacks,
-	 *   so any such callbacks would start animations sequentially.
-	 * @param {Array} params The parameters to send to the callback, if any
+	 * @param {Function} callback The callback to invoke once no animations are active.
+	 * @param {Array} [params] Optional parameters passed to the callback.
 	 */
 	waitUntilAnimationsEnd: function (callback, params) {
-		setTimeout(_executeIfAnimationsEnded, 0);
-		function _executeIfAnimationsEnded() {
+		// Slight delay so that any animationStarted() calls in the same tick register first
+		setTimeout(_check, 0);
+
+		function _check() {
 			var a = Q.Visual.animationStarted;
-			if ((a.animationsEnding || 0) < Date.now()) {
+
+			// If no animations have been started yet, run callback immediately
+			if (!a || !a.animationsEnding) {
 				Q.handle(callback, Q.Visual, params);
-			} else {
-				setTimeout(_executeIfAnimationsEnded, a.animationsEnding - Date.now);
+				return;
 			}
+
+			var now = Date.now();
+
+			// If current time is past the end of all animations, call callback
+			if (now >= a.animationsEnding) {
+				// Double-check in case callback itself starts a new animation
+				if (!a.animationsEnding || Date.now() >= a.animationsEnding) {
+					Q.handle(callback, Q.Visual, params);
+					return;
+				}
+			}
+
+			// Otherwise, recheck after the remaining duration
+			setTimeout(_check, Math.max(0, a.animationsEnding - now));
 		}
 	},
+
 	/**
-	 * Just call this to indicate that a transient animation has started,
-	 * in case someone wants to wait for all transient animations to end
-	 * they will call waitUntilAnimationsEnd()
-	 * @param {Number} duration in milliseconds
+	 * Call this whenever a transient animation starts.
+	 * It updates the global animation end timestamp.
+	 * @static
+	 * @method animationStarted
+	 * @param {Number} duration Duration of the animation in milliseconds.
 	 */
 	animationStarted: function (duration) {
 		var a = Q.Visual.animationStarted;
+
+		// Initialize tracking fields if missing
 		a.animationsEnding = a.animationsEnding || 0;
-		if (a.animationsEnding < Date.now()) {
-			a.animationsStarted = Date.now();
-			a.animationsEnding = a.animationsStarted + duration;
-		} else {
-			a.animationsEnding += duration;
-		}
+
+		var now = Date.now();
+
+		// Extend end time only from the later of now or existing end time
+		a.animationsEnding = Math.max(a.animationsEnding, now) + duration;
 	},
 	/**
 	 * Returns the x coordinate of an event relative to the document
@@ -15553,6 +15730,7 @@ Q.Dialogs = {
 					$(h2).html(o.title);
 				} else {
 					$(h2).empty().append(o.title);
+
 				}
 			}
 			if (content) {
@@ -15560,6 +15738,7 @@ Q.Dialogs = {
 					$(contentElement).html(content);
 				} else {
 					$(contentElement).empty().append(content);
+
 				}
 			}
 			dialog.style.display = 'none';
@@ -15573,11 +15752,6 @@ Q.Dialogs = {
 				Q.handle(o.onClose.original, dialog, [dialog, options]);
 			}, 'Q.Dialogs');
 			o.onClose.original = _onClose;
-			try {
-				$dialog.plugin('Q/dialog', o);
-			} catch (e) {
-				console.warn(e);
-			}
 			var topDialog = null;
 			var dialogs = Q.Dialogs.dialogs;
 			dialog.isFullscreen = o.fullscreen;
@@ -15594,6 +15768,11 @@ Q.Dialogs = {
 				setTimeout(function () {
 					$dialog.close();
 				}, o.closeAfterDelay);
+			}
+			try {
+				$dialog.plugin('Q/dialog', o);
+			} catch (e) {
+				console.warn(e);
 			}
 		}
 	},
@@ -15688,7 +15867,7 @@ Q.Dialogs.push.options = {
 	content: '',
 	className: null,
 	fullscreen: Q.info.useFullscreen,
-	appendTo: document.body,
+	appendTo: null,
 	alignByParent: false,
 	beforeLoad: new Q.Event(),
 	onActivate: new Q.Event(),
@@ -16454,6 +16633,7 @@ Q.onInit.add(function () {
 	for (var k in substitutions) {
 		sfu[k] = Q.url(substitutions[k]);
 	}
+	Q.info.imgLoading = Q.url(Q.info.imgLoading || '{{Q}}/img/throbbers/loading.gif');
 
 	var QtQw = Q.text.Q.words;
 	Q.Pointer.ClickOrTap = QtQw.ClickOrTap = useTouchEvents ? QtQw.Tap : QtQw.Click;
@@ -16580,7 +16760,10 @@ Q.Tool.jQuery({
 	"Q/textfill": "{{Q}}/js/fn/textfill.js",
 	"Q/autogrow": "{{Q}}/js/fn/autogrow.js",
 	"Q/dialog": "{{Q}}/js/fn/dialog.js",
-	"Q/flip": "{{Q}}/js/fn/flip.js",
+	"Q/flip": {
+		js: "{{Q}}/js/fn/flip.js",
+		css: "{{Q}}/css/fn/flip.css"
+	},
 	"Q/gallery": "{{Q}}/js/fn/gallery.js",
 	"Q/zoomer": "{{Q}}/js/fn/zoomer.js",
 	"Q/fisheye": "{{Q}}/js/fn/fisheye.js",
@@ -16598,7 +16781,11 @@ Q.Tool.jQuery({
 	"Q/scrollbarsAutoHide": "{{Q}}/js/fn/scrollbarsAutoHide.js",
 	"Q/sortable": "{{Q}}/js/fn/sortable.js",
 	"Q/validator": "{{Q}}/js/fn/validator.js",
-	"Q/touchscroll": "{{Q}}/js/fn/touchscroll.js"
+	"Q/touchscroll": "{{Q}}/js/fn/touchscroll.js",
+	"Q/emojis": {
+		js: "{{Q}}/js/fn/emojis.js",
+		css: "{{Q}}/css/fn/emojis.css"
+	}
 });
 
 Q.onJQuery.add(function ($) {
@@ -16690,10 +16877,17 @@ function _addHandlebarsHelpers() {
 			var ba = Q.Tool.beingActivated;
 			return (ba ? ba.prefix : '');
 		});
-		Handlebars.registerHelper('join', function(array, sep, options) {
-		    return array.map(function(item) {
-		        return options.fn(item);
-		    }).join(sep);
+		Handlebars.registerHelper('join', function() {
+			var args = Array.prototype.slice.call(arguments, 0, -1);
+			var options = arguments[arguments.length - 1];
+			if (Array.isArray(args[0]) && typeof options.fn === 'function') {
+				var array = args[0];
+				var sep = args[1] || '';
+				return array.map(function(item) {
+					return options.fn(item);
+				}).join(sep);
+			}
+			return args.join('');
 		});
 		Handlebars.registerHelper('tool', function (name, id, tag, retain, options) {
 			if (!name) {
@@ -16882,15 +17076,15 @@ Q.request.options = {
 	asJSON: false,
 	parse: 'json',
 	timeout: 5000,
-	onRedirect: new Q.Event(function (url) {
+	onRedirect: new Q.Event(function (url, options) {
 		if (!url.startsWith(Q.baseUrl())) {
 			location.href = url; // just redirect to another site
 		} else {
-			Q.loadUrl(url, {
+			Q.loadUrl(url, Q.extend({}, options, {
 				target: '_self',
 				quiet: true,
 				dontTransformUrl: true
-			});
+			}));
 		}
 	}, "Q"),
 	resultFunction: "result",
@@ -17540,6 +17734,33 @@ Q.stackTrace = function() {
 		obj = new Error();
 	}
 	return obj.stack.replace('Error', 'Stack Trace');
+};
+
+Q.setTimeout = function (callback, delay) {
+	var timer = setTimeout(function () {
+		cleanup();
+		callback("timeout");
+	}, delay);
+	function onUnload() {
+		if (timer) {
+			clearTimeout(timer);
+			cleanup();
+			callback("unload");
+		}
+	}
+	function cleanup() {
+		window.removeEventListener("pagehide", onUnload);
+		window.removeEventListener("beforeunload", onUnload);
+		timer = null;
+	}
+	window.addEventListener("pagehide", onUnload);
+	window.addEventListener("beforeunload", onUnload);
+	return function () {
+		if (timer) {
+			clearTimeout(timer);
+			cleanup();
+		}
+	};
 };
 
 /**

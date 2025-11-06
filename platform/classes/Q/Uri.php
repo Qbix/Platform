@@ -207,7 +207,7 @@ class Q_Uri
 
 	static function serviceWorkerURL()
 	{
-		return Q_Request::baseUrl() . '/Q-ServiceWorker.js';
+		return Q_Request::baseUrl() . '/Q-ServiceWorker';
 	}
 	
 	
