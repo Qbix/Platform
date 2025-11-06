@@ -13972,7 +13972,7 @@ _touchBlurHandler.options = {
 	blurContentEditable: true
 };
 
-function _detectOrientation(e) {
+function _detectOrientation(e, secondCall) {
 	var w = window;
 	var d = document;
 	var h = d.documentElement;
@@ -13988,6 +13988,12 @@ function _detectOrientation(e) {
 		h.removeClass('Q_horizontalOrientation')
 			.addClass('Q_verticalOrientation');
 		if (Q.info) Q.info.isVertical = true;
+	}
+
+	if(!secondCall) {
+		setTimeout(function() {
+			_detectOrientation(null, true);
+		}, 500)
 	}
 }
 
