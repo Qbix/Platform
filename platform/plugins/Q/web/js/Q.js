@@ -10818,7 +10818,7 @@ function _onUpdateFound(event) {
 }
 
 function _startCachingWithServiceWorker() {
-	if (!Q.ServiceWorker.isSupported) {
+	if (!Q.ServiceWorker.isSupported || Q.info.skipServiceWorkerCaching) {
 		return false;
 	}
 	Q.ServiceWorker.start(function (worker, registration) {
