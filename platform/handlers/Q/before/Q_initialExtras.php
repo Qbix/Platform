@@ -34,7 +34,6 @@ function Q_before_Q_initialExtras()
 				'slotNames' => Q_Config::get("Q", "response", "slotNames", array(
 					'content', 'dashboard', 'title', 'notices'
 				)),
-				'skipServiceWorkerCaching' => Q_Config::get("Q", "skipServiceWorkerCaching", false),
 				'timestamp' => time()
 			)
 		);
@@ -42,6 +41,7 @@ function Q_before_Q_initialExtras()
 	foreach ($info as $k => $v) {
 		Q_Response::setScriptData("Q.info.$k", $v);
 	}
+	Q_Response::setScriptData('Q.ServiceWorker.skipCaching', Q_Config::get("Q", "javascript", 'serviceWorker', 'skipCaching', false));
     $uris = Q_Config::get('Q', 'javascript', 'uris', array());
     $urls = array();
     foreach ($uris as $u) {

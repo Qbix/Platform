@@ -6,7 +6,7 @@ function Q_serviceWorker_response()
 
 	$baseUrl_json = Q::json_encode(Q_Request::baseUrl());
 	$serviceWorkerUrl_json = Q::json_encode(Q_Uri::serviceWorkerURL());
-	$skipServiceWorkerCaching = (int)Q_Config::get("Q", "skipServiceWorkerCaching", false);
+	$skipServiceWorkerCaching = json_encode(Q_Config::get("Q", "javascript", 'serviceWorker', 'skipCaching', false));
 	$cookies_json = Q::json_encode($_COOKIE); // can be filtered for HttpOnly simulation
 
 	echo <<<JS
@@ -17,7 +17,6 @@ var Q = {
 	info: {
 		baseUrl: $baseUrl_json,
 		serviceWorkerUrl: $serviceWorkerUrl_json,
-		skipServiceWorkerCaching: $skipServiceWorkerCaching
 	},
 	Cache: {
 		clearAll: function () {
@@ -27,6 +26,9 @@ var Q = {
 				}
 			});
 		}
+	},
+	ServiceWorker: {
+		skipCaching: $skipServiceWorkerCaching
 	}
 };
 
@@ -39,17 +41,11 @@ var Q = {
 	});
 
 	self.addEventListener('fetch', function (event) {
-		var url = new URL(event.request.url);
-		var ext = url.pathname.split('.').pop().toLowerCase();
+		const url = new URL(event.request.url);
+		const ext = url.pathname.split('.').pop().toLowerCase();
 
-        if (Q.info.skipServiceWorkerCaching) {
-            return;
-        }
-        
-		// Skip non-same-origin or non-relevant file types
-		if (url.origin !== self.location.origin || ['js', 'css'].indexOf(ext) < 0) {
-			return;
-		}
+		if (Q.info.skipServiceWorkerCaching) return;
+		if (url.origin !== self.location.origin || ['js', 'css'].indexOf(ext) < 0) return;
 
 		if (url.toString() === Q.info.serviceWorkerUrl) {
 			return event.respondWith(new Response(
@@ -58,74 +54,110 @@ var Q = {
 			));
 		}
 
-		// Clone request and attach Cookie-JS header
-		const original = event.request;
-		const cookieHeader = Object.entries(cookies)
-			.map(([k, v]) => k + "=" + v).join("; ");
+		event.respondWith((async () => {
+			// --- Build new request with headers ---
+			const original = event.request;
+			const newHeaders = new Headers(original.headers);
 
-		const newHeaders = new Headers(original.headers);
-		newHeaders.set("Cookie-JS", cookieHeader);
+			// Attach simulated cookies
+			const cookieHeader = Object.entries(cookies)
+				.map(([k, v]) => k + "=" + v).join("; ");
+			newHeaders.set("Cookie-JS", cookieHeader);
 
-		const init = {
-			method: original.method,
-			headers: newHeaders,
-			mode: original.mode,
-			credentials: original.credentials,
-			cache: original.cache,
-			redirect: original.redirect,
-			referrer: original.referrer,
-			referrerPolicy: original.referrerPolicy,
-			integrity: original.integrity,
-			keepalive: original.keepalive,
-			signal: original.signal
-		};
-
-		if (original.method !== 'GET' && original.method !== 'HEAD') {
-			init.body = original.clone().body;
-		}
-
-		if (init.mode === 'navigate') {
-			event.respondWith(fetch(event.request));
-			return;
-		}
-		const newRequest = new Request(original.url, init);
-
-		event.respondWith(
-			caches.open("Q").then(cache => {
-				return cache.match(event.request).then(cached => {
-					if (cached) {
-						console.log("cached: " + event.request.url);
-						return cached;
+			// Determine frame type safely before fetch
+			let frameType = "unknown";
+			if (event.clientId) {
+				try {
+					const client = await clients.get(event.clientId);
+					if (client && typeof client.frameType !== 'undefined') {
+						frameType = client.frameType;
 					}
-					// Not in cache → go to network
-					return fetch(newRequest).then(response => {
-						// Save a clone in the cache for future requests
-						cache.put(event.request, response.clone());
+				} catch (e) {}
+			} else {
+				frameType = "no-client";
+			}
+			newHeaders.set("Client-Frame-Type", frameType);
 
-						// Update local cookie store if server sends Set-Cookie-JS
-						const setCookieHeader = response.headers.get("Set-Cookie-JS");
-						if (setCookieHeader) {
-							setCookieHeader.split(';').forEach(kv => {
-								const [k, v] = kv.trim().split('=');
-								if (k && v) cookies[k] = v;
+			const init = {
+				method: original.method,
+				headers: newHeaders,
+				mode: original.mode,
+				credentials: original.credentials,
+				cache: original.cache,
+				redirect: original.redirect,
+				referrer: original.referrer,
+				referrerPolicy: original.referrerPolicy,
+				integrity: original.integrity,
+				keepalive: original.keepalive,
+				signal: original.signal
+			};
+			if (original.method !== 'GET' && original.method !== 'HEAD') {
+				init.body = original.clone().body;
+			}
+			if (init.mode === 'navigate') {
+				return fetch(event.request);
+			}
+
+			const newRequest = new Request(original.url, init);
+			const cache = await caches.open("Q");
+
+			// Serve from cache if available
+			const cached = await cache.match(event.request);
+			if (cached) {
+				console.log("cached: " + event.request.url);
+				return cached;
+			}
+
+			// Otherwise fetch from network
+			const response = await fetch(newRequest);
+			cache.put(event.request, response.clone());
+
+			// --- Handle Set-Cookie-JS intelligently ---
+			const setCookieHeader = response.headers.get("Set-Cookie-JS");
+			if (setCookieHeader) {
+				let changed = false;
+				setCookieHeader.split(';').forEach(kv => {
+					const [k, v] = kv.trim().split('=');
+					if (k && v && cookies[k] !== v) {
+						cookies[k] = v;
+						changed = true;
+					}
+				});
+				if (changed) {
+					const clientsList = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' });
+					let hasNested = false;
+					let frameTypeSupported = false;
+					for (const client of clientsList) {
+						if (typeof client.frameType !== 'undefined') {
+							frameTypeSupported = true;
+							if (client.frameType === 'nested') {
+								hasNested = true;
+								break;
+							}
+						}
+					}
+					if (hasNested || !frameTypeSupported) {
+						for (const client of clientsList) {
+							client.postMessage({
+								type: "Set-Cookie-JS",
+								cookies
 							});
 						}
-						return response;
-					});
-				});
-			})
-		);
+					} else {
+						console.log("[SW] Skipped Set-Cookie-JS broadcast — all top-level clients.");
+					}
+				}
+			}
+
+			return response;
+		})());
 	});
 
-	self.addEventListener("install", (event) => {
-		self.skipWaiting();
-	});
-	self.addEventListener("activate", (event) => {
-		event.waitUntil(clients.claim());
-	});
+	self.addEventListener("install", event => self.skipWaiting());
+	self.addEventListener("activate", event => event.waitUntil(clients.claim()));
 
 	self.addEventListener('message', function (event) {
-		var data = event.data || {};
+		const data = event.data || {};
 		if (data.type === 'Q.Cache.put') {
 			caches.open('Q').then(function (cache) {
 				data.items.forEach(function (item) {
@@ -147,7 +179,6 @@ var Q = {
 })();
 JS;
 
-	// Optional extra plugin code
 	echo <<<JS
 
 /************************************************
@@ -170,7 +201,7 @@ JS;
  ************************************************/
 
 JS;
-	
+
 	echo PHP_EOL . PHP_EOL;
 	Q::event("Q/serviceWorker/response", array(), 'after');
 

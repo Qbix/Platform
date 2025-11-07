@@ -10803,6 +10803,17 @@ Q.ServiceWorker = {
 				console.warn("Q.ServiceWorker.start error", error);
 			});
 		});
+		// Listen for cookie updates coming from the Service Worker
+		navigator.serviceWorker.addEventListener('message', event => {
+			const data = event.data || {};
+			if (data.type === 'Set-Cookie-JS' && data.cookies) {
+				for (const [k, v] of Object.entries(data.cookies)) {
+					// Update document.cookie so future page requests carry it
+					document.cookie = encodeURIComponent(k) + '=' + encodeURIComponent(v) + '; path=/';
+					console.log('[SW] Updated cookie from service worker:', k);
+				}
+			}
+		});
 	}
 }
 try {
@@ -10818,7 +10829,7 @@ function _onUpdateFound(event) {
 }
 
 function _startCachingWithServiceWorker() {
-	if (!Q.ServiceWorker.isSupported || Q.info.skipServiceWorkerCaching) {
+	if (!Q.ServiceWorker.isSupported || Q.ServiceWorker.skipCaching) {
 		return false;
 	}
 	Q.ServiceWorker.start(function (worker, registration) {
