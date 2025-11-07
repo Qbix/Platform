@@ -34,6 +34,7 @@ function Q_before_Q_initialExtras()
 				'slotNames' => Q_Config::get("Q", "response", "slotNames", array(
 					'content', 'dashboard', 'title', 'notices'
 				)),
+				'skipServiceWorkerCaching' => Q_Config::get("Q", "skipServiceWorkerCaching", false),
 				'timestamp' => time()
 			)
 		);

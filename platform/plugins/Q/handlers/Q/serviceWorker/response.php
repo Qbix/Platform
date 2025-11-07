@@ -6,6 +6,7 @@ function Q_serviceWorker_response()
 
 	$baseUrl_json = Q::json_encode(Q_Request::baseUrl());
 	$serviceWorkerUrl_json = Q::json_encode(Q_Uri::serviceWorkerURL());
+	$skipServiceWorkerCaching = (int)Q_Config::get("Q", "skipServiceWorkerCaching", false);
 	$cookies_json = Q::json_encode($_COOKIE); // can be filtered for HttpOnly simulation
 
 	echo <<<JS
@@ -15,7 +16,8 @@ function Q_serviceWorker_response()
 var Q = {
 	info: {
 		baseUrl: $baseUrl_json,
-		serviceWorkerUrl: $serviceWorkerUrl_json
+		serviceWorkerUrl: $serviceWorkerUrl_json,
+		skipServiceWorkerCaching: $skipServiceWorkerCaching
 	},
 	Cache: {
 		clearAll: function () {
@@ -40,6 +42,10 @@ var Q = {
 		var url = new URL(event.request.url);
 		var ext = url.pathname.split('.').pop().toLowerCase();
 
+        if (Q.info.skipServiceWorkerCaching) {
+            return;
+        }
+        
 		// Skip non-same-origin or non-relevant file types
 		if (url.origin !== self.location.origin || ['js', 'css'].indexOf(ext) < 0) {
 			return;
