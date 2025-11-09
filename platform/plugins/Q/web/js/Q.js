@@ -7476,7 +7476,7 @@ Q.Cache.document = function _Q_Cache_document(name, max, options) {
 };
 Q.Cache.local = function _Q_Cache_local(name, max, options) {
 	if (!Q.Cache.local.caches[name]) {
-		var cache = Q.Cache.local.caches[name] = new Q.Cache(Q.extend({
+		Q.Cache.local.caches[name] = new Q.Cache(Q.extend({
 			localStorage: true,
 			max: max,
 			name: name
