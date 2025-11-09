@@ -313,6 +313,41 @@ class Q_Request
 		return $result ? $result : '';
 	}
 
+	/**
+	 * Returns the origin of the current HTTP request.
+	 * Also works behind proxies if they forward the appropriate headers.
+	 *
+	 * @method origin
+	 * @static
+	 * @return string|null  The request origin (scheme://host[:port]) or null if unknown.
+	 */
+	public static function origin()
+	{
+		if (isset($_SERVER['HTTP_ORIGIN'])) {
+			return $_SERVER['HTTP_ORIGIN'];
+		}
+		if (isset($_SERVER['HTTP_X_FORWARDED_ORIGIN'])) {
+			return $_SERVER['HTTP_X_FORWARDED_ORIGIN'];
+		}
+		if (isset($_SERVER['HTTP_REFERER'])) {
+			return Q_Uri::origin($_SERVER['HTTP_REFERER']);
+		}
+		if (isset($_SERVER['HTTP_HOST'])) {
+			$scheme = 'http';
+			if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+				$scheme = 'https';
+			}
+			return $scheme . '://' . $_SERVER['HTTP_HOST'];
+		}
+		return null;
+	}
+
+	/**
+	 * Use this method to check whether a service worker is being requested
+	 * @method isServiceWorker
+	 * @static
+	 * @return {boolean}
+	 */
 	static function isServiceWorker()
 	{
 		$url = Q_Request::url();

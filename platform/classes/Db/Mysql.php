@@ -1057,10 +1057,11 @@ class Db_Mysql implements Db_Interface
 	}
 
 	/**
-	 * Returns a Date string to store in the database
+	 * Converts a UNIX timestamp or date string to a 'Y-m-d' string
+	 * for storing in the database.
 	 * @method toDate
-	 * @param {string} $timestamp The UNIX timestamp, e.g. from a strtotime function
-	 * @return {string}
+	 * @param {string|int} $timestamp UNIX timestamp or parseable date string
+	 * @return {string} Formatted as 'Y-m-d'
 	 */
 	function toDate ($timestamp)
 	{
@@ -1074,10 +1075,11 @@ class Db_Mysql implements Db_Interface
 	}
 
 	/**
-	 * Returns a DateTime string to store in the database
+	 * Converts a UNIX timestamp or date string to a full datetime string
+	 * for storing in the database.
 	 * @method toDateTime
-	 * @param {string} $timestamp The UNIX timestamp, e.g. from a strtotime function
-	 * @return {string}
+	 * @param {string|int} $timestamp UNIX timestamp or parseable date string
+	 * @return {string} Formatted as 'Y-m-d H:i:s'
 	 */
 	function toDateTime ($timestamp)
 	{

@@ -459,6 +459,40 @@ class Q_Valid
 		}
 		return true;
 	}
+
+	/**
+	 * Convenience method to require that the request origin matches
+	 * the base URL origin. Compatible with PHP 5.2.
+	 *
+	 * @method requireOrigin
+	 * @static
+	 * @param string $url Optional URL to check against. If null, uses Q_Request::url()
+	 * @param bool $throwIfInvalid Whether to throw an exception if invalid
+	 * @throws Q_Exception_WrongValue If the origin is invalid and $throwIfInvalid is true
+	 * @return bool True if valid, false otherwise
+	 */
+	function requireOrigin($url = null, $throwIfInvalid = false)
+	{
+		if (!isset($url)) {
+			$url = Q_Request::url();
+		}
+
+		$allowedOrigin = Q_Uri::origin(Q_Request::baseUrl());
+		$origin = Q_Request::origin();
+
+		if (!$origin || $origin !== $allowedOrigin) {
+			if ($throwIfInvalid) {
+				throw new Q_Exception_WrongValue(array(
+					'field' => 'origin',
+					'range' => $allowedOrigin,
+					'value' => $origin ? $origin : '(none)'
+				));
+			}
+			return false;
+		}
+
+		return true;
+	}
 	
 	/**
 	 * Convenience method to require certain fields to be present in an array,
