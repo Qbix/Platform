@@ -8199,7 +8199,7 @@ var _loadNonceReq = Q.getter(function (callback, context, args) {
 	});
 }, {
 	cache: Q.Cache.document('Q.loadNonce', 1)
-})
+});
 
 /**
  * This function is called by Q to make sure that we've loaded the Handlebars library
@@ -10867,7 +10867,8 @@ function _startCachingWithServiceWorker() {
 }
 
 /**
- * Gets, sets or a deletes a cookie
+ * Gets, sets or a deletes a cookie.
+ * May notify our service worker of the change.
  * @static
  * @method cookie
  * @param {String} name
@@ -10893,44 +10894,67 @@ Q.cookie = function _Q_cookie(name, value, options) {
 			var path, domain = '';
 			parts = Q.baseUrl().split('://');
 			if ('path' in options) {
-				path = ';path='+options.path;
+				path = ';path=' + options.path;
 			} else if (parts[1]) {
 				path = ';path=/' + parts[1].split('/').slice(1).join('/');
 			} else {
 				return null;
 			}
 			if ('domain' in options) {
-				domain = ';domain='+options.domain;
+				domain = ';domain=' + options.domain;
 			} else {
 				// remove any possibly conflicting cookies from .hostname, with same path
 				var o = Q.copy(options);
 				var hostname = parts[1].split('/').shift();
-				o.domain = '.'+hostname;
+				o.domain = '.' + hostname;
 				Q.cookie(name, null, o);
-				domain = ''; //';domain=' + hostname;
+				domain = '';
+			}
+			function _notifyServiceWorker(val) {
+				try {
+					if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+						return;
+					}
+					var msg = {
+						type: 'Set-Cookie-JS',
+						cookies: {}
+					};
+					msg.cookies[name] = val;
+					navigator.serviceWorker.controller.postMessage(msg);
+				} catch (e) {
+					console.warn('Q.cookie SW notify failed:', e);
+				}
 			}
 			if (value === null) {
-				document.cookie = encodeURIComponent(name)+'=;expires=Thu, 01-Jan-1970 00:00:01 GMT'+path+domain;
+				document.cookie = encodeURIComponent(name) +
+					'=;expires=Thu, 01-Jan-1970 00:00:01 GMT' + path + domain;
+				_notifyServiceWorker(''); // deletion
 				return null;
 			}
 			var expires = '';
 			if (options.expires) {
 				expires = new Date();
 				expires.setTime((new Date()).getTime() + options.expires);
-				expires = ';expires='+expires.toGMTString();
+				expires = ';expires=' + expires.toGMTString();
 			}
-			document.cookie = encodeURIComponent(name)+'='+encodeURIComponent(value)+expires+path+domain;
+			document.cookie = encodeURIComponent(name) + '=' +
+				encodeURIComponent(value) + expires + path + domain;
+
+			_notifyServiceWorker(String(value)); // update or add
 			return null;
 		}
-	
-		// Otherwise, return the value
-		var cookies = document.cookie.split(';'), result;
-		for (var i=0; i<cookies.length; ++i) {
+		// Otherwise, return the cookie value
+		var cookies = document.cookie.split(';');
+		var result;
+		for (var i = 0; i < cookies.length; ++i) {
 			parts = cookies[i].split('=');
 			result = parts.splice(0, 1);
 			result.push(parts.join('='));
-			if (decodeURIComponent(result[0].trim()) === name) {
-				return result.length < 2 ? null : decodeURIComponent(result[1]);
+			if (decodeURIComponent(result[0].replace(/^\s+|\s+$/g, '')) === name) {
+				if (result.length < 2) {
+					return null;
+				}
+				return decodeURIComponent(result[1]);
 			}
 		}
 		return null;
