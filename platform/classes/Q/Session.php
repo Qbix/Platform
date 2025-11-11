@@ -263,7 +263,8 @@ class Q_Session
 	 *   to be used if a session ID has to be generated.
 	 *   If you are specifying setId for an internal sessionId, you must set this to "internal",
 	 *   otherwise the function would throw Q_Exception_SessionHijacked
-	 * @param {string} [$set] 
+	 * @param {array} [$options] 
+	 * @param {boolean} [$options.temporary] Don't set the cookie, this is just to access another session temporarily
 	 * @return {boolean} Whether a new session was started or not.
 	 * @throws {Q_Exception_SessionHijacked}
 	 * @throws {Q_Exception_FailedValidation}
@@ -352,7 +353,7 @@ class Q_Session
 					}
 					self::writeHandler($id, '');
 				}
-				if (!empty($_SERVER['HTTP_HOST'])) {
+				if (!empty($_SERVER['HTTP_HOST']) and empty($options['temporary'])) {
 					$durationName = self::durationName();
 					$duration = Q_Config::get('Q', 'session', 'durations', $durationName, 0);
 					$secure = Q_Config::get('Q', 'session', 'cookie', 'secure', true);
