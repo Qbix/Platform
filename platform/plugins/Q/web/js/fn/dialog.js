@@ -222,7 +222,7 @@ Q.Tool.jQuery('Q/overlay',
 			close: function(e, options)
 			{
 				if (e) {
-					$.Event(e).preventDefault();
+					e.preventDefault();
 				}
 				Q.Visual.stopHints($this[0]);
 				Q.Visual.cancelClick();
@@ -515,7 +515,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 					}
 
 					Q.handle(o.onClose, $this[0], [$this[0], options || {}]);
-					if (e) $.Event(e).preventDefault();
+					if (e) e.preventDefault();
 				},
 				windowParams: windowParams
 			};
