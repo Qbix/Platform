@@ -9440,6 +9440,8 @@ Q.ajaxExtend = function _Q_ajaxExtend(what, slotNames, options) {
  * @see Q.request
  * @static
  * @method req
+ * @param {Object} [fields]
+ *  Optional object of fields to pass, syntactic sugar for adding fields to GET requests
  * @param {String} uri
  *  A string of the form "Module/action"
  * @param {String|Array} slotNames

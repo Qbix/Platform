@@ -431,6 +431,18 @@ class Q_Valid
 	 */
 	static function capability($capability, $permissions)
 	{
+		if (is_array($capability) && !($capability instanceof Q_Capability)) {
+			$capability = new Q_Capability(
+				Q::ifset($capability, 'permissions', array()),
+				$capability,
+				Q::ifset($capability, 'startTime', null),
+				Q::ifset($capability, 'endTime', null)
+			);
+		}
+		if (!($capability instanceof Q_Capability)) {
+			return false;
+		}
+
 		$now = time();
 		$cp = Q::ifset($capability, 'permissions', array());
 		if (!$capability
@@ -462,7 +474,7 @@ class Q_Valid
 
 	/**
 	 * Convenience method to require that the request origin matches
-	 * the base URL origin. Compatible with PHP 5.2.
+	 * the base URL origin.
 	 *
 	 * @method requireOrigin
 	 * @static

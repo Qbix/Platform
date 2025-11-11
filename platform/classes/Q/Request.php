@@ -1299,6 +1299,22 @@ class Q_Request
 	}
 	
 	/**
+	 * Convenience method to require that the request origin matches
+	 * the base URL origin.and call Q_Response::addError otherwise.
+	 * @see Q_Valid::requireOrigin
+	 * @method requireOrigin
+	 * @static
+	 * @param {array} $fields Array of strings or arrays naming fields that are required
+	 * @param {boolean} [$throwIfMissing=false] Whether to throw an exception if the field is missing
+	 * @param {boolean} [$emptyMeansMissing=false] Whether empty value means missing field
+	 * @return {boolean} Whether it was valid
+	 */
+	static function requireOrigin($throwIfInvalid = false)
+	{
+		return Q_Valid::requireOrigin(Q_Request::url(), $throwIfInvalid);
+	}
+
+	/**
 	 * Used called internally, by event handlers to see if the requested
 	 * URI requires a valid nonce to be submitted, to prevent CSRF attacks.
 	 * @see Q_Valid::requireValidNonce
