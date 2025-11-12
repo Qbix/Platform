@@ -12084,8 +12084,10 @@ function _activateTools(toolElement, options, shared) {
 			// will work correctly, whether it's sync or async.
 			var event = Q.Tool.onLoadedConstructor(toolName);
 			var required = Q.Tool.constructors[toolName].required;
-			for (var i=0; i<required.length; ++i) {
-				event = event.and(Q.Tool.onLoadedConstructor(required[i]));
+			if (required) {
+				for (var i=0; i<required.length; ++i) {
+					event = event.and(Q.Tool.onLoadedConstructor(required[i]));
+				}
 			}
 			event.addOnce(function () {
 				var _constructor = _constructors[toolName];
