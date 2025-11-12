@@ -287,6 +287,31 @@ class Q_Utils
 	}
 
 	/**
+	 * Unserializes a string previously produced by Q_Utils::serialize()
+	 * back into an associative array.
+	 *
+	 * @param {string} $string
+	 * @param {string} [$separator='&']
+	 * @return {array}
+	 */
+	static function unserialize($string, $separator = '&')
+	{
+		// Defensive: ensure valid string
+		if (!is_string($string) || $string === '') {
+			return array();
+		}
+
+		$result = array();
+
+		// parse_str automatically urldecodes and builds nested arrays
+		parse_str(str_replace($separator, '&', $string), $result);
+
+		// Ensure keys are sorted in consistent order (like serialize)
+		self::ksort($result);
+		return $result;
+	}
+
+	/**
 	 * Like regular ksort, but in-place sorts nested arrays recursively too
 	 * @param {&$array} The array to be sorted in-place
 	 * @param {integer} [$flags] like in ksort

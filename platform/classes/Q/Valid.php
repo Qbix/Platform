@@ -423,15 +423,26 @@ class Q_Valid
 	 * Validates a capability signed by our own server's secret key.
 	 * The capability must have "startTime", "endTime" in milliseconds since UNIX epoch,
 	 * and must also be signed with Q_Utils::sign() or equivalent implementation.
+	 *
 	 * @method capability
 	 * @static
-	 * @param {Q_Capability|array} $capability
+	 * @param {Q_Capability|array|string} $capability
+	 *   Either a Q_Capability instance, associative array, or serialized string.
 	 * @param {array|string} $permissions
+	 *   Required permission(s) to check for.
 	 * @return {bool}
 	 */
 	static function capability($capability, $permissions)
 	{
-		if (is_array($capability) && !($capability instanceof Q_Capability)) {
+		// Normalize capability
+		if (is_string($capability)) {
+			try {
+				$capability = new Q_Capability($capability);
+			} catch (Exception $e) {
+				Q::log("Q_Valid::capability invalid string: " . $e->getMessage());
+				return false;
+			}
+		} elseif (is_array($capability) && !($capability instanceof Q_Capability)) {
 			$capability = new Q_Capability(
 				Q::ifset($capability, 'permissions', array()),
 				$capability,
@@ -439,36 +450,46 @@ class Q_Valid
 				Q::ifset($capability, 'endTime', null)
 			);
 		}
+
 		if (!($capability instanceof Q_Capability)) {
 			return false;
 		}
 
+		// Signature and time validation
 		$now = time();
 		$cp = Q::ifset($capability, 'permissions', array());
-		if (!$capability
-		|| !Q_Valid::signature(false, $capability)
-		|| empty($cp)
-		|| Q::ifset($capability, 'startTime', 0) > $now
-		|| Q::ifset($capability, 'endTime', 33226225269) < $now) {
+		if (
+			!$capability
+			|| !Q_Valid::signature(false, $capability)
+			|| empty($cp)
+			|| Q::ifset($capability, 'startTime', 0) > $now
+			|| Q::ifset($capability, 'endTime', 33226225269) < $now
+		) {
 			return false;
 		}
+
+		// Normalize permissions to array
 		if (is_string($permissions)) {
 			$permissions = array($permissions);
 		}
+
+		// Check capability permissions
 		$config = Q_Config::get('Q', 'capability', 'permissions', array());
 		$search = array();
 		foreach ($cp as $p) {
 			$search[$p] = true;
 			if (!empty($config[$p])) {
-				// add also long-form permission name
+				// Add also long-form permission name
 				$search[$config[$p]] = true;
 			}
 		}
+
 		foreach ($permissions as $p) {
 			if (empty($search[$p])) {
 				return false;
 			}
 		}
+
 		return true;
 	}
 
