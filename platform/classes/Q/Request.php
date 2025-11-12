@@ -330,11 +330,20 @@ class Q_Request
 			return $_SERVER['HTTP_X_FORWARDED_ORIGIN'];
 		}
 		if (isset($_SERVER['HTTP_REFERER'])) {
-			return Q_Uri::origin($_SERVER['HTTP_REFERER']);
+			$parts = parse_url($_SERVER['HTTP_REFERER']);
+			if (!empty($parts['scheme']) && !empty($parts['host'])) {
+				$origin = $parts['scheme'] . '://' . $parts['host'];
+				if (!empty($parts['port'])
+				&& (($parts['scheme'] === 'http' && $parts['port'] != 80)
+				|| ($parts['scheme'] === 'https' && $parts['port'] != 443))) {
+					$origin .= ':' . $parts['port'];
+				}
+				return $origin;
+			}
 		}
 		if (isset($_SERVER['HTTP_HOST'])) {
 			$scheme = 'http';
-			if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+			if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
 				$scheme = 'https';
 			}
 			return $scheme . '://' . $_SERVER['HTTP_HOST'];

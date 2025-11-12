@@ -489,7 +489,19 @@ class Q_Valid
 			$url = Q_Request::url();
 		}
 
-		$allowedOrigin = Q_Uri::origin(Q_Request::baseUrl());
+		// Extract origin (scheme + host + optional port) from base URL
+		$parts = parse_url(Q_Request::baseUrl());
+		if (!empty($parts['scheme']) && !empty($parts['host'])) {
+			$allowedOrigin = $parts['scheme'] . '://' . $parts['host'];
+			if (!empty($parts['port'])
+			&& (($parts['scheme'] === 'http' && $parts['port'] != 80)
+			|| ($parts['scheme'] === 'https' && $parts['port'] != 443))) {
+				$allowedOrigin .= ':' . $parts['port'];
+			}
+		} else {
+			$allowedOrigin = null;
+		}
+
 		$origin = Q_Request::origin();
 
 		if (!$origin || $origin !== $allowedOrigin) {
@@ -497,7 +509,7 @@ class Q_Valid
 				throw new Q_Exception_WrongValue(array(
 					'field' => 'origin',
 					'range' => $allowedOrigin,
-					'value' => $origin ? $origin : '(none)'
+					'value' => $origin ?: '(none)'
 				));
 			}
 			return false;
