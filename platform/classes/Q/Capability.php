@@ -81,12 +81,12 @@ class Q_Capability
 
 	function exportArray()
 	{
-		return Q_Utils::sign($this->_toArray());
+		return Q_Utils::sign($this->toArray());
 	}
 
 	function signature()
 	{
-		return Q_Utils::signature($this->_toArray());
+		return Q_Utils::signature($this->toArray());
 	}
 
 	function __toString()
@@ -104,7 +104,7 @@ class Q_Capability
 		return "$core;$data;$sig";
 	}
 
-	private function _toArray()
+	private function toArray()
 	{
 		$arr = array('permissions' => $this->permissions);
 		if (isset($this->startTime)) $arr['startTime'] = $this->startTime;

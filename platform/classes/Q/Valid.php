@@ -460,7 +460,7 @@ class Q_Valid
 		$cp = Q::ifset($capability, 'permissions', array());
 		if (
 			!$capability
-			|| !Q_Valid::signature(false, $capability)
+			|| !Q_Valid::signature(false, $capability->toArray())
 			|| empty($cp)
 			|| Q::ifset($capability, 'startTime', 0) > $now
 			|| Q::ifset($capability, 'endTime', 33226225269) < $now
@@ -504,7 +504,7 @@ class Q_Valid
 	 * @throws Q_Exception_WrongValue If the origin is invalid and $throwIfInvalid is true
 	 * @return bool True if valid, false otherwise
 	 */
-	function requireOrigin($url = null, $throwIfInvalid = false)
+	static function requireOrigin($url = null, $throwIfInvalid = false)
 	{
 		if (!isset($url)) {
 			$url = Q_Request::url();
