@@ -16626,6 +16626,9 @@ if (!root.console) {
 		warn: noop
 	};
 }
+Q.log = console.log.bind(console);
+Q.warn = console.warn.bind(console);
+Q.error = console.error.bind(console);
 root.console.log.register = function (name) {
 	return root.console.log[name] = function() {
 		var params = Array.prototype.slice.call(arguments);
