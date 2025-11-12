@@ -1,7 +1,7 @@
 <?php
 
 /**
- * This is the default handler for the Q/responseExtras event.
+ * This is the default handler for the Q/responseExtras "before" hook.
  * It should not send session data like the nonce, which prevents CSRF
  * attacks. For that, see the Q/sessionExtras handler.
  */
@@ -35,6 +35,7 @@ function Q_before_Q_responseExtras()
 			'serviceWorkerUrl' => Q_Uri::serviceWorkerUrl()
 		)
 	);
+	$info['socket']['permissions'] = Q_Config::get('Q', 'socket', 'permissions', array());
 	foreach ($info as $k => $v) {
 		Q_Response::setScriptData("Q.info.$k", $v);
 	}
