@@ -109,7 +109,7 @@ class Q_Capability
 		$arr = array('permissions' => $this->permissions);
 		if (isset($this->startTime)) $arr['startTime'] = $this->startTime;
 		if (isset($this->endTime)) $arr['endTime'] = $this->endTime;
-		return array_merge($arr, $this->data);
+		return array_merge($this->data, $arr);
 	}
 
 	private static function _permissions($permission)

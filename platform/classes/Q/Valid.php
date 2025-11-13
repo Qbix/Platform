@@ -442,10 +442,14 @@ class Q_Valid
 				Q::log("Q_Valid::capability invalid string: " . $e->getMessage());
 				return false;
 			}
-		} elseif (is_array($capability) && !($capability instanceof Q_Capability)) {
+		} else if (is_array($capability) && !($capability instanceof Q_Capability)) {
+			$data = $capability;
+			foreach (array('permissions', 'startTime', 'endTime') as $k) {
+				unset($data[$k]);
+			}
 			$capability = new Q_Capability(
 				Q::ifset($capability, 'permissions', array()),
-				$capability,
+				$data,
 				Q::ifset($capability, 'startTime', null),
 				Q::ifset($capability, 'endTime', null)
 			);
