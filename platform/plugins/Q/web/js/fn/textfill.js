@@ -84,10 +84,10 @@ Q.Tool.jQuery('Q/textfill',
 			for (var i=0; i<100; ++i) {
 				$e.css('font-size', fontSize + 'px');
 				var rect = $e[0].getBoundingClientRect();
-				textWidth = Math.round(rect.width
+				textWidth = Math.floor(rect.width
 					+ parseFloat($e.css('margin-left'))
 					+ parseFloat($e.css('margin-right')));
-				textHeight = Math.round(rect.height
+				textHeight = Math.floor(rect.height
 					+ parseFloat($e.css('margin-top'))
 					+ parseFloat($e.css('margin-bottom')));
 				if (o.maxLines) {
