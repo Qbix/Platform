@@ -104,7 +104,7 @@ class Q_Capability
 		return "$core;$data;$sig";
 	}
 
-	private function toArray()
+	function toArray()
 	{
 		$arr = array('permissions' => $this->permissions);
 		if (isset($this->startTime)) $arr['startTime'] = $this->startTime;
