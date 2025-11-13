@@ -307,6 +307,10 @@ body.Q_preventScroll {
 	position: relative;
 	flex-grow: 2;
 }
+.Q_dialog .Q_QR_code,
+.Q_dialog .Q_QR_code img {
+	width: 100%;
+}
 .Q_alert .Q_dialog_content,
 .Q_confirm .Q_dialog_content,
 .Q_prompt .Q_dialog_content {

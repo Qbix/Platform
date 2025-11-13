@@ -582,7 +582,7 @@ class Q_Dispatcher
 		/**
 		 * Gives the app a chance to generate a response.
 		 * You should not change the server state when handling this event.
-		 * @event Q/response
+		//  * @event Q/response
 		 * @param {array} $routed
 		 */
 		$eventName = 'Q/response';

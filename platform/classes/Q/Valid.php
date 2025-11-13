@@ -464,7 +464,7 @@ class Q_Valid
 		$cp = Q::ifset($capability, 'permissions', array());
 		if (
 			!$capability
-			|| !Q_Valid::signature(false, $capability->toArray())
+			|| Q_Utils::signature($capability->toArray()) !== $capability->sig
 			|| empty($cp)
 			|| Q::ifset($capability, 'startTime', 0) > $now
 			|| Q::ifset($capability, 'endTime', 33226225269) < $now

@@ -24,6 +24,14 @@ class Q_Capability
 		$startTime = null, 
 		$endTime = null
 	) {
+		if ($permissions instanceof Q_Capability) {
+			Q::take(
+				$permissions,
+				array('permissions', 'data', 'startTime', 'endTime', 'sig'),
+				$this
+			);
+			return;
+		}
 		if (is_string($permissions)) {
 			// Parse from string form
 			// Example: "perm1+perm2,1700000000,1700100000;{...};<sig>"
@@ -94,8 +102,8 @@ class Q_Capability
 		$p = implode('+', $this->permissions);
 		$startTime = $this->startTime ?: '';
 		$endTime = $this->endTime ?: '';
-		$core = "$p,$startTime,$endTime";
 		$data = Q_Utils::serialize($this->data);
+		$core = "$p,$startTime,$endTime";
 		$arr = $this->exportArray();
 		$sf = Q_Config::get('Q', 'internal', 'sigField', 'sig');
 		$sig = $arr["Q.$sf"];
