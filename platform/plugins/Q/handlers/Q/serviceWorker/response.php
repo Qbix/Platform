@@ -149,7 +149,7 @@ var Q = {
 						for (var j = 0; j < clientsList.length; j++) {
 							var clientObj = clientsList[j];
 							clientObj.postMessage({
-								type: 'Set-Cookie-JS',
+								type: 'Q.cookie',
 								cookies: cookies
 							});
 						}
@@ -182,7 +182,7 @@ var Q = {
 		}
 
 		// Cookie synchronization from clients
-		if (data.type === 'Set-Cookie-JS' && data.cookies) {
+		if (data.type === 'Q.cookie' && data.cookies) {
 			var changed = false;
 			for (var k in data.cookies) {
 				if (!data.cookies.hasOwnProperty(k)) continue;

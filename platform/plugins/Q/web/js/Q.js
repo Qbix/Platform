@@ -10829,7 +10829,7 @@ Q.ServiceWorker = {
 		// Listen for cookie updates coming from the Service Worker
 		navigator.serviceWorker.addEventListener('message', event => {
 			const data = event.data || {};
-			if (data.type === 'Set-Cookie-JS' && data.cookies) {
+			if (data.type === 'Q.cookie' && data.cookies) {
 				for (const [k, v] of Object.entries(data.cookies)) {
 					// Update document.cookie so future page requests carry it
 					document.cookie = encodeURIComponent(k) + '=' + encodeURIComponent(v) + '; path=/';
@@ -10939,7 +10939,7 @@ Q.cookie = function _Q_cookie(name, value, options) {
 						return;
 					}
 					var msg = {
-						type: 'Set-Cookie-JS',
+						type: 'Q.cookie',
 						cookies: {}
 					};
 					msg.cookies[name] = val;
