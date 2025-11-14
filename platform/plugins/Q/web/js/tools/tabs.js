@@ -47,6 +47,8 @@ Q.Tool.define("Q/tabs", function(options) {
 	var $te = $(tool.element);
 	
 	tool.retained = {};
+
+	state.tabName = null;
 	
 	if (state.touchlabels === undefined) {
 		state.touchlabels = false;
@@ -562,7 +564,6 @@ Q.Tool.define("Q/tabs", function(options) {
 		));
 		var w2 = 0, w3 = 0, w4 = 0, index = -10;
 		var $o = $('.Q_tabs_overflow', $te);
-		state.tabName = null;
 		Q.handle(state.beforeRefresh, tool, [function (tabName) {
 			var found = false;
 			tool.$tabs.each(function () {
