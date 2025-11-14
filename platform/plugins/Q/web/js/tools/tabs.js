@@ -219,7 +219,7 @@ Q.Tool.define("Q/tabs", function(options) {
 		if (Q.Visual.shouldOpenInNewWindow(loaderOptions.event)) {
 			window.open(href);
 		} else {
-			Q.handle(href, o);
+			Q.loadUrl(href, o);
 		}
 
 		function slotContainer(slotName) {
