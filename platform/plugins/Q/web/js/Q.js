@@ -10523,22 +10523,6 @@ Q.require = function (src, callback, synchronously, once) {
 	});
 };
 
-/**
- * Used to load a module, using the built-in import() function.
- * This wrapper is here so we can more easily log and trace where
- * files have been imported from.
- * @method import
- * @static
- * @param {String} src The src of the module to load, will be processed by Q.url()
- * @return {Promise} A promise that resolves to whatever was exported by the module
- */
-Q.import = function (src) {
-	Q.handle(Q.import.onCall, Q, [src]);
-	return import(Q.url(src));
-};
-
-Q.import.onCall = new Q.Event();
-
 var _exports = {};
 
 /**
