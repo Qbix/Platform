@@ -239,7 +239,7 @@ html[xmlns] .Q_clearfix { display: block; }
 .Q_overlay .Q_title { background-color: #55A; color: white; margin: 0; padding: 5px 10px 5px 10px; font-size: 18px; font-weight: bold; border-radius: 5px 5px 0 0; }
 .Q_document_surface { background: white; padding: 10px; }
 .Q_chrome_surface { background: gray; }
-.Q_tabbed { border: 1px solid #aaa; border-top: 1px solid #eee; background: white; }
+.Q_tabbed { border: 1px solid #aaa; border-top: 1px solid #eee; background: white; color: black; }
 .Q_forceDisplayBlock { display: block !important; }
 .Q_forceDisplayInline { display: inline !important; }
 .Q_forceDisplayNone { display: none !important; }
@@ -1190,4 +1190,5 @@ body.Q_columns_animationFX {
 	.Q_fullscreen_dialog textarea::placeholder {
 		color: rgba(255, 255, 255, 0.5);
 	}
+	.Q_tabbed { border: 1px solid #555; border-top: 1px solid #555; background: #555; color: white; }
 }

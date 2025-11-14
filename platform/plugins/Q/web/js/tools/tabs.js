@@ -411,10 +411,15 @@ Q.Tool.define("Q/tabs", function(options) {
 			return;
 		}
 
-		if (state.defaultTabName != null) {
+		var selectedTab = window.location.search.queryField(state.field);
+		if (!selectedTab && state.defaultTabName != null) {
+			selectedTab = state.defaultTabName;
+		}
+		if (selectedTab) {
 			tool.$tabs.each(function (k, t) {
 				var tdn = tool.getName(t);
-				if (state.defaultTabName === tdn) {
+				if (tdn === selectedTab) {
+					state.defaultTabName = tdn; // overridden from URL
 					state.defaultTab = t;
 					return false;
 				}
@@ -535,8 +540,9 @@ Q.Tool.define("Q/tabs", function(options) {
 			href = state.urls && state.urls[name];
 		}
 		if (!href && state.field && name) {
+			var s = window.location.search;
 			href = window.location.href.split('?')[0]
-				+ window.location.search.queryField(state.field, name);
+				+ s.queryField(state.field, name);
 		}
 		return href;
 	},
