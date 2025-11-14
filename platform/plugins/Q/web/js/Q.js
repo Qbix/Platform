@@ -12083,30 +12083,34 @@ function _activateTools(toolElement, options, shared) {
 			// any child elements, call Q.activate() and Qbix
 			// will work correctly, whether it's sync or async.
 			var event = Q.Tool.onLoadedConstructor(toolName);
-			var required = Q.Tool.constructors[toolName].required;
-			if (required) {
-				for (var i=0; i<required.length; ++i) {
-					event = event.and(Q.Tool.onLoadedConstructor(required[i]));
-				}
-			}
 			event.addOnce(function () {
-				var _constructor = _constructors[toolName];
-				var result = new _constructor(toolElement, options);
-				var tool = Q.getObject(['Q', 'tools', toolName], toolElement);
-				shared.tool = tool;
-				Q.setObject([toolId, toolName], tool, shared.tools);
-				if (uniqueToolId) {
-					if (uniqueToolId === shared.firstToolId) {
-						shared.firstTool = tool;
+				// also wait for required constructors, if any
+				var required = Q.Tool.constructors[toolName].required;
+				if (required) {
+					for (var i=0; i<required.length; ++i) {
+						event = event.and(Q.Tool.onLoadedConstructor(required[i]));
 					}
-					shared.pipe.fill(uniqueToolId)();
-					shared.internal && shared.internal.progress && shared.internal.progress(shared);
 				}
-				if (!tool) {
-					return;
-				}
-				pendingCurrentEvent.handle.call(tool, options, result);
-				pendingCurrentEvent.removeAllHandlers();
+				// now we can run our code
+				event.addOnce(function () {
+					var _constructor = _constructors[toolName];
+					var result = new _constructor(toolElement, options);
+					var tool = Q.getObject(['Q', 'tools', toolName], toolElement);
+					shared.tool = tool;
+					Q.setObject([toolId, toolName], tool, shared.tools);
+					if (uniqueToolId) {
+						if (uniqueToolId === shared.firstToolId) {
+							shared.firstTool = tool;
+						}
+						shared.pipe.fill(uniqueToolId)();
+						shared.internal && shared.internal.progress && shared.internal.progress(shared);
+					}
+					if (!tool) {
+						return;
+					}
+					pendingCurrentEvent.handle.call(tool, options, result);
+					pendingCurrentEvent.removeAllHandlers();
+				});
 			});
 		}
 	}, shared, null, { placeholder: true }, shared.whitelist);
