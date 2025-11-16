@@ -1,9 +1,9 @@
 <?php
 
 /**
- * This is the default handler for the Q/responseExtras event.
- * It should not send session data like the nonce, which prevents CSRF
- * attacks. For that, see the Q/sessionExtras handler.
+ * This is the default handler for the Q/initialExtras "before" hook.
+ * This is processed when the full page is loaded, not during AJAX requests.
+ * Also see Q/sessionExtras for extras pertaining to an active session.
  */
 function Q_before_Q_initialExtras()
 {

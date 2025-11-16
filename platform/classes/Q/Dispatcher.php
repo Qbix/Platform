@@ -241,7 +241,7 @@ class Q_Dispatcher
 					foreach ($querystrings as $qsn => $qss) {
 						foreach ($qss as $qs) {
 							if (Q::startsWith($_SERVER['QUERY_STRING'], $qs)) {
-								$qsname = "-$qsn";
+								$qsname = '-'.Q_Utils::normalize($qsn);
 								break 2;
 							}
 						}
