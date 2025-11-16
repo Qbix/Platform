@@ -169,7 +169,7 @@ Q.Tool.jQuery('Q/overlay',
 				var oom = data.options.mask;
 				var mcn = (typeof oom === 'string') ? ' ' + oom : '';
 				if (data.options.fadeInOut
-				&& !document.body.hasClass('Q_dialogs_animationFX')) {
+				&& !document.documentElement.hasClass('Q_dialogs_animationFX')) {
 					if (typeof data.options.fadeInOut === 'function') {
 						data.options.fadeInOut(_doFade);
 					} else {
@@ -243,7 +243,7 @@ Q.Tool.jQuery('Q/overlay',
 				}
 				$this.removeClass('Q_overlay_open');
 				if (data.options.fadeInOut
-				&& !document.body.hasClass('Q_dialogs_animationFX')) {
+				&& !document.documentElement.hasClass('Q_dialogs_animationFX')) {
 					Q.Visual.animationStarted(o.fadeTime);
 					Q.Animation.play(function (x, y) {
 						if (x === 1) {
@@ -427,7 +427,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 				},
 				noCalculatePosition: o.noCalculatePosition,
 				alignParent: (o.alignByParent && !Q.info.isMobile ? $this.parent() : null),
-				fadeInOut: o.fadeInOut && !document.body.hasClass('Q_dialogs_animationFX')
+				fadeInOut: o.fadeInOut && !document.documentElement.hasClass('Q_dialogs_animationFX')
 				&& function (callback) {
 					o.onActivate.add(callback, "Q/overlay");
 				},
