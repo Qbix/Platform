@@ -12972,7 +12972,7 @@ var _connectSocketNS = root.a = Q.getter(function(ns, url, callback, options) {
 		if (!Q.Socket.connect.validateAuth(ns, url, o)) {
 			return setTimeout(function () {
 				callback("Q.Socket.connect: not authorized");
-			});
+			}, 0);
 		}
 	}
 	if (ns[0] !== '/') {
