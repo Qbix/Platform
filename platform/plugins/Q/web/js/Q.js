@@ -6888,6 +6888,9 @@ Q.Response.processMetas = function Q_Response_processMetas(response) {
 	for (var slotName in response.metas) {
 		Q.each(response.metas[slotName], function (i) {
 			var metaData = this;
+			if (!metaData.name || !metaData.value) {
+				return;
+			}
 			var metas = document.querySelectorAll("meta[" + metaData.name + "='" + metaData.value + "']");
 			var found = false;
 			Q.each(metas, function (j) {
