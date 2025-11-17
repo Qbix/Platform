@@ -113,6 +113,10 @@ class Q_Request
 			// the app root URL. If you want the canonical one which the developer
 			// may have specified in the config field "Q"/"web"/"appRootUrl"
 			// then just query it via Q_Config::get().
+
+			self::$requested_without_port = (
+				strpos($_SERVER['HTTP_HOST'], ':') === false
+			);
 			
 			// Infer things
 			self::$controller_url = self::inferControllerUrl($script_name);
@@ -206,55 +210,70 @@ class Q_Request
 	 *  Then generates a querystring and includes it with the URL.
 	 * @return {string} Returns the URL that was requested, possibly with a querystring.
 	 */
-	static function url(
-	 $queryFields = array())
+	static function url($queryFields = array())
 	{
 		if (!isset($_SERVER['REQUEST_URI'])) {
-			// this was not requested from the web
 			return null;
 		}
 		$request_uri = $_SERVER['REQUEST_URI'];
-		
-		// determing whether this should be reported as https
 		$https = self::isSecure(true);
-		
-		// Deal with the querystring
-		$r_parts = explode('?', $request_uri);
-		$request_uri = $r_parts[0];
+
+		$r_parts = explode('?', $request_uri, 2);
+		$path = $r_parts[0];
 		$request_querystring = isset($r_parts[1]) ? $r_parts[1] : '';
-		
-		// Extract the URL
+
 		if (!isset(self::$url)) {
-			$server_name = $_SERVER['SERVER_NAME'];
-			if ($server_name[0] === '*' || $server_name[0] === '~') {
+
+			if (isset($_SERVER['HTTP_HOST']) && $_SERVER['HTTP_HOST'] !== '') {
 				$server_name = $_SERVER['HTTP_HOST'];
+			} else if (isset($_SERVER['SERVER_NAME']) && $_SERVER['SERVER_NAME'] !== '') {
+				$server_name = $_SERVER['SERVER_NAME'];
+			} else {
+				throw new Exception('Cannot infer host: neither HTTP_HOST nor SERVER_NAME is set');
 			}
-			self::$url = sprintf('http%s://%s%s%s%s%s%s', 
-				$https ? 's' : '', 
-				isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '',
-				isset($_SERVER['PHP_AUTH_PW']) ? ':'.$_SERVER['PHP_AUTH_PW'] : '',
-				isset($_SERVER['PHP_AUTH_USER']) ? '@' : '',
-				$server_name, 
-				$_SERVER['SERVER_PORT'] != (!empty($_SERVER['HTTPS']) ? 443 : 80) 
-					? ':'.$_SERVER['SERVER_PORT'] : '',
-				$request_uri);
+
+			$port = '';
+			if (isset($_SERVER['SERVER_PORT']) && !in_array($_SERVER['SERVER_PORT'], array(80, 443))) {
+				$port = ':' . $_SERVER['SERVER_PORT'];
+			}
+
+			$auth = '';
+			if (isset($_SERVER['PHP_AUTH_USER']) && $_SERVER['PHP_AUTH_USER'] !== '') {
+				$auth = $_SERVER['PHP_AUTH_USER'];
+				if (isset($_SERVER['PHP_AUTH_PW'])) {
+					$auth .= ':' . $_SERVER['PHP_AUTH_PW'];
+				}
+				$auth .= '@';
+			}
+
+			self::$url = sprintf(
+				'http%s://%s%s%s',
+				$https ? 's' : '',
+				$auth,
+				$server_name . $port,
+				$path
+			);
 		}
-				
+
 		if (!$queryFields) {
 			return self::$url;
 		}
-		
 		$query = array();
-		if ($request_querystring) {
+		if ($request_querystring !== '') {
 			Q::parse_str($request_querystring, $query);
 		}
 		if (is_string($queryFields)) {
+			// e.g. "x=1&y=2"
+			$qf_array = array();
 			Q::parse_str($queryFields, $qf_array);
 			$query = array_merge($query, $qf_array);
+
 		} else if (is_array($queryFields)) {
 			foreach ($queryFields as $key => $value) {
+
 				if (isset($value)) {
 					$query[$key] = $value;
+
 				} else {
 					foreach (array_keys($query) as $k) {
 						if (preg_match($key, $k)) {
@@ -265,7 +284,7 @@ class Q_Request
 			}
 		}
 		if (!empty($query)) {
-			return self::$url.'?'.http_build_query($query, '', '&');
+			return self::$url . '?' . http_build_query($query, '', '&');
 		}
 		return self::$url;
 	}
@@ -1437,36 +1456,58 @@ class Q_Request
 	 */
 	protected static function inferControllerUrl(&$script_name)
 	{
-		// Must be called from the web
-		if (!isset(self::$url) and !isset($_SERVER['SCRIPT_NAME'])) {
+		if (!isset(self::$url) && !isset($_SERVER['SCRIPT_NAME'])) {
 			throw new Exception('$_SERVER["SCRIPT_NAME"] is missing');
 		}
 
-		// Try to infer the web url as follows:
-		$script_name = str_replace('batch.php', 'action.php', $_SERVER['SCRIPT_NAME']);
-		if ($script_name == '' or $script_name == '/')
+		if ($script_name === '' || $script_name === '/') {
 			$script_name = '/index.php';
+		}
+
+		// special case for batch.php controller to infer action.php anyway
+		$script_name = str_replace('batch.php', 'action.php', $_SERVER['SCRIPT_NAME']);
 		$extpos = strrpos($script_name, '.php');
 		if ($extpos === false) {
-			// Rewrite rules were used, at the local URL root
 			$script_name = '/index.php' . $script_name;
 		}
-		$server_name = $_SERVER['SERVER_NAME'];
-		if ($server_name[0] === '*' || $server_name[0] === '~') {
-			$server_name = $_SERVER['HTTP_HOST'];
-		}
-		
-		$https = self::isSecure(true);
 
-		return sprintf('http%s://%s%s%s%s%s%s', 
+		if (isset($_SERVER['HTTP_HOST']) && $_SERVER['HTTP_HOST'] !== '') {
+			$server_name = $_SERVER['HTTP_HOST'];
+		} else if (isset($_SERVER['SERVER_NAME']) && $_SERVER['SERVER_NAME'] !== '') {
+			$server_name = $_SERVER['SERVER_NAME'];
+		} else {
+			throw new Exception('Cannot infer hostname: neither HTTP_HOST nor SERVER_NAME is set');
+		}
+
+		$https = self::isSecure(true);
+		$port = '';
+
+		if (!empty(self::$requested_without_port)) {
+			if (isset($_SERVER['SERVER_PORT']) && !in_array($_SERVER['SERVER_PORT'], array(80, 443))) {
+				$port = ':' . $_SERVER['SERVER_PORT'];
+			}
+		} else {
+			if (isset($_SERVER['SERVER_PORT'])) {
+				$port = ':' . $_SERVER['SERVER_PORT'];
+			}
+		}
+
+		$auth = '';
+		if (isset($_SERVER['PHP_AUTH_USER']) && $_SERVER['PHP_AUTH_USER'] !== '') {
+			$auth = $_SERVER['PHP_AUTH_USER'];
+			if (isset($_SERVER['PHP_AUTH_PW'])) {
+				$auth .= ':' . $_SERVER['PHP_AUTH_PW'];
+			}
+			$auth .= '@';
+		}
+
+		return sprintf(
+			'http%s://%s%s%s',
 			$https ? 's' : '',
-			isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '',
-			isset($_SERVER['PHP_AUTH_PW']) ? ':'.$_SERVER['PHP_AUTH_PW'] : '',
-			isset($_SERVER['PHP_AUTH_USER']) ? '@' : '', 
-			$server_name,
-			$_SERVER['SERVER_PORT'] != (!empty($_SERVER['HTTPS']) ? 443 : 80) 
-				? ':'.$_SERVER['SERVER_PORT'] : '',
-			$script_name);
+			$auth,
+			$server_name . $port,
+			$script_name
+		);
 	}
 	
 	/**
@@ -1481,22 +1522,56 @@ class Q_Request
 		if (isset(self::$app_root_url)) {
 			return self::$app_root_url;
 		}
-		$app_root = substr($_SERVER['SCRIPT_NAME'], 
-		 0, strrpos($_SERVER['SCRIPT_NAME'], '/'));
-		$server_name = $_SERVER['SERVER_NAME'];
-		if ($server_name[0] === '*' || $server_name[0] === '~') {
-			$server_name = $_SERVER['HTTP_HOST'];
+
+		if (!isset($_SERVER['SCRIPT_NAME'])) {
+			throw new Exception('$_SERVER["SCRIPT_NAME"] is missing');
 		}
+
+		$app_root = substr(
+			$_SERVER['SCRIPT_NAME'],
+			0,
+			strrpos($_SERVER['SCRIPT_NAME'], '/')
+		);
+
+		if (isset($_SERVER['HTTP_HOST']) && $_SERVER['HTTP_HOST'] !== '') {
+			$server_name = $_SERVER['HTTP_HOST'];
+		} else if (isset($_SERVER['SERVER_NAME']) && $_SERVER['SERVER_NAME'] !== '') {
+			$server_name = $_SERVER['SERVER_NAME'];
+		} else {
+			throw new Exception('Cannot infer hostname: neither HTTP_HOST nor SERVER_NAME is set');
+		}
+
 		$https = self::isSecure(true);
-		return sprintf('http%s://%s%s%s%s%s%s', 
+		$port = '';
+
+		if (!empty(self::$requested_without_port)) {
+			if (isset($_SERVER['SERVER_PORT']) && !in_array($_SERVER['SERVER_PORT'], array(80, 443))) {
+				$port = ':' . $_SERVER['SERVER_PORT'];
+			}
+		} else {
+			if (isset($_SERVER['SERVER_PORT'])) {
+				$port = ':' . $_SERVER['SERVER_PORT'];
+			}
+		}
+
+		$auth = '';
+		if (isset($_SERVER['PHP_AUTH_USER']) && $_SERVER['PHP_AUTH_USER'] !== '') {
+			$auth = $_SERVER['PHP_AUTH_USER'];
+			if (isset($_SERVER['PHP_AUTH_PW'])) {
+				$auth .= ':' . $_SERVER['PHP_AUTH_PW'];
+			}
+			$auth .= '@';
+		}
+
+		self::$app_root_url = sprintf(
+			'http%s://%s%s%s',
 			$https ? 's' : '',
-			isset($_SERVER['PHP_AUTH_USER']) ? $_SERVER['PHP_AUTH_USER'] : '',
-			isset($_SERVER['PHP_AUTH_PW']) ? ':'.$_SERVER['PHP_AUTH_PW'] : '',
-			isset($_SERVER['PHP_AUTH_USER']) ? '@' : '',
-			$server_name,
-			$_SERVER['SERVER_PORT'] != (!empty($_SERVER['HTTPS']) ? 443 : 80) 
-				? ':'.$_SERVER['SERVER_PORT'] : '',
-			$app_root);
+			$auth,
+			$server_name . $port,
+			$app_root
+		);
+
+		return self::$app_root_url;
 	}
 
 	/**
@@ -1580,6 +1655,12 @@ class Q_Request
 	 * @type string
 	 */
 	static protected $controller_present = null;
+	/**
+	 * @property $requested_without_port
+	 * @static
+	 * @type string
+	 */
+	static protected $requested_without_port = null;
 	/**
 	 * @property $slotNames_override
 	 * @static
