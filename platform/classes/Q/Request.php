@@ -910,7 +910,7 @@ class Q_Request
 				return $source["Q.$fieldname"];
 			}
 		} else {
-			$source = array_merge($_GET, $_POST, $_COOKIE);
+			$source = array_merge($_GET, $_POST);
 		}
 		// Try with dots first. It may be parsed from JSON.
 		if (isset($source["Q.$fieldname"])) {
@@ -1205,7 +1205,7 @@ class Q_Request
 			return $ret;
 		}
 		$available = Q_Config::get('Q', 'web', 'languages', array('en' => 1));
-		if ($language = Q_Request::special('language', Q::ifset($_COOKIE, 'Q_language', null))
+		if ($language = Q_Request::special('language', Q::ifset($_COOKIE, 'Q_language', null), $_REQUEST)
 		and !empty($available[$language])) {
 			$parts1 = explode(',', $language);
 			$parts2 = explode('-', array_shift($parts1));

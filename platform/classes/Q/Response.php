@@ -1930,7 +1930,7 @@ class Q_Response
 		}
 		$attributes = array();
 		foreach (self::$htmlAttributes as $k => $v) {
-			$attributes[] = Q_Html::text("$k").'='.Q_Html::text("$v");
+			$attributes[] = Q_Html::text("$k").'="'.Q_Html::text("$v").'"';
 		}
 		$language = self::language();
 		Q::event('Q/Response/htmlAttributes', array(
