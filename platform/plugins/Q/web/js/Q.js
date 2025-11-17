@@ -5125,7 +5125,7 @@ Q.Tool.clear = function _Q_Tool_clear(elem, removeCached, removeElementAfterLast
  * @param {String} [ctor.js] filenames containing Javascript to load for the tool
  * @param {String} [ctor.css] filenames containing CSS to load for the tool, which will be namespaced
  * @param {String} [ctor.html] filenames containing HTML to load for the tool, including templates
- * @param {String|ArrayBufferConstructor} [ctor.text] list any text files to load (for the current language) before the tool constructor.
+ * @param {Array|ArrayBufferConstructor} [ctor.text] list any text files to load (for the current language) before the tool constructor.
  *   Also looks for any text files added with Q.Text.forTools(namePrefix, textFileNames)
  * @param {Object} [ctor.placeholder] what to render before the tool is loaded and rendered instead
  * @param {String} [ctor.placeholder.html] literal HTML to insert
@@ -12863,6 +12863,9 @@ Q.Text = {
 				continue; // asked not to extend
 			}
 			var text = objectToExtend.text = objectToExtend.text || [];
+			if (typeof text === 'string') {
+				text = objectToExtend.text = [text];
+			}
 			Q.each(d[namePrefix], function (i, t) {
 				if (text.indexOf(t) < 0) {
 					text.push(t);
