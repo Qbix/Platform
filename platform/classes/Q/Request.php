@@ -1189,10 +1189,12 @@ class Q_Request
 	 * by analyzing the Accepts-Language header. May also get locale information.
 	 * @method accepts
 	 * @static
+	 * @param {array} [$options]
+	 * @param {boolean} [$options.skipSavingCookie]
 	 * @return {array} returns array of array("en", "US", 0.8) entries
 	 *  Note, the second and third element of this array may be omitted!
 	 */
-	static function languages()
+	static function languages($options = array())
 	{
 		/**
 		 * @event Q/request/languages {before}
@@ -1203,10 +1205,15 @@ class Q_Request
 			return $ret;
 		}
 		$available = Q_Config::get('Q', 'web', 'languages', array('en' => 1));
-		if ($language = Q_Request::special('language', null)
+		if ($language = Q_Request::special('language', Q::ifset($_COOKIE, 'Q_language', null))
 		and !empty($available[$language])) {
 			$parts1 = explode(',', $language);
 			$parts2 = explode('-', array_shift($parts1));
+			if (empty($options['skipSavingCookie'])) {
+				if (!Q_Dispatcher::$startedResponse) {
+					Q_Response::setCookie('Q_language', $language);
+				}
+			}
 			return array(array_merge($parts2, $parts1));
 		}
 		$header = Q::ifset($_SERVER, 'HTTP_ACCEPT_LANGUAGE', 'en');
