@@ -674,9 +674,9 @@ Q.Tool.define("Q/tabs", function(options) {
 				// REFLOW happens here
 				if ($overflow.outerWidth(true) >  w - w3 - 1) {
 					oneLess = true;
+					++values.count;
 				}
 			}
-			++values.count;
 			html = this.state.overflow.content.interpolate(values);
 			if (oneLess) {
 				--index;
