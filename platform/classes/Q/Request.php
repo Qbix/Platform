@@ -9,6 +9,15 @@
  */
 class Q_Request
 {
+	/**
+	 * Use this to determine whether or not the request is secure (HTTPS).
+	 * @method isSecure
+	 * @static
+	 * @param {boolean} [$includingForwarded=false]
+	 * Set to true to also consider X-Forwarded-Proto and similar headers
+	 * that may be set by proxies/load balancers.
+	 * @return {boolean}
+	 */
 	static function isSecure($includingForwarded = false)
 	{
 		// 1. Direct HTTPS indicators
@@ -20,34 +29,41 @@ class Q_Request
 			return true;
 		}
 
-		// 4. Common proxy header (Nginx, HAProxy, ALB, your tunnel)
 		if ($includingForwarded) {
-			// 2. Cloudflare (highest authority when present)
-			// CF strips TLS and re-adds this header
+
+			// 2. Cloudflare (highest authority)
 			if (isset($_SERVER['HTTP_CF_VISITOR'])) {
 				$cf = json_decode($_SERVER['HTTP_CF_VISITOR'], true);
-				if (!empty($cf['scheme']) && $cf['scheme'] === 'https') {
+				if (!empty($cf['scheme']) && strtolower($cf['scheme']) === 'https') {
 					return true;
 				}
 			}
 
-			// 3. Cloudflare's simpler header
-			if (isset($_SERVER['HTTP_CF_SSL']) && $_SERVER['HTTP_CF_SSL'] === 'on') {
+			// 3. Cloudflare simple SSL flag
+			if (isset($_SERVER['HTTP_CF_SSL']) &&
+				strtolower($_SERVER['HTTP_CF_SSL']) === 'on') {
 				return true;
 			}
 
-			if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) &&
-				strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') {
-				return true;
+			// 4. X-Forwarded-Proto (may contain multiple values)
+			if (isset($_SERVER['HTTP_X_FORWARDED_PROTO'])) {
+				$xfp = strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']);
+				$parts = array_map('trim', explode(',', $xfp));
+				if (in_array('https', $parts, true)) {
+					return true;
+				}
 			}
 
-			// AWS / GCP load balancers sometimes send "X-Forwarded-Scheme"
-			if (isset($_SERVER['HTTP_X_FORWARDED_SCHEME']) &&
-				strtolower($_SERVER['HTTP_X_FORWARDED_SCHEME']) === 'https') {
-				return true;
+			// 5. AWS/GCP load balancers: X-Forwarded-Scheme
+			if (isset($_SERVER['HTTP_X_FORWARDED_SCHEME'])) {
+				$xfs = strtolower($_SERVER['HTTP_X_FORWARDED_SCHEME']);
+				$parts = array_map('trim', explode(',', $xfs));
+				if (in_array('https', $parts, true)) {
+					return true;
+				}
 			}
 
-			// FastCGI param sometimes set by nginx
+			// 6. Some nginx/FastCGI setups
 			if (isset($_SERVER['HTTP_FRONT_END_HTTPS']) &&
 				strtolower($_SERVER['HTTP_FRONT_END_HTTPS']) === 'on') {
 				return true;
@@ -56,7 +72,6 @@ class Q_Request
 
 		return false;
 	}
-
 
 	/**
 	 * Find out whether the request is coming from inside the computer,
