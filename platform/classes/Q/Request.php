@@ -11,13 +11,52 @@ class Q_Request
 {
 	static function isSecure($includingForwarded = false)
 	{
-		$result = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
-			|| $_SERVER['SERVER_PORT'] == 443;
-		if ($includingForwarded) {
-			$result = $result || Q::ifset($_SERVER, 'HTTP_X_FORWARDED_PROTO', null) === 'https';
+		// 1. Direct HTTPS indicators
+		if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') {
+			return true;
 		}
-		return $result;
+
+		if (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443) {
+			return true;
+		}
+
+		// 4. Common proxy header (Nginx, HAProxy, ALB, your tunnel)
+		if ($includingForwarded) {
+			// 2. Cloudflare (highest authority when present)
+			// CF strips TLS and re-adds this header
+			if (isset($_SERVER['HTTP_CF_VISITOR'])) {
+				$cf = json_decode($_SERVER['HTTP_CF_VISITOR'], true);
+				if (!empty($cf['scheme']) && $cf['scheme'] === 'https') {
+					return true;
+				}
+			}
+
+			// 3. Cloudflare's simpler header
+			if (isset($_SERVER['HTTP_CF_SSL']) && $_SERVER['HTTP_CF_SSL'] === 'on') {
+				return true;
+			}
+
+			if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) &&
+				strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https') {
+				return true;
+			}
+
+			// AWS / GCP load balancers sometimes send "X-Forwarded-Scheme"
+			if (isset($_SERVER['HTTP_X_FORWARDED_SCHEME']) &&
+				strtolower($_SERVER['HTTP_X_FORWARDED_SCHEME']) === 'https') {
+				return true;
+			}
+
+			// FastCGI param sometimes set by nginx
+			if (isset($_SERVER['HTTP_FRONT_END_HTTPS']) &&
+				strtolower($_SERVER['HTTP_FRONT_END_HTTPS']) === 'on') {
+				return true;
+			}
+		}
+
+		return false;
 	}
+
 
 	/**
 	 * Find out whether the request is coming from inside the computer,

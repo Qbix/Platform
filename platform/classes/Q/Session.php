@@ -252,7 +252,8 @@ class Q_Session
 	 *   to avoid malicious GET changing an existing session surreptitiously).
 	 *   If neither is there then we check whether a cookie with the Q_Session::name()
 	 *   was set by the currently executing script, and use that. If none of these
-	 *   contain a valid ID, then we call generateId(true, prefixType) and start a new session.
+	 *   contain a valid ID, then we call generateId(true, prefixType) and start a new session,
+	 *   or use the publicKey from Q_Users_sig, if any, to generate a session ID.
 	 *   You can specify a valid session ID string in this parameter,
 	 *   to access an existing session. But be careful, because this can allow malicious
 	 *   actors specify an existing sessionId! If you're trying to set a
@@ -269,7 +270,7 @@ class Q_Session
 	 * @throws {Q_Exception_SessionHijacked}
 	 * @throws {Q_Exception_FailedValidation}
 	 */
-	static function start($throwIfMissingOrInvalid = false, $setId = null, $prefixType = '')
+	static function start($throwIfMissingOrInvalid = false, $setId = null, $prefixType = '', $options = array())
 	{
 		if (self::id() and !$setId) {
 			// Session has already started

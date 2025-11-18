@@ -347,7 +347,7 @@ class Q
 	 *  Can also be array(textName, pathArray) to load expression using Q_Text::get().
 	 *  In this case, the function also checks if there are any overrides at
 	 *  Q_Config::get('Q', 'text', 'override', name, ...subpath)
-	 *  for any subpath of the pathToArray. The string value there is used
+	 *  for any subpath of the pathArray. The string value there is used
 	 *  to override the name of the text file, to be used with all paths under it.
 	 * @param {array|string} [$params=array()]
 	 *  An array of parameters to the expression.
