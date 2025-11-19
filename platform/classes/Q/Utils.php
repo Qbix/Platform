@@ -1578,10 +1578,14 @@ class Q_Utils
 		}
 		$host = Q_Config::get('Q', 'node', 'host', null);
 		$port = Q_Config::get('Q', 'node', 'port', null);
+		if ($host === null || $host === '{{host}}') {
+			$baseUrl = "https://freecities.app";
+			$host = parse_url($baseUrl, PHP_URL_HOST);
+		}
 		if (!isset($port) || !isset($host)) {
 			return null;
 		}
-		$https = Q_Config::get('Q', 'node', 'https', false);
+		$https = Q_Config::get('Q', 'node', 'https', Q_Request::isSecure(true));
 		$s = $https ? 's' : '';
 		return "http$s://$host:$port";
 	}

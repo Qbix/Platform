@@ -16,7 +16,6 @@ function Q_before_Q_responseExtras()
 	if (!$uri) {
 		return;
 	}
-	$languages = Q_Request::languages();
 	$info = array(
 		'url' => $url,
 		'uriString' => (string)$uri

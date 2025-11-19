@@ -161,6 +161,13 @@ class Q_Dispatcher
 			$request_uri = Q_Request::uri();
 			self::$uri = clone($request_uri);
 		}
+		if (empty(self::$uri->fields)) {
+			$url = Q_Request::url();
+			$nodeUrl = Q_Config::get('Q', 'node', 'url', null);
+			if (Q::startsWith($url, $nodeUrl . '/')) {
+				return false; // this wasn't meant for PHP
+			}
+		}
 		$route = self::$uri->route();
 
 		// if file or dir is requested, try to serve it

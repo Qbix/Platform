@@ -331,17 +331,18 @@ class Q_Response
 				'value' => 'Content-Security-Policy',
 				'content' => Q_Response::contentSecurityPolicy()
 			));
-			$noTransform = 'no-transform';
+			Q_Response::$noTransform = 'no-transform';
 		} else {
-			$noTransform = Q_Config::get('Q', 'web', 'headers', 'noTransform', false)
+			Q_Response::$noTransform = Q_Config::get('Q', 'web', 'headers', 'noTransform', false)
 				? 'no-transform'
 				: '';
 		}
-		if (Q_Dispatcher::$startedResponse) {
-			$publicPrivate = Q_Session::isAuthenticated() ? 'no-cache' : 'public';
-			$directives = array($publicPrivate, $noTransform);
-			header("Cache-Control: " . implode(', ', $directives));
-		}
+
+		$isAuthenticated = Q_Session::isAuthenticated();
+		$publicPrivate = $isAuthenticated ? 'no-cache' : 'public';
+		$noTransform = (Q_Response::$noTransform or $isAuthenticated) ? 'no-transform' : '';
+		$directives = array($publicPrivate, $noTransform);
+		header("Cache-Control: " . implode(', ', $directives));
 
 		$app = Q::app();
 		$layout_view = Q_Config::get('Q', 'response', 'layout', 'html', "$app/layout/html.php");
@@ -2771,14 +2772,16 @@ class Q_Response
 
 	public static $preload = array();
 
-	static public $skipResponseExtras = false;
-	static public $skipInitialExtras = false;
-	static public $skipSessionExtras = false;
+	public static $noTransform = null;
+
+	public static $skipResponseExtras = false;
+	public static $skipInitialExtras = false;
+	public static $skipSessionExtras = false;
 	
-	static protected $captureScriptDataForSession = false;
+	protected static $captureScriptDataForSession = false;
 	
-	static public $sessionData = array();
-	static public $sessionDataPaths = array();
+	public static $sessionData = array();
+	public static $sessionDataPaths = array();
 
 	// resource types for methods like latestTimestamp
 	const URLS = 1;

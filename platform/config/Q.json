@@ -147,12 +147,12 @@
 			}
 		},
 		"node" : {
-			"host": "127.0.0.1",
+			"host": "{{host}}",
 			"port": "10500",
 			"https": false
 		},
 		"nodeInternal": {
-			"host": "127.0.0.1",
+			"host": "{{host}}",
 			"port": "10501",
 			"https": false
 		},
