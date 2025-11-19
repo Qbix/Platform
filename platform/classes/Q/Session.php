@@ -1288,20 +1288,6 @@ class Q_Session
 	}
 
 	/**
-	 * Returns true if session ID starts with the prefix under config
-	 * 'Q', 'session', 'id', 'prefixes', 'internal'
-	 * @method isInternal
-	 * @static
-	 * @return {bool}
-	 */
-	static function isInternal()
-	{
-		return Q::startsWith(Q_Session::id(), Q_Config::get(
-			'Q', 'session', 'id', 'prefixes', 'internal', 'sessionId_internal_'
-		));
-	}
-
-	/**
 	 * Verifies a session id, that it was correctly signed with "Q"/"external"/"secret"
 	 * so that the web server won't have to deal with session ids we haven't issued.
 	 * This verification can also be done at the edge (e.g. CDN) without bothering our network.
@@ -1340,9 +1326,24 @@ class Q_Session
 	 */
 	static function isAuthenticated()
 	{
+		$sessionId = self::id();
+		return self::isInternal() or ($prefix = Q_Config::get(
+			'Q', 'session', 'id', 'prefixes', 'authenticated', 'sessionId_authenticated_'
+		) and Q::startsWith($sessionId, $prefix));
+	}
+
+	/**
+	 * Returns whether the session is internal, based on the name
+	 * of the session cookie and Q/session/id/prefixes/authencated config
+	 * @method isInternal
+	 * @static
+	 * @return {boolean}
+	 */
+	static function isInternal()
+	{
 		$sessionId = Q_Session::id();
 		return ($prefix = Q_Config::get(
-			'Q', 'session', 'id', 'prefixes', 'authenticated', null
+			'Q', 'session', 'id', 'prefixes', 'internal', 'sessionId_internal_'
 		) and Q::startsWith($sessionId, $prefix));
 	}
 
