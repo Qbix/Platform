@@ -9221,7 +9221,7 @@ Q.url = function _Q_url(what, fields, options) {
 		}
 	} else if (options && options.cacheBust) {
 		cb = options.cacheBust;
-		what3 += "?Q.cb=" + Math.floor(Date.now()/1000/cb)*cb;
+		what3 += "?Q.cb=" + Math.floor(Date.now()/cb)*cb;
 	}
 	parts = what3.split('?');
 	if (parts.length > 2) {
@@ -11681,7 +11681,7 @@ Q.loadUrl.loading = {};
  * @param {Object} options
  *  If callables is a url, these are the options to pass to Q.loadUrl, if any. Also can include:
  *  @param {boolean} [options.dontReload=false] if this is true and callback is a url matching current url, it is not reloaded
- *  @param {boolean} [options.loadUsingAjax=false] if this is true and callback is a url, it is loaded using Q.loadUrl
+ *  @param {boolean} [options.loadUsingAjax=true] if this is true and callback is a url, it is loaded using Q.loadUrl
  *  @param {Function} [options.externalLoader] when using loadUsingAjax, you can set this to a function to suppress loading of external websites with Q.handle.
  *	Note: this will still not supress loading of external websites done with other means, such as window.location
  *  @param {Object} [options.fields] optional fields to pass with any method other than "get"
@@ -11825,7 +11825,7 @@ Q.loadUrl.loading = {};
 	}
 };
 Q.handle.options = {
-	loadUsingAjax: false,
+	loadUsingAjax: true,
 	externalLoader: null,
 	dontReload: false
 };
