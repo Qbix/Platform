@@ -38,6 +38,13 @@ class Q_Session
 	 */
 	static protected $session_db_data_field;
 	/**
+	 * @property $session_db_content_field
+	 * @type string
+	 * @static
+	 * @protected
+	 */
+	static protected $session_db_content_field;
+	/**
 	 * @property $session_db_id_field
 	 * @type string
 	 * @static

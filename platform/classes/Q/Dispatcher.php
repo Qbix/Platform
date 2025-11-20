@@ -163,7 +163,7 @@ class Q_Dispatcher
 		}
 		if (empty(self::$uri->fields)) {
 			$url = Q_Request::url();
-			$nodeUrl = Q_Config::get('Q', 'node', 'url', null);
+			$nodeUrl = Q_Uri::interpolateUrl(Q_Config::get('Q', 'node', 'url', null));
 			if (Q::startsWith($url, $nodeUrl . '/')) {
 				return false; // this wasn't meant for PHP
 			}

@@ -49,16 +49,23 @@ class Q_Text
 	 * @static
 	 * @param {String} language Something like "en"
 	 * @param {String} [locale=null] Something like "US", but can also be null if unknown
+	 * @param {array} [$options]
+	 * @param {boolean} [$options.skipSavingCookie]
 	 * @return {Boolean} whether the language was set successfully
 	 */
-	static function setLanguage($language, $locale = null)
+	static function setLanguage($language, $locale = null, $options = array())
 	{
-		$lang = preg_replace('/[^a-zA-Z_-]/', '', $language);
+		$lang = $language ? preg_replace('/[^a-zA-Z_-]/', '', $language) : '';
 		if (!$lang) {
 			return false;
 		}
 		self::$language = strtolower($language);
 		self::$locale = $locale ? strtoupper($locale) : '';
+		if (empty($options['skipSavingCookie'])) {
+			if (!Q_Dispatcher::$startedResponse) {
+				Q_Response::setCookie('Q_language', $language);
+			}
+		}
 		return true;
 	}
 

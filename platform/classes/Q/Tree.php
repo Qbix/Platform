@@ -56,6 +56,24 @@ class Q_Tree
 	}
 	
 	/**
+	 * Transform something for every top-level key
+	 * @method every
+	 * @param {callable} $callback
+	 * @return array
+	 */
+	function every($callback)
+	{
+		foreach ($this->parameters as $k => &$v) {
+			$args = array(&$this->parameters, $k, &$v);
+			$result = call_user_func_array($callback, $args);
+			if ($result === false) {
+				break;
+			}
+		}
+		return $this->parameters;
+	}
+
+	/**
 	 * Gets the value of a field, possibly deep inside the array
 	 * @method get
 	 * @param {string} $key1 The name of the first key in the configuration path
@@ -160,53 +178,114 @@ class Q_Tree
 	}
 	
 	/**
-	 * Traverse the tree depth-first and call the callback
+	 * Traverse the tree depth-first and call the callback.
+	 *
+	 * Callback return value semantics:
+	 *
+	 *   - return false  : abort the entire traversal immediately
+	 *   - return true   : skip this node's children but continue with siblings
+	 *   - return other  : descend normally into children (if associative)
+	 *
+	 * The callback receives: ($path, $value, $array, $context)
+	 *
 	 * @method depthFirst
-	 * @param {callable} $callback Will receive ($path, $value, $array, $context)
-	 * @param {mixed} [$context=null] To propagate some context to the callback
+	 * @param {callable} $callback
+	 * @param {mixed} [$context=null]
 	 */
 	function depthFirst($callback, $context = null)
 	{
 		$this->_depthFirst(array(), $this->parameters, $callback, $context);
 	}
-	
+
 	private function _depthFirst($subpath, $arr, $callback, $context)
 	{
 		foreach ($arr as $k => $a) {
 			$path = array_merge($subpath, array($k));
-			if (false === call_user_func($callback, $path, $a, $arr, $context)) {
+
+			$cont = call_user_func($callback, $path, $a, $arr, $context);
+
+			// false: abort traversal
+			if ($cont === false) {
+				return false;
+			}
+
+			// true: skip children, continue siblings
+			if ($cont === true) {
 				continue;
 			}
+
+			// descend normally into associative arrays
 			if (Q::isAssociative($a)) {
-				$this->_depthFirst($path, $a, $callback, $context);
+				if (false === $this->_depthFirst($path, $a, $callback, $context)) {
+					return false;
+				}
 			}
 		}
+
+		return true;
 	}
-	
+
 	/**
-	 * Traverse the tree breadth-first and call the callback
+	 * Traverse the tree breadth-first and call the callback.
+	 *
+	 * Callback return value semantics:
+	 *
+	 *   - return false  : abort the entire traversal immediately
+	 *   - return true   : skip this node's children but continue with siblings
+	 *   - return other  : descend normally into children (if associative)
+	 *
+	 * The callback receives: ($path, $value, $array, $context)
+	 *
 	 * @method breadthFirst
-	 * @param {callable} $callback Will receive ($path, $value, $array, $context)
-	 * @param {mixed} [$context=null] To propagate some context to the callback
+	 * @param {callable} $callback
+	 * @param {mixed} [$context=null]
 	 */
 	function breadthFirst($callback, $context = null)
 	{
-		call_user_func($callback, array(), $this->parameters, $this->parameters, $context);
-		$this->_breadthFirst(array(), $this->parameters, $callback, $context);
-	}
-	
-	private function _breadthFirst($subpath, $arr, $callback, $context)
-	{
-		foreach ($arr as $k => $a) {
-			$path = array_merge($subpath, array($k));
-			if (false === call_user_func($callback, $path, $a, $arr, $context)) {
-				break;
-			}
+		// process root
+		$rootCont = call_user_func($callback, array(), $this->parameters, $this->parameters, $context);
+
+		// false: abort traversal
+		if ($rootCont === false) {
+			return;
 		}
-		foreach ($arr as $k => $a) {
-			if (Q::isAssociative($a)) {
-				$path = array_merge($subpath, array($k));
-				$this->_breadthFirst($path, $a, $callback, $context);
+
+		// true: skip children (root has no siblings, so stop)
+		if ($rootCont === true) {
+			return;
+		}
+
+		$this->_breadthFirst($callback, $context);
+	}
+
+	private function _breadthFirst($callback, $context)
+	{
+		// queue entries: [$path, $node, $parent]
+		$queue = array();
+		$queue[] = array(array(), $this->parameters, $this->parameters);
+
+		while (!empty($queue)) {
+			list($path, $node, $parent) = array_shift($queue);
+
+			foreach ($node as $k => $value) {
+				$childPath = array_merge($path, array($k));
+
+				$cont = call_user_func($callback, $childPath, $value, $node, $context);
+
+				// false: abort immediately
+				if ($cont === false) {
+					return;
+				}
+
+				// true: skip children, continue siblings
+				if ($cont === true) {
+					continue;
+				}
+
+				// descend only if associative
+				if (is_array($value)) {
+					$queue[] = array($childPath, $value, $node);
+				}
 			}
 		}
 	}

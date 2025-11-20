@@ -415,6 +415,7 @@ class Q
 		}
 		return $expression;
 	}
+	
     /**
      * Modification of stripos function but with array as $needle (case-insensitive)
      * @method striposa
