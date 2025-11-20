@@ -318,7 +318,9 @@ class Q_Tree
 	 */
 	private function _diffTo($path, $value, $array, $context)
 	{
-		if (empty($path)) return false;
+		if (empty($path)) {
+			return true;
+		}
 
 		$args = $path;
 		$args[] = null;
@@ -336,7 +338,7 @@ class Q_Tree
 					if (!empty($diff)) {
 						call_user_func_array(array($context->diff, 'set'), array_merge($path, array($diff)));
 					}
-					return false;
+					return true;
 				}
 				$valueTo = array('replace' => $valueTo);
 			}
@@ -349,7 +351,7 @@ class Q_Tree
 				$parentPath = array_slice($path, 0, -1);
 				$parent = $parentPath ? call_user_func_array(array($context->to, 'get'), array_merge($parentPath, array(null))) : $context->to->parameters;
 				if (!is_array($parent) || !array_key_exists($key, $parent)) {
-					return false;
+					return true;
 				}
 			}
 			call_user_func_array(array($context->diff, 'set'), $args2);
@@ -358,7 +360,9 @@ class Q_Tree
 
 	private function _diffFrom($path, $value, $array, $context)
 	{
-		if (empty($path)) return false;
+		if (empty($path)) {
+			return true;
+		}
 		$args = $path;
 		$args[] = null;
 		$valueFrom = call_user_func_array(array($context->from, 'get'), $args);
@@ -366,7 +370,7 @@ class Q_Tree
 			$args2 = $path;
 			$args2[] = $value;
 			call_user_func_array(array($context->diff, 'set'), $args2);
-			return false;
+			return true;
 		}
 	}
 
