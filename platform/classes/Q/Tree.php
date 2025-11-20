@@ -296,17 +296,17 @@ class Q_Tree
 	 *
 	 * @method diff
 	 * @param {Q_Tree} $tree
-	 * @param {bool} [$skipUndefinedValues=false] Skip if the value is undefined in target
+	 * @param {bool} [$skipAddedKeys=false] Skip if the value is undefined in target
 	 * @param {string|null} $keyField If provided, diff arrays of objects by this field
 	 * @return {Q_Tree}
 	 */
-	function diff($tree, $skipUndefinedValues = true, $keyField = null)
+	function diff($tree, $skipAddedKeys = false, $keyField = null)
 	{
 		$context = new StdClass();
 		$context->from = $this;
 		$context->to = $tree;
 		$context->diff = new Q_Tree();
-		$context->skipUndefinedValues = $skipUndefinedValues;
+		$context->skipAddedKeys = $skipAddedKeys;
 		$context->keyField = $keyField;
 		$this->depthFirst(array($this, '_diffTo'), $context);
 		$tree->depthFirst(array($tree, '_diffFrom'), $context);
@@ -343,8 +343,8 @@ class Q_Tree
 			$args2 = $path;
 			$args2[] = $valueTo;
 
-			// restore skipUndefinedValues check
-			if ($context->skipUndefinedValues) {
+			// restore skipAddedKeys check
+			if ($context->skipAddedKeys) {
 				$key = end($path);
 				$parentPath = array_slice($path, 0, -1);
 				$parent = $parentPath ? call_user_func_array(array($context->to, 'get'), array_merge($parentPath, array(null))) : $context->to->parameters;
