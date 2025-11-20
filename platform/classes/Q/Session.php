@@ -603,7 +603,8 @@ class Q_Session
 	 */
 	protected static function serializeSessionArray(array $sessionArray)
 	{
-		$handler = ini_get('session.serialize_handler') ?: 'php';
+		$handler = ini_get('session.serialize_handler');
+		$handler = $handler ? $handler : 'php';
 
 		if ($handler === 'php') {
 			$out = '';
@@ -638,9 +639,9 @@ class Q_Session
 	 */
 	protected static function decodeSessionJSON($json)
 	{
-		if (!$json) return [];
+		if (!$json) return array();
 		$arr = json_decode($json, true);
-		return is_array($arr) ? $arr : [];
+		return is_array($arr) ? $arr : array();
 	}
 
 	/**
@@ -675,6 +676,7 @@ class Q_Session
 		if (! empty(self::$session_db_connection)) {
 			$id_field = self::$session_db_id_field;
 			$data_field = self::$session_db_data_field;
+			$content_field = self::$session_db_content_field;
 			if (!self::$session_db_row
 			or self::$session_db_row->$id_field != $id) {
 				$class = self::$session_db_row_class;
@@ -696,13 +698,8 @@ class Q_Session
 					$row->set('ipWasJustSet', compact('ip', 'protocol', 'isPublic'));
 				}
 			}
-			if (!empty(self::$session_db_row->content)) {
-				$arr = self::decodeSessionJSON(self::$session_db_row->content);
-				$result = self::serializeSessionArray($arr);
-			} else {
-				$result = isset(self::$session_db_row->$data_field)
-					? self::$session_db_row->$data_field : '';
-			}
+			$arr = self::decodeSessionJSON(Q::ifset(self::$session_db_row, 'content', ''));
+			$result = self::serializeSessionArray($arr);
 		} else {
 			$duration_name = self::durationName();
 			$id1 = substr($id, 0, 4);
@@ -788,6 +785,7 @@ class Q_Session
 				$db_row_class = self::$session_db_row_class;
 				$id_field = self::$session_db_id_field;
 				$data_field = self::$session_db_data_field;
+				$content_field = self::$session_db_content_field;
 				$updated_field = self::$session_db_updated_field;
 				$duration_field = self::$session_db_duration_field;
 				$platform_field = self::$session_db_platform_field;
@@ -825,11 +823,18 @@ class Q_Session
 						'begin' => true,
 						'ignoreCache' => true
 					));
-					$jsonArr = self::decodeSessionJSON(Q::ifset($row, 'content', '[]'));
+					$jsonArr = self::decodeSessionJSON(Q::ifset($row, 'content', ''));
 					$t = new Q_Tree($jsonArr);
 					$t->merge($our_SESSION);
 					$_SESSION = $t->getAll();
-					$merged_data = self::serializeSessionArray($_SESSION);
+
+					// don't compare php serializations anymore
+					// $merged_data = self::serializeSessionArray($_SESSION);
+
+					// compare using json
+					$merged_data = json_encode($_SESSION, JSON_UNESCAPED_UNICODE);
+					$params['existing_data'] = Q::ifset($row, $content_field, '');
+					$params['merged_data'] = $merged_data;
 
 					$params = array_merge($params, array(
 						'id_field' => $id_field,
@@ -837,9 +842,8 @@ class Q_Session
 						'duration_field' => $duration_field,
 						'platform_field' => $platform_field,
 						'updated_field' => $updated_field,
-						'row' => $row,
-						'existing_data' => Q::ifset($row, $data_field, ''),
-						'merged_data' => $merged_data
+						'row' => $row
+						// removed incorrect existing_data/merged_data override
 					));
 				} else {
 					if (!is_dir($dir)) {
@@ -885,7 +889,12 @@ class Q_Session
 					$new = $params['new'] = !self::$sessionExisted;
 					Q::event('Q/session/save', $params, 'before');
 					if (! empty(self::$session_db_connection)) {
-						$row->$data_field = $merged_data ? $merged_data : '';
+						// no longer storing php-serialized data, we have the JSON in "content" field
+						$row->$data_field = ''; // $merged_data ? $merged_data : '';
+
+						// write JSON
+						$row->content = $merged_data;   // <-- ADDED
+
 						$row->$duration_field = Q_Config::get(
 							'Q', 'session', 'durations', Q_Request::formFactor(),
 							Q_Config::expect('Q', 'session', 'durations', 'session')
@@ -910,7 +919,7 @@ class Q_Session
 			$result = Q::event(
 				'Q/session/write',
 				@compact(
-					'id', 'data_field', 'updated_field', 'duration_field', 'platform_field',
+					'id', 'content_field', 'data_field', 'updated_field', 'duration_field', 'platform_field',
 					'sess_file', 'row', 'new',
 					'changed', 'sess_data', 'old_data', 'existing_data', 'merged_data'
 				),
@@ -1164,6 +1173,13 @@ class Q_Session
 				'type' => 'string'
 			));
 		}
+		$session_db_content_field = isset($db_info['contentField']) ? $db_info['contentField'] : null;
+		if (empty($session_db_content_field)) {
+			throw new Q_Exception_WrongType(array(
+				'field' => 'session_db_content_field',
+				'type' => 'string'
+			));
+		}
 		$session_db_id_field = isset($db_info['idField']) ? $db_info['idField'] : null;
 		if (empty($session_db_id_field)) {
 			throw new Q_Exception_WrongType(array(
@@ -1197,8 +1213,9 @@ class Q_Session
 		$session_db_table = call_user_func(array($session_db_row_class, 'table'));
 		$class = $session_db_row_class;
 		$ancestors = array($class);
-		while ($class = get_parent_class($class))
+		while ($class = get_parent_class($class)) {
 			$ancestors[] = $class;
+		}
 		if (! in_array('Db_Row', $ancestors)) {
 			throw new Q_Exception_WrongType(array(
 				'field' => 'session_db_row_class',
@@ -1209,6 +1226,7 @@ class Q_Session
 		self::$session_db_connection = $session_db_connection;
 		self::$session_db_table = $session_db_table;
 		self::$session_db_data_field = $session_db_data_field;
+		self::$session_db_content_field = $session_db_content_field;
 		self::$session_db_id_field = $session_db_id_field;
 		self::$session_db_updated_field = $session_db_updated_field;
 		self::$session_db_duration_field = $session_db_duration_field;
