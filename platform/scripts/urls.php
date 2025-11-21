@@ -125,7 +125,7 @@ function Q_script_urls_glob(
 		$calculateHashes = false;
 	}
 
-	global $urls_dir;
+	global $urls_dir, $time;
 	if (!$calculateHashes && !glob($urls_dir.DS.'*')) {
 		// the $urls_dir is empty
 		// this is the first time we're running this script
@@ -162,13 +162,14 @@ function Q_script_urls_glob(
 			)) { // file is too big to process
 				continue;
 			}
-			$t = filemtime($f);
+			$mt = filemtime($f);
+			$t = $time;
 			if ($calculateHashes) {
 				$c = file_get_contents($f);
 				$hash = hash($algo, $c, true);
 				$h = base64_encode($hash);
 				$value = compact('t', 'h');
-			} else if ($t <= $earliest) {
+			} else if ($mt <= $earliest) {
 				continue;
 			} else {
 				$value = compact('t');
