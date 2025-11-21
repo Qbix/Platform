@@ -17,7 +17,7 @@ class Db_Range
 	 *  If boolean true is passed here, then $max is set to $min with the last character
 	 *  incremented to the next character value (used for string prefixes).
 	 */
-	function __construct ($min, $includeMin, $includeMax, $max)
+	function __construct ($min, $includeMin, $includeMax = false, $max = null)
 	{
 		$this->min = $min;
 		$this->includeMin = $includeMin;
