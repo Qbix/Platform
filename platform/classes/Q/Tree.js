@@ -143,30 +143,73 @@ module.exports = function (linked) {
 		return context.diff;
 	};
 
-	function _diffTo(path,value,arr,context) {
-		var valueTo = context.to.get(path,null);
-		if ((!Q.isPlainObject(value)||!Q.isPlainObject(valueTo)) && valueTo!==value) {
-			if (Q.isArrayLike(value)&&Q.isArrayLike(valueTo)) {
-				var keyField = _detectKeyField(value,valueTo);
-				if (keyField) {
-					var d = _diffByKey(value,valueTo,keyField);
-					if (Object.keys(d).length) context.diff.set(path,d);
-					return false;
-				}
-				valueTo = {replace:valueTo};
-			}
-			if (context.skipUndefinedValues) {
-				var lastKey = path[path.length-1];
-				var parent = context.to.get(path.slice(0,-1), {});
-				if (!(lastKey in parent)) return false;
-			}
-			context.diff.set(path,valueTo);
+	function _diffTo(path, value, arr, context) {
+		// if empty path → return true (skip children, continue)
+		if (!path.length) {
+			return true;
 		}
-		if (valueTo==null) return false;
+		var getArgs = path.slice();
+		getArgs.push(null);
+		var valueTo = context.to.get.apply(context.to, getArgs);
+		var isAssocValue     = Q.isPlainObject(value);
+		var isAssocValueTo   = Q.isPlainObject(valueTo);
+		// If at least one side is NOT associative OR values differ:
+		if ((!isAssocValue || !isAssocValueTo) && valueTo !== value) {
+			// handle keyed arrays if both are arrays and not associative
+			if (Q.isArrayLike(value) && Q.isArrayLike(valueTo)) {
+
+				var keyField = _detectKeyField(
+					Q.isArrayLike(value) ? value : [],
+					Q.isArrayLike(valueTo) ? valueTo : []
+				);
+
+				if (keyField) {
+					var d = _diffByKey(value, valueTo, context.keyField || keyField);
+					if (Object.keys(d).length) {
+						context.diff.set(path, d);
+					}
+					// PHP: return true → skip children but continue siblings
+					return true;
+				}
+
+				// PHP: no keyField → use replace syntax
+				valueTo = { replace: valueTo };
+			}
+			// skipAddedKeys semantics
+			if (context.skipUndefinedValues) {
+				var lastKey  = path[path.length - 1];
+				var parentPath = path.slice(0, -1);
+
+				var parent = parentPath.length
+					? context.to.get.apply(context.to, parentPath.concat(null))
+					: context.to.parameters;
+
+				if (!parent || !(lastKey in parent)) {
+					// PHP: return true → skip children, continue traversal
+					return true;
+				}
+			}
+			// perform the diff write
+			context.diff.set(path, valueTo);
+		}
+		if (valueTo == null) {
+			return true;
+		}
 	}
-	function _diffFrom(path,value,arr,context) {
-		var valueFrom = context.from.get(path,undefined);
-		if (valueFrom===undefined) { context.diff.set(path,value); return false; }
+	function _diffFrom(path, value, arr, context) {
+		if (!path.length) {
+			return true;
+		}
+		var getArgs = path.slice();
+		getArgs.push(null);
+		var valueFrom = context.from.get.apply(context.from, getArgs);
+		// If from-tree doesn't have the key -> add it
+		if (valueFrom === undefined) {
+			context.diff.set(path, value);
+			// PHP: return true -> skip children but continue siblings
+			return true;
+		}
+		// else descend normally
 	}
 
 	this.merge = function(second,under,noNumericArrays) {
@@ -177,33 +220,57 @@ module.exports = function (linked) {
 		return this;
 	};
 
-	function _merge(first,second,noNumericArrays) {
-		if (Q.typeOf(first)==='array') {
+	function _merge(first, second, noNumericArrays) {
+		if (Array.isArray(first)) {
 			if (second.updates) {
 				var keyField = second.updates[0], updates = second.updates.slice(1);
-				updates.forEach(upd=>{
-					for (var i = 0;i<first.length;i++) {
-						if (first[i][keyField]===upd[keyField]) first[i] = Object.assign({},first[i],upd);
+				updates.forEach(function (upd) {
+					for (var i = 0; i < first.length; i++) {
+						if (first[i][keyField] === upd[keyField]) {
+							first[i] = Object.assign({}, first[i], upd);
+						}
 					}
 				});
 				if (second.add) first = first.concat(second.add);
 				if (second.remove) {
-					first = first.filter(o=>{
-						return !second.remove.some(r=>o[keyField]===r[keyField]);
+					first = first.filter(function (o) {
+						return !second.remove.some(function (r) { return o[keyField] === r[keyField]; });
 					});
 				}
 				return first;
 			}
+
 			if (second.replace) return second.replace;
+
+			if (second.prepend || second.append) {
+				var result = first.slice();
+
+				if (Array.isArray(second.prepend)) {
+					for (var i = second.prepend.length - 1; i >= 0; i--) {
+						var v = second.prepend[i];
+						if (result.indexOf(v) === -1) result.unshift(v);
+					}
+				}
+
+				if (Array.isArray(second.append)) {
+					for (var i = 0; i < second.append.length; i++) {
+						var v2 = second.append[i];
+						if (result.indexOf(v2) === -1) result.push(v2);
+					}
+				}
+
+				return result;
+			}
 		}
-		var result = Array.isArray(first)?first.slice():Object.assign({},first);
+
+		var resultObj = Array.isArray(first) ? first.slice() : Object.assign({}, first);
 		for (var k in second) {
-			if (!(k in result)) result[k] = second[k];
-			else if (typeof result[k]!=='object'||result[k]===null) result[k] = second[k];
-			else if (typeof second[k]!=='object'||second[k]===null) result[k] = second[k];
-			else result[k] = _merge(result[k],second[k],noNumericArrays);
+			if (!(k in resultObj)) resultObj[k] = second[k];
+			else if (typeof resultObj[k] !== 'object' || resultObj[k] === null) resultObj[k] = second[k];
+			else if (typeof second[k] !== 'object' || second[k] === null) resultObj[k] = second[k];
+			else resultObj[k] = _merge(resultObj[k], second[k], noNumericArrays);
 		}
-		return result;
+		return resultObj;
 	}
 
 	function _diffByKey(oldArr,newArr,keyField) {
@@ -234,33 +301,65 @@ module.exports = function (linked) {
 	}
 };
 
-function _depthFirst(subpath, obj, callback, context)  {
-	var k, v, path;
-	for (k in obj) {
-		v = obj[k];
-		path = subpath.concat([k]);
-		if (false === callback.call(this, path, v, obj, context)) {
+function _depthFirst(subpath, obj, callback, context) {
+	for (var k in obj) {
+		if (!Object.prototype.hasOwnProperty.call(obj, k)) continue;
+
+		var v = obj[k];
+		var path = subpath.concat([k]);
+
+		var ret = callback.call(this, path, v, obj, context);
+
+		// false or true -> skip children, continue siblings
+		if (ret === false || ret === true) {
 			continue;
 		}
+
+		// descend only if associative object
 		if (Q.isPlainObject(v)) {
 			_depthFirst.call(this, path, v, callback, context);
 		}
 	}
 }
 
-function _breadthFirst(subpath, obj, callback, context) {
-	var k, v, path;
-	for (k in obj) {
-		v = obj[k];
-		path = subpath.concat([k]);
-		if (false === callback.call(this, path, v, obj, context)) {
-			break;
-		}
-	}
-	for (k in obj) {
-		if (Q.isPlainObject(v)) {
-			path = subpath.concat([k]);
-			_breadthFirst.call(this, path, v, callback);
+function _breadthFirst(subpath, node, callback, context) {
+	var queue = [];
+	queue.push([subpath, node, node]); // [path, node, parent]
+
+	while (queue.length > 0) {
+		var item = queue.shift();
+		var path = item[0];
+		var current = item[1];
+		var parent = item[2];
+
+		for (var k in current) {
+			if (!Object.prototype.hasOwnProperty.call(current, k)) continue;
+
+			var value = current[k];
+			var childPath = path.concat([k]);
+
+			var cont = callback.call(
+				this,
+				childPath,   // path
+				value,       // value
+				current,     // parent
+				context      // context
+			);
+
+			// false → abort all traversal
+			if (cont === false) {
+				return;
+			}
+
+			// true → skip children, continue siblings
+			if (cont === true) {
+				continue;
+			}
+
+			// descend only into associative objects
+			if (Q.isPlainObject(value)) {
+				queue.push([childPath, value, current]);
+			}
 		}
 	}
 }

@@ -721,7 +721,6 @@ class Q_Tree
 	protected static function merge_internal($array1 = array(), $array2 = array(), $noNumericArrays = false)
 	{
 		if (!Q::isAssociative($array1)) {
-			// keyed array handling
 			if (isset($array2['updates'])) {
 				$keyField = $array2['updates'][0];
 				$updates = array_slice($array2['updates'], 1);
@@ -743,14 +742,40 @@ class Q_Tree
 				}
 				return $array1;
 			}
-			if (isset($array2['replace'])) return $array2['replace'];
+
+			if (isset($array2['replace'])) {
+				return $array2['replace'];
+			}
+
+			if (isset($array2['prepend']) || isset($array2['append'])) {
+				$result = $array1;
+
+				if (isset($array2['prepend']) && is_array($array2['prepend'])) {
+					foreach (array_reverse($array2['prepend']) as $v) {
+						if (!in_array($v, $result, true)) {
+							array_unshift($result, $v);
+						}
+					}
+				}
+
+				if (isset($array2['append']) && is_array($array2['append'])) {
+					foreach ($array2['append'] as $v) {
+						if (!in_array($v, $result, true)) {
+							$result[] = $v;
+						}
+					}
+				}
+
+				return array_values($result);
+			}
 		}
 
 		$result = $array1;
 		foreach ($array2 as $key => $value) {
 			if (!$noNumericArrays && !Q::isAssociative($array2)) {
-				// merge in unique values for numeric arrays
-				if (!in_array($value, $result)) $result[] = $value;
+				if (!in_array($value, $result, true)) {
+					$result[] = $value;
+				}
 			} else if (array_key_exists($key, $result)) {
 				if (is_array($value) && is_array($result[$key])) {
 					$result[$key] = self::merge_internal($result[$key], $value, $noNumericArrays);
