@@ -349,9 +349,13 @@ class Q_Session
 			if ($id) {
 				self::processDbInfo();
 				self::id($id);
-				self::savePath();
-				session_start();
-				if (!Q_Request::isInternal()) {
+				if (!Q_Session::$session_db_row_class) {
+					self::savePath();
+				}
+				if (Q_Request::isInternal()) {
+					@session_start();
+				} else {
+					session_start();
 					header_remove("Set-Cookie"); // we will set it ourselves, thank you
 				}
 				$started = true;
@@ -1394,6 +1398,9 @@ class Q_Session
 
 	static function setSessionHandlers()
 	{
+		if (Q_Request::isInternal()) {
+			return; // no need to set them
+		}
 		if (session_status() === PHP_SESSION_ACTIVE) {
 			session_abort(); // abort active session to reset handlers
 		}
