@@ -1156,6 +1156,16 @@ body.Q_columns_animationFX {
     height: 0;
 }
 
+.Q_optimistic {
+	opacity: 0.8;
+	filter: blur(1px);
+	pointer-events: none;
+}
+
+.Q_optimistic .Streams_chat_tick {
+	opacity: 0.2;
+}
+
 @media (prefers-color-scheme: dark) {
 	:root {
 		--content-fg-color: white;

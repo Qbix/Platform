@@ -2059,8 +2059,24 @@ Q.extend = function _Q_extend(target /* [[deep,] [levels,] anotherObject], ... [
 						return ar.indexOf(item) === i;
 					});
 			} else if (Q.isPlainObject(arg)) {
+				// prepend / append for regular numeric arrays
+				if (arg.prepend && Q.isArrayLike(target)) {
+					// ensure numeric array behavior
+					target = [].concat(arg.prepend, target)
+						.filter(function (item, i, ar) {
+							return ar.indexOf(item) === i;
+						});
+				}
+				if (arg.append && Q.isArrayLike(target)) {
+					target = [].concat(target, arg.append)
+						.filter(function (item, i, ar) {
+							return ar.indexOf(item) === i;
+						});
+				}
+
 				// keyed diff semantics
 				if (arg.replace) {
+
 					target = Q.copy(arg.replace);
 				} else {
 					if (arg.updates) {
@@ -3762,6 +3778,39 @@ Q.Event.factory = function (collection, defaults, callback, removeOnEmpty) {
 	_Q_Event_factory.collection = collection;
 	_Q_Event_factory.onNewEvent = new Q.Event();
 	return _Q_Event_factory;
+};
+
+/**
+ * Events for optimistic UI operations.
+ * Tools listen per indexed optimistic key
+ * and the app triggers optimistic events via Q.handle().
+ * @class Optimistic
+ * @namespace Q
+ */
+Q.Optimistic = {
+
+	/**
+	 * Fired when an optimistic UI operation begins.
+	 *     Q.handle(Q.Optimistic.onBegin("stream", publisherId, name), tool, payload)
+	 * @event onBegin
+	 */
+	onBegin: Q.Event.factory({}, []),
+
+	/**
+	 * Fired when an optimistic UI operation resolves successfully.
+	 *     Q.handle(Q.Optimistic.onResolve("stream", publisherId, name), tool, payload)
+	 * @event onResolve
+	 */
+	onResolve: Q.Event.factory({}, []),
+
+	/**
+	 * Fired when an optimistic UI operation fails.
+	 *     Q.handle(Q.Optimistic.onReject("stream", publisherId, name), tool, payload)
+	 * @event onReject
+	 */
+	onReject: Q.Event.factory({}, []),
+
+	counter = 0
 };
 
 /**
