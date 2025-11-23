@@ -849,6 +849,18 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		}
 		$this->endedTime = Db::milliseconds(true);
 		if (!empty($exception)) {
+			$ddlPrefixes = array(
+				'SHOW ', 'DESCRIBE ', 'CREATE ', 'ALTER ',
+				'DROP ', 'RENAME ', 'TRUNCATE ', 'ANALYZE ',
+				'OPTIMIZE ', 'CHECK '
+			);
+			$exceptionDDL = null;
+			foreach ($ddlPrefixes as $p) {
+				if (stripos($sql, $p) === 0) {
+					$exceptionDDL = $exception;
+					$exception = null;
+				}
+			}
 			/**
 			 * @event Db/query/exception {after}
 			 * @param {Db_Query_Mysql} query
@@ -857,17 +869,20 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			 * @param {Exception} exception
 			 */
 			Q::event('Db/query/exception', 
-				@compact('query', 'queries', 'sql', 'exception'),
+				@compact('query', 'queries', 'sql', 'exception', 'exceptionDDL'),
 				'after'
 			);
-			if (!class_exists('Q_Exception_DbQuery')) {
-				throw new Exception($exception->getMessage() . " [query was: $sql]", -1);
+			if ($e = $exception ? $exception : $exceptionDDL) {
+				if (!class_exists('Q_Exception_DbQuery')) {
+					throw new Exception($e->getMessage() . " [query was: $sql]", -1);
+				} else {
+					// See http://php.net/manual/en/class.pdoexception.php#95812
+					throw new Q_Exception_DbQuery(array(
+						'sql' => $sql,
+						'msg' => $e->getMessage()
+					), 'PDOException');
+				}
 			}
-			// See http://php.net/manual/en/class.pdoexception.php#95812
-			throw new Q_Exception_DbQuery(array(
-				'sql' => $sql,
-				'msg' => $exception->getMessage()
-			), 'PDOException');
 		}
 		if (class_exists('Q')) {
 			/**
