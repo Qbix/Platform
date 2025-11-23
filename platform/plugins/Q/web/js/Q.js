@@ -3810,7 +3810,17 @@ Q.Optimistic = {
 	 */
 	onReject: Q.Event.factory({}, []),
 
-	counter = 0
+	counter: 0,
+
+	/**
+	 * Get a fresh ID to use when calling Q.handle with onBegin,onResolve,onReject
+	 * @method id
+	 * @static
+	 * @returns {String}
+	 */
+	id: function () {
+		return Q.uuid(Q.clientId() + '_' + (++Q.Optimistic.counter));
+	}
 };
 
 /**
