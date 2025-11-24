@@ -223,6 +223,7 @@ Bootstrap.loadPlugins = function (callback) {
 		try {
 			Q.plugins[pluginName] = Q.require(pluginName);
 		} catch (e) {
+			console.warn(pluginName + ' plugin could not be loaded: ', e);
 			Q.plugins[pluginName] = null; // fallback if class isn't defined
 		}
 	}
