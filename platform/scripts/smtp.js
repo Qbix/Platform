@@ -136,33 +136,43 @@ const metrics = {
 // ------------------------------------------------------------------
 // PASSWORD PROMPT
 // ------------------------------------------------------------------
-
 function readPassword(prompt) {
-  return new Promise(resolve => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout
-    });
-    const stdin = process.stdin;
-    const onData = c => {
-      c = c + "";
-      switch (c) {
-        case "\n":
-        case "\r":
-        case "\u0004":
-          stdin.removeListener("data", onData);
-          break;
-        default:
-          process.stdout.write("\x1B[2K\x1B[200D" + prompt + "*".repeat(rl.line.length));
-      }
-    };
-    stdin.on("data", onData);
-    rl.question(prompt, val => {
-      rl.close();
-      resolve(val);
-    });
-  });
+	return new Promise(function(resolve) {
+		const stdin = process.stdin;
+		const stdout = process.stdout;
+
+		stdout.write(prompt);
+
+		stdin.resume();
+		stdin.setRawMode(true);
+
+		let buf = "";
+
+		function onData(ch) {
+			ch = ch.toString("utf8");
+
+			if (ch === "\n" || ch === "\r") {
+				stdin.setRawMode(false);
+				stdin.removeListener("data", onData);
+				stdout.write("\n");
+				resolve(buf);
+				return;
+			}
+
+			if (ch === "\u0003") {
+				// Ctrl+C
+				stdin.setRawMode(false);
+				process.stdout.write("\n");
+				process.exit();
+			}
+
+			buf += ch;
+		}
+
+		stdin.on("data", onData);
+	});
 }
+
 
 // ------------------------------------------------------------------
 // ADDRESS NORMALIZATION
@@ -1807,59 +1817,110 @@ function interactiveSetup() {
 /********************************************************************
  * RUN INTERACTIVE SETUP *BEFORE* using SMTP_* variables
  ********************************************************************/
+function readPassword(prompt) {
+	return new Promise(function(resolve) {
+		const stdin = process.stdin;
+		const stdout = process.stdout;
+
+		stdout.write(prompt);
+
+		stdin.resume();
+		stdin.setRawMode(true);
+
+		let buf = "";
+
+		function onData(ch) {
+			ch = ch.toString("utf8");
+
+			// Enter
+			if (ch === "\n" || ch === "\r") {
+				stdin.setRawMode(false);
+				stdin.removeListener("data", onData);
+				stdout.write("\n");
+				resolve(buf);
+				return;
+			}
+
+			// Ctrl+C
+			if (ch === "\u0003") {
+				stdin.setRawMode(false);
+				stdout.write("\n");
+				process.exit();
+			}
+
+			buf += ch;
+		}
+
+		stdin.on("data", onData);
+	});
+}
+
 function _interactiveSetup() {
-  _interactiveSetup = _asyncToGenerator(function* () {
-    if (SMTP_HOST && process.env.SMTP_PASSWORD) return; // Already configured
+	_interactiveSetup = _asyncToGenerator(function* () {
+		if (SMTP_HOST && process.env.SMTP_PASSWORD) return; // Already configured
 
-    console.log("\n=== SMTP Relay Interactive Setup ===\n");
-    console.log("No SMTP upstream configured. Let's set it up.\n");
-    let host = yield ask("Upstream SMTP host (e.g. smtp.gmail.com:465): ");
-    let port = null;
-    if (host.includes(":")) {
-      const parts = host.split(":");
-      host = parts[0];
-      port = parseInt(parts[1], 10);
-    } else {
-      let auto = yield ask("No port provided. Use default 465 (SSL)? (Y/n): ");
-      port = !auto || auto.match(/^y(es)?$/i) ? 465 : 587;
-    }
+		console.log("\n=== SMTP Relay Interactive Setup ===\n");
+		console.log("No SMTP upstream configured. Let's set it up.\n");
 
-    // Auto-detect secure/STARTTLS
-    let secure = false;
-    let starttls = false;
-    if (port === 465) {
-      secure = true;
-    } else if (port === 587) {
-      starttls = true;
-    } else {
-      let ans = yield ask(`Enable SSL for port ${port}? (y/N): `);
-      secure = !!ans.match(/^y(es)?$/i);
-    }
-    let username = yield ask("SMTP username (blank for none): ");
-    let password = "";
-    if (username) {
-      password = yield ask("SMTP password: ", {
-        mask: true
-      });
-    }
-    let save = yield ask("Save to .env for future runs? (Y/n): ");
-    if (!save || save.match(/^y(es)?$/i)) {
-      let lines = [`SMTP_HOST=${host}`, `SMTP_PORT=${port}`, `SMTP_SECURE=${secure ? "true" : "false"}`, `SMTP_STARTTLS=${starttls ? "true" : "false"}`, `SMTP_USER=${username}`, `SMTP_PASSWORD=${password}`, `LISTEN_PORT=${LISTEN_PORT}`].join("\n");
-      fs.writeFileSync(".env", lines);
-      console.log("\nSaved to .env\n");
-    }
+		let host = yield ask("Upstream SMTP host (e.g. smtp.gmail.com:465): ");
+		let port = null;
 
-    // Override environment for this session
-    process.env.SMTP_HOST = host;
-    process.env.SMTP_PORT = port;
-    process.env.SMTP_SECURE = secure;
+		if (host.includes(":")) {
+			const parts = host.split(":");
+			host = parts[0];
+			port = parseInt(parts[1], 10);
+		} else {
+			let auto = yield ask("No port provided. Use default 465 (SSL)? (Y/n): ");
+			port = !auto || auto.match(/^y(es)?$/i) ? 465 : 587;
+		}
 
-    // Respect username logic fully:
-    process.env.SMTP_STARTTLS = username ? starttls : "false";
-    process.env.SMTP_USER = username;
-    process.env.SMTP_PASSWORD = password;
-  });
-  return _interactiveSetup.apply(this, arguments);
+		// SSL/STARTTLS logic
+		let secure = false;
+		let starttls = false;
+
+		if (port === 465) {
+			secure = true;
+		} else if (port === 587) {
+			starttls = true;
+		} else {
+			let ans = yield ask("Enable SSL for port " + port + "? (y/N): ");
+			secure = !!ans.match(/^y(es)?$/i);
+		}
+
+		let username = yield ask("SMTP username (blank for none): ");
+		let password = "";
+
+		if (username) {
+			// Secure hidden password entry
+			password = yield readPassword("SMTP password: ");
+		}
+
+		let save = yield ask("Save to .env for future runs? (Y/n): ");
+		if (!save || save.match(/^y(es)?$/i)) {
+			let lines = [
+				"SMTP_HOST=" + host,
+				"SMTP_PORT=" + port,
+				"SMTP_SECURE=" + (secure ? "true" : "false"),
+				"SMTP_STARTTLS=" + (starttls ? "true" : "false"),
+				"SMTP_USER=" + username,
+				"SMTP_PASSWORD=" + password,
+				"LISTEN_PORT=" + LISTEN_PORT
+			].join("\n");
+
+			fs.writeFileSync(".env", lines);
+			console.log("\nSaved to .env\n");
+		}
+
+		// Override environment for current run
+		process.env.SMTP_HOST = host;
+		process.env.SMTP_PORT = port;
+		process.env.SMTP_SECURE = secure;
+		process.env.SMTP_STARTTLS = username ? starttls : "false";
+		process.env.SMTP_USER = username;
+		process.env.SMTP_PASSWORD = password;
+	});
+
+	return _interactiveSetup.apply(this, arguments);
 }
 _asyncToGenerator(function* () {
   yield interactiveSetup();
