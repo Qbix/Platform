@@ -59,6 +59,19 @@ loadEnv(ARGS.env || ".env");
 // CONFIG
 // ------------------------------------------------------------------
 
+// Normalize boolean-ish env vars to proper string values
+function normalizeEnvBool(name) {
+    const v = process.env[name];
+    if (v === true || v === "true" || v === 1 || v === "1") {
+        process.env[name] = "true";
+    } else {
+        process.env[name] = "false";
+    }
+}
+
+normalizeEnvBool("SMTP_SECURE");
+normalizeEnvBool("SMTP_STARTTLS");
+
 const LISTEN_PORT = parseInt(ARGS["listen-port"] || process.env.LISTEN_PORT || 2525, 10);
 const LISTEN_HOST = ARGS["listen-host"] || process.env.LISTEN_HOST || "0.0.0.0";
 const USE_SSL = !!ARGS["listen-ssl"];
@@ -71,6 +84,8 @@ if (USE_SSL) {
 const SMTP_HOST = ARGS["smtp-host"] || process.env.SMTP_HOST;
 const SMTP_PORT = parseInt(ARGS["smtp-port"] || process.env.SMTP_PORT || 587, 10);
 const SMTP_USER = ARGS.user || process.env.SMTP_USER;
+const DEFAULT_FROM = process.env.DEFAULT_FROM || null;
+
 
 // Password comes later via readPassword()
 
@@ -535,12 +550,13 @@ function finishData(sess) {
 function processInboundMessage(sess, raw) {
   metrics.msg_in++;
   let rcpt = normalizeAddress(sess.rcptTo);
-  let existing = DIGESTS.get(rcpt);
+  let digestKey = rcpt + "|" + normalizeAddress(sess.mailFrom || "");
+  let existing = DIGESTS.get(digestKey);
 
   // First message for this recipient → deliver immediately (byte-preserved)
   if (!existing) {
     DIGESTS.set(rcpt, newDigest());
-    relayImmediateBytePreserved(raw, rcpt, err => {
+    relayImmediateBytePreserved(raw, rcpt, sess.mailFrom, err => {
       if (err) log("error", {
         msg: "immediate_fail",
         rcpt,
@@ -552,8 +568,9 @@ function processInboundMessage(sess, raw) {
   }
 
   // Otherwise add to digest
-  addToDigest(rcpt, raw);
+  addToDigest(rcpt, raw, sess.mailFrom);
   scheduleDigest(rcpt);
+
 }
 
 // ------------------------------------------------------------------
@@ -1102,7 +1119,7 @@ function sanitizeHTML(htmlParts, droppedInline) {
  * DIGEST ACCUMULATION ENGINE
  ********************************************************************/
 
-function addToDigest(rcpt, raw) {
+function addToDigest(rcpt, raw, mailFrom) {
   let d = DIGESTS.get(rcpt) || newDigest();
   let now = Date.now();
 
@@ -1135,6 +1152,11 @@ function addToDigest(rcpt, raw) {
       _iterator5.e(err);
     } finally {
       _iterator5.f();
+    }
+    d.mailFrom = d.mailFrom || mailFrom;
+    if (!d.mailFrom) {
+      log("warn", { msg: "digest_missing_mailfrom", rcpt });
+      return;
     }
     DIGESTS.set(rcpt, d);
     return;
@@ -1367,7 +1389,7 @@ ${html}
     if (hasText) {
       return `Subject: ${subject}
 To: ${rcpt}
-From: ${SMTP_USER || "relay@localhost"}
+From: ${d.mailFrom || DEFAULT_FROM || "relay@localhost"}
 Content-Type: text/plain; charset=utf-8
 
 ${text}
@@ -1375,7 +1397,7 @@ ${text}
     }
     return `Subject: ${subject}
 To: ${rcpt}
-From: ${SMTP_USER || "relay@localhost"}
+From: ${d.mailFrom || DEFAULT_FROM || "relay@localhost"}
 Content-Type: text/html; charset=utf-8
 
 ${html}
@@ -1520,14 +1542,14 @@ function checkResp(resp, expected) {
 /********************************************************************
  * OUTBOUND SMTP: FULL SEND
  ********************************************************************/
-function smtpDeliver(_x, _x2, _x3) {
+function smtpDeliver(_x, _x2, _x3, _x4) {
   return _smtpDeliver.apply(this, arguments);
 }
 /********************************************************************
  * IMMEDIATE BYTE-PRESERVED RELAY
  ********************************************************************/
 function _smtpDeliver() {
-  _smtpDeliver = _asyncToGenerator(function* (rawMessage, rcpt, isBytePreserved) {
+  _smtpDeliver = _asyncToGenerator(function* (rawMessage, rcpt, isBytePreserved, mailFrom) {
     return new Promise(/*#__PURE__*/function () {
       var _ref2 = _asyncToGenerator(function* (resolve, reject) {
         let sock = null;
@@ -1536,13 +1558,13 @@ function _smtpDeliver() {
         try {
           if (useTLS) {
             global.SMTP_IGNORE_CERT_ERRORS = process.env.SMTP_IGNORE_CERT_ERRORS === "true";
-            sock = tls.connect(SMTP_PORT_OUT, SMTP_HOST, {
-              // FIXED: SMTP_PORT_OUT is now defined globally
+            sock = tls.connect(SMTP_PORT, SMTP_HOST, {
+              // FIXED: SMTP_PORT is now defined globally
               rejectUnauthorized: !SMTP_IGNORE_CERT_ERRORS,
               minVersion: "TLSv1.2"
             });
           } else {
-            sock = net.connect(SMTP_PORT_OUT, SMTP_HOST); // FIXED: same
+            sock = net.connect(SMTP_PORT, SMTP_HOST); // FIXED: same
           }
         } catch (e) {
           return reject(e);
@@ -1639,8 +1661,7 @@ function _smtpDeliver() {
             }
 
             // MAIL FROM
-            let mailFrom = SMTP_USER || "relay@localhost";
-            resp = yield smtpSend(sock, `MAIL FROM:<${mailFrom}>`);
+            resp = yield smtpSend(sock, `MAIL FROM:<${mailFrom || DEFAULT_FROM || "relay@localhost"}>`);
             checkResp(resp, 250);
 
             // RCPT TO
@@ -1692,16 +1713,19 @@ function _smtpDeliver() {
   });
   return _smtpDeliver.apply(this, arguments);
 }
-function relayImmediateBytePreserved(raw, rcpt, cb) {
-  smtpDeliver(raw, rcpt, true).then(() => cb(null)).catch(cb);
+
+function relayImmediateBytePreserved(raw, rcpt, mailFrom, cb) {
+    smtpDeliver(raw, rcpt, true, mailFrom)
+        .then(() => cb(null))
+        .catch(cb);
 }
 
 /********************************************************************
  * DIGEST RELAY
  ********************************************************************/
 
-function relayDigest(mime, rcpt, cb) {
-  smtpDeliver(mime, rcpt, false).then(() => cb(null)).catch(cb);
+function relayDigest(mime, rcpt, mailFrom, cb) {
+  smtpDeliver(mime, rcpt, false, mailFrom).then(() => cb(null)).catch(cb);
 }
 
 /********************************************************************
@@ -1936,7 +1960,7 @@ _asyncToGenerator(function* () {
   global.SMTP_STARTTLS = process.env.SMTP_STARTTLS === "true"; // port 587
 
   // Expose upstream port for smtpDeliver()
-  global.SMTP_PORT_OUT = global.SMTP_PORT;
+  global.SMTP_PORT = global.SMTP_PORT;
 
   // Define TLS listener port (if you want inbound SMTPS)
   global.LISTEN_PORT_TLS = parseInt(process.env.LISTEN_PORT_TLS || 465, 10);
