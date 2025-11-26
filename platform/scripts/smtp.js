@@ -677,7 +677,7 @@ function handleCommand(sess, line) {
 		//
 		case "AUTH": {
 			const parts = line.split(/\s+/);
-			const method = parts[1]?.toUpperCase();
+			const method = parts[1] ? parts[1] : toUpperCase();
 
 			if (!REQUIRE_AUTH) {
 				ssend(sess, "503 AUTH not required");
