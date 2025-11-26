@@ -656,7 +656,9 @@ function handleCommand(sess, line) {
 			sess.dataMode = false;
 			if (cmd === "EHLO") {
 				ssend(sess, "250-relay.local");
-				if (!sess.tlsUpgraded) ssend(sess, "250-STARTTLS");
+        if (USE_SSL) {
+          if (!sess.tlsUpgraded) ssend(sess, "250-STARTTLS");
+        }
 				if (REQUIRE_AUTH) ssend(sess, "250-AUTH LOGIN");
 				ssend(sess, "250 OK");
 			} else {
