@@ -91,7 +91,10 @@ const DEFAULT_FROM = process.env.DEFAULT_FROM || null;
 
 // Digest / backoff config
 const SUBJECT_TEMPLATE = ARGS.subject || process.env.SUBJECT_TEMPLATE || "{{count}} Updates";
-const BACKOFF_FACTOR = parseFloat(ARGS.backoff || process.env.BACKOFF || "2.0");
+const DELAY_FIRST = parseInt(ARGS["first-delay"] || process.env.DELAY_FIRST || 60000, 10);
+const DELAY_BACKOFF = parseFloat(ARGS.backoff || process.env.BACKOFF || "2.0");
+const DIGEST_TIME_ASCENDING =
+	(process.env.DIGEST_TIME_ASCENDING || "false") === "true";
 const SEP_TEXT = ARGS["separator-text"] || process.env.SEPARATOR_TEXT || "\n\n---\n\n";
 const SEP_HTML = ARGS["separator-html"] || process.env.SEPARATOR_HTML || "<br><br>---<br><br>";
 const MAX_LINES = parseInt(ARGS["max-lines"] || process.env.MAX_LINES || 20000, 10);
@@ -110,6 +113,7 @@ const SESSION_TIMEOUT = parseInt(ARGS.timeout || process.env.TIMEOUT || 30000, 1
 // Logging
 const LOG_FILE = ARGS["log-file"] || process.env.LOG_FILE || null;
 const LOG_LEVEL = ARGS["log-level"] || process.env.LOG_LEVEL || "info";
+const LOG_SUCCESS = (ARGS["log-success"] || process.env.LOG_SUCCESS || "false") === "true";
 const LOG_FD = LOG_FILE ? fs.openSync(LOG_FILE, "a") : null;
 
 // ------------------------------------------------------------------
@@ -221,9 +225,10 @@ function normalizeAddress(addr) {
 */
 
 const DIGESTS = new Map();
-function newDigest() {
+function newDigest(mailFrom) {
   return {
-    nextDelay: 60000,
+    mailFrom: mailFrom,
+    nextDelay: DELAY_FIRST,
     timer: null,
     lastReceived: Date.now(),
     textParts: [],
@@ -555,21 +560,30 @@ function processInboundMessage(sess, raw) {
 
   // First message for this recipient → deliver immediately (byte-preserved)
   if (!existing) {
-    DIGESTS.set(rcpt, newDigest());
+    let mailFrom = sess.mailFrom; // before it's reset
+    DIGESTS.set(digestKey, newDigest(mailFrom));
     relayImmediateBytePreserved(raw, rcpt, sess.mailFrom, err => {
-      if (err) log("error", {
-        msg: "immediate_fail",
-        rcpt,
-        err: err.toString()
-      });
+      if (err) {
+        log("error", {
+          msg: "immediate_fail",
+          rcpt,
+          err: err.toString()
+        });
+      } else if (LOG_SUCCESS) {
+        log("info", {
+          msg: "immediate_ok",
+          rcpt,
+          mailFrom: mailFrom
+        });
+      }
       metrics.msg_out++;
     });
     return;
   }
 
   // Otherwise add to digest
-  addToDigest(rcpt, raw, sess.mailFrom);
-  scheduleDigest(rcpt);
+  addToDigest(rcpt, sess.mailFrom, raw);
+  scheduleDigest(rcpt, sess.mailFrom);
 
 }
 
@@ -1119,17 +1133,15 @@ function sanitizeHTML(htmlParts, droppedInline) {
  * DIGEST ACCUMULATION ENGINE
  ********************************************************************/
 
-function addToDigest(rcpt, raw, mailFrom) {
-  let d = DIGESTS.get(rcpt) || newDigest();
+function addToDigest(rcpt, mailFrom, raw) {
+  const digestKey = rcpt + "|" + normalizeAddress(mailFrom || "");
+  let d = DIGESTS.get(digestKey) || newDigest();
   let now = Date.now();
 
   // Cooldown logic
   if (now - d.lastReceived > COOLDOWN_MIN * 60000) {
     d = newDigest();
-    log("info", {
-      msg: "cooldown_reset",
-      rcpt
-    });
+    log("info", { msg: "cooldown_reset", rcpt });
   }
   d.lastReceived = now;
 
@@ -1139,129 +1151,82 @@ function addToDigest(rcpt, raw, mailFrom) {
   // Check message count limit
   if (d.msgCount >= MAX_MESSAGES) {
     d.omitMeta.count++;
-    // Count all attachments
-    var _iterator5 = _createForOfIteratorHelper(parsed.attachments),
-      _step5;
-    try {
-      for (_iterator5.s(); !(_step5 = _iterator5.n()).done;) {
-        let a = _step5.value;
-        d.omitMeta.attachCount++;
-        d.omitMeta.attachBytes += a.size;
-      }
-    } catch (err) {
-      _iterator5.e(err);
-    } finally {
-      _iterator5.f();
+
+    for (const a of parsed.attachments) {
+      d.omitMeta.attachCount++;
+      d.omitMeta.attachBytes += a.size;
     }
+
     d.mailFrom = d.mailFrom || mailFrom;
+
     if (!d.mailFrom) {
       log("warn", { msg: "digest_missing_mailfrom", rcpt });
       return;
     }
-    DIGESTS.set(rcpt, d);
+
+    DIGESTS.set(digestKey, d);
     return;
   }
 
-  // Add text
-  var _iterator6 = _createForOfIteratorHelper(parsed.text),
-    _step6;
-  try {
-    for (_iterator6.s(); !(_step6 = _iterator6.n()).done;) {
-      let t = _step6.value;
-      d.textParts.push(t);
-    }
+  // Text
+  for (const t of parsed.text) d.textParts.push(t);
 
-    // Add HTML (we sanitize later)
-  } catch (err) {
-    _iterator6.e(err);
-  } finally {
-    _iterator6.f();
-  }
-  var _iterator7 = _createForOfIteratorHelper(parsed.html),
-    _step7;
-  try {
-    for (_iterator7.s(); !(_step7 = _iterator7.n()).done;) {
-      let h = _step7.value;
-      d.htmlParts.push(h);
-    }
+  // HTML
+  for (const h of parsed.html) d.htmlParts.push(h);
 
-    // Attachment logic
-  } catch (err) {
-    _iterator7.e(err);
-  } finally {
-    _iterator7.f();
-  }
+  // Attachments
   let droppedInline = [];
-  var _iterator8 = _createForOfIteratorHelper(parsed.attachments),
-    _step8;
-  try {
-    for (_iterator8.s(); !(_step8 = _iterator8.n()).done;) {
-      let a = _step8.value;
-      if (a.size > MAX_ATTACH_SIZE) {
-        d.omitMeta.attachCount++;
-        d.omitMeta.attachBytes += a.size;
-        metrics.attach_dropped++;
-        if (a.isInlineImage) {
-          droppedInline.push({
-            filename: a.filename,
-            size: a.size
-          });
-        }
-        continue;
+  for (const a of parsed.attachments) {
+    if (a.size > MAX_ATTACH_SIZE ||
+        d.attachBytes + a.size > MAX_TOTAL_ATTACH) {
+
+      d.omitMeta.attachCount++;
+      d.omitMeta.attachBytes += a.size;
+      metrics.attach_dropped++;
+
+      if (a.isInlineImage) {
+        droppedInline.push({ filename: a.filename, size: a.size });
       }
-      if (d.attachBytes + a.size > MAX_TOTAL_ATTACH) {
-        d.omitMeta.attachCount++;
-        d.omitMeta.attachBytes += a.size;
-        metrics.attach_dropped++;
-        if (a.isInlineImage) {
-          droppedInline.push({
-            filename: a.filename,
-            size: a.size
-          });
-        }
-        continue;
-      }
-      // Accept attachment
-      d.attachments.push(a);
-      d.attachBytes += a.size;
-      metrics.attach_forwarded++;
+      continue;
     }
 
-    // Sanitize HTML for dropped inline images
-  } catch (err) {
-    _iterator8.e(err);
-  } finally {
-    _iterator8.f();
+    d.attachments.push(a);
+    d.attachBytes += a.size;
+    metrics.attach_forwarded++;
   }
+
+  // Sanitize HTML
   if (droppedInline.length > 0 && d.htmlParts.length > 0) {
-    let sanitized = sanitizeHTML(d.htmlParts, droppedInline);
-    d.htmlParts = [sanitized];
+    d.htmlParts = [sanitizeHTML(d.htmlParts, droppedInline)];
   }
+
   d.msgCount++;
 
-  // Enforce global memory cap
-  let estMem = estimateDigestMemory();
-  if (estMem > GLOBAL_MEMORY_CAP) {
-    log("warn", {
-      msg: "global_memory_cap_reached"
-    });
-    // All new attachments or messages beyond cap are omitted
-    // Already counted as omitted above.
+  // Global memory cap
+  if (estimateDigestMemory() > GLOBAL_MEMORY_CAP) {
+    log("warn", { msg: "global_memory_cap_reached" });
   }
-  DIGESTS.set(rcpt, d);
+
+  DIGESTS.set(digestKey, d);
 }
 
 /********************************************************************
  * SCHEDULE DIGEST SEND (EXPONENTIAL BACKOFF)
  ********************************************************************/
 
-function scheduleDigest(rcpt) {
-  let d = DIGESTS.get(rcpt);
+function scheduleDigest(rcpt, mailFrom) {
+  let digestKey = rcpt + "|" + normalizeAddress(mailFrom || "");
+  let d = DIGESTS.get(digestKey);
   if (!d) return;
   if (d.timer) return;
   d.timer = setTimeout(() => {
     d.timer = null;
-    flushDigest(rcpt);
+    flushDigest(rcpt, mailFrom);
+    // Exponential backoff
+    d.nextDelay = Math.min(
+      d.nextDelay * DELAY_BACKOFF,
+      60 * 60 * 1000      // 1 hour max backoff
+    );
   }, d.nextDelay);
 }
 
@@ -1326,16 +1291,24 @@ function estimateDigestMemory() {
  * FINAL DIGEST SEND
  ********************************************************************/
 
-function flushDigest(rcpt) {
-  let d = DIGESTS.get(rcpt);
+function flushDigest(rcpt, mailFrom) {
+  let digestKey = rcpt + "|" + normalizeAddress(mailFrom || "");
+  let d = DIGESTS.get(digestKey);
   if (!d) return;
   let mime = buildDigestMIME(rcpt, d);
-  relayDigest(mime, rcpt, err => {
-    if (err) log("error", {
-      msg: "digest_send_fail",
-      rcpt,
-      err: err.toString()
-    });
+  relayDigest(mime, rcpt, mailFrom, err => {
+    if (err) {
+      log("error", {
+        msg: "digest_send_fail",
+        rcpt,
+        err: err.toString()
+      });
+    } else if (LOG_SUCCESS) {
+      log("info", {
+        msg: "digest_ok",
+        rcpt
+      });
+    }
     metrics.digest_sent++;
   });
 
@@ -1349,6 +1322,12 @@ function flushDigest(rcpt) {
 
 function buildDigestMIME(rcpt, d) {
   // Text & HTML combined
+  if (DIGEST_TIME_ASCENDING) {
+    // Sort by arrival order: oldest → newest
+    // (d.textParts and d.htmlParts already follow arrival order, but we enforce)
+    d.textParts.sort((a, b) => a.timestamp - b.timestamp);
+    d.htmlParts.sort((a, b) => a.timestamp - b.timestamp);
+  }
   let text = d.textParts.join(SEP_TEXT);
   let html = d.htmlParts.join(SEP_HTML);
   let omitted = d.omitMeta.count;
@@ -1483,47 +1462,69 @@ Content-Type: multipart/mixed; boundary="${boundary}"
  ********************************************************************/
 
 function smtpSend(sock, line) {
-  return new Promise((resolve, reject) => {
-    let got = "";
-    function onData(chunk) {
-      got += chunk.toString("latin1");
-      // Complete when a line STARTS WITH "xyz " (NOT "xyz-")
-      let last = got.split(/\r?\n/).pop();
-      if (/^[0-9]{3} /.test(last)) {
-        clearTimeout(timer);
-        sock.removeListener("data", onData);
-        resolve(got);
-      }
-    }
-    let timer = setTimeout(() => {
-      sock.removeListener("data", onData);
-      reject(new Error("SMTP timeout"));
-    }, 30000);
-    sock.on("data", onData);
-    sock.write(line + "\r\n");
-  });
+	return new Promise((resolve, reject) => {
+		let buf = "";
+
+		const onData = chunk => {
+			buf += chunk.toString("latin1");
+			const lines = buf.split(/\r?\n/);
+      const lastComplete = lines.length > 1 ? lines[lines.length - 2] : lines[0];
+
+			// Single-line SMTP reply ends with "XYZ <space>"
+			if (/^[0-9]{3} /.test(lastComplete)) {
+				cleanup();
+				resolve(buf);
+			}
+		};
+
+		const cleanup = () => {
+			clearTimeout(timer);
+			sock.removeListener("data", onData);
+		};
+
+		const timer = setTimeout(() => {
+			cleanup();
+			reject(new Error("SMTP timeout"));
+		}, 30000);
+
+		sock.on("data", onData);
+		sock.write(line + "\r\n");
+	});
 }
+
+
 function smtpSendMulti(sock, line) {
-  return new Promise((resolve, reject) => {
-    let buf = "";
-    const onData = chunk => {
-      buf += chunk.toString("latin1");
-      // SMTP multiline response detection:
-      // Continue while lines start with "250-"
-      // Stop only when a line starts with "250 "
-      if (/^250 /.test(buf.split(/\r?\n/).pop())) {
-        sock.removeListener("data", onData);
-        clearTimeout(timer);
-        resolve(buf);
-      }
-    };
-    let timer = setTimeout(() => {
-      sock.removeListener("data", onData);
-      reject(new Error("SMTP timeout"));
-    }, 30000);
-    sock.on("data", onData);
-    sock.write(line + "\r\n");
-  });
+	return new Promise((resolve, reject) => {
+		let buf = "";
+
+		const onData = chunk => {
+			buf += chunk.toString("latin1");
+
+			const lines = buf.split(/\r?\n/);
+
+			// Multiline ends ONLY when a line begins with "250 "
+			const done = lines.find(l => /^250 /.test(l));
+
+			if (done) {
+				cleanup();
+				resolve(buf);
+			}
+		};
+
+		const cleanup = () => {
+			clearTimeout(timer);
+			sock.removeListener("data", onData);
+		};
+
+		const timer = setTimeout(() => {
+			cleanup();
+			reject(new Error("SMTP timeout"));
+		}, 30000);
+
+		// multiline requires .on(), not .once()
+		sock.on("data", onData);
+		sock.write(line + "\r\n");
+	});
 }
 
 /********************************************************************
@@ -1572,7 +1573,7 @@ function _smtpDeliver() {
 
         // Install error handler ONLY until STARTTLS or AUTH
         sock.on("error", e => reject(e));
-        sock.once("connect", /*#__PURE__*/_asyncToGenerator(function* () {
+        sock.once("secureConnect", /*#__PURE__*/_asyncToGenerator(function* () {
           // After connect, remove the temporary plain error handler.
           sock.removeAllListeners("error");
           // Reinstall a general handler for pre-STARTTLS phase:
@@ -1671,20 +1672,36 @@ function _smtpDeliver() {
             // DATA
             resp = yield smtpSend(sock, "DATA");
             checkResp(resp, 354);
-            let msgOut;
-            let normalized = isBytePreserved ? rawMessage // do NOT normalize
-            : rawMessage.replace(/\r?\n/g, "\r\n"); // safe for digest mail only
 
-            msgOut = outboundDotStuff(normalized);
-            sock.write(msgOut + "\r\n.\r\n");
+            // Inject required RFC headers + optional SES config-set header
+            rawMessage = ensureOutboundHeaders(rawMessage, {
+              mailFrom: mailFrom || DEFAULT_FROM,
+              domain: (mailFrom || DEFAULT_FROM || "localhost").split("@")[1] || "localhost",
+              sesConfigSet: process.env.SES_CONFIG_SET || ARGS["ses-config-set"] || null
+            });
+
+            // CRLF-normalize only when we aren’t byte-preserving
+            let normalized = rawMessage;
+            if (!isBytePreserved) {
+              normalized = rawMessage.replace(/\r?\n/g, "\r\n");
+            }
+
+            // Dot-stuff and terminate with <CRLF>.<CRLF>
+            const finalMessage =
+              outboundDotStuff(normalized) +
+              "\r\n.\r\n";
+
+            sock.write(finalMessage);
+
 
             // Final result
             resp = yield new Promise((res, rej) => {
               let buf = "";
               const onD = ch => {
                 buf += ch.toString("latin1");
-                let last = buf.split(/\r?\n/).pop();
-                if (/^[0-9]{3} /.test(last)) {
+                const lines = buf.split(/\r?\n/);
+                const lastComplete = lines.length > 1 ? lines[lines.length - 2] : lines[0];
+                if (/^[0-9]{3} /.test(lastComplete)) {
                   sock.removeListener("data", onD);
                   res(buf);
                 }
@@ -1695,9 +1712,17 @@ function _smtpDeliver() {
             checkResp(resp, 250);
 
             // QUIT
-            yield smtpSend(sock, "QUIT");
-            sock.end();
-            resolve();
+            try {
+                yield smtpSend(sock, "QUIT");
+            } catch (e) {
+                // ignore failures on QUIT
+            }
+
+            try { sock.end(); } catch (e) {}
+            try { sock.destroy(); } catch (e) {}
+
+            return resolve();
+
           } catch (e) {
             try {
               sock.end();
@@ -1719,6 +1744,33 @@ function relayImmediateBytePreserved(raw, rcpt, mailFrom, cb) {
         .then(() => cb(null))
         .catch(cb);
 }
+
+function ensureOutboundHeaders(raw, env) {
+	// Insert Date
+	if (!/^Date:/mi.test(raw)) {
+		raw = `Date: ${new Date().toUTCString()}\r\n` + raw;
+	}
+
+	// Insert Message-ID
+	if (!/^Message-ID:/mi.test(raw)) {
+		const id = crypto.randomUUID ? crypto.randomUUID() :
+			Math.random().toString(36).slice(2);
+		raw = `Message-ID: <${id}@${env.domain}>\r\n` + raw;
+	}
+
+	// Ensure From header exists (and matches envelope for SES)
+	if (!/^From:/mi.test(raw)) {
+		raw = `From: ${env.mailFrom}\r\n` + raw;
+	}
+
+	// Optional SES config-set
+	if (env.sesConfigSet && !/^X-SES-CONFIGURATION-SET:/mi.test(raw)) {
+		raw = `X-SES-CONFIGURATION-SET: ${env.sesConfigSet}\r\n` + raw;
+	}
+
+	return raw;
+}
+
 
 /********************************************************************
  * DIGEST RELAY
@@ -1919,6 +1971,12 @@ function _interactiveSetup() {
 			password = yield readPassword("SMTP password: ");
 		}
 
+    let enableConfigSet = yield ask("Enable SES delivery logging (X-SES-CONFIGURATION-SET)? (y/N): ");
+    let configSetName = "";
+    if (enableConfigSet.match(/^y(es)?$/i)) {
+      configSetName = yield ask("Enter SES Configuration Set name: ");
+    }
+
 		let save = yield ask("Save to .env for future runs? (Y/n): ");
 		if (!save || save.match(/^y(es)?$/i)) {
 			let lines = [
@@ -1930,6 +1988,9 @@ function _interactiveSetup() {
 				"SMTP_PASSWORD=" + password,
 				"LISTEN_PORT=" + LISTEN_PORT
 			].join("\n");
+      if (configSetName) {
+        lines += "\nSES_CONFIG_SET=" + configSetName;
+      }
 
 			fs.writeFileSync(".env", lines);
 			console.log("\nSaved to .env\n");
@@ -1942,6 +2003,7 @@ function _interactiveSetup() {
 		process.env.SMTP_STARTTLS = username ? starttls : "false";
 		process.env.SMTP_USER = username;
 		process.env.SMTP_PASSWORD = password;
+    process.env.SES_CONFIG_SET = configSetName || "";
 	});
 
 	return _interactiveSetup.apply(this, arguments);
