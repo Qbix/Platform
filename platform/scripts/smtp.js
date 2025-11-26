@@ -74,6 +74,9 @@ normalizeEnvBool("SMTP_STARTTLS");
 
 const LISTEN_PORT = parseInt(ARGS["listen-port"] || process.env.LISTEN_PORT || 2525, 10);
 const LISTEN_HOST = ARGS["listen-host"] || process.env.LISTEN_HOST || "0.0.0.0";
+const LISTEN_USER = process.env.LISTEN_USER || null;
+const LISTEN_PASS = process.env.LISTEN_PASS || null;
+const REQUIRE_AUTH = !!(LISTEN_USER && LISTEN_PASS);
 const USE_SSL = !!ARGS["listen-ssl"];
 let SSL_KEY = null,
   SSL_CERT = null;
@@ -592,113 +595,199 @@ function processInboundMessage(sess, raw) {
 // ------------------------------------------------------------------
 
 function handleCommand(sess, line) {
-  if (!PIPELINE_ALLOWED && sess.expectResponse) {
-    ssend(sess, "503 Bad sequence: no pipelining");
-    return;
-  }
-  const cmd = line.split(" ")[0].toUpperCase();
 
-  // We are now inside a command; until the response is flushed,
-  // do not allow another command (if pipelining is off)
-  sess.expectResponse = true;
-  switch (cmd) {
-    case "EHLO":
-    case "HELO":
-      // Reset transaction state
-      sess.mailFrom = null;
-      sess.rcptTo = null;
-      sess.dataMode = false;
-      if (cmd === "EHLO") {
-        ssend(sess, "250-relay.local");
-        if (!sess.tlsUpgraded) ssend(sess, "250-STARTTLS");
-        ssend(sess, "250 OK");
-      } else {
-        ssend(sess, "250 relay.local");
-      }
-      break;
-    case "STARTTLS":
-      if (sess.tlsUpgraded) {
-        ssend(sess, "454 TLS already active");
-      } else {
-        doSTARTTLS(sess);
-      }
-      break;
-    case "MAIL":
-      {
-        const m = line.match(/<([^>]+)>/);
-        if (!m) {
-          ssend(sess, "501 Syntax");
-          break;
-        }
+	//
+	// 1. AUTH LOGIN username phase
+	//
+	if (sess.expectAuthUser) {
+		const user = Buffer.from(line.trim(), "base64").toString("utf8");
+		sess.expectAuthUser = false;
 
-        // Must not be inside a transaction already
-        if (sess.mailFrom || sess.rcptTo) {
-          ssend(sess, "503 Nested MAIL not allowed; use RSET");
-          break;
-        }
-        sess.mailFrom = m[1];
-        sess.rcptTo = null;
-        ssend(sess, "250 OK");
-      }
-      break;
-    case "RCPT":
-      {
-        if (!sess.mailFrom) {
-          ssend(sess, "503 Bad sequence; MAIL first");
-          break;
-        }
-        const m = line.match(/<([^>]+)>/);
-        if (!m) {
-          ssend(sess, "501 Syntax");
-          break;
-        }
+		if (user !== LISTEN_USER) {
+			ssend(sess, "535 Authentication failed");
+			closeSession(sess);
+			return;
+		}
 
-        // This relay supports exactly one RCPT
-        if (sess.rcptTo) {
-          ssend(sess, "452 Too many recipients");
-          break;
-        }
-        sess.rcptTo = m[1];
-        ssend(sess, "250 OK");
-      }
-      break;
-    case "DATA":
-      if (!sess.mailFrom || !sess.rcptTo) {
-        ssend(sess, "503 Bad sequence");
-        break;
-      }
-      sess.dataMode = true;
-      sess.rawChunks = [];
-      sess.dataBytes = 0;
-      sess.dataLines = 0;
-      sess.dotScanner = new DotTerminatorScanner();
-      ssend(sess, "354 End data with <CR><LF>.<CR><LF>");
-      break;
-    case "RSET":
-      sess.mailFrom = null;
-      sess.rcptTo = null;
-      sess.dataMode = false;
-      sess.rawChunks = [];
-      sess.dataBytes = 0;
-      sess.dataLines = 0;
-      sess.dotScanner = new DotTerminatorScanner();
-      sess.cmdBuffer = "";
-      // expectResponse will be cleared immediately after response
-      ssend(sess, "250 OK");
-      break;
-    case "QUIT":
-      ssend(sess, "221 Bye");
-      closeSession(sess);
-      break;
-    default:
-      ssend(sess, "500 Command unrecognized");
-      break;
-  }
+		sess.expectAuthPass = true;
+		ssend(sess, "334 UGFzc3dvcmQ6"); // "Password:"
+		sess.expectResponse = false;      // *** CRITICAL FIX ***
+		return;
+	}
 
-  // IMPORTANT: do *not* unset immediately — flush race safety
-  setImmediate(() => {
-    sess.expectResponse = false;
-  });
+	//
+	// 2. AUTH LOGIN password phase
+	//
+	if (sess.expectAuthPass) {
+		const pass = Buffer.from(line.trim(), "base64").toString("utf8");
+		sess.expectAuthPass = false;
+
+		if (pass !== LISTEN_PASS) {
+			ssend(sess, "535 Authentication failed");
+			closeSession(sess);
+			return;
+		}
+
+		sess.authed = true;
+		ssend(sess, "235 Authentication successful");
+		sess.expectResponse = false;      // *** CRITICAL FIX ***
+		return;
+	}
+
+	//
+	// 3. No pipelining allowed during response flush
+	//
+	if (!PIPELINE_ALLOWED && sess.expectResponse) {
+		ssend(sess, "503 Bad sequence: no pipelining");
+		return;
+	}
+
+	const cmd = line.split(" ")[0].toUpperCase();
+
+	// Enter COMMAND mode (except AUTH LOGIN which has early returns)
+	sess.expectResponse = true;
+
+	switch (cmd) {
+
+		case "EHLO":
+		case "HELO":
+			sess.mailFrom = null;
+			sess.rcptTo = null;
+			sess.dataMode = false;
+			if (cmd === "EHLO") {
+				ssend(sess, "250-relay.local");
+				if (!sess.tlsUpgraded) ssend(sess, "250-STARTTLS");
+				if (REQUIRE_AUTH) ssend(sess, "250-AUTH LOGIN");
+				ssend(sess, "250 OK");
+			} else {
+				ssend(sess, "250 relay.local");
+			}
+			break;
+
+		case "STARTTLS":
+			if (sess.tlsUpgraded) {
+				ssend(sess, "454 TLS already active");
+			} else {
+				doSTARTTLS(sess);
+			}
+			break;
+
+		//
+		// AUTH command
+		//
+		case "AUTH": {
+			const parts = line.split(/\s+/);
+			const method = parts[1]?.toUpperCase();
+
+			if (!REQUIRE_AUTH) {
+				ssend(sess, "503 AUTH not required");
+				sess.expectResponse = false;    // *** CRITICAL FIX ***
+				return;
+			}
+
+			if (method !== "LOGIN") {
+				ssend(sess, "504 Unsupported authentication method");
+				sess.expectResponse = false;    // *** CRITICAL FIX ***
+				return;
+			}
+
+			sess.expectAuthUser = true;
+			ssend(sess, "334 VXNlcm5hbWU6"); // Username:
+			sess.expectResponse = false;      // *** CRITICAL FIX ***
+			return;
+		}
+
+		//
+		// MAIL
+		//
+		case "MAIL":
+			if (REQUIRE_AUTH && !sess.authed) {
+				ssend(sess, "530 Authentication required");
+				break;
+			}
+			if (sess.mailFrom || sess.rcptTo) {
+				ssend(sess, "503 Nested MAIL not allowed; use RSET");
+				break;
+			}
+			const mFrom = line.match(/<([^>]+)>/);
+			if (!mFrom) {
+				ssend(sess, "501 Syntax");
+				break;
+			}
+			sess.mailFrom = mFrom[1];
+			sess.rcptTo = null;
+			ssend(sess, "250 OK");
+			break;
+
+		//
+		// RCPT
+		//
+		case "RCPT":
+			if (REQUIRE_AUTH && !sess.authed) {
+				ssend(sess, "530 Authentication required");
+				break;
+			}
+			if (!sess.mailFrom) {
+				ssend(sess, "503 Bad sequence; MAIL first");
+				break;
+			}
+			const mRcpt = line.match(/<([^>]+)>/);
+			if (!mRcpt) {
+				ssend(sess, "501 Syntax");
+				break;
+			}
+			if (sess.rcptTo) {
+				ssend(sess, "452 Too many recipients");
+				break;
+			}
+			sess.rcptTo = mRcpt[1];
+			ssend(sess, "250 OK");
+			break;
+
+		//
+		// DATA
+		//
+		case "DATA":
+			if (REQUIRE_AUTH && !sess.authed) {
+				ssend(sess, "530 Authentication required");
+				break;
+			}
+			if (!sess.mailFrom || !sess.rcptTo) {
+				ssend(sess, "503 Bad sequence");
+				break;
+			}
+			sess.dataMode = true;
+			sess.rawChunks = [];
+			sess.dataBytes = 0;
+			sess.dataLines = 0;
+			sess.dotScanner = new DotTerminatorScanner();
+			ssend(sess, "354 End data with <CR><LF>.<CR><LF>");
+			break;
+
+		case "RSET":
+			sess.mailFrom = null;
+			sess.rcptTo = null;
+			sess.dataMode = false;
+			sess.rawChunks = [];
+			sess.dataBytes = 0;
+			sess.dataLines = 0;
+			sess.dotScanner = new DotTerminatorScanner();
+			ssend(sess, "250 OK");
+			break;
+
+		case "QUIT":
+			ssend(sess, "221 Bye");
+			closeSession(sess);
+			break;
+
+		default:
+			ssend(sess, "500 Command unrecognized");
+			break;
+	}
+
+	setImmediate(() => {
+		sess.expectResponse = false;
+	});
 }
 
 // ------------------------------------------------------------------
@@ -786,6 +875,9 @@ function inboundConnection(sock, isTLS) {
   }
   ACTIVE_SESSIONS++;
   const sess = createSession(sock, isTLS);
+  sess.authed = !REQUIRE_AUTH;
+  sess.expectAuthUser = false;
+  sess.expectAuthPass = false;
   resetTimer(sess);
   sock.on("data", chunk => handleChunk(sess, chunk));
   sock.on("error", e => log("error", {
