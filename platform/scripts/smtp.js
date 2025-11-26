@@ -656,9 +656,9 @@ function handleCommand(sess, line) {
 			sess.dataMode = false;
 			if (cmd === "EHLO") {
 				ssend(sess, "250-relay.local");
-        if (USE_SSL) {
-          if (!sess.tlsUpgraded) ssend(sess, "250-STARTTLS");
-        }
+				if (USE_SSL) {
+					if (!sess.tlsUpgraded) ssend(sess, "250-STARTTLS");
+				}
 				if (REQUIRE_AUTH) ssend(sess, "250-AUTH LOGIN");
 				ssend(sess, "250 OK");
 			} else {
@@ -1424,6 +1424,9 @@ function buildDigestMIME(rcpt, d) {
   }
   let text = d.textParts.join(SEP_TEXT);
   let html = d.htmlParts.join(SEP_HTML);
+
+
+
   let omitted = d.omitMeta.count;
   if (omitted > 0) {
     let note = OMIT_FORMAT.replace("{{N}}", omitted).replace("{{A}}", d.omitMeta.attachCount).replace("{{S}}", d.omitMeta.attachBytes);
@@ -1453,6 +1456,7 @@ ${text}
 
 --${altBoundary}
 Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
 
 ${html}
 
@@ -1472,6 +1476,7 @@ ${text}
 To: ${rcpt}
 From: ${d.mailFrom || DEFAULT_FROM || "relay@localhost"}
 Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: quoted-printable
 
 ${html}
 `;
