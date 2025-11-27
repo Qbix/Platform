@@ -103,6 +103,10 @@ html.Q_ios.Q_standalone .Q_columns_title {
 	width: calc(100% - 10px);
 }
 
+.Q_notMobile .Q_columns_tool .Q_columns_container {
+	display: flex;
+}
+
 .Q_columns_column .Q_column_slot {
 	clear: both;
 	overflow: auto;
