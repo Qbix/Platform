@@ -247,10 +247,27 @@ class Q_Text
 		}
 		$sources = array_unique($sources);
 		foreach ($sources as $s) {
-			if (isset($options2['language']) && $options2['language'] != self::$defaultLanguage) {
+			if (isset(self::$defaultLanguage) && isset($options2['language'])
+			&& $options2['language'] != self::$defaultLanguage) {
+				// get strings from the default language, in case they aren't in the other one
 				$tree->merge(Q_Text::get($s, array('language' => self::$defaultLanguage)));
 			}
+			// now merge the ones found for the desired language
 			$tree->merge(Q_Text::get($s, $options2));
+		}
+		// finally, apply final result of @override after processing text files
+		foreach ($sources as $s) {
+			// get strings from the default language, in case they aren't in the other one
+			if (isset(self::$defaultLanguage) && isset($options2['language'])
+			&& $options2['language'] != self::$defaultLanguage
+			&& !empty(Q_Text::$override[self::$defaultLanguage][$s])) {
+				$tree->merge(Q_Tree::$override[self::$defaultLanguage][$s]);
+			}
+			// now merge the overrides found for the desired language
+			$basename = self::basename($options2);
+			if (!empty(Q_Text::$override[$basename][$s])) {
+				$tree->merge(Q_Text::$override[$basename][$s]);
+			}
 		}
 		return $tree->getAll();
 	}
