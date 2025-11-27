@@ -1,5 +1,5 @@
 {
-	"name": "Q",
+	"name": "q",
 	"description": "Qbix Platform",
 	"author": "Qbix",
 	"homepage": "https://qbix.com/platform",
@@ -25,6 +25,17 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git://github.com/EGreg/Q.git"
+		"url": "git://github.com/Qbix/Platform.git"
+	},
+	"main": "index.js",
+	"directories": {
+		"test": "tests"
+	},
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [],
+	"bugs": {
+		"url": "https://github.com/Qbix/Platform/issues"
 	}
 }
