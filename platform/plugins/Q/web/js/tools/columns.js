@@ -189,10 +189,11 @@ Q.Tool.define("Q/columns", function(options) {
 		});
 
 		var $div = $(div);
-		$div.attr('data-width-range', Math.round($div.width()/300) || 1);
-		Q.onLayout(div).add(function () {
+		var _updateDataWidthRange = Q.debounce(function () {
 			$div.attr('data-width-range', Math.round($div.width()/300) || 1);
-		}, this);
+		}, 100);
+		_updateDataWidthRange();
+		Q.onLayout(div).add(_updateDataWidthRange, this);
 	}, 'Q/columns'),
 	onClose: new Q.Event(function (div, index, data, skipUpdateAttributes) {
 		if (!skipUpdateAttributes) {
@@ -584,7 +585,9 @@ Q.Tool.define("Q/columns", function(options) {
 					$div.removeClass('Q_columns_loading');
 				}
 				div.setClassIf($controlsSlot[0] && !!$controlsSlot[0].innerHTML, 'Q_columns_hasControls');
-				Q.layout(tool.element);
+				setTimeout(function () { // let the layout update
+					Q.layout(tool.element);
+				}, 1000);
 				if (o.focusAfterActivate) {
 					$('input[type=text],textarea', $columnSlot)
 					.slice(0, 1).plugin('Q/clickfocus');
@@ -1149,7 +1152,9 @@ function presentColumn(tool, $column, fullscreen, recalculateHeights) {
 			}
 		}
 	}
-	Q.layout($cs[0]);
+	setTimeout(function () { // give the layout a chance to update
+		Q.layout($cs[0]);
+	}, 0);
 	if (!fullscreen) {
 		return;
 	}
