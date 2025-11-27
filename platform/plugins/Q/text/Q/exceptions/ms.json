@@ -1,5 +1,5 @@
 {
-    "MissingFile": "fail {{filename}} hilang",
-    "InvalidLanguage": "bahasa tidak sah {{language}}",
-    "RequiredField": "{{field}} diperlukan"
+	"MissingFile": "fail {{filename}} hilang",
+	"InvalidLanguage": "bahasa tidak sah {{language}}",
+	"RequiredField": "{{field}} diperlukan"
 }

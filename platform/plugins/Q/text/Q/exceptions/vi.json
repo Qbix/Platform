@@ -1,5 +1,5 @@
 {
-    "MissingFile": "thiếu tập tin {{filename}}",
-    "InvalidLanguage": "ngôn ngữ không hợp lệ {{language}}",
-    "RequiredField": "{{field}} là bắt buộc"
+	"MissingFile": "thi\u1ebfu t\u1eadp tin {{filename}}",
+	"InvalidLanguage": "ng\u00f4n ng\u1eef kh\u00f4ng h\u1ee3p l\u1ec7 {{language}}",
+	"RequiredField": "{{field}} l\u00e0 b\u1eaft bu\u1ed9c"
 }

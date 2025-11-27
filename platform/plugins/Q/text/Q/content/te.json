@@ -1,158 +1,158 @@
 {
-    "request": {
-        "error": "అభ్యర్థన సమయంలో లోపం {{status}}",
-        "canceled": "అభ్యర్థన రద్దు చేయబడింది",
-        "500": "అంతర్గత సర్వర్ లోపం",
-        "404": "కనుగొనబడలేదు: {{url}}",
-        "501": "అభ్యర్థన అంతరాయం కలిగింది",
-        "401": "అనధికారమైనది",
-        "403": "నిషేధించబడింది"
-    },
-    "nonce": {
-        "sameDomain": "సెషన్ ముగిసిపోయింది. పేజీని రిఫ్రెష్ చేసి, మళ్లీ ప్రయత్నించండి.",
-        "otherDomain": "{{baseUrl}} వద్ద విదేశీ డొమైన్‌కి క్రాస్-డొమైన్ అభ్యర్థన బ్లాక్ చేయబడింది"
-    },
-    "words": {
-        "tap": "నొక్కండి",
-        "click": "క్లిక్ చేయండి",
-        "yes": "అవును",
-        "no": "సంఖ్య",
-        "Tap": "తాకండి",
-        "Click": "క్లిక్ చేయండి",
-        "Yes": "అవును",
-        "No": "సంఖ్య",
-        "OK": "అలాగే",
-        "Alert": "హెచ్చరిక",
-        "Confirm": "నిర్ధారణ",
-        "Prompt": "వచనాన్ని నమోదు చేయండి"
-    },
-    "months": {
-        "1": "జనవరి",
-        "2": "ఫిబ్రవరి",
-        "3": "మార్చి",
-        "4": "ఏప్రిల్",
-        "5": "మే",
-        "6": "జూన్",
-        "7": "జూలై",
-        "8": "ఆగస్టు",
-        "9": "సెప్టెంబర్",
-        "10": "అక్టోబర్",
-        "11": "నవంబర్",
-        "12": "డిసెంబర్"
-    },
-    "durations": {
-        "second": "రెండవ",
-        "seconds": "సెకన్లు",
-        "minute": "నిమిషం",
-        "minutes": "నిమిషాలు",
-        "hour": "గంటలు",
-        "day": "రోజు",
-        "days": "రోజులు",
-        "week": "వారం",
-        "weeks": "వారాలు",
-        "month": "నెల",
-        "months": "నెలల",
-        "year": "సంవత్సరం",
-        "years": "సంవత్సరాలు",
-        "decade": "దశాబ్దం",
-        "decades": "దశాబ్దాలు",
-        "century": "శతాబ్దం",
-        "centuries": "శతాబ్దాలు"
-    },
-    "audio": {
-        "allowMicrophoneAccess": "దయచేసి మీ మైక్రోఫోన్‌కు ప్రాప్యతను అనుమతించండి",
-        "record": "రికార్డ్ చేయండి",
-        "recording": "రికార్డింగ్",
-        "remains": "అవశేషాలు",
-        "maximum": "గరిష్టంగా",
-        "playing": "ఆడుతున్నారు",
-        "recorded": "రికార్డ్ చేయబడింది",
-        "clip": "క్లిప్",
-        "discard": "విస్మరించండి",
-        "encoding": "ఎన్కోడింగ్"
-    },
-    "video": {
-        "clip": "క్లిప్",
-        "errorNoSource": "వీడియో మూలం లేదు",
-        "SkipAfter": "తర్వాత దాటవేయి",
-        "Skip": "దాటవేయి"
-    },
-    "pdf": {
-        "clip": "క్లిప్",
-        "errorNoSource": "పిడిఎఫ్ మూలం లేదు"
-    },
-    "clip": {
-        "SetClipStart": "క్లిప్ ప్రారంభాన్ని సెట్ చేయండి",
-        "ClipStart": "క్లిప్ ప్రారంభం",
-        "SetClipEnd": "క్లిప్ ముగింపుని సెట్ చేయండి",
-        "ClipEnd": "క్లిప్ ముగింపు",
-        "StartMoreEnd": "ప్రారంభ స్థానం ముగింపు స్థానం కంటే ఎక్కువగా ఉండకూడదు",
-        "EndLessStart": "ముగింపు స్థానం ప్రారంభ స్థానం కంటే తక్కువగా ఉండకూడదు",
-        "WhichInvalid": "&#39;ఏది&#39; అనే వాదన చెల్లదు"
-    },
-    "alert": {
-        "title": "గమనించండి"
-    },
-    "confirm": {
-        "title": "నిర్ధారించండి",
-        "ok": "అవును",
-        "cancel": "సంఖ్య"
-    },
-    "prompt": {
-        "title": "వచనాన్ని నమోదు చేయండి",
-        "ok": "అలాగే"
-    },
-    "tabs": {
-        "more": "మరింత",
-        "Menu": "మెను"
-    },
-    "imagepicker": {
-        "errorReadingFile": "ఫైల్‌ని చదవడంలో లోపం ఏర్పడింది",
-        "errorType": "క్షమించండి, కానీ ఈ ఫైల్ రకానికి మద్దతు లేదు",
-        "cameraCommands": {
-            "prompt": "మీరు ఏమి చెయ్యాలనుకుంటున్నారు?",
-            "photo": "కొత్త ఫోటో తీయండి",
-            "library": "లైబ్రరీ నుండి ఎంచుకోండి"
-        },
-        "tooSmall": "దయచేసి పెద్ద చిత్రాన్ని ఎంచుకోండి.",
-        "cropping": {
-            "title": "పరిమాణం మరియు స్థానాన్ని సర్దుబాటు చేయండి",
-            "touchscreen": "జూమ్ చేయడానికి మరియు లాగడానికి మీ వేళ్లను ఉపయోగించండి",
-            "notTouchscreen": "జూమ్ చేయడానికి మరియు లాగడానికి మీ మౌస్ &amp; చక్రాన్ని ఉపయోగించండి"
-        }
-    },
-    "timestamp": {
-        "lastNight": "నిన్న రాత్రి",
-        "lastEvening": "చివరి సాయంత్రం",
-        "yesterday": "నిన్న",
-        "thisMorning": "ఈ ఉదయం",
-        "today": "నేడు",
-        "tonight": "ఈరాత్రి",
-        "tomorrowMorning": "టామ్ ఉదయం",
-        "tomorrow": "రేపు",
-        "hoursAgo": "{{h}} గంటల క్రితం",
-        "hourAgo": "{{h}} గంట క్రితం",
-        "minuteAgo": "{{m}} నిమిషం క్రితం",
-        "minutesAgo": "{{m}} నిమిషాల క్రితం",
-        "secondAgo": "{{s}} సెకను క్రితం",
-        "secondsAgo": "{{s}} సెకన్ల క్రితం",
-        "fewSecondsAgo": "సెకన్ల క్రితం",
-        "rightNow": "ఇప్పుడే",
-        "inSecond": "{{s}} సెకనులో",
-        "inSeconds": "{{s}} సెకన్లలో",
-        "inMinute": "{{m}} నిమిషంలో",
-        "inMinutes": "{{m}} నిమిషాల్లో",
-        "inHour": "{{h}} గంటలో",
-        "inHours": "{{h}} గంటల్లో",
-        "inUnderMinute": "1 నిమిషంలోపు"
-    },
-    "browser": {
-        "insecureContext": "ఇది పని చేయడానికి మీరు సురక్షితమైన సందర్భంలో బ్రౌజ్ చేయాలి"
-    },
-    "scan": {
-        "QR": "QR కోడ్‌లను స్కాన్ చేయండి"
-    },
-    "input": {
-        "Placeholder": "టైప్ చేయడం ప్రారంభించండి..."
-    }
+	"request": {
+		"error": "\u0c05\u0c2d\u0c4d\u0c2f\u0c30\u0c4d\u0c25\u0c28 \u0c38\u0c2e\u0c2f\u0c02\u0c32\u0c4b \u0c32\u0c4b\u0c2a\u0c02 {{status}}",
+		"canceled": "\u0c05\u0c2d\u0c4d\u0c2f\u0c30\u0c4d\u0c25\u0c28 \u0c30\u0c26\u0c4d\u0c26\u0c41 \u0c1a\u0c47\u0c2f\u0c2c\u0c21\u0c3f\u0c02\u0c26\u0c3f",
+		"500": "\u0c05\u0c02\u0c24\u0c30\u0c4d\u0c17\u0c24 \u0c38\u0c30\u0c4d\u0c35\u0c30\u0c4d \u0c32\u0c4b\u0c2a\u0c02",
+		"404": "\u0c15\u0c28\u0c41\u0c17\u0c4a\u0c28\u0c2c\u0c21\u0c32\u0c47\u0c26\u0c41: {{url}}",
+		"501": "\u0c05\u0c2d\u0c4d\u0c2f\u0c30\u0c4d\u0c25\u0c28 \u0c05\u0c02\u0c24\u0c30\u0c3e\u0c2f\u0c02 \u0c15\u0c32\u0c3f\u0c17\u0c3f\u0c02\u0c26\u0c3f",
+		"401": "\u0c05\u0c28\u0c27\u0c3f\u0c15\u0c3e\u0c30\u0c2e\u0c48\u0c28\u0c26\u0c3f",
+		"403": "\u0c28\u0c3f\u0c37\u0c47\u0c27\u0c3f\u0c02\u0c1a\u0c2c\u0c21\u0c3f\u0c02\u0c26\u0c3f"
+	},
+	"nonce": {
+		"sameDomain": "\u0c38\u0c46\u0c37\u0c28\u0c4d \u0c2e\u0c41\u0c17\u0c3f\u0c38\u0c3f\u0c2a\u0c4b\u0c2f\u0c3f\u0c02\u0c26\u0c3f. \u0c2a\u0c47\u0c1c\u0c40\u0c28\u0c3f \u0c30\u0c3f\u0c2b\u0c4d\u0c30\u0c46\u0c37\u0c4d \u0c1a\u0c47\u0c38\u0c3f, \u0c2e\u0c33\u0c4d\u0c32\u0c40 \u0c2a\u0c4d\u0c30\u0c2f\u0c24\u0c4d\u0c28\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f.",
+		"otherDomain": "{{baseUrl}} \u0c35\u0c26\u0c4d\u0c26 \u0c35\u0c3f\u0c26\u0c47\u0c36\u0c40 \u0c21\u0c4a\u0c2e\u0c48\u0c28\u0c4d \u0c28\u0c41\u0c02\u0c21\u0c3f \u0c15\u0c4d\u0c30\u0c3e\u0c38\u0c4d-\u0c21\u0c4a\u0c2e\u0c48\u0c28\u0c4d {{method}} \u0c05\u0c2d\u0c4d\u0c2f\u0c30\u0c4d\u0c25\u0c28 \u0c2c\u0c4d\u0c32\u0c3e\u0c15\u0c4d \u0c1a\u0c47\u0c2f\u0c2c\u0c21\u0c3f\u0c02\u0c26\u0c3f"
+	},
+	"words": {
+		"tap": "\u0c28\u0c4a\u0c15\u0c4d\u0c15\u0c02\u0c21\u0c3f",
+		"click": "\u0c15\u0c4d\u0c32\u0c3f\u0c15\u0c4d \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f",
+		"yes": "\u0c05\u0c35\u0c41\u0c28\u0c41",
+		"no": "\u0c38\u0c02\u0c16\u0c4d\u0c2f",
+		"Tap": "\u0c24\u0c3e\u0c15\u0c02\u0c21\u0c3f",
+		"Click": "\u0c15\u0c4d\u0c32\u0c3f\u0c15\u0c4d \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f",
+		"Yes": "\u0c05\u0c35\u0c41\u0c28\u0c41",
+		"No": "\u0c38\u0c02\u0c16\u0c4d\u0c2f",
+		"OK": "\u0c05\u0c32\u0c3e\u0c17\u0c47",
+		"Alert": "\u0c39\u0c46\u0c1a\u0c4d\u0c1a\u0c30\u0c3f\u0c15",
+		"Confirm": "\u0c28\u0c3f\u0c30\u0c4d\u0c27\u0c3e\u0c30\u0c23",
+		"Prompt": "\u0c35\u0c1a\u0c28\u0c3e\u0c28\u0c4d\u0c28\u0c3f \u0c28\u0c2e\u0c4b\u0c26\u0c41 \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f"
+	},
+	"months": {
+		"1": "\u0c1c\u0c28\u0c35\u0c30\u0c3f",
+		"2": "\u0c2b\u0c3f\u0c2c\u0c4d\u0c30\u0c35\u0c30\u0c3f",
+		"3": "\u0c2e\u0c3e\u0c30\u0c4d\u0c1a\u0c3f",
+		"4": "\u0c0f\u0c2a\u0c4d\u0c30\u0c3f\u0c32\u0c4d",
+		"5": "\u0c2e\u0c47",
+		"6": "\u0c1c\u0c42\u0c28\u0c4d",
+		"7": "\u0c1c\u0c42\u0c32\u0c48",
+		"8": "\u0c06\u0c17\u0c38\u0c4d\u0c1f\u0c41",
+		"9": "\u0c38\u0c46\u0c2a\u0c4d\u0c1f\u0c46\u0c02\u0c2c\u0c30\u0c4d",
+		"10": "\u0c05\u0c15\u0c4d\u0c1f\u0c4b\u0c2c\u0c30\u0c4d",
+		"11": "\u0c28\u0c35\u0c02\u0c2c\u0c30\u0c4d",
+		"12": "\u0c21\u0c3f\u0c38\u0c46\u0c02\u0c2c\u0c30\u0c4d"
+	},
+	"durations": {
+		"second": "\u0c30\u0c46\u0c02\u0c21\u0c35",
+		"seconds": "\u0c38\u0c46\u0c15\u0c28\u0c4d\u0c32\u0c41",
+		"minute": "\u0c28\u0c3f\u0c2e\u0c3f\u0c37\u0c02",
+		"minutes": "\u0c28\u0c3f\u0c2e\u0c3f\u0c37\u0c3e\u0c32\u0c41",
+		"hour": "\u0c17\u0c02\u0c1f\u0c32\u0c41",
+		"day": "\u0c30\u0c4b\u0c1c\u0c41",
+		"days": "\u0c30\u0c4b\u0c1c\u0c41\u0c32\u0c41",
+		"week": "\u0c35\u0c3e\u0c30\u0c02",
+		"weeks": "\u0c35\u0c3e\u0c30\u0c3e\u0c32\u0c41",
+		"month": "\u0c28\u0c46\u0c32",
+		"months": "\u0c28\u0c46\u0c32\u0c32",
+		"year": "\u0c38\u0c02\u0c35\u0c24\u0c4d\u0c38\u0c30\u0c02",
+		"years": "\u0c38\u0c02\u0c35\u0c24\u0c4d\u0c38\u0c30\u0c3e\u0c32\u0c41",
+		"decade": "\u0c26\u0c36\u0c3e\u0c2c\u0c4d\u0c26\u0c02",
+		"decades": "\u0c26\u0c36\u0c3e\u0c2c\u0c4d\u0c26\u0c3e\u0c32\u0c41",
+		"century": "\u0c36\u0c24\u0c3e\u0c2c\u0c4d\u0c26\u0c02",
+		"centuries": "\u0c36\u0c24\u0c3e\u0c2c\u0c4d\u0c26\u0c3e\u0c32\u0c41"
+	},
+	"audio": {
+		"allowMicrophoneAccess": "\u0c26\u0c2f\u0c1a\u0c47\u0c38\u0c3f \u0c2e\u0c40 \u0c2e\u0c48\u0c15\u0c4d\u0c30\u0c4b\u0c2b\u0c4b\u0c28\u0c4d\u200c\u0c15\u0c41 \u0c2a\u0c4d\u0c30\u0c3e\u0c2a\u0c4d\u0c2f\u0c24\u0c28\u0c41 \u0c05\u0c28\u0c41\u0c2e\u0c24\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f",
+		"record": "\u0c30\u0c3f\u0c15\u0c3e\u0c30\u0c4d\u0c21\u0c4d \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f",
+		"recording": "\u0c30\u0c3f\u0c15\u0c3e\u0c30\u0c4d\u0c21\u0c3f\u0c02\u0c17\u0c4d",
+		"remains": "\u0c05\u0c35\u0c36\u0c47\u0c37\u0c3e\u0c32\u0c41",
+		"maximum": "\u0c17\u0c30\u0c3f\u0c37\u0c4d\u0c1f\u0c02\u0c17\u0c3e",
+		"playing": "\u0c06\u0c21\u0c41\u0c24\u0c41\u0c28\u0c4d\u0c28\u0c3e\u0c30\u0c41",
+		"recorded": "\u0c30\u0c3f\u0c15\u0c3e\u0c30\u0c4d\u0c21\u0c4d \u0c1a\u0c47\u0c2f\u0c2c\u0c21\u0c3f\u0c02\u0c26\u0c3f",
+		"clip": "\u0c15\u0c4d\u0c32\u0c3f\u0c2a\u0c4d",
+		"discard": "\u0c35\u0c3f\u0c38\u0c4d\u0c2e\u0c30\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f",
+		"encoding": "\u0c0e\u0c28\u0c4d\u0c15\u0c4b\u0c21\u0c3f\u0c02\u0c17\u0c4d"
+	},
+	"video": {
+		"clip": "\u0c15\u0c4d\u0c32\u0c3f\u0c2a\u0c4d",
+		"errorNoSource": "\u0c35\u0c40\u0c21\u0c3f\u0c2f\u0c4b \u0c2e\u0c42\u0c32\u0c02 \u0c32\u0c47\u0c26\u0c41",
+		"SkipAfter": "\u0c24\u0c30\u0c4d\u0c35\u0c3e\u0c24 \u0c26\u0c3e\u0c1f\u0c35\u0c47\u0c2f\u0c3f",
+		"Skip": "\u0c26\u0c3e\u0c1f\u0c35\u0c47\u0c2f\u0c3f"
+	},
+	"pdf": {
+		"clip": "\u0c15\u0c4d\u0c32\u0c3f\u0c2a\u0c4d",
+		"errorNoSource": "\u0c2a\u0c3f\u0c21\u0c3f\u0c0e\u0c2b\u0c4d \u0c2e\u0c42\u0c32\u0c02 \u0c32\u0c47\u0c26\u0c41"
+	},
+	"clip": {
+		"SetClipStart": "\u0c15\u0c4d\u0c32\u0c3f\u0c2a\u0c4d \u0c2a\u0c4d\u0c30\u0c3e\u0c30\u0c02\u0c2d\u0c3e\u0c28\u0c4d\u0c28\u0c3f \u0c38\u0c46\u0c1f\u0c4d \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f",
+		"ClipStart": "\u0c15\u0c4d\u0c32\u0c3f\u0c2a\u0c4d \u0c2a\u0c4d\u0c30\u0c3e\u0c30\u0c02\u0c2d\u0c02",
+		"SetClipEnd": "\u0c15\u0c4d\u0c32\u0c3f\u0c2a\u0c4d \u0c2e\u0c41\u0c17\u0c3f\u0c02\u0c2a\u0c41\u0c28\u0c3f \u0c38\u0c46\u0c1f\u0c4d \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f",
+		"ClipEnd": "\u0c15\u0c4d\u0c32\u0c3f\u0c2a\u0c4d \u0c2e\u0c41\u0c17\u0c3f\u0c02\u0c2a\u0c41",
+		"StartMoreEnd": "\u0c2a\u0c4d\u0c30\u0c3e\u0c30\u0c02\u0c2d \u0c38\u0c4d\u0c25\u0c3e\u0c28\u0c02 \u0c2e\u0c41\u0c17\u0c3f\u0c02\u0c2a\u0c41 \u0c38\u0c4d\u0c25\u0c3e\u0c28\u0c02 \u0c15\u0c02\u0c1f\u0c47 \u0c0e\u0c15\u0c4d\u0c15\u0c41\u0c35\u0c17\u0c3e \u0c09\u0c02\u0c21\u0c15\u0c42\u0c21\u0c26\u0c41",
+		"EndLessStart": "\u0c2e\u0c41\u0c17\u0c3f\u0c02\u0c2a\u0c41 \u0c38\u0c4d\u0c25\u0c3e\u0c28\u0c02 \u0c2a\u0c4d\u0c30\u0c3e\u0c30\u0c02\u0c2d \u0c38\u0c4d\u0c25\u0c3e\u0c28\u0c02 \u0c15\u0c02\u0c1f\u0c47 \u0c24\u0c15\u0c4d\u0c15\u0c41\u0c35\u0c17\u0c3e \u0c09\u0c02\u0c21\u0c15\u0c42\u0c21\u0c26\u0c41",
+		"WhichInvalid": "&#39;\u0c0f\u0c26\u0c3f&#39; \u0c05\u0c28\u0c47 \u0c35\u0c3e\u0c26\u0c28 \u0c1a\u0c46\u0c32\u0c4d\u0c32\u0c26\u0c41"
+	},
+	"alert": {
+		"title": "\u0c17\u0c2e\u0c28\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f"
+	},
+	"confirm": {
+		"title": "\u0c28\u0c3f\u0c30\u0c4d\u0c27\u0c3e\u0c30\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f",
+		"ok": "\u0c05\u0c35\u0c41\u0c28\u0c41",
+		"cancel": "\u0c38\u0c02\u0c16\u0c4d\u0c2f"
+	},
+	"prompt": {
+		"title": "\u0c35\u0c1a\u0c28\u0c3e\u0c28\u0c4d\u0c28\u0c3f \u0c28\u0c2e\u0c4b\u0c26\u0c41 \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f",
+		"ok": "\u0c05\u0c32\u0c3e\u0c17\u0c47"
+	},
+	"tabs": {
+		"more": "\u0c2e\u0c30\u0c3f\u0c02\u0c24",
+		"Menu": "\u0c2e\u0c46\u0c28\u0c41"
+	},
+	"imagepicker": {
+		"errorReadingFile": "\u0c2b\u0c48\u0c32\u0c4d\u200c\u0c28\u0c3f \u0c1a\u0c26\u0c35\u0c21\u0c02\u0c32\u0c4b \u0c32\u0c4b\u0c2a\u0c02 \u0c0f\u0c30\u0c4d\u0c2a\u0c21\u0c3f\u0c02\u0c26\u0c3f",
+		"errorType": "\u0c15\u0c4d\u0c37\u0c2e\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f, \u0c15\u0c3e\u0c28\u0c40 \u0c08 \u0c2b\u0c48\u0c32\u0c4d \u0c30\u0c15\u0c3e\u0c28\u0c3f\u0c15\u0c3f \u0c2e\u0c26\u0c4d\u0c26\u0c24\u0c41 \u0c32\u0c47\u0c26\u0c41",
+		"cameraCommands": {
+			"prompt": "\u0c2e\u0c40\u0c30\u0c41 \u0c0f\u0c2e\u0c3f \u0c1a\u0c46\u0c2f\u0c4d\u0c2f\u0c3e\u0c32\u0c28\u0c41\u0c15\u0c41\u0c02\u0c1f\u0c41\u0c28\u0c4d\u0c28\u0c3e\u0c30\u0c41?",
+			"photo": "\u0c15\u0c4a\u0c24\u0c4d\u0c24 \u0c2b\u0c4b\u0c1f\u0c4b \u0c24\u0c40\u0c2f\u0c02\u0c21\u0c3f",
+			"library": "\u0c32\u0c48\u0c2c\u0c4d\u0c30\u0c30\u0c40 \u0c28\u0c41\u0c02\u0c21\u0c3f \u0c0e\u0c02\u0c1a\u0c41\u0c15\u0c4b\u0c02\u0c21\u0c3f"
+		},
+		"tooSmall": "\u0c26\u0c2f\u0c1a\u0c47\u0c38\u0c3f \u0c2a\u0c46\u0c26\u0c4d\u0c26 \u0c1a\u0c3f\u0c24\u0c4d\u0c30\u0c3e\u0c28\u0c4d\u0c28\u0c3f \u0c0e\u0c02\u0c1a\u0c41\u0c15\u0c4b\u0c02\u0c21\u0c3f.",
+		"cropping": {
+			"title": "\u0c2a\u0c30\u0c3f\u0c2e\u0c3e\u0c23\u0c02 \u0c2e\u0c30\u0c3f\u0c2f\u0c41 \u0c38\u0c4d\u0c25\u0c3e\u0c28\u0c3e\u0c28\u0c4d\u0c28\u0c3f \u0c38\u0c30\u0c4d\u0c26\u0c41\u0c2c\u0c3e\u0c1f\u0c41 \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f",
+			"touchscreen": "\u0c1c\u0c42\u0c2e\u0c4d \u0c1a\u0c47\u0c2f\u0c21\u0c3e\u0c28\u0c3f\u0c15\u0c3f \u0c2e\u0c30\u0c3f\u0c2f\u0c41 \u0c32\u0c3e\u0c17\u0c21\u0c3e\u0c28\u0c3f\u0c15\u0c3f \u0c2e\u0c40 \u0c35\u0c47\u0c33\u0c4d\u0c32\u0c28\u0c41 \u0c09\u0c2a\u0c2f\u0c4b\u0c17\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f",
+			"notTouchscreen": "\u0c1c\u0c42\u0c2e\u0c4d \u0c1a\u0c47\u0c2f\u0c21\u0c3e\u0c28\u0c3f\u0c15\u0c3f \u0c2e\u0c30\u0c3f\u0c2f\u0c41 \u0c32\u0c3e\u0c17\u0c21\u0c3e\u0c28\u0c3f\u0c15\u0c3f \u0c2e\u0c40 \u0c2e\u0c4c\u0c38\u0c4d &amp; \u0c1a\u0c15\u0c4d\u0c30\u0c3e\u0c28\u0c4d\u0c28\u0c3f \u0c09\u0c2a\u0c2f\u0c4b\u0c17\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f"
+		}
+	},
+	"timestamp": {
+		"lastNight": "\u0c28\u0c3f\u0c28\u0c4d\u0c28 \u0c30\u0c3e\u0c24\u0c4d\u0c30\u0c3f",
+		"lastEvening": "\u0c1a\u0c3f\u0c35\u0c30\u0c3f \u0c38\u0c3e\u0c2f\u0c02\u0c24\u0c4d\u0c30\u0c02",
+		"yesterday": "\u0c28\u0c3f\u0c28\u0c4d\u0c28",
+		"thisMorning": "\u0c08 \u0c09\u0c26\u0c2f\u0c02",
+		"today": "\u0c28\u0c47\u0c21\u0c41",
+		"tonight": "\u0c08\u0c30\u0c3e\u0c24\u0c4d\u0c30\u0c3f",
+		"tomorrowMorning": "\u0c1f\u0c3e\u0c2e\u0c4d \u0c09\u0c26\u0c2f\u0c02",
+		"tomorrow": "\u0c30\u0c47\u0c2a\u0c41",
+		"hoursAgo": "{{h}} \u0c17\u0c02\u0c1f\u0c32 \u0c15\u0c4d\u0c30\u0c3f\u0c24\u0c02",
+		"hourAgo": "{{h}} \u0c17\u0c02\u0c1f \u0c15\u0c4d\u0c30\u0c3f\u0c24\u0c02",
+		"minuteAgo": "{{m}} \u0c28\u0c3f\u0c2e\u0c3f\u0c37\u0c02 \u0c15\u0c4d\u0c30\u0c3f\u0c24\u0c02",
+		"minutesAgo": "{{m}} \u0c28\u0c3f\u0c2e\u0c3f\u0c37\u0c3e\u0c32 \u0c15\u0c4d\u0c30\u0c3f\u0c24\u0c02",
+		"secondAgo": "{{s}} \u0c38\u0c46\u0c15\u0c28\u0c41 \u0c15\u0c4d\u0c30\u0c3f\u0c24\u0c02",
+		"secondsAgo": "{{s}} \u0c38\u0c46\u0c15\u0c28\u0c4d\u0c32 \u0c15\u0c4d\u0c30\u0c3f\u0c24\u0c02",
+		"fewSecondsAgo": "\u0c38\u0c46\u0c15\u0c28\u0c4d\u0c32 \u0c15\u0c4d\u0c30\u0c3f\u0c24\u0c02",
+		"rightNow": "\u0c07\u0c2a\u0c4d\u0c2a\u0c41\u0c21\u0c47",
+		"inSecond": "{{s}} \u0c38\u0c46\u0c15\u0c28\u0c41\u0c32\u0c4b",
+		"inSeconds": "{{s}} \u0c38\u0c46\u0c15\u0c28\u0c4d\u0c32\u0c32\u0c4b",
+		"inMinute": "{{m}} \u0c28\u0c3f\u0c2e\u0c3f\u0c37\u0c02\u0c32\u0c4b",
+		"inMinutes": "{{m}} \u0c28\u0c3f\u0c2e\u0c3f\u0c37\u0c3e\u0c32\u0c4d\u0c32\u0c4b",
+		"inHour": "{{h}} \u0c17\u0c02\u0c1f\u0c32\u0c4b",
+		"inHours": "{{h}} \u0c17\u0c02\u0c1f\u0c32\u0c4d\u0c32\u0c4b",
+		"inUnderMinute": "1 \u0c28\u0c3f\u0c2e\u0c3f\u0c37\u0c02\u0c32\u0c4b\u0c2a\u0c41"
+	},
+	"browser": {
+		"insecureContext": "\u0c07\u0c26\u0c3f \u0c2a\u0c28\u0c3f \u0c1a\u0c47\u0c2f\u0c21\u0c3e\u0c28\u0c3f\u0c15\u0c3f \u0c2e\u0c40\u0c30\u0c41 \u0c38\u0c41\u0c30\u0c15\u0c4d\u0c37\u0c3f\u0c24\u0c2e\u0c48\u0c28 \u0c38\u0c02\u0c26\u0c30\u0c4d\u0c2d\u0c02\u0c32\u0c4b \u0c2c\u0c4d\u0c30\u0c4c\u0c1c\u0c4d \u0c1a\u0c47\u0c2f\u0c3e\u0c32\u0c3f"
+	},
+	"scan": {
+		"QR": "QR \u0c15\u0c4b\u0c21\u0c4d\u200c\u0c32\u0c28\u0c41 \u0c38\u0c4d\u0c15\u0c3e\u0c28\u0c4d \u0c1a\u0c47\u0c2f\u0c02\u0c21\u0c3f"
+	},
+	"input": {
+		"Placeholder": "\u0c1f\u0c48\u0c2a\u0c4d \u0c1a\u0c47\u0c2f\u0c21\u0c02 \u0c2a\u0c4d\u0c30\u0c3e\u0c30\u0c02\u0c2d\u0c3f\u0c02\u0c1a\u0c02\u0c21\u0c3f..."
+	}
 }

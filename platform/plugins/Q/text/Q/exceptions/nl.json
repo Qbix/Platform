@@ -1,5 +1,5 @@
 {
-    "MissingFile": "ontbrekend bestand {{filename}}",
-    "InvalidLanguage": "ongeldige taal {{language}}",
-    "RequiredField": "{{field}} vereist"
+	"MissingFile": "ontbrekend bestand {{filename}}",
+	"InvalidLanguage": "ongeldige taal {{language}}",
+	"RequiredField": "{{field}} vereist"
 }

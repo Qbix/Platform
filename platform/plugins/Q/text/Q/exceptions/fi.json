@@ -1,5 +1,5 @@
 {
-    "MissingFile": "puuttuva tiedosto {{filename}}",
-    "InvalidLanguage": "virheellinen kieli {{language}}",
-    "RequiredField": "{{field}} vaaditaan"
+	"MissingFile": "puuttuva tiedosto {{filename}}",
+	"InvalidLanguage": "virheellinen kieli {{language}}",
+	"RequiredField": "{{field}} vaaditaan"
 }

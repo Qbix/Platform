@@ -1,5 +1,5 @@
 {
-    "MissingFile": "kukosa faili {{filename}}",
-    "InvalidLanguage": "lugha batili {{language}}",
-    "RequiredField": "{{field}} inahitajika"
+	"MissingFile": "kukosa faili {{filename}}",
+	"InvalidLanguage": "lugha batili {{language}}",
+	"RequiredField": "{{field}} inahitajika"
 }

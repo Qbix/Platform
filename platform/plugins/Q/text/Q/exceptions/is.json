@@ -1,5 +1,5 @@
 {
-    "MissingFile": "vantar skrá {{filename}}",
-    "InvalidLanguage": "ógilt tungumál {{language}}",
-    "RequiredField": "{{field}} þarf"
+	"MissingFile": "vantar skr\u00e1 {{filename}}",
+	"InvalidLanguage": "\u00f3gilt tungum\u00e1l {{language}}",
+	"RequiredField": "{{field}} \u00fearf"
 }

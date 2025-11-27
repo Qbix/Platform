@@ -1,5 +1,5 @@
 {
-    "MissingFile": "缺少文件{{filename}}",
-    "InvalidLanguage": "无效语言{{language}}",
-    "RequiredField": "需要{{field}}"
+	"MissingFile": "\u7f3a\u5c11\u6587\u4ef6{{filename}}",
+	"InvalidLanguage": "\u65e0\u6548\u8bed\u8a00{{language}}",
+	"RequiredField": "\u9700\u8981{{field}}"
 }

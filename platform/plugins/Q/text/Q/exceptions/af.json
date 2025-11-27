@@ -1,5 +1,5 @@
 {
-    "MissingFile": "ontbrekende lêer {{filename}}",
-    "InvalidLanguage": "ongeldige taal {{language}}",
-    "RequiredField": "{{field}} word vereis"
+	"MissingFile": "ontbrekende l\u00eaer {{filename}}",
+	"InvalidLanguage": "ongeldige taal {{language}}",
+	"RequiredField": "{{field}} word vereis"
 }

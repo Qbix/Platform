@@ -1,5 +1,5 @@
 {
-    "MissingFile": "file mancante {{filename}}",
-    "InvalidLanguage": "lingua non valida {{language}}",
-    "RequiredField": "{{field}} è obbligatorio"
+	"MissingFile": "file mancante {{filename}}",
+	"InvalidLanguage": "lingua non valida {{language}}",
+	"RequiredField": "{{field}} \u00e8 obbligatorio"
 }

@@ -1,5 +1,5 @@
 {
-    "MissingFile": "누락된 파일 {{filename}}",
-    "InvalidLanguage": "잘못된 언어 {{language}}",
-    "RequiredField": "{{field}} 가 필요합니다"
+	"MissingFile": "\ub204\ub77d\ub41c \ud30c\uc77c {{filename}}",
+	"InvalidLanguage": "\uc798\ubabb\ub41c \uc5b8\uc5b4 {{language}}",
+	"RequiredField": "{{field}} \uac00 \ud544\uc694\ud569\ub2c8\ub2e4"
 }

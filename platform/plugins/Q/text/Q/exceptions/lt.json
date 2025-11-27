@@ -1,5 +1,5 @@
 {
-    "MissingFile": "trūksta failo {{filename}}",
-    "InvalidLanguage": "neteisinga kalba {{language}}",
-    "RequiredField": "Reikalingas {{field}}"
+	"MissingFile": "tr\u016bksta failo {{filename}}",
+	"InvalidLanguage": "neteisinga kalba {{language}}",
+	"RequiredField": "Reikalingas {{field}}"
 }
