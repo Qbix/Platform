@@ -6407,7 +6407,7 @@ function _loadToolScript(toolElement, callback, shared, parentId, options, white
 				typeof toolConstructor !== 'string'
 				&& !(Q.isPlainObject(toolConstructor) && toolConstructor.js
 			)))) {
-				toolConstructor = function () {
+				toolConstructor = _qtc[toolName] = function () {
 					log("Missing tool constructor for " + toolName);
 				}; 
 				Q.Tool.onLoadedConstructor(toolName)
@@ -11295,7 +11295,9 @@ Q.activate = function _Q_activate(elem, options, callback, internal) {
 	shared.pipe.add(shared.waitingForTools, 1, _activated)
 		.run();
 		
-	Q.Tool.beingActivated = ba;
+	if (ba) {
+		Q.Tool.beingActivated = ba;
+	}
 	
 	return promise;
 	
