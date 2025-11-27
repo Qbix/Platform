@@ -82,7 +82,9 @@ Q.Tool.jQuery('Q/clickable', function _Q_clickable(o) {
 					var key = parts[0];
 					var val = parts.slice(1).join(":");
 					if (key) {
-						$this.attr(key, val);
+						try {
+							$this.attr(key, val);
+						} catch (e) {}
 					}
 				});
 			}
@@ -94,7 +96,7 @@ Q.Tool.jQuery('Q/clickable', function _Q_clickable(o) {
 			}
 
 			// Restore inline style exactly
-			var oldStyle = $this.state("Q/clickable").oldStyle;
+			var oldStyle = state && state.oldStyle;
 			if (oldStyle != null) {
 				$this.attr("style", oldStyle);
 			} else {
