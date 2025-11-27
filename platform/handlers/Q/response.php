@@ -34,6 +34,7 @@ function Q_response($params)
 			if (Q_Config::get('Q', 'response', 'onSuccessShowFrom', true)) {
 				$onSuccess = Q_Uri::url($onSuccess.'?Q.fromSuccess='.Q_Dispatcher::uri());
 			}
+			Q_Response::sendCacheControlHeaders();
 			Q_Response::redirect($onSuccess);
 			return;
 		}
@@ -164,6 +165,8 @@ function Q_response($params)
 			$to_encode['echo'] = $echo;
 		}
 
+		Q_Response::sendCacheControlHeaders();
+
 		$json = Q::json_encode(Q::cutoff($to_encode));
 		$callback = Q_Request::callback();
 		switch (strtolower($isAjax)) {
@@ -247,6 +250,8 @@ Q.init();
 	Q_Response::processSessionExtras('after');
 
 	$slots = Q_Response::slots(false);
+
+	Q_Response::sendCacheControlHeaders();
 
 	// Render a full HTML layout
 	$layout_view = Q_Response::layoutView();
