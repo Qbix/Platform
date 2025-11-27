@@ -9126,10 +9126,10 @@ Q.trigger = function _Q_trigger(eventName, element, args) {
  *  on container elements.
  *  If a non-element is passed here (such as null, or a DOMEvent)
  *  then this defaults to the document element.
- * @param {Boolean} [force] Pass true here to handle Q.onLayout events
- *   even if ResizeObserver was added
+ * @param {Boolean} [skipIfObserved] Pass true here to skip Q.onLayout events
+ *  for elements on which ResizeObserver was added
  */
-Q.layout = function _Q_layout(element, force) {
+Q.layout = function _Q_layout(element, skipIfObserved) {
 	if (!(element instanceof Element)) {
 		element = null;
 	}
@@ -9138,7 +9138,7 @@ Q.layout = function _Q_layout(element, force) {
 			var event = _layoutEvents[i];
 
 			// return if ResizeObserver defined on this element
-			if (!force && _layoutObservers[i]) {
+			if (skipIfObserved && _layoutObservers[i]) {
 				return;
 			}
 

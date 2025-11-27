@@ -62,12 +62,58 @@ Q.Tool.jQuery('Q/clickable', function _Q_clickable(o) {
 	var originalTime = Date.now();
 	var timing = state.timing;
 
-	setTimeout(function _clickify() {
-		// if element already wrapped clickable container, do nothing
+	setTimeout(_clickify, timing.renderingDelay);
+	Q.onLayout(this[0]).set(_clickify, 'Q/clickable');
+	state.clickify = _clickify;
+	return this;
+
+	function _clickify() {
+
+		// ----- 1. If wrapper exists, unwrap + restore -----
+		var $existing = $this.closest(".Q_clickable_container");
+		if ($existing.length) {
+
+			// Restore original attributes (except class)
+			var storedAttr = $existing.attr("data-origin-attributes") || "";
+			if (storedAttr) {
+				storedAttr.split(";").forEach(function (pair) {
+					if (!pair) return;
+					var parts = pair.split(":");
+					var key = parts[0];
+					var val = parts.slice(1).join(":");
+					if (key) {
+						$this.attr(key, val);
+					}
+				});
+			}
+
+			// Restore classes
+			var storedClasses = $existing.attr("data-origin-classes");
+			if (storedClasses != null) {
+				$this.attr("class", storedClasses);
+			}
+
+			// Restore inline style exactly
+			var oldStyle = $this.state("Q/clickable").oldStyle;
+			if (oldStyle != null) {
+				$this.attr("style", oldStyle);
+			} else {
+				$this.removeAttr("style");
+			}
+
+			// Move element out of wrapper
+			$this.insertAfter($existing);
+
+			// Remove wrapper
+			$existing.remove();
+		}
+
+		// ----- 2. Safety guard: if wrapper still exists after removing, abort -----
 		if ($this.closest(".Q_clickable_container").length) {
 			return;
 		}
 
+		// ----- 3. If invisible, wait for visibility -----
 		if (!$this.is(':visible')) {
 			if (!$this.closest('body').length) {
 				return;
@@ -78,132 +124,145 @@ Q.Tool.jQuery('Q/clickable', function _Q_clickable(o) {
 			return;
 		}
 
+		// ----- 4. Save the element’s current inline style for future unwrap -----
 		state.oldStyle = $this.attr('style');
+
+		// ----- 5. Begin wrapping logic (unchanged from your original) -----
 		var display = $this.css('display');
 		var position = $this.css('position');
 		var p = $this.parent();
+
 		if (p.length && p[0].tagName.toUpperCase() === 'TD') {
 			p.css('position', 'relative');
 		}
-	    if (!o.selectable) {
+
+		if (!o.selectable) {
 			$this[0].preventSelections(true);
 		}
-		// var rect = $this[0].getBoundingClientRect();
+
 		var bw = parseInt($this.css('border-left-width')) + parseInt($this.css('border-right-width'));
 		var bh = parseInt($this.css('border-top-width')) + parseInt($this.css('border-bottom-width'));
 		var csw = Math.ceil($this[0].offsetWidth + bw);
 		var csh = Math.ceil($this[0].offsetHeight + bh);
-		// $this.css('height', $this.height()+'px');
-		var $container = $('<span class="Q_clickable_container" />').css({
-			'display': (display === 'inline' || display === 'inline-block') ? 'inline-block' : display,
-			'zoom': 1,
-			'position': position === 'static' ? 'relative' : position,
-			'left': position === 'static' ? 0 : ($this.css('right') === 'auto' ? $this.css('left') : 'auto'),
-			'right': position === 'static' ? 'auto' : $this.css('right'),
-			'top': position === 'static' ? 0 : $this.css('top'),
-			'margin': '0px',
-			'padding': '0px',
-			'border': '0px solid transparent',
-			'float': $this.css('float'),
-			// 'z-index': $this.css('z-index') + 1, //10000,
-			'width': csw+'px',
-			'height': csh+'px',
-			'max-width': $this.css('max-width'),
-			'max-height': $this.css('max-height'),
-			'overflow': 'visible',
-			'line-height': $this.css('line-height'),
-			'vertical-align': $this.css('vertical-align'),
-			'text-align': $this.css('text-align')
-		}).attr({
-			'data-origin-classes': $this.attr('class'),
-			'data-origin-attributes': function () {
-				var i,
-					attributeNodes = $this[0].attributes,
-					length = attributeNodes.length,
-					attrs = '';
 
-				for (i = 0; i < length; i++) {
-					if (attributeNodes[i].name === 'class') {
-						continue;
+		var $container = $('<span class="Q_clickable_container" />')
+			.css({
+				'display': (display === 'inline' || display === 'inline-block') ? 'inline-block' : display,
+				'zoom': 1,
+				'position': position === 'static' ? 'relative' : position,
+				'left': position === 'static' ? 0 : ($this.css('right') === 'auto' ? $this.css('left') : 'auto'),
+				'right': position === 'static' ? 'auto' : $this.css('right'),
+				'top': position === 'static' ? 0 : $this.css('top'),
+				'margin': '0px',
+				'padding': '0px',
+				'border': '0px solid transparent',
+				'float': $this.css('float'),
+				'width': csw + 'px',
+				'height': csh + 'px',
+				'max-width': $this.css('max-width'),
+				'max-height': $this.css('max-height'),
+				'overflow': 'visible',
+				'line-height': $this.css('line-height'),
+				'vertical-align': $this.css('vertical-align'),
+				'text-align': $this.css('text-align')
+			})
+			.attr({
+				'data-origin-classes': $this.attr('class'),
+				'data-origin-attributes': (function () {
+					var i, attrs = '', attributeNodes = $this[0].attributes;
+					for (i = 0; i < attributeNodes.length; i++) {
+						var name = attributeNodes[i].name;
+						if (name === 'class') continue;
+						attrs += name + ':' + attributeNodes[i].value + ';';
 					}
+					return attrs;
+				})()
+			});
 
-					attrs += attributeNodes[i].name + ':' + attributeNodes[i].value + ';';
-				}
-				return attrs;
-			}()
-		});
 		if (state.className) {
 			$container.addClass(state.className);
 		}
-		$this.hide(); // to get percentage values, if any, for margins & padding
+
+		// Hide momentarily to compute percentage margins
+		$this.hide();
 		var cs = $this[0].computedStyle();
+
 		Q.each(['left', 'right', 'top', 'bottom'], function (i, pos) {
 			var f = 'margin' + pos.toCapitalized();
 			$container[0].style[f] = cs[f];
 		});
+
 		$this.show();
 		$this.css('margin', 0);
+
+		// Insert wrapper
 		$container.insertAfter($this);
-		// $this.css('height', h);
-		// if (display === 'inline') {
-		// 	$container.html('&nbsp;');
-		// }
+
+		// ----- Shadow logic preserved exactly -----
 		if (!o.allowCallout) {
 			$this.css('-webkit-touch-callout', 'none');
 		}
+
 		if (o.shadow && o.shadow.src) {
-			var shadow = $('<img />').addClass('Q_clickable_shadow')
+			var shadow = $('<img />')
+				.addClass('Q_clickable_shadow')
 				.attr('src', Q.url(o.shadow.src));
-			shadow.css('display', 'none').appendTo($container).on('load', function () {
-				var $this = $(this);
-				var width = csw * o.shadow.stretch;
-				var height = Math.min($this.height() * width / $this.width(), csh/2);
-				var toSet = {
-					'position': 'absolute',
-					'left': (csw - width)/2+'px',
-					'top': csh - height * (1-o.shadow.dip)+'px',
-					'width': width+'px',
-					'height': height+'px',
-					'opacity': o.shadow.opacity,
-					'display': '',
-					'padding': '0px',
-					'background': 'none',
-					'border': '0px',
-					'outline': '0px'
-				};
-				var i, l, props = Object.keys(toSet);
-				$this.css(toSet);
-			});
+
+			shadow.css('display', 'none')
+				.appendTo($container)
+				.on('load', function () {
+					var $s = $(this);
+					var width = csw * o.shadow.stretch;
+					var height = Math.min($s.height() * width / $s.width(), csh / 2);
+
+					$s.css({
+						'position': 'absolute',
+						'left': (csw - width) / 2 + 'px',
+						'top': csh - height * (1 - o.shadow.dip) + 'px',
+						'width': width + 'px',
+						'height': height + 'px',
+						'opacity': o.shadow.opacity,
+						'display': '',
+						'padding': '0px',
+						'background': 'none',
+						'border': '0px',
+						'outline': '0px'
+					});
+				});
 		}
-		var $stretcher = $('<div class="Q_clickable_stretcher" />').css({
-			'position': 'absolute',
-			'left': '0px',
-			'top': '0px',
-			'width': csw+'px',
-			'height': csh+'px',
-			'overflow': 'visible',
-			'padding': '0px',
-			'margin': '0px'
-		}).addClass('Q_clickable_sized')
-		.appendTo($container);
+
+		// ----- Stretcher -----
+		var $stretcher = $('<div class="Q_clickable_stretcher" />')
+			.css({
+				'position': 'absolute',
+				'left': '0px',
+				'top': '0px',
+				'width': csw + 'px',
+				'height': csh + 'px',
+				'overflow': 'visible',
+				'padding': '0px',
+				'margin': '0px'
+			})
+			.addClass('Q_clickable_sized')
+			.appendTo($container);
+
 		var $triggers = $stretcher;
+
 		if (o.triggers) {
-			$triggers = (typeof o.triggers === 'function')
-				? $(o.triggers.call($this, o))
-				: $(o.triggers);
+			$triggers =
+				(typeof o.triggers === 'function')
+					? $(o.triggers.call($this, o))
+					: $(o.triggers);
 		}
+
 		var width = csw;
 		var height = csh;
-		var left = parseInt($container.css('left'));
-		var top = parseInt($container.css('top'));
-		var tw = $this.outerWidth();
-		var th = $this.outerHeight();
+
+		// Move original element into stretcher
 		$this.appendTo($stretcher).css({
 			position: 'absolute',
 			left: '0px',
 			top: '0px'
-			// width: csw,
-			// height: csh
 		});
 		var zindex;
 		var anim = null;
@@ -477,8 +536,7 @@ Q.Tool.jQuery('Q/clickable', function _Q_clickable(o) {
 				}
 			}
 		}
-	}, timing.renderingDelay);
-	return this;
+	}
 },
 
 {	// default options
@@ -537,6 +595,7 @@ Q.Tool.jQuery('Q/clickable', function _Q_clickable(o) {
 		Q.each(this.state('Q/clickable').observers, function () {
 			this.unobserve(this.observedElement);
 		});
+		Q.onLayout(this[0]).remove('Q/clickable');
 	}
 }
 
