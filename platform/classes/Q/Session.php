@@ -1155,7 +1155,8 @@ class Q_Session
 			}
 		}
 		Q_Response::clearAllCookies();
-		$message = Q::interpolate($message, @compact('baseUrl'));
+		$method = Q_Request::method();
+		$message = Q::interpolate($message, @compact('baseUrl', 'method'));
 		$field = 'nonce';
 		throw new Q_Exception_FailedValidation(@compact('message', 'field'), 'Q.nonce');
 	}

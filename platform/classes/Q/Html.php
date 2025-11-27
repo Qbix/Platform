@@ -1711,6 +1711,7 @@ class Q_Html
 			}	
 		}
 	}
+
 	/**
 	 * Convert HTML into very basic markdown-like text.
 	 * Handles paragraphs, line breaks, bold, italic, lists, and links.

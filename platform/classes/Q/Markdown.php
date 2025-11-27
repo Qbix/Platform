@@ -11,16 +11,17 @@ class Q_Markdown
 {
 	/**
 	 * Escape markdown special characters in a string.
-	 * @method markdown
-	 * @static
-	 * @param 
+	 * @method cleanup
+     * @static
+     * @param {string} $markdown
 	 */
-	function sanitize($markdown)
+	static function cleanup($markdown)
 	{
-		// MarkdownV2 reserved characters
+		// MarkdownV2 reserved characters that aren't used for links etc.
 		$specials = array(
-			"_", "*", "[", "]", "(", ")", "~", "`", ">", "#",
-			"+", "-", "=", "|", "{", "}", ".", "!"
+            "~", "`", ">", "#",
+            "+", "-", "=", "|",
+            "{", "}", ".", "!"
         );
 		$pattern = array();
 		$replace = array();
@@ -29,6 +30,6 @@ class Q_Markdown
 			$pattern[] = '/(?<!\\\\)' . preg_quote($c, '/') . '/';
 			$replace[] = '\\\\' . $c;
 		}
-		return preg_replace($pattern, $replace, $options['text']);
+		return preg_replace($pattern, $replace, $markdown);
 	}
 }

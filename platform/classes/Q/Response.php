@@ -331,18 +331,7 @@ class Q_Response
 				'value' => 'Content-Security-Policy',
 				'content' => Q_Response::contentSecurityPolicy()
 			));
-			Q_Response::$noTransform = 'no-transform';
-		} else {
-			Q_Response::$noTransform = Q_Config::get('Q', 'web', 'headers', 'noTransform', false)
-				? 'no-transform'
-				: '';
 		}
-
-		$isAuthenticated = Q_Session::isAuthenticated();
-		$publicPrivate = $isAuthenticated ? 'no-cache' : 'public';
-		$noTransform = (Q_Response::$noTransform or $isAuthenticated) ? 'no-transform' : '';
-		$directives = array($publicPrivate, $noTransform);
-		header("Cache-Control: " . implode(', ', $directives));
 
 		$app = Q::app();
 		$layout_view = Q_Config::get('Q', 'response', 'layout', 'html', "$app/layout/html.php");
@@ -2324,6 +2313,31 @@ class Q_Response
 		// see https://bugs.php.net/bug.php?id=38104
 		self::$cookiesToRemove[$name] = array($path, array(true, null), false, false);
 		unset(self::$cookies[$name]);
+	}
+
+	/**
+	 * Send Cache-Control headers depending on certain conditions
+	 * @method sendCacheControlHeaders
+	 * @static
+	 * @return {array} The components of Cache-Control header
+	 */
+	static function sendCacheControlHeaders()
+	{
+		// Send Cache-Control headers
+		if (empty($skipContentSecurityPolicy)
+		and !Q_Config::get('Q', 'web', 'contentSecurityPolicy', 'ignore', false)) {
+			Q_Response::$noTransform = 'no-transform';
+		} else {
+			Q_Response::$noTransform = Q_Config::get('Q', 'web', 'headers', 'noTransform', false)
+				? 'no-transform'
+				: '';
+		}
+		$isAuthenticated = Q_Session::isAuthenticated();
+		$publicPrivate = $isAuthenticated ? 'private, no-store, no-cache, must-revalidate, max-age=0' : 'public';
+		$noTransform = (Q_Response::$noTransform or $isAuthenticated) ? 'no-transform' : '';
+		$directives = array($publicPrivate, $noTransform);
+		header("Cache-Control: " . implode(', ', $directives));
+		return $directives;
 	}
 	
 	/**
