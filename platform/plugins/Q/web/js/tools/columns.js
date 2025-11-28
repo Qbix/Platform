@@ -1152,9 +1152,6 @@ function presentColumn(tool, $column, fullscreen, recalculateHeights) {
 			}
 		}
 	}
-	setTimeout(function () { // give the layout a chance to update
-		Q.layout($cs[0]);
-	}, 0);
 	if (!fullscreen) {
 		return;
 	}
