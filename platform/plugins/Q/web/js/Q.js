@@ -9134,7 +9134,7 @@ Q.layout = function _Q_layout(element, skipIfObserved) {
 		element = null;
 	}
 	Q.each(_layoutElements, function (i, e) {
-		if (!element || element.contains(e)) {
+		if (!element || (element.contains(e) && element !== e) ) {
 			var event = _layoutEvents[i];
 
 			// return if ResizeObserver defined on this element
@@ -12159,11 +12159,9 @@ function _activateTools(toolElement, options, shared) {
 			var event = Q.Tool.onLoadedConstructor(toolName);
 			event.addOnce(function () {
 				// also wait for required constructors, if any
-				var required = Q.Tool.constructors[toolName].required;
-				if (required) {
-					for (var i=0; i<required.length; ++i) {
-						event = event.and(Q.Tool.onLoadedConstructor(required[i]));
-					}
+				var required = Q.Tool.constructors[toolName].required || [];
+				for (var i=0; i<required.length; ++i) {
+					event = event.and(Q.Tool.onLoadedConstructor(required[i]));
 				}
 				// now we can run our code
 				event.addOnce(function () {
