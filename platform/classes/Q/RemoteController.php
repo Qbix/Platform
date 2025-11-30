@@ -9,7 +9,7 @@ class Q_RemoteController
 		try {
 			$input = file_get_contents('php://input');
 			$expectedHmac = hash_hmac('sha256', $input, Q_Config::expect('Q', 'remote', 'secret'));
-			$actualHmac = $_SERVER['HTTP_X_Q_HMAC'] ?? '';
+			$actualHmac = isset($_SERVER['HTTP_X_Q_HMAC']) ? $_SERVER['HTTP_X_Q_HMAC'] : '';
 
 			if (!hash_equals($expectedHmac, $actualHmac)) {
 				throw new Exception("HMAC verification failed");
@@ -22,10 +22,11 @@ class Q_RemoteController
 
 			$function = $payload['function'];
 			$params = $payload['params'];
-			$context = $payload['context'] ?? [];
+			$context = isset($payload['context']) ? $payload['context'] : array();
 
 			// Restore globals if any
-			foreach ($context['globals'] ?? [] as $k => $v) {
+			$cgs = isset($context['globals']) ? $context['globals'] : array();
+			foreach ($cgs as $k => $v) {
 				$GLOBALS[$k] = $v;
 			}
 

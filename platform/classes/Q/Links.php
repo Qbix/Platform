@@ -110,8 +110,8 @@ class Q_Links
      * @return {string} The generated Telegram URL.
      */
 	static function telegram ($to = null, $text = null, $options = array()) {
-        $urlParams = [];
-        $options = $options ?? [];
+        $urlParams = array();
+        $options = isset($options) ? $options : array();
 
         if (!$to) { // Share URL with some users to select in Telegram
             $command = 'msg';
