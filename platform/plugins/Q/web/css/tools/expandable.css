@@ -44,11 +44,6 @@
 	display: none;
 }
 
-.Q_expandable_tool:not(.Q_expanded) .Q_expandable_whenExpanded,
-.Q_expandable_tool:not(.Q_expanded) .Q_expandable_content {
-	display: none;
-}
-
 .Q_expandable_count {
 	float: inline-end;
     padding: 0 5px 0 5px;

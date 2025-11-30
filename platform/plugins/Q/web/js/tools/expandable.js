@@ -103,7 +103,7 @@ Q.Tool.define('Q/expandable', function (options) {
      * @param {Object} [options]
      *  @param {Boolean} [options.autoCollapseSiblings] Pass false to skip collapsing siblings even if state.collapseSiblings is currently true
      *  @param {Object} [options.animation]
-     *  @param {Object} [options.animation.duration=300] Pass 0 to skip animations
+     *  @param {Object} [options.animation.duration=500] Pass 0 to skip animations
      *  @param {Boolean} [options.scrollContainer] Whether to scroll a parent container
      *  @param {Boolean} [options.scrollToElement] Can be used to specify another element to scroll to when expanding. Defaults to the title element of the expandable.
      *  @param {Number} [options.spaceAbove] How many pixels of space to leave above at the end of the scrolling animation
@@ -133,7 +133,16 @@ Q.Tool.define('Q/expandable', function (options) {
 
         // measure natural height before animating
         $content[0].style.display = "block";
-        var fullHeight = $content[0].scrollHeight;
+		
+		// temporarily enable measurement
+		$content.addClass("Q_expandable_measuring");
+
+		// force layout read
+		var fullHeight = $content[0].scrollHeight;
+
+		// remove measurement class
+		$content.removeClass("Q_expandable_measuring");
+
 
         // prepare for animation
         $content[0].style.overflow = "hidden";
