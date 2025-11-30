@@ -93,15 +93,15 @@ class Db_Utils
 	}
 
 	/**
-	 * Append a message to the log
+	 * Append a message to the system log. Consider using Q::log() instead
 	 * @method log
 	 * @static
 	 * @param {string} $message the message to append
 	 * @param {integer} [$level=LOG_NOTICE] see E_NOTICE in the php manual, etc.
 	 * @param {boolean} [$timestamp=true] whether to prepend the current timestamp
-	 * @param {string} [$ident='Db:'] the ident string to prepend to the message
+	 * @param {string} [$ident=''] the ident string to prepend to the message
 	 */
-	static function log ($message, $level = LOG_NOTICE, $timestamp = true, $ident = 'Db: ')
+	static function log ($message, $level = LOG_NOTICE, $timestamp = true, $ident = '')
 	{
 		static $logOpen = false;
 		if (! $logOpen)
