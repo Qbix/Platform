@@ -76,3 +76,19 @@
 .Q_expandable_container.Q_expanded {
 	display: block;
 }
+
+/* Hide content only when NOT expanded and NOT animating */
+.Q_expandable_tool:not(.Q_expanded):not(.Q_expanding):not(.Q_collapsing) .Q_expandable_whenExpanded,
+.Q_expandable_tool:not(.Q_expanded):not(.Q_expanding):not(.Q_collapsing) .Q_expandable_content {
+    display: none;
+}
+
+/* Measurement helper to override everything */
+.Q_expandable_measuring {
+    display: block !important;
+    position: absolute !important;
+    visibility: hidden !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+}
