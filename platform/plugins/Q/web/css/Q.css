@@ -1179,6 +1179,7 @@ body.Q_columns_animationFX {
 	.Q_overlay a, .Q_fullscreen_dialog a {
 		color: white;
 		fill: white;
+		text-decoration: underline;
 	}
 	.Q_overlay select,
 	.Q_overlay input,
