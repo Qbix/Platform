@@ -10732,6 +10732,16 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		if ((m && m !== media) || !h || h.split('?')[0] !== href2) {
 			continue;
 		}
+
+		if (Q.addStylesheet.loaded[href2] === false) {
+			if (o.ignoreLoadingErrors) {
+				_onload();
+			} else if (o.onError) {
+				o.onError.call(e);
+			}
+			return o.returnAll ? e : false;
+		}
+
 		// A link element with this media and href is already found in the document.
 		// Move the element to the right container if necessary
 		// (This may change the order in which stylesheets are applied).
@@ -10769,9 +10779,11 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 			Q.addStylesheet.onErrorCallbacks[href2] = [];
 		}
 		Q.addStylesheet.onLoadCallbacks[href2].push(onload);
+
 		if (o.onError) {
 			Q.addStylesheet.onErrorCallbacks[href2].push(o.onError);
 		}
+
 		if (!e.wasProcessedByQ) {
 			if (Q.info.isAndroidStock) {
 				setTimeout(function () { // it doesn't support onload
@@ -10798,7 +10810,15 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		}
 	}
 	Q.addStylesheet.added[href] = true;
+
 	Q.addStylesheet.onLoadCallbacks[href2] = [onload];
+	if (!Q.addStylesheet.onErrorCallbacks[href2]) {
+		Q.addStylesheet.onErrorCallbacks[href2] = [];
+	}
+	if (o.onError) {
+		Q.addStylesheet.onErrorCallbacks[href2].push(o.onError);
+	}
+
 	link.onload = onload2;
 	link.onreadystatechange = onload2; // for IE
 	link.setAttribute('href', href);
@@ -10825,7 +10845,6 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 	// https://developer.mozilla.org/en-US/docs/Web/HTML/Element/link#Browser_compatibility
 	return link;
 };
-
 
 Q.addStylesheet.onLoadCallbacks = {};
 Q.addStylesheet.onErrorCallbacks = {};
