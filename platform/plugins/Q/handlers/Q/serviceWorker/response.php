@@ -113,15 +113,28 @@ var Q = {
 				var newRequest = new Request(original.url, init);
 				var cache = await caches.open('Q');
 
-				// Serve from cache if available
+				// Serve from cache if available — but only if it was a successful (ok) response
 				var cached = await cache.match(original);
 				if (cached) {
-					console.log('[SW] cache hit:', original.url);
-					return cached;
+					if (cached.ok) {
+						console.log('[SW] cache hit:', original.url);
+						return cached;  // return only good cached responses
+					} else {
+						// Cached error — remove it and fall through to network
+						console.warn('[SW] ignoring cached error for:', original.url);
+						try { cache.delete(original); } catch (e) {}
+					}
 				}
 
+				// Fetch from network
 				var response = await fetch(newRequest);
-				cache.put(original, response.clone());
+
+				// Cache only successful responses (status 200–299)
+				if (response && response.ok) {
+					try { cache.put(original, response.clone()); } catch (e) {}
+				} else {
+					console.warn('[SW] not caching error response for:', original.url, response.status);
+				}
 
 				// --- Handle Set-Cookie-JS header ---
 				var setCookieHeader = response.headers.get('Set-Cookie-JS');
