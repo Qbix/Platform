@@ -13599,9 +13599,7 @@ function _listenForVisibilityChange() {
 	var _isDocumentHidden = null;
 	var _lastDocumentHidden = null;
 	var _handleOnVisibilityChange = Q.debounce(function (event) {
-		if (_isDocumentHidden === null) {
-			_isDocumentHidden = Q.isDocumentHidden();
-		}
+		_isDocumentHidden = Q.isDocumentHidden();
 		if (_lastDocumentHidden == _isDocumentHidden) {
 			return;
 		}
