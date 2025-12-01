@@ -10659,7 +10659,6 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 			return;
 		}
 		var cb;
-		Q.addStylesheet.loaded[href2] = false;
 		if (Q.addStylesheet.onErrorCallbacks[href2]) {
 			while ((cb = Q.addStylesheet.onErrorCallbacks[href2].shift())) {
 				cb.call(this);
@@ -10798,6 +10797,8 @@ Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
 		}
 		return o.returnAll ? e : false; // don't add
 	}
+
+	Q.addStylesheet.loaded[href2] = false; // might be overwritten by true on success
 
 	// Create the stylesheet's tag and insert it into the document
 	var link = document.createElement('link');
