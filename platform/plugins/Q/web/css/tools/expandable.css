@@ -78,7 +78,7 @@
 }
 
 .Q_expandable_measuring .Q_expandable_content {
-    display: block;
+    display: block !important;
 }
 
 .Q_expandable_measuring {
