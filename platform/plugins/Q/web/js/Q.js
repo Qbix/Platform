@@ -6889,7 +6889,11 @@ Q.Response.processStylesheets = function Q_Response_loadStylesheets(response, ca
 			var key = slotName + '\t' + stylesheet.href + '\t' + stylesheet.media;
 			var elem = Q.addStylesheet(
 				stylesheet.href, stylesheet.media,
-				slotPipe.fill(key), { slotName: slotName, returnAll: false }
+				slotPipe.fill(key), { 
+					slotName: slotName, 
+					returnAll: false,
+					onError: slotPipe.fill(key)
+				}
 			);
 			if (elem) {
 				stylesheets.push(elem);
@@ -7006,7 +7010,8 @@ Q.Response.processScripts = function Q_Response_processScripts(response, callbac
 		var elem = Q.addScript(
 			response.scripts[slotName], slotPipe.fill(slotName), {
 			ignoreLoadingErrors: options.ignoreLoadingErrors,
-			returnAll: false
+			returnAll: false,
+			onError: slotPipe.fill(slotName)
 		});
 		if (elem) {
 			newScripts[slotName] = elem;
@@ -10300,7 +10305,7 @@ try {
  * @param {Boolean} [options.duplicate] if true, adds script even if one with that src was already loaded
  * @param {Boolean} [options.querystringMatters] if true, then different querystring is considered as different, even if duplicate option is false
  * @param {Boolean} [options.skipIntegrity] if true, skips adding "integrity" attribute even if one can be calculated
- * @param {Boolean} [options.onError] optional function that may be called in newer browsers if the script fails to load. Its this object is the script tag.
+ * @param {Boolean} [options.onError] optional function that may be called in newer browsers if the script fails to load. Its this object is the script element.
  * @param {Boolean} [options.ignoreLoadingErrors] If true, ignores any errors in loading scripts.
  * @param {Boolean} [options.container] An element to which the stylesheet should be appended (unless it already exists in the document).
  * @param {Boolean} [options.returnAll] If true, returns all the script elements instead of just the new ones
@@ -10630,6 +10635,7 @@ var _exports = {};
  * @param {Boolean} [options.querystringMatters] if true, then different querystring is considered as different, even if duplicate option is false
  * @param {Boolean} [options.skipIntegrity] if true, skips adding "integrity" attribute even if one can be calculated
  * @param {Boolean} [options.returnAll=false] If true, returns all the link elements instead of just the new ones
+ * @param {Function} [options.onError] optional function that may be called in newer browsers if the stylesheet fails to load. Its this object is the link element.
  * @return {Array} Returns an aray of LINK elements
  */
 Q.addStylesheet = function _Q_addStylesheet(href, media, onload, options) {
