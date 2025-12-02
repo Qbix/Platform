@@ -864,13 +864,13 @@ class Q
 	}
 
 	/**
-	 * Renders a particular view
+	 * Renders a particular view.
 	 * @method view
 	 * @static
 	 * @param {string} $viewName
 	 *  The full name of the view
 	 * @param {array} $params=array()
-	 *  Parameters to pass to the view
+	 *  Parameters to pass to the view. Can override fields loaded from
 	 * @param {array} $options Some options
 	 * @param {string|null} $options.language Preferred language
 	 * @return {string}
