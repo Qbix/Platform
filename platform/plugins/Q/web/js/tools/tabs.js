@@ -496,18 +496,28 @@ Q.Tool.define("Q/tabs", function(options) {
 			$tabs.each(function (k, t) {
 				var tdn = tool.getName(t);
 				var tu = tool.getUrl(t);
-
+				if (tu === url) {
+					tab = t;
+					return false;
+				}
+			});
+		}
+		if (!tab) {
+			$tabs.each(function (k, t) {
+				var tdn = tool.getName(t);
+				var tu = tool.getUrl(t);
 				for (var i=0; i<urls.length; ++i) {
-					var url = urls[i];
+					var u = urls[i];
 					if ((tdn && tdn === name)
 					|| (!name && (
-						tu === url
-						|| tu === url.split('?')[0]))
+						tu === u
+						|| tu === u.split('?')[0]))
 					) {
 						tab = t;
 						return false;
 					}
 				}
+
 				if (state.defaultTabName === tdn) {
 					defaultTab = t;
 				}
