@@ -251,6 +251,11 @@ html[xmlns] .Q_clearfix { display: block; }
 	opacity: 1; border-radius: 7px; box-shadow: 0 0 20px #333; display: flex; flex-direction: column;
 }
 
+.Q_overlay .Q_title_slot {
+    border-top-left-radius: 7px;
+    overflow: hidden;
+}
+
 .Q_notMobile .Q_overlay { max-width: 500px; }
 .Q_mobile .Q_overlay { max-width: 95%; }
 
@@ -1173,6 +1178,7 @@ body.Q_columns_animationFX {
 	}
 	.Q_overlay, .Q_fullscreen_dialog {
 		background: url(../img/bg/overlay-dark.png);
+		background: linear-gradient(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.8)),  url(../img/bg/overlay-dark.png);
 		color: white;
 		fill: white;
 	}
