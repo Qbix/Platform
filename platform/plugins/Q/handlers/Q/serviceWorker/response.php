@@ -35,9 +35,7 @@ var Q = {
 	// In-memory cookie store managed dynamically
 	var cookies = {};
 
-	self.addEventListener('clearCache', function () {
-		Q.Cache.clearAll();
-	});
+	// REMOVED: self.addEventListener('clearCache', ...)
 
 	self.addEventListener('fetch', function (event) {
 		var url = new URL(event.request.url);
@@ -181,6 +179,13 @@ var Q = {
 	// Handle messages from pages
 	self.addEventListener('message', function (event) {
 		var data = event.data || {};
+
+		// Handle clearCache
+		if (data === 'clearCache' || data.type === 'clearCache') {
+			Q.Cache.clearAll();
+			console.log('[SW] Cache cleared on request');
+			return;
+		}
 
 		// Manual cache injection
 		if (data.type === 'Q.Cache.put' && data.items && data.items.length) {
