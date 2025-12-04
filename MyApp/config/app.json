@@ -221,7 +221,7 @@
 		"permalinks": {
 			"routes": {},
 			"actions": {
-				"MyApp": [ /* actions that may get permalinks */ ]
+				"MyApp": { /* actions that may get permalinks */ }
 			}
 		}
 	}
