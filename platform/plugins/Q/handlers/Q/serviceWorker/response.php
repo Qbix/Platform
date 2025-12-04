@@ -35,8 +35,6 @@ var Q = {
 	// In-memory cookie store managed dynamically
 	var cookies = {};
 
-	// REMOVED: self.addEventListener('clearCache', ...)
-
 	self.addEventListener('fetch', function (event) {
 		var url = new URL(event.request.url);
 		var parts = url.pathname.split('.');
