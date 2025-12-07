@@ -777,7 +777,7 @@ abstract class Db
 	 *       If true, always return associative arrays without using schema.
 	 *   @param {string} [$options.schemaName]
 	 *       Schema name in the views folder. Defaults to the Db_Row class name,
-	 *       e.g. class `Streams_Avatar` → "Streams/templates/Avatar".
+	 *       e.g. class `Streams_Avatar` to "Streams/templates/Avatar".
 	 *   @param {bool}   [$options.numeric=false]
 	 *       If true, makes a plain numerically indexed array even if $what has keys.
 	 * @return {array} Exported data, recursively applying exportArray or schema mapping.

@@ -321,7 +321,7 @@ class Q_Translate
 	 *
 	 * @param mixed $node   Current subtree (modified in place)
 	 * @param array $path   Current key path
-	 * @param array $hints  Map of "path string" → isAssoc
+	 * @param array $hints  Map of "path string" to isAssoc
 	 */
 	private function applyAssocHints(&$node, $path, $hints)
 	{

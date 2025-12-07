@@ -144,7 +144,7 @@ module.exports = function (linked) {
 	};
 
 	function _diffTo(path, value, arr, context) {
-		// if empty path → return true (skip children, continue)
+		// if empty path to return true (skip children, continue)
 		if (!path.length) {
 			return true;
 		}
@@ -168,11 +168,11 @@ module.exports = function (linked) {
 					if (Object.keys(d).length) {
 						context.diff.set(path, d);
 					}
-					// PHP: return true → skip children but continue siblings
+					// PHP: return true to skip children but continue siblings
 					return true;
 				}
 
-				// PHP: no keyField → use replace syntax
+				// PHP: no keyField to use replace syntax
 				valueTo = { replace: valueTo };
 			}
 			// skipAddedKeys semantics
@@ -185,7 +185,7 @@ module.exports = function (linked) {
 					: context.to.parameters;
 
 				if (!parent || !(lastKey in parent)) {
-					// PHP: return true → skip children, continue traversal
+					// PHP: return true to skip children, continue traversal
 					return true;
 				}
 			}
@@ -346,12 +346,12 @@ function _breadthFirst(subpath, node, callback, context) {
 				context      // context
 			);
 
-			// false → abort all traversal
+			// false to abort all traversal
 			if (cont === false) {
 				return;
 			}
 
-			// true → skip children, continue siblings
+			// true to skip children, continue siblings
 			if (cont === true) {
 				continue;
 			}

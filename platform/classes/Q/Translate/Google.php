@@ -93,7 +93,7 @@ class Q_Translate_Google {
 				$val = $item['value'];
 				if (is_string($val) && Q_Translate::filter($val)) {
 					$qArr[] = $val;
-					$map[]  = $idx; // map API index → $chunk index
+					$map[]  = $idx; // map API index to $chunk index
 				} else {
 					// skip translation, keep original
 					$res[$item['originalKey']] = $item;
