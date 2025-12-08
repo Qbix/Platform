@@ -90,18 +90,24 @@ body { position: relative; margin: 0; }
 	0.001% { visibility: visible; opacity: 0; }
 	100% { visibility: visible; opacity: 1; }
 }
-@keyframes updated-flash-anim {
+@keyframes Q_updatedFlash {
 	from { background-color: var(--updated-color-from); }
 	to { background-color: var(--updated-color-to); }
 }
+@keyframes Q_pulsateShadow {
+	0% { filter: drop-shadow(0 0 3px rgba(150, 150, 150, 0.1)); }
+	50% { filter: drop-shadow(0 0 8px rgba(150, 150, 150, 0.9)); }
+	100% { filter: drop-shadow(0 0 3px rgba(150, 150, 150, 0.1)); }
+}
+
 
 /* Common Q classes */
 .Q_hide { display: none !important; }
 .Q_hideUntilLoaded body { opacity: 0; }
 .Q_blink { animation: Q_blink .5s step-end infinite alternate; }
-.Q_updated_flash { animation: updated-flash-anim .5s ease-in-out .5s 1 alternate; }
+.Q_updated_flash { animation: Q_updatedFlash .5s ease-in-out .5s 1 alternate; }
 .Q_updated_flash.Q_pop {
-	animation: updated-flash-anim .5s ease-in-out .5s 1 alternate,
+	animation: Q_updatedFlash .5s ease-in-out .5s 1 alternate,
 	Q_pop 1s ease-in-out 0s 0.7;
 }
 
@@ -163,10 +169,14 @@ body { position: relative; margin: 0; }
 	animation: Q_wiggle 5s ease-in-out infinite;
 }
 .Q_pulsate {
-	animation: Q_pulsate 3s ease-in-out infinite alternate;
+	animation: Q_pulsate 5s ease-in-out infinite alternate;
 }
 .Q_fadeIn {
 	animation: Q_fadeIn 300ms ease-in-out forwards;
+}
+.Q_pulsateShadow {
+	filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.5));
+	animation: Q_pulsateShadow 3s ease-in-out infinite;
 }
 
 .Q_behind { opacity: 0.2 !important; filter: blur(1px); }
