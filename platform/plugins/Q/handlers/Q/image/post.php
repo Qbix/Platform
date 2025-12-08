@@ -24,5 +24,16 @@
  */
 function Q_image_post($params = null)
 {
+	// First check FILES: Blob upload case
+	if (!empty($_FILES)) {
+		// Normalize into the same format used by base64 handler
+		// You may have multiple fields, but we expect "icon"
+		foreach ($_FILES as $field => $info) {
+			$params[$field]['_file'] = $info;
+		}
+		$params['icon'] = $_REQUEST['icon'];
+		$params['save'] = $_REQUEST['save'];
+	}
+
 	return Q_Image::postNewImage($params);
 }

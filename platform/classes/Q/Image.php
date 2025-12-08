@@ -349,63 +349,129 @@ class Q_Image
 
 	/**
 	 * Call this when handling an HTTP request that submitted the image,
-	 * either in the $_FILES superglobal or pass inside the "data" parameter.
-	 * You can also override any of the parameters from the request, by passing them in.
+	 * either in the $_FILES superglobal or passed inside the "data" parameter.
+	 * You can also override any of the parameters from the request by passing them in.
+	 *
 	 * @class HTTP Q image
 	 * @method postNewImage
+	 *
 	 * @param {array} [$params] Parameters that can come from the request
-	 *   @param {string} [$params.icon.data]  Required if $_FILES is empty. Base64-encoded  data URI - see RFC 2397
-	 *   @param {string} [$params.icon.path="Q/uploads"] parent path under web dir (see subpath)
-	 *   @param {string} [$params.icon.subpath=""] subpath that should follow the path, to save the image under
-	 *   @param {string} [$params.icon.merge=""] path under web dir for an optional image to use as a background
-	 *   @param {string} [$params.icon.crop] array with keys "x", "y", "w", "h" to crop the original image
-	 * @param {string} [$params.save='x'] name of config under Q/image/sizes, which
-	 *  are an array of $size => $basename pairs
-	 *  where the size is of the format "WxH", and either W or H can be empty.
-	 *  These are stored in the config for various types of images, 
-	 *  and you pass the name of the config, so that e.g. clients can't simply
-	 *  specify their own sizes.
-	 * @param {string} [$override=false] Set to true, to tell handlers of any "after" hooks, 
-	 *  that they are meant to update the references to the new image
+	 *   @param {array} [$params.icon] Group of image-related parameters
+	 *   @param {string} [$params.icon.data]
+	 *       Base64-encoded data URI (RFC 2397). Required if $_FILES is empty.
+	 *   @param {string} [$params.icon.path="Q/uploads"]
+	 *       Parent path under web directory
+	 *   @param {string} [$params.icon.subpath=""]
+	 *       Subpath under path to save image under
+	 *   @param {string} [$params.icon.merge=""]
+	 *       Path under web dir to an optional image to use as background
+	 *   @param {array} [$params.icon.crop]
+	 *       Keys: "x","y","w","h" to crop original image
+	 *
+	 * @param {string} [$params.save='x']
+	 *       Name of config under Q/image/sizes for image sizes
+	 *
+	 * @param {bool} [$override=false]
+	 *       If true, tells handlers of "after" hooks to update references to new image
+	 *
 	 * @return {array} Information about the saved image
 	 */
 	static function postNewImage($params)
 	{
-		$p = $params ? $params : Q::take($_REQUEST, array(
-			'data', 'path', 'subpath', 'merge', 'crop', 'save', 'original'
-		));
-		Q_Valid::requireFields(array('path'), $p, true);
+		// Normalize input params — allow nested 'icon' payload
+		if ($params) {
+			$p = $params;
+		} else {
+			// Legacy flat request params are promoted to 'icon'
+			$p = array(
+				'icon' => Q::take($_REQUEST, array(
+					'data', 'path', 'subpath', 'merge', 'crop', 'original'
+				)),
+				'save' => isset($_REQUEST['save']) ? $_REQUEST['save'] : null
+			);
+		}
+
+		// If icon not defined at all, initialize empty
+		if (!isset($p['icon'])) {
+			$p['icon'] = array();
+		}
+
+		// Required path value
+		Q_Valid::requireFields(array('path'), $p['icon'], true);
+
+		// ---------------------------------------------------------------------
+		// CASE 1: BLOB UPLOAD (from canvas.toBlob → FormData → $_FILES)
+		// ---------------------------------------------------------------------
 		if (!empty($_FILES)) {
 			$file = reset($_FILES);
 			$tmp = $file['tmp_name'];
-			if (empty($p['data'])) {
-				$p['data'] = file_get_contents($tmp);
+
+			if ($tmp && is_uploaded_file($tmp)) {
+				// Blob uploaded normally
+				$p['icon']['data'] = file_get_contents($tmp);
 			}
-			unlink($tmp);
-		} else {
-			if (empty($p['data'])) {
+
+			// Remove tmp file
+			if ($tmp && file_exists($tmp)) {
+				@unlink($tmp);
+			}
+		}
+
+		// ---------------------------------------------------------------------
+		// CASE 2: LEGACY BASE64 DATA URL
+		// ---------------------------------------------------------------------
+		else {
+			if (empty($p['icon']['data'])) {
 				throw new Q_Exception_RequiredField(array('field' => 'data'), 'data');
 			}
-			$p['data'] = base64_decode(chunk_split(substr($p['data'], strpos($p['data'], ',')+1)));
 
-			if (!empty($p['original'])) {
-				$p['original'] = base64_decode(chunk_split(substr($p['original'], strpos($p['original'], ',')+1)));
+			$dataUrl = $p['icon']['data'];
+			$comma = strpos($dataUrl, ',');
+			if ($comma === false) {
+				throw new Q_Exception("Invalid data URL");
+			}
+
+			// decode base64 payload
+			$base64 = substr($dataUrl, $comma + 1);
+			$p['icon']['data'] = base64_decode(chunk_split($base64));
+			if ($p['icon']['data'] === false) {
+				throw new Q_Exception("Failed to decode base64 image");
+			}
+
+			// original (optional)
+			if (!empty($p['icon']['original'])) {
+				$comma = strpos($p['icon']['original'], ',');
+				if ($comma !== false) {
+					$orig64 = substr($p['icon']['original'], $comma + 1);
+					$p['icon']['original'] = base64_decode(chunk_split($orig64));
+				}
 			}
 		}
-		$timeLimit = Q_Config::get('Q', 'uploads', 'limits', 'time', 5*60*60);
-		set_time_limit($timeLimit); // default is 5 min for saving the image in various formats
-		$data = Q_Image::save($p);
 
-		// save original image
-		if (!empty($p['original'])) {
-			if (!imagecreatefromstring($p['original'])) {
+		// ---------------------------------------------------------------------
+		// TIME LIMIT: allow large images to process all sizes
+		// ---------------------------------------------------------------------
+		$timeLimit = Q_Config::get('Q', 'uploads', 'limits', 'time', 5*60*60);
+		set_time_limit($timeLimit);
+
+		// ---------------------------------------------------------------------
+		// SAVE THE PROCESSED IMAGE
+		// ---------------------------------------------------------------------
+		$data = Q_Image::save($p['icon'] + array('save' => $p['save']));
+
+		// Save original image (if provided)
+		if (!empty($p['icon']['original'])) {
+			if (!imagecreatefromstring($p['icon']['original'])) {
 				throw new Q_Exception("Image type not supported");
 			}
-			file_put_contents($data['writePath'].'original.'.$data['ext'], $p['original']);
+			file_put_contents($data['writePath'].'original.'.$data['ext'], $p['icon']['original']);
 		}
+
+		// If no $params passed directly, this is a normal HTTP response → set slot
 		if (empty($params)) {
 			Q_Response::setSlot('data', $data);
 		}
+
 		return $data;
 	}
 	
@@ -414,26 +480,27 @@ class Q_Image
 	 * @method save
 	 * @static
 	 * @param {array} $params 
-	 * @param {string} [$params.data] the image data
-	 * @param {string} [$params.path="Q/uploads"] parent path under web dir (see subpath)
-	 * @param {string} [$params.subpath=""] subpath that should follow the path, to save the image under
-	 * @param {string} [$params.merge=""] path under web dir for an optional image to use as a background
-	 * @param {string} [$params.crop] array with keys "x", "y", "w", "h" to crop the original image
-	 * @param {string} [$params.save='x'] name of config under Q/image/sizes, which
-	 *  are an array of $size => $basename pairs
-	 *  where the size is of the format "WxH", and either W or H can be empty.
-	 *  These are stored in the config for various types of images, 
-	 *  and you pass the name of the config, so that e.g. clients can't simply
-	 *  specify their own sizes.
-	 * @param {string} [$params.skipAccess=false] if true, skips the check for authorization to write files there
-	 * @return {array} an array of ($size => $fullImagePath) pairs
-	 */
+	 *  @param {string|binary} $params.data Raw binary image data (from Blob upload or decoded base64).
+	*   @param {string} [$params.path="Q/uploads"]
+	*   @param {string} [$params.subpath=""]
+	*   @param {string} [$params.merge=""]
+	*   @param {array}  [$params.crop]
+	*   @param {string} [$params.save='x']
+	*   @param {bool}   [$params.skipAccess=false]
+	*
+	* @return {array} ($size => $fullImagePath) pairs, plus metadata
+	*/
 	static function save($params, $throwIfNotAuthorized = false)
 	{
 		if (empty($params['data'])) {
 			throw new Q_Exception("Image data is missing");
 		}
+
+		// $params['data'] is now ALWAYS raw binary:
+		// - Blob upload (via $_FILES)
+		// - Decoded base64 Data URL
 		$imageData = $params['data'];
+
 		$image = imagecreatefromstring($imageData);
 		if (!$image) {
 			throw new Q_Exception("Image type not supported");

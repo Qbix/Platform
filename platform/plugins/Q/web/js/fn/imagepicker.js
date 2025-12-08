@@ -366,65 +366,81 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 			return result;
 		};
 
-		function _doCanvasCrop (src, bounds, orientation, callback) {
+		function _doCanvasCrop(src, bounds, orientation, callback) {
 			// nothing to crop
-			if ( ! src || ! bounds ) {
+			if (!src || !bounds) {
 				throw new Q.Exception('Q/imagepicker: src and bounds are required!');
 			}
 
 			var canvas = $('<canvas style="display:none"></canvas>').appendTo('body')[0];
 
-			if (!( canvas && canvas.getContext('2d') )) {
+			if (!(canvas && canvas.getContext('2d'))) {
 				return callback.call(this, src, params.crop);
 			}
 
 			canvas.width = bounds.requiredSize.width;
 			canvas.height = bounds.requiredSize.height;
 
-			var $img = $('<img />').on('load', function() {
+			var $img = $('<img />').on('load', function () {
+
 				// draw cropped image
 				var sourceLeft = bounds.left;
 				var sourceTop = bounds.top;
 				var sourceWidth = bounds.width;
 				var sourceHeight = bounds.height;
+
 				var destLeft = 0;
 				var destTop = 0;
 				var destWidth = bounds.requiredSize.width;
 				var destHeight = bounds.requiredSize.height;
+
 				var context = canvas.getContext('2d');
+
+				// orientation handling
 				switch (orientation) {
 				case 8:
 					context.translate(-canvas.width, 0);
-					context.rotate(-90*Math.PI/180);
+					context.rotate(-90 * Math.PI / 180);
 					break;
 				case 3:
 					context.translate(canvas.width, canvas.height);
-					context.rotate(180*Math.PI/180);
+					context.rotate(180 * Math.PI / 180);
 					break;
 				case 6:
 					context.translate(canvas.width, 0);
-					context.rotate(90*Math.PI/180);
+					context.rotate(90 * Math.PI / 180);
 					break;
 				}
+
 				var rotated = (orientation === 8 || orientation === 6);
 				var dw = rotated ? destHeight : destWidth;
 				var dh = rotated ? destWidth : destHeight;
+
 				drawImageIOSFix(
 					context, $img[0],
 					sourceLeft, sourceTop, sourceWidth, sourceHeight,
 					destLeft, destTop, dw, dh
 				);
-				var imageData = ['image/png', 'image/gif', 'image/jpeg', 'image/webp']
-					.indexOf(state.saveImageType) >= 0
-					? canvas.toDataURL(state.saveImageType)
-					: canvas.toDataURL();
-				$(canvas).remove();
-				$img.remove();
-				callback.call(this, imageData, null);
+
+				// Allow override only for png/gif/jpeg/webp types
+				var mimeType =
+					['image/png', 'image/gif', 'image/jpeg', 'image/webp']
+						.indexOf(state.saveImageType) >= 0
+						? state.saveImageType
+						: 'image/png';
+
+				// Use toBlob (native or polyfilled)
+				canvas.toBlob(function (blob) {
+					$(canvas).remove();
+					$img.remove();
+					callback.call(this, blob, null);  // return Blob, not dataURL
+				}.bind(this), mimeType);
+
 			}).prop('src', src)
 			.css('display', 'none')
 			.appendTo('body');
-		};
+		}
+
 
 		function _onImgLoad() {
 			Q.addScript(EXIFjslib, function () {
@@ -592,68 +608,109 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 			} else {
 				_continue({});
 			}
+
 			function _continue(override) {
 				if (override === false || (override && override.cancel)) {
 					return _revert();
 				}
+
 				var path = state.path;
 				path = (typeof path === 'function') ? path() : path;
+
 				var subpath = state.subpath;
 				subpath = (typeof subpath === 'function') ? subpath() : subpath;
+
 				var params = Q.extend({
-					'data': data,
+					'data': data,        // now may be Blob or string
 					'path': path,
 					'subpath': subpath,
 					'url': state.url,
 					'loader': state.loader,
 					'crop': crop
 				}, state.moreFields);
+
 				if (state.sendOriginal) {
 					params.original = src;
 				}
 				if (state.save) {
 					params.save = state.save;
 				}
+
 				Q.extend(params, override);
+
 				if (Q.isEmpty(params.crop)) {
 					delete params.crop;
 				}
 
+				// If a custom loader function exists, keep original behavior.
 				if (params.loader) {
 					var callable = params.loader;
 					delete params.loader;
-					Q.handle(callable, null, [params, _callback]);
-				} else {
-					var url = params.url;
-					delete params.url;
-					if (window.FileReader) {
-						Q.request(url, 'data', _callback, {
-							fields: params,
-							method: 'POST'
-						});
-					} else {
-						delete params.data;
-						var $form = state.input.wrap('<form />', {
-							method: 'POST',
-							action: Q.url(url, params)
-						}).parent();
-						Q.formPost($form[0], {
-							onLoad: _callback
-						});
-						state.input.unwrap();
-					}
+					return Q.handle(callable, null, [params, _callback]);
 				}
+				delete params.loader;
+
+				var url = params.url;
+				delete params.url;
+
+				// Modern browsers: FileReader exists
+				if (!window.FileReader) {
+					return;
+				}
+
+				// CASE A — data is NOT a Blob → legacy base64 upload
+				if (!(data instanceof Blob)) {
+					return Q.request(url, 'data', _callback, {
+						fields: params,
+						method: 'POST'
+					});
+				}
+
+				// CASE B — Blob upload → must use FormData, with icon[...] nesting
+				var fd = new FormData();
+
+				// Main file blob — must be exactly "icon"
+				fd.append('icondata', data, 'image.' + _detectExt(state.saveImageType));
+
+				for (var k in params) {
+					if (k === 'data') {
+						continue; // Blob replaces base64 data
+					}
+
+					// These belong inside icon[...]
+					if (k === 'path' ||
+						k === 'subpath' ||
+						k === 'merge' ||
+						k === 'original' ||
+						k === 'crop') 
+					{
+						if (k === 'crop') {
+							// crop is an object → must JSON stringify
+							fd.append('icon[crop]', JSON.stringify(params.crop));
+						} else {
+							fd.append('icon[' + k + ']', params[k]);
+						}
+						continue;
+					}
+
+					// Everything else (save, moreFields, etc.)
+					fd.append(k, params[k]);
+				}
+
+
+				return Q.request(url, null, _callback, {
+					method: 'POST',
+					formdata: fd
+				});
+			}
+
+			function _detectExt(mime) {
+				if (!mime) return 'png';
+				return mime.replace('image/', '');
 			}
 		}
-	
-		function _revert() {
-			var state = $this.state('Q/imagepicker');
-			$this.prop('src', state.oldSrc)
-				.stop()
-				.removeClass('Q_uploading');
-		}
-	
-	   function detectVerticalSquash(img) {
+
+		function detectVerticalSquash(img) {
 		   if (Q.info.platform !== 'ios') {
 			   return 1;
 		   }
@@ -748,7 +805,6 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 				Q.formPost($form[0], {
 					onLoad: _callback
 				});
-				state.input.unwrap();
 			}
 		}
 	},
