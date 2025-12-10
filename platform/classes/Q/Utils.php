@@ -353,7 +353,7 @@ class Q_Utils
 	 * @param {array} $data The array of data
 	 * @param {array|string} [$fieldKeys] Path of the key under which to save signature
 	 * @param {string} [$secret] Can pass a different secret to use for generating the signature
-	 *  than the one found in Q/internal/secret config.
+	 *  than the one found in Q/internal/secret config.}
 	 * @return {array} The data, with the signature added unless $secret is null
 	 */
 	static function sign($data, $fieldKeys = null, $secret = null) {
@@ -361,7 +361,7 @@ class Q_Utils
 			$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		}
 		if (!isset($secret)) {
-			return $data;
+			$secret = Q_Utils::generateLocalSecret();
 		}
 		if (!$fieldKeys) {
 			$sf = Q_Config::get('Q', 'internal', 'sigField', 'sig');
@@ -381,6 +381,28 @@ class Q_Utils
 		unset($ref[$ef]);
 		$ref[$ef] = Q_Utils::signature($data, $secret);
 		return $data;
+	}
+
+	/**
+	 * Generate a local secret that is stable but hard to guess from outside
+	 * @method generateLocalSecret
+	 * @static
+	 */
+	protected static function generateLocalSecret()
+	{
+		$parts = array(
+			gethostname(),
+			php_uname(),          // Includes kernel version etc.
+			PHP_OS,               // OS name
+			__FILE__,             // Path to this code on disk
+		);
+		$machineIdFile = '/etc/machine-id';
+		if (is_readable($machineIdFile)) {
+			$parts[] = trim(file_get_contents($machineIdFile));
+		}
+		// Create stable, local-only secret
+		$secret = hash('sha256', implode("\t", $parts));
+		return $secret;
 	}
 
 	/**
