@@ -340,6 +340,9 @@ class Q_Utils
 		if (!isset($secret)) {
 			$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		}
+		if (!isset($secret)) {
+			$secret = Q_Utils::generateLocalSecret();
+		}
 		if (is_array($data)) {
 			$data = self::serialize($data);
 		}
