@@ -318,6 +318,38 @@ class Db_Mysql implements Db_Interface
 		$table_comment = (!empty($table_status[0])) ? " * <br>{$table_status[0]}\n" : '';
 	}
 
+	protected function _introspectTableIndexes($table_name)
+	{
+		$rows = $this->rawQuery("SHOW INDEX FROM $table_name")
+			->execute()
+			->fetchAll(PDO::FETCH_ASSOC);
+
+		$indexes = [];
+
+		foreach ($rows as $r) {
+			$name = $r['Key_name'];
+
+			if (!isset($indexes[$name])) {
+				$indexes[$name] = [
+					'unique'  => !$r['Non_unique'],
+					'type'    => 'btree', // MySQL default
+					'columns' => [],
+					'partial' => false
+				];
+			}
+
+			$indexes[$name]['columns'][(int)$r['Seq_in_index']] = $r['Column_name'];
+		}
+
+		foreach ($indexes as &$idx) {
+			ksort($idx['columns']);
+			$idx['columns'] = array_values($idx['columns']);
+		}
+
+		return $indexes;
+	}
+
+
 	protected function _normalizeDefault($d) {
 		if (!empty($directory)
 			and strtolower($d) === 'current_timestamp()') {
