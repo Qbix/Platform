@@ -688,6 +688,8 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			$sql = $query->getSQL(); // depends on shard, possibly
 			// TODO: implement caching sql until query changes
 
+			$query->signalMissingIndex($sql, $shardName);
+
 			try {
 				if (!empty($query->clauses["BEGIN"])) {
 					$ntk[] = isset($query->transactionKey) ? $query->transactionKey : null;
@@ -2003,8 +2005,10 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					} else {
 						$criteria_list[] = "FALSE";
 					}
-				} else if ($value === null) {
-					$criteria_list[] = "ISNULL($expr)";
+				} else if ($value === null || $value === Db_Values::$IS_NULL) {
+					$criteria_list[] = self::column($expr) . " IS NULL";
+				} else if ($value === Db_Values::$NOT_NULL) {
+					$criteria_list[] = self::column($expr) . " IS NOT NULL";
 				} else if ($value instanceof Db_Expression) {
 					if (is_array($value->parameters)) {
 						$this->parameters = array_merge(
@@ -2108,7 +2112,16 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			$updates_list = array();
 			foreach ($updates as $field => $value) {
 				$column = self::column($field);
-				if ($value instanceof Db_Expression) {
+				if ($value === Db_Values::$NOW) {
+					$updates_list[] = "$column = CURRENT_TIMESTAMP";
+					continue;
+				} else if ($value === Db_Values::$DEFAULT) {
+					$updates_list[] = "$column = DEFAULT";
+					continue;
+				} else if ($value === Db_Values::$KEEP) {
+					$updates_list[] = "$column = $column";
+					continue;
+				} else if ($value instanceof Db_Expression) {
 					if (is_array($value->parameters)) {
 						$this->parameters = array_merge($this->parameters, $value->parameters);
 					}

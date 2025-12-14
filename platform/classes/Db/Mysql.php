@@ -1906,6 +1906,7 @@ EOT;
 		$table_cols = $this->rawQuery("SHOW FULL COLUMNS FROM $table_name")->execute()->fetchAll(PDO::FETCH_ASSOC);
 		$table_status = $this->rawQuery("SHOW TABLE STATUS WHERE Name = '$table_name'")->execute()->fetchAll(PDO::FETCH_COLUMN, 17);
 		$table_comment = (!empty($table_status[0])) ? " * <br>{$table_status[0]}\n" : '';
+		
 		// Calculate primary key
 		$pk = array();
 		foreach ($table_cols as $k => $table_col) {
@@ -1919,6 +1920,34 @@ EOT;
 		}
 		$pk_exported = var_export($pk, true);
 		$pk_json = json_encode($pk);
+
+		// Fetch index information
+		$index_rows = $this->rawQuery("SHOW INDEX FROM $table_name")
+			->execute()
+			->fetchAll(PDO::FETCH_ASSOC);
+
+		$indexes = array();
+
+		foreach ($index_rows as $r) {
+			$name = $r['Key_name'];
+			if (!isset($indexes[$name])) {
+				$indexes[$name] = array(
+					'unique' => ($r['Non_unique'] == 0),
+					'type' => $r['Index_type'],
+					'columns' => array()
+				);
+			}
+			$indexes[$name]['columns'][(int)$r['Seq_in_index']] = $r['Column_name'];
+		}
+
+		foreach ($indexes as &$idx) {
+			ksort($idx['columns']);
+			$idx['columns'] = array_values($idx['columns']);
+		}
+
+		$indexes_exported = var_export($indexes, true);
+		$indexes_json = json_encode($indexes);
+
 
 		// Magic field name arrays
 		$possibleMagicFields = array('insertedTime', 'updatedTime', 'created_time', 'updated_time');
@@ -2783,6 +2812,34 @@ $field_hints
 	static function connectionName()
 	{
 		return $connectionName_var;
+	}
+
+	$dc
+	 * Returns index metadata for the table
+	 * @method indexes
+	 * @static
+	 * @return {array}
+	 */
+	static function indexes()
+	{
+		return $indexes_exported;
+	}
+
+	$dc
+	 * Returns true if a left-prefix index exists for the given columns
+	 * @method hasIndexOn
+	 * @static
+	 * @param {array} \$columns
+	 * @return {boolean}
+	 */
+	static function hasIndexOn(array \$columns)
+	{
+		foreach (self::indexes() as \$idx) {
+			if (array_slice(\$idx['columns'], 0, count(\$columns)) === \$columns) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	$dc

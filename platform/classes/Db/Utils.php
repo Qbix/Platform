@@ -626,5 +626,127 @@ class Db_Utils
 		echo "Please, remove 'Db/config/upcoming.json', verify config, drop new shards and start split process again\n";
 		return false;
 	}
+
+	/**
+	 * Logs queries executed on shards
+	 * @method logShardQuery
+	 * @static
+	 * @param {array} $params
+	 */
+	static function logShardQuery($params)
+	{
+		if (!is_array($params) || empty($params['queries'])) {
+			return;
+		}
+
+		foreach ($params['queries'] as $shard => $query) {
+			if (!is_object($query) || $query->className === 'Users_Session') {
+				continue;
+			}
+
+			if (!is_callable(array($query, 'getClause'))) {
+				continue;
+			}
+
+			$connection = $query->db->connectionName();
+
+			if ($begin = $query->getClause('BEGIN')
+			and $query->nestedTransactionCount == 1) {
+				Q::log($begin);
+			}
+
+			$duration = ceil($query->endedTime - $query->startedTime);
+			Q::log(
+				"Query $connection on shard \"$shard\":\n$params[sql]\n(duration: $duration ms)\n\n",
+				null,
+				array('maxLength' => 10000)
+			);
+
+			if ($commit = $query->getClause('COMMIT')
+			and $query->nestedTransactionCount == 0) {
+				Q::log($commit);
+			}
+
+			if (!empty($params['exception'])) {
+				Q::log("ROLLBACK (due to exception)");
+				Q::log("query was: " . $params['sql']);
+				Q::log($params['exception'], null, true, array(
+					'maxLength' => 2000
+				));
+			} else if ($rollback = $query->getClause('ROLLBACK')) {
+				Q::log($rollback);
+			}
+		}
+	}
+
+	/**
+	 * Logs missing indexes information
+	 * @method logMissingIndexes
+	 * @static
+	 * @param {array} $params
+	 */
+	static function logMissingIndexes($params)
+	{
+		if (!is_array($params)
+		|| empty($params['query'])
+		|| empty($params['sql'])) {
+			return;
+		}
+
+		$query = $params['query'];
+
+		// Only if the query annotated itself
+		if (!isset($query->missingIndexInfo)) {
+			return;
+		}
+
+		// Only if Q::backtrace exists
+		if (!is_callable(array('Q', 'backtrace'))) {
+			return;
+		}
+
+		$logDir  = APP_FILES_DIR . DS . 'Q' . DS . 'logs';
+		$logFile = $logDir . DS . 'Db-analytics.json';
+
+		if (!is_dir($logDir)) {
+			@mkdir($logDir, 0775, true);
+		}
+
+		$data = array();
+
+		if (is_readable($logFile)) {
+			try {
+				$json = file_get_contents($logFile);
+				$data = json_decode($json, true);
+				if (!is_array($data)) {
+					$data = array();
+				}
+			} catch (Exception $e) {
+				$data = array();
+			}
+		}
+
+		if (empty($data['missingIndex'])) {
+			$data['missingIndex'] = array();
+		}
+
+		$trace = Q::backtrace('{{class}}::{{function}}', 3);
+		$key   = $trace ? $trace[0] : 'unknown';
+
+		if (empty($data['missingIndex'][$key])) {
+			$data['missingIndex'][$key] = array(
+				'count'     => 1,
+				'backtrace' => $trace
+			);
+		} else {
+			$data['missingIndex'][$key]['count']++;
+		}
+
+		file_put_contents(
+			$logFile,
+			json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES)
+		);
+	}
+
 	static $compare_field_name;
 }

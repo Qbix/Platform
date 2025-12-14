@@ -831,6 +831,65 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
+	 * Signals an event if the query appears to not use any suitable index
+	 * @method signalMissingIndex
+	 * @param {string} $sql
+	 * @param {string|null} $shardName
+	 */
+	protected function signalMissingIndex($sql, $shardName = null)
+	{
+		if (!class_exists('Q')) {
+			return;
+		}
+
+		$class = $this->className ?? null;
+		if (!$class || !is_callable([$class, 'indexes'])) {
+			return;
+		}
+
+		// Only meaningful for read/write queries
+		if ($this->type !== Db_Query::TYPE_SELECT
+		&& $this->type !== Db_Query::TYPE_UPDATE
+		&& $this->type !== Db_Query::TYPE_DELETE) {
+			return;
+		}
+
+		// You already track intent in the query object
+		if (!method_exists($this, 'indexedColumns')) {
+			return;
+		}
+
+		$columns = $this->indexedColumns();
+		if (!$columns) {
+			return;
+		}
+
+		if ($class::hasIndexOn($columns)) {
+			return;
+		}
+
+		/**
+		 * @event Db/query/missingIndex {after}
+		 * @param {Db_Query_Mysql} query
+		 * @param {array} queries
+		 * @param {string} sql
+		 * @param {Exception} exception
+		 */
+		Q::event('Db/query/missingIndex', 
+			array(
+				'query' => $this,
+				'class' => $class,
+				'columns' => $columns,
+				'indexes' => $class::indexes(),
+				'sql' => $sql,
+				'shardName' => $shardName
+			),
+			'after'
+		);
+	}
+
+
+	/**
 	 * Actual points mapping depending if partition is plain or associative array
 	 * @property $mapping
 	 * @type array
