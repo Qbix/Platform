@@ -1279,22 +1279,26 @@ class Q
 
 		// Otherwise proceed with standard include and function resolution
 		$handler_name_parts = explode('/', $handler_name);
-		$function_name = str_replace('-', '_', implode('_', $handler_name_parts));
-		if (!is_array($params)) {
-			$params = array();
-		}
-		if (!function_exists($function_name)) {
-			if ($skip_include) {
-				return null;
+		if (count($handler_name_parts) > 1) {
+			$function_name = str_replace('-', '_', implode('_', $handler_name_parts));
+			if (!is_array($params)) {
+				$params = array();
 			}
-			// try to load appropriate file using relative filename
-			// (may search multiple include paths)
-			$filename = 'handlers'.DS.implode(DS, $handler_name_parts).'.php';
-			self::includeFile($filename, $params, true);
 			if (!function_exists($function_name)) {
-				require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Exception'.DS.'MissingFunction.php');
-				throw new Q_Exception_MissingFunction(@compact('function_name'));
+				if ($skip_include) {
+					return null;
+				}
+				// try to load appropriate file using relative filename
+				// (may search multiple include paths)
+				$filename = 'handlers'.DS.implode(DS, $handler_name_parts).'.php';
+				self::includeFile($filename, $params, true);
+				if (!function_exists($function_name)) {
+					require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Exception'.DS.'MissingFunction.php');
+					throw new Q_Exception_MissingFunction(@compact('function_name'));
+				}
 			}
+		} else {
+			$function_name = $handler_name;
 		}
 		// The following avoids the bug in PHP where
 		// call_user_func doesn't work with references being passed
