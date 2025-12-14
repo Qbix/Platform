@@ -1,0 +1,196 @@
+{"ts":"2025-11-25T20:14:34.644Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T20:14:34.662Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T20:15:08.493Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T20:33:17.850Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T20:33:17.862Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T20:33:56.920Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T20:35:03.510Z","level":"error","msg":"digest_send_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T20:53:23.775Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T20:53:23.785Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T20:53:51.300Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T20:53:51.311Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T20:55:27.053Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T20:59:00.217Z","level":"error","msg":"socket_error","err":"Error: write EPIPE"}
+{"ts":"2025-11-25T20:59:00.218Z","level":"warn","msg":"session_timeout","remote":"127.0.0.1"}
+{"ts":"2025-11-25T21:05:04.931Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:05:04.941Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:05:34.128Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:05:34.138Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:06:44.587Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: Timeout waiting greeting"}
+{"ts":"2025-11-25T21:07:30.056Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:08:43.075Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:09:37.325Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:09:40.821Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:11:17.025Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:11:17.035Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:11:48.460Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:12:57.877Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:12:57.887Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:13:30.122Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:14:35.240Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:14:35.250Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:15:06.553Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:15:46.603Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:16:16.604Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:17:15.510Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:17:16.621Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:17:50.211Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:19:34.356Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:19:34.367Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:21:25.661Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:21:25.663Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:21:25.664Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:21:25.668Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: read ECONNRESET"}
+{"ts":"2025-11-25T21:22:22.394Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:24:29.462Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:24:29.472Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:25:03.870Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:27:15.159Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:27:15.168Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:28:54.771Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:28:54.781Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:29:28.810Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:30:27.578Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:31:22.664Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:31:22.675Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:33:15.853Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:33:15.864Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:33:56.086Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:33:56.096Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:34:55.970Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:35:24.170Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:35:24.180Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:36:32.857Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:42:59.440Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T21:42:59.450Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T21:46:50.196Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:46:50.200Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: 004CF9EC01000000:error:0A000410:SSL routines:ssl3_read_bytes:ssl/tls alert handshake failure:ssl/record/rec_layer_s3.c:916:SSL alert number 40\n"}
+{"ts":"2025-11-25T21:47:32.769Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:47:51.984Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:49:32.135Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:52:52.418Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:53:28.776Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:53:55.749Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:58:58.119Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T21:59:31.718Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T22:00:52.745Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:00:52.775Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:01:18.396Z","level":"error","msg":"immediate_fail","rcpt":"greg@intercoin.org","err":"Error: SMTP expected 334, got 451 4.4.2 Timeout waiting for data from client."}
+{"ts":"2025-11-25T22:10:44.116Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:10:44.134Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:12:20.281Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:12:20.291Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:12:26.257Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":null}
+{"ts":"2025-11-25T22:15:35.643Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:15:35.654Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:18:04.899Z","level":"error","msg":"immediate_fail","rcpt":"greg@qbix.com","err":"Error: SMTP expected 250, got 451 4.4.2 Timeout waiting for data from client."}
+{"ts":"2025-11-25T22:19:09.171Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:19:09.181Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:20:37.945Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:20:37.955Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:20:39.754Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":null}
+{"ts":"2025-11-25T22:22:06.337Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:22:06.348Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:22:30.891Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":null}
+{"ts":"2025-11-25T22:22:45.203Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:22:45.212Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:22:48.139Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":null}
+{"ts":"2025-11-25T22:22:50.386Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:22:50.396Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:24:16.433Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:24:16.491Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:24:24.444Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T22:35:18.137Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:35:18.147Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:35:24.312Z","level":"error","msg":"immediate_fail","rcpt":"greg@qbix.com","err":"Error: SMTP expected 250, got 554 Configuration Set does not exist: Configuration set <QbixConfigSet> does not exist."}
+{"ts":"2025-11-25T22:39:42.198Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:39:42.209Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:39:44.350Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T22:53:21.640Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:53:21.647Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:53:31.640Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T22:56:09.757Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:56:09.764Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:56:14.854Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T22:56:53.984Z","level":"warn","msg":"session_timeout","remote":"127.0.0.1"}
+{"ts":"2025-11-25T22:56:53.987Z","level":"error","msg":"socket_error","err":"Error [ERR_STREAM_WRITE_AFTER_END]: write after end"}
+{"ts":"2025-11-25T22:57:38.983Z","level":"warn","msg":"session_timeout","remote":"127.0.0.1"}
+{"ts":"2025-11-25T22:57:38.986Z","level":"error","msg":"socket_error","err":"Error [ERR_STREAM_WRITE_AFTER_END]: write after end"}
+{"ts":"2025-11-25T22:58:49.503Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:58:49.510Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:58:53.898Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T22:59:08.039Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T22:59:08.046Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T22:59:12.137Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:01:18.554Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:01:18.562Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:01:26.176Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:03:39.871Z","level":"warn","msg":"session_timeout","remote":"127.0.0.1"}
+{"ts":"2025-11-25T23:03:39.874Z","level":"error","msg":"socket_error","err":"Error [ERR_STREAM_WRITE_AFTER_END]: write after end"}
+{"ts":"2025-11-25T23:05:17.266Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:05:17.274Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:05:22.103Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:07:02.580Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:07:02.586Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:07:12.692Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:08:36.638Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:08:36.646Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:08:41.940Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:10:08.156Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:10:08.164Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:10:13.639Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:11:33.826Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:11:33.833Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:11:40.102Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:12:10.758Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:12:10.765Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:12:15.546Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:13:43.161Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:13:43.168Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:13:47.750Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:18:58.187Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:18:58.194Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:19:07.343Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:21:19.449Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:21:19.456Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:21:43.454Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:25:08.292Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: 004CF9EC01000000:error:0A000410:SSL routines:ssl3_read_bytes:ssl/tls alert handshake failure:ssl/record/rec_layer_s3.c:916:SSL alert number 40\n"}
+{"ts":"2025-11-25T23:38:38.558Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: 004CF9EC01000000:error:0A000410:SSL routines:ssl3_read_bytes:ssl/tls alert handshake failure:ssl/record/rec_layer_s3.c:916:SSL alert number 40\n"}
+{"ts":"2025-11-25T23:38:50.146Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:38:50.153Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:39:04.799Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-25T23:49:38.528Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: 004CF9EC01000000:error:0A000410:SSL routines:ssl3_read_bytes:ssl/tls alert handshake failure:ssl/record/rec_layer_s3.c:916:SSL alert number 40\n"}
+{"ts":"2025-11-25T23:56:45.468Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-25T23:56:45.479Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-25T23:58:10.377Z","level":"error","msg":"immediate_fail","rcpt":"greg@qbix.com","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T23:59:00.538Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: SMTP timeout"}
+{"ts":"2025-11-25T23:59:49.672Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: SMTP timeout"}
+{"ts":"2025-11-26T00:01:30.210Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: SMTP timeout"}
+{"ts":"2025-11-26T00:02:05.225Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:02:05.232Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:02:13.488Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-26T00:03:08.326Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: SMTP expected 334, got 451 4.4.2 Timeout waiting for data from client."}
+{"ts":"2025-11-26T00:03:21.562Z","level":"error","msg":"digest_send_fail","rcpt":"greg@qbix.com","err":"Error: SMTP expected 250, got 554 Message rejected: Email address is not verified. The following identities failed the check in region US-EAST-1: relay@localhost"}
+{"ts":"2025-11-26T00:05:44.836Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:05:44.843Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:05:49.839Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-26T00:06:00.517Z","level":"info","msg":"digest_ok","rcpt":"greg@qbix.com"}
+{"ts":"2025-11-26T00:06:44.804Z","level":"info","msg":"digest_ok","rcpt":"greg@qbix.com"}
+{"ts":"2025-11-26T00:37:17.999Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:37:18.009Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:37:27.210Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-26T00:38:19.635Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:38:19.644Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:38:22.073Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-26T00:38:43.149Z","level":"info","msg":"digest_ok","rcpt":"greg@qbix.com"}
+{"ts":"2025-11-26T00:39:08.399Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:39:08.409Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:39:15.129Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:39:15.140Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:43:45.547Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:43:45.557Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:48:28.106Z","level":"info","msg":"tls_disabled_no_certs"}
+{"ts":"2025-11-26T00:48:28.117Z","level":"info","msg":"plain_smtp_listening","port":2525,"host":"0.0.0.0"}
+{"ts":"2025-11-26T00:48:41.820Z","level":"info","msg":"immediate_ok","rcpt":"greg@qbix.com","mailFrom":"bot-baby@qbix.com"}
+{"ts":"2025-11-26T00:48:59.945Z","level":"info","msg":"digest_ok","rcpt":"greg@qbix.com"}
+{"ts":"2025-11-26T00:49:10.688Z","level":"info","msg":"digest_ok","rcpt":"greg@qbix.com"}
