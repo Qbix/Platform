@@ -109,12 +109,20 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 	}
 
     /**
-	 * Calculates an ON CONFLICT DO UPDATE clause (PostgreSQL)
+	 * Calculates an ON CONFLICT DO UPDATE clause (PostgreSQL).
+	 *
+	 * IMPORTANT SEMANTICS:
+	 * - PostgreSQL requires an explicit conflict target.
+	 * - We NEVER infer conflict targets from update columns.
+	 * - Automatic inference is limited to PRIMARY KEY only.
+	 *
 	 * @method onDuplicateKeyUpdate_internal
 	 * @protected
 	 * @param {array|bool} $updates Either an associative array of column => value pairs,
 	 *                              or true to auto-generate one safe update.
 	 * @return {string} SQL fragment for DO UPDATE SET ...
+	 * @throws {Exception} If used outside INSERT context, or if conflict target
+	 *                     cannot be determined safely.
 	 */
 	protected function onDuplicateKeyUpdate_internal($updates)
 	{
@@ -126,10 +134,12 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 		}
 
 		$i = 1; // reset per call
-		$updates_list     = [];
-		$conflictColumns  = [];
+		$updates_list = [];
 
-		// If caller passed true, auto-generate update of one safe column
+		/**
+		 * Handle auto-update case.
+		 * This is intentionally conservative to avoid incorrect UPSERTs.
+		 */
 		if ($updates === true) {
 			if (empty($this->className)) {
 				throw new Exception(
@@ -137,25 +147,40 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 					-1
 				);
 			}
+
 			$row        = new $this->className;
-			$primaryKey = $row->getPrimaryKey();
+			$primaryKey = (array) $row->getPrimaryKey();
 			$fieldNames = call_user_func([$this->className, 'fieldNames']);
 
-			// Prefer updatedTime if present
+			if (empty($primaryKey)) {
+				throw new Exception(
+					"PostgreSQL UPSERT requires a primary key when using onDuplicateKeyUpdate(true)",
+					-1
+				);
+			}
+
+			// Prefer updatedTime / updated_time if present
 			foreach (['updatedTime', 'updated_time'] as $magic) {
 				if (in_array($magic, $fieldNames, true)) {
-					$updates = [$magic => new Db_Expression("CURRENT_TIMESTAMP")];
+					$updates = [
+						$magic => new Db_Expression("CURRENT_TIMESTAMP")
+					];
 					break;
 				}
 			}
 
-			// Otherwise pick the first non-PK field
+			// Otherwise perform a harmless self-assignment on the PK
 			if ($updates === true) {
-				foreach ($fieldNames as $col) {
-					if (in_array($col, $primaryKey, true)) continue;
-					$updates = [$col => new Db_Expression("EXCLUDED." . self::column($col))];
-					break;
-				}
+				$pk = reset($primaryKey);
+				$updates = [
+					$pk => new Db_Expression("EXCLUDED." . self::column($pk))
+				];
+			}
+
+			// Auto-set conflict target to PRIMARY KEY if not already set
+			if (empty($this->clauses['ON CONFLICT TARGET'])) {
+				$this->clauses['ON CONFLICT TARGET'] =
+					'(' . implode(', ', array_map([self::class, 'column'], $primaryKey)) . ')';
 			}
 		}
 
@@ -163,13 +188,14 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 			throw new Exception("Updates must be an associative array.", -1);
 		}
 
-		// Build update expressions
+		// Build update expressions only (no conflict inference here)
 		foreach ($updates as $field => $value) {
-			$conflictColumns[] = $field;
-
 			if ($value instanceof Db_Expression) {
 				if (is_array($value->parameters)) {
-					$this->parameters = array_merge($this->parameters, $value->parameters);
+					$this->parameters = array_merge(
+						$this->parameters,
+						$value->parameters
+					);
 				}
 				$updates_list[] = self::column($field) . " = $value";
 			} else {
@@ -179,32 +205,56 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 			}
 		}
 
-		// Auto-infer conflict target if not explicitly set
-		if (empty($this->clauses['ON CONFLICT TARGET']) && !empty($conflictColumns)) {
-			$this->clauses['ON CONFLICT TARGET'] =
-				'(' . implode(', ', array_map([self::class, 'column'], $conflictColumns)) . ')';
+		// PostgreSQL requires a conflict target — do NOT guess
+		if (empty($this->clauses['ON CONFLICT TARGET'])) {
+			throw new Exception(
+				"PostgreSQL requires an explicit ON CONFLICT target or a primary key.",
+				-1
+			);
 		}
 
-		return implode(', ', $updates_list); // caller wraps with "DO UPDATE SET ..."
+		return implode(', ', $updates_list);
 	}
 
-
+	/**
+	 * Builds INSERT ... ON CONFLICT ... DO UPDATE SET ...
+	 *
+	 * @method build_insert_onDuplicateKeyUpdate
+	 * @protected
+	 * @return {string}
+	 * @throws {Exception} If conflict target is missing.
+	 */
 	protected function build_insert_onDuplicateKeyUpdate()
 	{
 		if (empty($this->clauses['ON DUPLICATE KEY UPDATE'])) {
 			return '';
 		}
+
 		if (empty($this->clauses['ON CONFLICT TARGET'])) {
-			throw new Exception("PostgreSQL requires ON CONFLICT target.");
+			throw new Exception(
+				"PostgreSQL requires ON CONFLICT target.",
+				-1
+			);
 		}
-		return "\nON CONFLICT " . $this->clauses['ON CONFLICT TARGET']
-		     . " DO UPDATE SET " . $this->clauses['ON DUPLICATE KEY UPDATE'];
+
+		return "\nON CONFLICT "
+			. $this->clauses['ON CONFLICT TARGET']
+			. " DO UPDATE SET "
+			. $this->clauses['ON DUPLICATE KEY UPDATE'];
 	}
 
+	/**
+	 * Alias for PostgreSQL INSERT builder.
+	 *
+	 * @method build_onDuplicateKeyUpdate
+	 * @protected
+	 * @return {string}
+	 */
 	protected function build_onDuplicateKeyUpdate()
 	{
 		return $this->build_insert_onDuplicateKeyUpdate();
 	}
+
 
 	/**
 	 * Check if a column is indexed in a PostgreSQL table.

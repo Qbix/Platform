@@ -616,7 +616,7 @@ abstract class Db_Query extends Db_Expression
 
 	/**
 	 * Computes the adapter class name for a given Db instance.
-	 * Example: Db_Mysql → Db_Query_Mysql
+	 * Example: Db_Mysql to Db_Query_Mysql
 	 *
 	 * @method adapterClass
 	 * @static
@@ -627,7 +627,7 @@ abstract class Db_Query extends Db_Expression
 	{
 		$parts = explode('_', get_class($db));
 
-		if ($parts[0] === 'Db') {
+		if ($parts[0] === 'Db' && $parts[1] !== 'Query') {
 			$parts[0] = 'Db_Query';
 		}
 
@@ -3351,11 +3351,6 @@ abstract class Db_Query extends Db_Expression
 		if ($class::hasIndexOn($columns)) {
 			return;
 		}
-
-		$this->missingIndexInfo = array(
-			'class'   => $class,
-			'columns' => $columns
-		);
 
 		/**
 		 * @event Db/query/missingIndex {after}

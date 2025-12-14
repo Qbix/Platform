@@ -510,7 +510,7 @@ class Db
 
 		return Db_Query::adapter($this, Db_Query::TYPE_INSERT, $clauses, $fields, $table_into);
 	}
-
+	
 	/**
 	 * Inserts multiple rows into a single table, preparing the statement only once,
 	 * and executes all the queries. It triggers beforeSave and afterSaveExecute
@@ -532,13 +532,10 @@ class Db
 	 * @param {integer} [$options.chunkSize]
 	 *    The number of rows to insert at a time. Defaults to 20.
 	 *    You can also put 0 here, which means unlimited chunks, but it's not recommended.
-	 * @param {array} [$options.onDuplicateKeyUpdate]
+	 * @param {array|bool} [$options.onDuplicateKeyUpdate]
 	 *    You can put an array of fieldname => value pairs here,
-	 *    which will add an ON DUPLICATE KEY UPDATE clause to the query.
-	 *    Consider using new Db_Expression("VALUES(fieldName)") for the values of fields
-	 *    that you'd want to update on existing rows, and Db_Expression("CURRENT_TIMESTAMP")
-	 *    for magic time fields.
-	 *    Or you can just pass true instead of an array, and the system will do it for you.
+	 *    which will add an ON DUPLICATE KEY UPDATE / ON CONFLICT DO UPDATE clause to the query.
+	 *    Or you can just pass true instead of an array, and the adapter will do it for you.
 	 */
 	function insertManyAndExecute($table_into, array $rows = array(), $options = array())
 	{
@@ -549,16 +546,16 @@ class Db
 			return false;
 		}
 
-		$adapter = Db_Query::adapterClass($this);
+		$adapterClass = Db_Query::adapterClass($this);
 		$chunkSize = isset($options['chunkSize']) ? $options['chunkSize'] : 20;
 		if ($chunkSize < 0) {
 			return false;
 		}
 
 		$possibleMagicInsertFields = array('insertedTime', 'created_time');
-		$possibleMagicUpdateFields = array('updatedTime', 'updated_time');
 		$onDuplicateKeyUpdate = isset($options['onDuplicateKeyUpdate'])
-			? $options['onDuplicateKeyUpdate'] : null;
+			? $options['onDuplicateKeyUpdate']
+			: null;
 		$className = isset($options['className']) ? $options['className'] : null;
 
 		// Get the columns list
@@ -571,59 +568,21 @@ class Db
 		} else {
 			$row = reset($rows);
 			$record = ($row instanceof Db_Row) ? $row->fields : $row;
+			$columnsList = array();
 			foreach ($record as $column => $value) {
-				$columnsList[] = $c = $adapter::column($column);
+				$c = $adapterClass::column($column);
+				$columnsList[] = $c;
 				$rawColumns[$c] = $column;
 			}
 		}
+
 		$columnsString = implode(', ', $columnsList);
 		$into = "$table_into ($columnsString)";
-
-		// On duplicate key update clause (optional)
-		$update_fields = array();
-		$odku_clause = '';
-		if (isset($onDuplicateKeyUpdate)) {
-			$odku_clause = "\n\t ON DUPLICATE KEY UPDATE ";
-			$parts = array();
-			if ($onDuplicateKeyUpdate === true) {
-				if (empty($options['className'])) {
-					throw new Exception("Db::insertManyAndExecute: need options['className'] when onDuplicateKeyUpdate === true");
-				}
-				$row = new $options['className'];
-				$primaryKey = $row->getPrimaryKey();
-				$onDuplicateKeyUpdate = array();
-				foreach ($columnsList as $c) {
-					$column = isset($rawColumns[$c]) ? $rawColumns[$c] : $c;
-					if (in_array($column, $primaryKey)) {
-						continue;
-					}
-					$onDuplicateKeyUpdate[$column] = in_array($column, $possibleMagicUpdateFields)
-						? new Db_Expression("CURRENT_TIMESTAMP")
-						: new Db_Expression("VALUES($column)");
-					break; // only need one
-				}
-				$fieldNames = call_user_func(array($options['className'], 'fieldNames'));
-				foreach ($possibleMagicUpdateFields as $column) {
-					if (in_array($column, $fieldNames)) {
-						$onDuplicateKeyUpdate[$column] = new Db_Expression("CURRENT_TIMESTAMP");
-					}
-				}
-			}
-			foreach ($onDuplicateKeyUpdate as $k => $v) {
-				if ($v instanceof Db_Expression) {
-					$part = "= $v";
-				} else {
-					$part = " = :__update_$k";
-					$update_fields["__update_$k"] = $v;
-				}
-				$parts[] .= static::column($k) . $part;
-			}
-			$odku_clause .= implode(",\n\t", $parts);
-		}
 
 		// Process in outer chunks
 		foreach (array_chunk($rows, $chunkSize) as $rowsChunk) {
 			$rowObjects = array();
+
 			if ($className) {
 				$isCallable = is_callable(array($className, 'beforeInsertManyAndExecute'));
 				foreach ($rowsChunk as $k => $row) {
@@ -648,12 +607,12 @@ class Db
 				}
 			}
 
-			// Start filling
 			$queries = array();
 			$queryCounts = array();
 			$bindings = array();
 			$last_q = array();
 			$last_queries = array();
+
 			foreach ($rowsChunk as $row) {
 				if ($row instanceof Db_Row) {
 					if (class_exists('Q') and class_exists($className)) {
@@ -674,9 +633,7 @@ class Db
 							}
 						}
 					} else {
-						foreach ($row->fields as $name => $value) {
-							$record[$name] = $value;
-						}
+						$record = $row->fields;
 					}
 				} else {
 					$record = $row;
@@ -691,23 +648,26 @@ class Db
 					}
 				}
 
-				$query = new Db_Query_Mysql($this, Db_Query::TYPE_INSERT);
-				// get shard, if any
+				$query = new $adapterClass($this, Db_Query::TYPE_INSERT);
+
 				$shard = '';
-				if (isset($className)) {
+				if ($className) {
 					$query->className = $className;
 					$sharded = $query->shard(null, $record);
 					if (count($sharded) > 1 or $shard === '*') {
-						throw new Exception("Db::insertManyAndExecute row should be stored on exactly one shard: " . json_encode($record));
+						throw new Exception(
+							"Db::insertManyAndExecute row should be stored on exactly one shard: "
+							. json_encode($record)
+						);
 					}
 					$shard = key($sharded);
 				}
 
-				// start filling out the query data
 				$qc = empty($queryCounts[$shard]) ? 1 : $queryCounts[$shard] + 1;
 				if (!isset($bindings[$shard])) {
 					$bindings[$shard] = array();
 				}
+
 				$valuesList = array();
 				$index = 0;
 				foreach ($columnsList as $column) {
@@ -721,6 +681,7 @@ class Db
 						$bindings[$shard]['_'.$qc.'_'.$index] = $value;
 					}
 				}
+
 				$valuesString = implode(', ', $valuesList);
 				if (empty($queryCounts[$shard])) {
 					$q = $queries[$shard] = "INSERT INTO $into\nVALUES ($valuesString) ";
@@ -730,14 +691,10 @@ class Db
 					++$queryCounts[$shard];
 				}
 
-				// if chunk filled up for this shard, execute it
 				if ($qc === $chunkSize) {
-					if ($onDuplicateKeyUpdate) {
-						$q .= $odku_clause;
-					}
 					$query = $this->rawQuery($q)->bind($bindings[$shard]);
 					if ($onDuplicateKeyUpdate) {
-						$query = $query->bind($update_fields);
+						$query->onDuplicateKeyUpdate($onDuplicateKeyUpdate);
 					}
 					if (isset($last_q[$shard]) and $last_q[$shard] === $q) {
 						$query->reuseStatement($last_queries[$shard]);
@@ -750,15 +707,11 @@ class Db
 				}
 			}
 
-			// Now execute the remaining queries, if any
 			foreach ($queries as $shard => $q) {
 				if (!$q) continue;
-				if ($onDuplicateKeyUpdate) {
-					$q .= $odku_clause;
-				}
 				$query = $this->rawQuery($q)->bind($bindings[$shard]);
 				if ($onDuplicateKeyUpdate) {
-					$query = $query->bind($update_fields);
+					$query->onDuplicateKeyUpdate($onDuplicateKeyUpdate);
 				}
 				if (isset($last_q[$shard]) and $last_q[$shard] === $q) {
 					$query->reuseStatement($last_queries[$shard]);
@@ -773,7 +726,6 @@ class Db
 				}
 			}
 
-			// simulate afterSaveExecute on all rows in this chunk
 			if ($className) {
 				if (is_callable(array($className, 'afterInsertManyAndExecute'))) {
 					call_user_func(array($className, 'afterInsertManyAndExecute'), $rowObjects);
@@ -786,7 +738,9 @@ class Db
 							$stmt = null;
 							$result = new Db_Result($stmt, $query);
 							$rowObject->afterSaveExecute(
-								$result, $query, $rowObject->fields,
+								$result,
+								$query,
+								$rowObject->fields,
 								$rowObject->calculatePKValue(true),
 								'insertManyAndExecute'
 							);
@@ -799,7 +753,7 @@ class Db
 					'rows' => $rowObjects,
 				), 'after');
 			}
-		} // end outer chunk
+		}
 	}
 
 	/**
@@ -2113,6 +2067,10 @@ class Db
 		if (!file_exists($directory))
 			throw new Exception("directory $directory does not exist.");
 		
+		$class_name = Db_Q($this);
+		$parts = explode($class_name);
+		$Adapter = ucfirst(end($parts));
+
 		$connectionName = $this->connectionName();
 		$conn = Db::getConnection($connectionName);
 		
