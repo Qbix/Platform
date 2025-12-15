@@ -286,6 +286,7 @@ body.Q_preventScroll {
 	color: white;
 	background: transparent;
 	border: none;
+	flex-shrink: 0;
 }
 .Q_fullscreen_dialog .Q_title_slot *,
 .Q_overlay .Q_title_slot * {
