@@ -1,11 +1,12 @@
 (function (window, Q, $, undefined) {
-	
+
 /**
  * @module Q
  */
-	
+
 /**
- * YUIDoc description goes here
+ * Video player tool, that can play videos hosted by
+ * youtube, vimeo, muse, twitch, odysee and other backends
  * @class Q video
  * @constructor
  * @param {Object} [options] Override various options for this tool
@@ -14,22 +15,15 @@
  *  @param {string} [options.clipStart] Clip start position in milliseconds
  *  @param {string} [options.clipEnd] Clip end position in milliseconds
  *  @param {string} [options.className] Additional class name to add to tool element
- *  @param {object} [options.metrics] Whether to send metrics about playback, only gets enabled if publisherId, streamName options are set
- *  @param {string} [options.metrics.publisherId] Publisher of the stream to collect metrics for
- *  @param {string} [options.metrics.streamName] Name of the stream to collect metrics for
- *  @param {object} [options.metrics.useFaces] Whether to use facial recognition to track when people start and stop watching the video
- *  @param {integer} [options.metrics.useFaces.debounce] How long to wait after person stopped watching the video and didn't return, before reporting that in metrics
+ *  @param {object} [options.metrics] Whether to send metrics about playback
  *  @param {string} [options.image] URL of image which will show as illustration before play.
  *  @param {object} [options.clips] Contains options for "clips" mode.
- *  @param {function} [options.clips.handler] The main option which return clip url for some timestamp. If it null - means mode is not "clips"
- *  @param {integer} [options.clips.duration] Clips duration in seconds. If defined the clips will play this fixed duration. If null clips will play till the end.
- *  @param {integer} [options.clips.oneSecondPercent=1/6] How much percents one second used on timeline. By default 1/6 - which means 60 seconds will use 10% of timeline.
- *  @param {Integer} [options.positionUpdatePeriod=1] Time period in seconds to check new play position.
- *  @param {boolean} [options.autoplay=false] If true - start play on load
- *  @param {boolean} [options.loop=false] 
- *  @param {array} [options.ads] Array of ads in format [{position:<minutes>, url:<string>}, ...]
- *  @param {array} [options.skipPositionOnLoad=false] It true skip setCurrentPosition on video loaded. Because start position can be defined in request.
- *  @param {boolean} [options.skipPauseOnload=false] If true, skip pause when player reach start position.
+ *  @param {Integer} [options.positionUpdatePeriod=1]
+ *  @param {boolean} [options.autoplay=false]
+ *  @param {boolean} [options.loop=false]
+ *  @param {array} [options.ads]
+ *  @param {array} [options.skipPositionOnLoad=false]
+ *  @param {boolean} [options.skipPauseOnload=false]
  */
 Q.Tool.define("Q/video", function (options) {
 	var tool = this;
@@ -48,11 +42,12 @@ Q.Tool.define("Q/video", function (options) {
 	tool.adapters = {};
 
 	var sm = state.metrics;
-	if (!Q.isEmpty(sm) && sm.publisherId && sm.streamName) {
-		tool.metrics = new Q.Streams.Metrics(state.metrics);
+	if (Q.Streams && Q.Streams.Metrics) {
+		if (!Q.isEmpty(sm) && sm.publisherId && sm.streamName) {
+			tool.metrics = new Q.Streams.Metrics(state.metrics);
+		}
 	}
 
-	// extend videojsOptions with global options
 	state.videojsOptions = Q.extend({
 		autoplay: state.autoplay,
 		loop: state.loop,
@@ -61,78 +56,66 @@ Q.Tool.define("Q/video", function (options) {
 		playsinline: state.playsinline
 	}, state.videojsOptions);
 
+	// helper to hide overlays when playback actually starts
+	function hidePlayOverlays() {
+		$(".vjs-big-play-button", tool.element).hide();
+		$(".Q_video_overlay_play", tool.element).hide();
+	}
+
 	tool.adapters.mp4 = {
 		init: function () {
-			var options = {
-				sources: [{
-					src: state.url,
-					type: 'video/mp4'
-				}]
-			};
-
-			tool.initVideojsPlayer(options);
+			tool.initVideojsPlayer({
+				sources: [{ src: state.url, type: 'video/mp4' }]
+			});
 		}
 	};
+
 	tool.adapters.webm = {
 		init: function () {
-			var options = {
-				sources: [{
-					src: state.url,
-					type: 'video/webm'
-				}]
-			};
-
-			tool.initVideojsPlayer(options);
+			tool.initVideojsPlayer({
+				sources: [{ src: state.url, type: 'video/webm' }]
+			});
 		}
 	};
+
 	tool.adapters.ogg = {
 		init: function () {
-			var options = {
-				sources: [{
-					src: state.url,
-					type: 'video/ogg'
-				}]
-			};
-
-			tool.initVideojsPlayer(options);
+			tool.initVideojsPlayer({
+				sources: [{ src: state.url, type: 'video/ogg' }]
+			});
 		}
 	};
+
 	tool.adapters.youtube = {
 		init: function () {
 			state.controls = 0;
 			state.videojsOptions.ytControls = 1;
 			Q.addScript("{{Q}}/js/videojs/plugins/YouTube.js", function () {
-				var options = {
+				tool.initVideojsPlayer({
 					techOrder: ["youtube"],
-					sources: [{
-						src: state.url,
-						type: 'video/youtube'
-					}],
+					sources: [{ src: state.url, type: 'video/youtube' }],
 					youtube: state.videojsOptions
-				};
-				tool.initVideojsPlayer(options);
+				});
 			});
 		}
 	};
+
 	tool.adapters.vimeo = {
 		init: function () {
 			Q.addScript("{{Q}}/js/videojs/plugins/Vimeo.js", function () {
-				var options = {
+				tool.initVideojsPlayer({
 					techOrder: ["vimeo"],
-					sources: [{
-						src: state.url,
-						type: 'video/vimeo'
-					}],
+					sources: [{ src: state.url, type: 'video/vimeo' }],
 					vimeo: state.videojsOptions
-				};
-				tool.initVideojsPlayer(options);
+				});
 			});
 		}
 	};
+
 	tool.adapters.odysee = { //plays livestream from odysee in iframe
 		init: function () {
 			Q.addScript("https://cdn.embed.ly/player-0.1.0.min.js", function () {
-				const iframe = document.createElement('iframe');
+				var iframe = document.createElement('iframe');
 				iframe.src = state.url;
 				tool.element.appendChild(iframe);
 				tool.element.classList.add('Q_video_odysee');
@@ -153,6 +136,7 @@ Q.Tool.define("Q/video", function (options) {
 			});
 		}
 	};
+
 	tool.adapters.muse = {
 		init: function () {
 			Q.addScript("https://muse.ai/static/js/embed-player.min.js", function () {
@@ -210,6 +194,7 @@ Q.Tool.define("Q/video", function (options) {
 			});
 		}
 	};
+
 	tool.adapters.twitch = {
 		init: function () {
 			var element = tool.element;
@@ -255,6 +240,11 @@ Q.Tool.define("Q/video", function (options) {
 
 			Q.addScript("{{Q}}/js/twitch/lib.js", function () {
 				state.player = new Twitch.Player(element, options);
+
+				state.player.waiting = function (status) {
+					// noop for twitch, but preserve interface
+				};
+
 
 				// place play button above the player
 				var $overlayPlay = $(".Q_video_overlay_play", tool.element);
@@ -347,8 +337,6 @@ Q.Tool.define("Q/video", function (options) {
 			});
 		}
 	};
-
-	//tool.adapters.youtube = tool.adapters.vimeo = tool.adapters.mp4 = tool.adapters.webm = tool.adapters.general;
 
 	$toolElement.on(Q.Pointer.fastclick, ".Q_video_close", function () {
 		tool.pause();
@@ -626,6 +614,7 @@ Q.Tool.define("Q/video", function (options) {
 				Q.handle(state.onPlay, tool, [position]);
 			}, throttle);
 			var onPause = Q.throttle(function () {
+				$(".Q_video_overlay_play", tool.element).show();
 				var position = state.currentPosition || tool.getCurrentPosition();
 				//console.log("Paused at position " + position + " milliseconds");
 				Q.handle(state.onPause, tool, [position]);
@@ -639,6 +628,7 @@ Q.Tool.define("Q/video", function (options) {
 				Q.handle(state.onVolumechange, tool, [state.player.volume()]);
 			}, throttle);
 			var onEnded = Q.throttle(function () {
+				$(".Q_video_overlay_play", tool.element).show();
 				var position = state.currentPosition || tool.getCurrentPosition();
 				//console.log("Seeked at position " + position + " milliseconds");
 				Q.handle(state.onEnded, tool, [position]);
@@ -973,7 +963,7 @@ Q.Tool.define("Q/video", function (options) {
 				clearInterval(durationTimeId);
 
 				Q.each(ads, function (i) {
-					if (typeof this.position === "string" && this.position.includes("%")) {
+					if (typeof this.position === "string" && this.position.indexOf("%") >= 0) {
 						this.position = duration / 100 * parseInt(this.position);
 					}
 
@@ -1116,7 +1106,7 @@ Q.Tool.define("Q/video", function (options) {
 	 */
 	getCurrentPosition: function () {
 		var currentTime = (Q.getObject("state.player.currentTime", this) && this.state.player.currentTime()) || 0;
-		return Math.trunc(currentTime * 1000);
+		return Math.floor(currentTime * 1000);
 	},
 	/**
 	 * Detect adapter from url
@@ -1143,15 +1133,15 @@ Q.Tool.define("Q/video", function (options) {
 			case 'mp4': return 'mp4';
 		}
 
-		if (host.includes("youtube.com") || host.includes("youtu.be")) {
+		if (host.indexOf("youtube.com") >= 0 || host.indexOf("youtu.be") >= 0) {
 			return 'youtube';
-		} else if (host.includes("vimeo.com")) {
+		} else if (host.indexOf("vimeo.com") >= 0) {
 			return 'vimeo';
-		} else if (host.includes("twitch")) {
+		} else if (host.indexOf("twitch") >= 0) {
 			return 'twitch';
-		} else if (host.includes("odysee")) {
+		} else if (host.indexOf("odysee") >= 0) {
 			return 'odysee';
-		} else if (host.includes("muse.ai")) {
+		} else if (host.indexOf("muse.ai") >= 0) {
 			return 'muse';
 		}
 
