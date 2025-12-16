@@ -34,7 +34,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	state = state || {};
 	Q.addStylesheet("{{Q}}/css/tools/gallery.css");
 
-	var maxVolume = 1;
+	var maxVolume = state.muted ? 0 : 1;
 	var autoplaySoundAllowed;
 
 	var $this = this;
