@@ -24,6 +24,7 @@
  * @param {Object} [options.retain] Optional LRU retain limits
  * @param {Number} [options.timeToBuffer=5000] Min ms required before modifying upcoming item
  * @param {Boolean} [options.autoplay=true] Start playback immediately
+ * @param {Boolean} [options.muted] Set to true to be muted even in environments where autoplay could be unmuted
  * @param {Boolean} [options.transitionToFirst=false] Transition first item
  * @param {Boolean} [options.loop=true] Loop timeline
  * @param {Q.Event} [options.onLoad] Fired when media loads
@@ -32,6 +33,9 @@
 Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	state = state || {};
 	Q.addStylesheet("{{Q}}/css/tools/gallery.css");
+
+	var maxVolume = 1;
+	var autoplaySoundAllowed;
 
 	var $this = this;
 	var gallery;
@@ -182,7 +186,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			cur.$element.find('.Q_gallery_caption').css('visibility', 'visible');
 
 			if (cur.type === 'video') {
-				try { cur.player.volume(y); } catch (e) {}
+				try { cur.player.volume(y * maxVolume); } catch (e) {}
 			}
 
 			if (!prev) return;
@@ -190,7 +194,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			prev.$element.css({ opacity: 1 - y });
 
 			if (prev.type === 'video') {
-				try { prev.player.volume(1 - y); } catch (e) {}
+				try { prev.player.volume((1 - y) * maxVolume); } catch (e) {}
 			}
 
 			if (y === 1) {
@@ -271,6 +275,14 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				var tool = Q.Tool.from($(".Q_video_tool", $item)[0], "Q/video");
 				videos[i] = { $element: $item, player: tool.player };
 
+				try {
+					tool.player.muted(maxVolume === 0);
+				} catch (e) {}
+
+				if (maxVolume !== 0) {
+					$item.find('.Q_gallery_volume').attr('data-type', 'on');
+				}
+
 				tool.state.onEnded.set(function () {
 					gallery.next(true);
 				}, "Q/gallery");
@@ -285,12 +297,33 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				m.$element = $item;
 				m.player = tool.player;
 
-				if (current === 0 && state.autoplay) {
+				if (current === 0 && state.autoplay && autoplaySoundAllowed === undefined) {
+
+					// autoplay safety first
+					try {
+						m.player.muted(true);
+					} catch (e) {}
+
+					tryInitialAutoplay(m).then(function (allowed) {
+						autoplaySoundAllowed = allowed;
+
+						if (!allowed) {
+							// downgrade policy
+							state.muted = true;
+							maxVolume = 0;
+
+							// immediate retry now that we're muted
+							try {
+								m.player.muted(true);
+								m.player.play();
+							} catch (e) {}
+						}
+					});
+
 					var tries = 0;
 					var playTimer = setInterval(function () {
 						if (tries++ > 10) return clearInterval(playTimer);
 						try {
-							m.player.muted(true);
 							m.player.play();
 						} catch (e) {}
 					}, 500);
@@ -299,6 +332,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 						clearInterval(playTimer);
 					});
 				}
+
 
 				Q.handle(state.onLoad, $this, [$item, videos, state]);
 				cb();
@@ -392,13 +426,17 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	$this.on(Q.Pointer.fastclick, ".Q_gallery_volume", function () {
 		var $btn = $(this);
 		var on = $btn.attr("data-type") === "on";
-		var volume = on ? 0 : 1;
+		var volume = on ? 0 : maxVolume;
+
+		if (maxVolume === 0) {
+			return; // button does nothing in silent galleries
+		}
 
 		var item = mediaItems[current];
 		if (item && item.type === 'video' && item.player) {
 			try {
 				item.player.volume(volume);
-				item.player.muted(!volume);
+				item.player.muted(volume === 0);
 			} catch (e) {}
 		}
 
@@ -423,6 +461,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	retain: undefined,
 	timeToBuffer: 5000,
 	autoplay: true,
+	muted: Q.info.isMobile  || Q.info.isTablet,
 	transitionToFirst: false,
 	loop: true,
 	onLoad: null,
@@ -453,5 +492,40 @@ Q.Template.set(
 	'<div class="Q_gallery_caption"><h2>{{title}}</h2><p>{{description}}</p></div>' +
 	'</div>'
 );
+
+function tryInitialAutoplay(item) {
+	return new Promise(function (resolve) {
+		try {
+			// optimistic: attempt unmuted play
+			item.player.muted(false);
+
+			var p = item.player.play();
+
+			// play() may or may not return a promise
+			if (p && p.then) {
+				p.then(function () {
+					// not rejected
+					resolve(true);
+				}).catch(function () {
+					// explicitly rejected
+					try {
+						item.player.muted(true);
+					} catch (e) {}
+					resolve(false);
+				});
+			} else {
+				// old engines: no exception == allowed
+				resolve(true);
+			}
+		} catch (e) {
+			// synchronous rejection
+			try {
+				item.player.muted(true);
+			} catch (e2) {}
+			resolve(false);
+		}
+	});
+}
+
 
 })(Q, Q.jQuery, window, document);
