@@ -1,6 +1,7 @@
 <?php
 
 class Q_Session_Handlers8 extends SessionHandler
+implements SessionUpdateTimestampHandlerInterface
 {
     public function open(string $save_path, string $session_name): bool
     {
@@ -30,5 +31,10 @@ class Q_Session_Handlers8 extends SessionHandler
     public function gc(int $max_lifetime): int
     {
         return Q_Session::gcHandler($max_lifetime);
+    }
+
+    public function validateId($id): bool
+    {
+        return Q_Session::isValidId($id);
     }
 }

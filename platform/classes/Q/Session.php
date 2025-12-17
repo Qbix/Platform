@@ -155,7 +155,8 @@ class Q_Session
 		 */
 		$id = Q::event('Q/session/id', array(), 'before', false, $id);
 		if (isset($id)) {
-			return session_id($id);
+			session_id($id);
+			return session_id(); // must read it before session_start, a PHP quirk
 		}
 		return session_id();
 	}
