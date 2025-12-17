@@ -37,4 +37,10 @@ implements SessionUpdateTimestampHandlerInterface
     {
         return Q_Session::isValidId($id);
     }
+
+    public function updateTimestamp($id, $data)
+	{
+		// Fallback: treat it like a write
+		return $this->write($id, $data);
+	}
 }
