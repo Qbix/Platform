@@ -17342,7 +17342,7 @@ Q.Camera = {
 		 */
 		QR: function (callback, options) {
 			options = Q.extend({}, this.options, options);
-			var audio =  new Q.Audio(options.sound.src);
+			var audio =  (new Q.Audio(options.sound.src)).audio;
 			if (root.QRScanner) {
 				return this.adapters.cordova(audio, callback, options);
 			}
