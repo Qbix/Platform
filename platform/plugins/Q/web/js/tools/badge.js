@@ -270,12 +270,6 @@ Q.Tool.define("Q/badge", function () {
 				$this.remove();
 			}
 		}).addClass('Q_badge_positioned');
-
-		if (!state.interval) {
-			state.interval = setInterval(function () {
-
-			});
-		}
 	},
 	Q: {
 		beforeRemove: function () {

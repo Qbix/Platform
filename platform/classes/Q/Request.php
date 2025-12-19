@@ -890,7 +890,7 @@ class Q_Request
 			return false;
 		}
 		$useragent = $_SERVER['HTTP_USER_AGENT'];
-		return !!preg_match('/Android .*Version\/[\d]+\.[\d]+/i', $useragent);
+		return !!preg_match('/Android\s+([0-9\.]+)/i', $useragent);
 	}
 	
 	/**
