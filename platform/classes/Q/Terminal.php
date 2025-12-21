@@ -10,11 +10,14 @@
  */
 class Q_Terminal
 {
-	private $width;
-	private $height;
+	private static $width;
+	private static $height;
 
-	private $buffer = [];        // [y][x] = [char, fg, bg]
-	private $mouseEnabled = false;
+	private static $buffer = array();        // [y][x] = [char, fg, bg]
+	private static $mouseEnabled = false;
+
+	private static $started = false;
+
 
 	/**
 	 * Construct a terminal instance and detect its size.
@@ -23,16 +26,133 @@ class Q_Terminal
 	 * @constructor
 	 * @method Q_Terminal
 	 */
-	public function __construct()
+	static function start()
 	{
-		$this->updateSize();
+		if (self::$started) return;
+		self::$started = true;
 
-		for ($y = 0; $y < $this->height; $y++) {
-			$this->buffer[$y] = [];
-			for ($x = 0; $x < $this->width; $x++) {
-				$this->buffer[$y][$x] = [' ', null, null];
+		self::updateSize();
+
+		for ($y = 0; $y < self::$height; $y++) {
+			self::$buffer[$y] = [];
+			for ($x = 0; $x < self::$width; $x++) {
+				self::$buffer[$y][$x] = [' ', null, null];
 			}
 		}
+	}
+
+
+	/**
+	 * Create a clickable link for supported terminals.
+	 * @method link
+	 * @static
+	 * @param {string} text The link text
+	 * @param {string} url The link URL
+	 * @return {string} The formatted link
+	 */
+	static function link($text, $url)
+	{
+		return "\033]8;;".$url."\033\\".$text."\033]8;;\033\\";
+	}
+
+	/**
+	 * Wrap text in ANSI color codes.
+	 * @method colored
+	 * @static
+	 * @param {string} text The text to color
+	 * @param {string|null} foreground_color The foreground color name
+	 * @param {string|null} background_color The background color name
+	 * @return {string} The colored text
+	 */
+	static function colored($text, $foreground_color = null, $background_color = null)
+	{
+		if (!$foreground_color and !$background_color) {
+			return $text;
+		}
+		static $foreground_colors = array(
+			'black' => '0;30',
+			'dark_gray' => '1;30',
+			'blue' => '0;34',
+			'light_blue' => '1;34',
+			'green' => '0;32',
+			'light_green' => '1;32',
+			'cyan' => '0;36',
+			'light_cyan' => '1;36',
+			'red' => '0;31',
+			'light_red' => '1;31',
+			'purple' => '0;35',
+			'light_purple' => '1;35',
+			'brown' => '0;33',
+			'yellow' => '1;33',
+			'light_gray' => '0;37',
+			'white' => '1;37'
+		);
+		static $background_colors = array(
+			'black' => '40',
+			'red' => '41',
+			'green' => '42',
+			'yellow' => '43',
+			'blue' => '44',
+			'magenta' => '45',
+			'cyan' => '46',
+			'light_gray' => '47',
+			'gray' => '100'
+		);
+		$colored_string = "";
+		if (isset($foreground_colors[$foreground_color])) {
+			$colored_string .= "\033[" . $foreground_colors[$foreground_color] . "m";
+		}
+		if (isset($background_colors[$background_color])) {
+			$colored_string .= "\033[" . $background_colors[$background_color] . "m";
+		}
+		return $colored_string .  $text . "\033[0m";
+	}
+
+	/**
+	 * Set the terminal cursor style.
+	 * @method cursor
+	 * @static
+	 * @param {string} type The cursor type: "block", "bar", "underline"
+	 * @return {void}
+	 */
+	static function cursor($type)
+	{
+		switch ($type) {
+			case 'block':
+				echo "\033[2 q";
+				break;
+			case 'underline':
+				echo "\033[4 q";
+				break;
+			case 'bar':
+				echo "\033[6 q";
+				break;
+			default:
+				echo "\033[2 q";
+				break;
+		}
+	}
+
+	/**
+	 * Hide the terminal cursor.
+	 * @method hideCursor
+	 * @static
+	 * @return {void}
+	 */
+	static function hideCursor()
+	{
+		echo "\033[?25l";
+	}
+
+	/**
+	 * Show the terminal cursor.
+	 * @method showCursor
+	 * @static
+	 * @return {void}
+	 */
+	static function showCursor()
+	{
+		echo "\033[?25h";
 	}
 
 	/**
@@ -41,7 +161,7 @@ class Q_Terminal
 	 * @method updateSize
 	 * @return void
 	 */
-	public function updateSize()
+	static function updateSize()
 	{
 		$out = [];
 		$cols = 80;
@@ -55,8 +175,8 @@ class Q_Terminal
 			}
 		}
 
-		$this->width = $cols;
-		$this->height = $rows;
+		self::$width = $cols;
+		self::$height = $rows;
 	}
 
 	/**
@@ -65,9 +185,9 @@ class Q_Terminal
 	 * @method getWidth
 	 * @return {number}
 	 */
-	public function getWidth()
+	static function getWidth()
 	{
-		return $this->width;
+		return self::$width;
 	}
 
 	/**
@@ -76,15 +196,16 @@ class Q_Terminal
 	 * @method getHeight
 	 * @return {number}
 	 */
-	public function getHeight()
+	static function getHeight()
 	{
-		return $this->height;
+		return self::$height;
 	}
 
 	/**
 	 * Write a single character into the internal screen buffer.
 	 *
 	 * @method write
+	 * @static
 	 * @param {number} x The X coordinate (0-based)
 	 * @param {number} y The Y coordinate (0-based)
 	 * @param {string} char The character to write
@@ -92,15 +213,15 @@ class Q_Terminal
 	 * @param {string} [bg] Optional background color name or ANSI code
 	 * @return {boolean} Whether the write occurred
 	 */
-	public function write($x, $y, $char, $fg = null, $bg = null)
+	static function write($x, $y, $char, $fg = null, $bg = null)
 	{
-		if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
+		if ($x < 0 || $y < 0 || $x >= self::$width || $y >= self::$height) {
 			return false;
 		}
 		if (strlen($char) > 1) {
 			$char = mb_substr($char, 0, 1);
 		}
-		$this->buffer[$y][$x] = [$char, $fg, $bg];
+		self::$buffer[$y][$x] = [$char, $fg, $bg];
 		return true;
 	}
 
@@ -108,29 +229,31 @@ class Q_Terminal
 	 * Read a character entry from the internal buffer.
 	 *
 	 * @method read
+	 * @static
 	 * @param {number} x The X coordinate (0-based)
 	 * @param {number} y The Y coordinate (0-based)
 	 * @return {array|null} `[char, fg, bg]` or null if out of bounds
 	 */
-	public function read($x, $y)
+	static function read($x, $y)
 	{
-		if ($x < 0 || $y < 0 || $x >= $this->width || $y >= $this->height) {
+		if ($x < 0 || $y < 0 || $x >= self::$width || $y >= self::$height) {
 			return null;
 		}
-		return $this->buffer[$y][$x];
+		return self::$buffer[$y][$x];
 	}
 
 	/**
 	 * Clear both the internal buffer and the visible terminal.
 	 *
 	 * @method clear
+	 * @static
 	 * @return void
 	 */
-	public function clear()
+	static function clear()
 	{
-		for ($y = 0; $y < $this->height; $y++) {
-			for ($x = 0; $x < $this->width; $x++) {
-				$this->buffer[$y][$x] = [' ', null, null];
+		for ($y = 0; $y < self::$height; $y++) {
+			for ($x = 0; $x < self::$width; $x++) {
+				self::$buffer[$y][$x] = [' ', null, null];
 			}
 		}
 		echo "\033[2J\033[H";
@@ -140,21 +263,22 @@ class Q_Terminal
 	 * Flush the internal buffer to the terminal display.
 	 *
 	 * @method flush
+	 * @static
 	 * @return void
 	 */
-	public function flush()
+	static function flush()
 	{
 		echo "\033[H";
-		for ($y = 0; $y < $this->height; $y++) {
-			for ($x = 0; $x < $this->width; $x++) {
-				list($ch, $fg, $bg) = $this->buffer[$y][$x];
+		for ($y = 0; $y < self::$height; $y++) {
+			for ($x = 0; $x < self::$width; $x++) {
+				list($ch, $fg, $bg) = self::$buffer[$y][$x];
 				if ($fg || $bg) {
 					echo Q_Utils::colored($ch, $fg, $bg);
 				} else {
 					echo $ch;
 				}
 			}
-			if ($y < $this->height - 1) {
+			if ($y < self::$height - 1) {
 				echo "\n";
 			}
 		}
@@ -168,7 +292,7 @@ class Q_Terminal
 	 * @param {string} text The text to display on the current line
 	 * @return void
 	 */
-	public static function overwriteLine($text)
+	static function overwriteLine($text)
 	{
 		echo "\r\033[K".$text;
 	}
@@ -177,14 +301,15 @@ class Q_Terminal
 	 * Move the hardware cursor to a specific position (1-based).
 	 *
 	 * @method moveCursor
+	 * @static
 	 * @param {number} x The column number (1-based)
 	 * @param {number} y The row number (1-based)
 	 * @return void
 	 */
-	public function moveCursor($x, $y)
+	static function moveCursor($x, $y)
 	{
-		$x = max(1, min($this->width,  $x));
-		$y = max(1, min($this->height, $y));
+		$x = max(1, min(self::$width,  $x));
+		$y = max(1, min(self::$height, $y));
 		echo "\033[".$y.";".$x."H";
 	}
 
@@ -192,15 +317,16 @@ class Q_Terminal
 	 * Enable mouse event tracking using Xterm SGR sequences.
 	 *
 	 * @method enableMouse
+	 * @static
 	 * @return void
 	 */
-	public function enableMouse()
+	static function enableMouse()
 	{
-		if ($this->mouseEnabled) return;
+		if (self::$mouseEnabled) return;
 		echo "\033[?1000h";
 		echo "\033[?1002h";
 		echo "\033[?1006h";
-		$this->mouseEnabled = true;
+		self::$mouseEnabled = true;
 	}
 
 	/**
@@ -209,23 +335,24 @@ class Q_Terminal
 	 * @method disableMouse
 	 * @return void
 	 */
-	public function disableMouse()
+	static function disableMouse()
 	{
-		if (!$this->mouseEnabled) return;
+		if (!self::$mouseEnabled) return;
 		echo "\033[?1000l";
 		echo "\033[?1002l";
 		echo "\033[?1006l";
-		$this->mouseEnabled = false;
+		self::$mouseEnabled = false;
 	}
 
 	/**
 	 * Enable or disable raw terminal input mode (no buffering, no echo).
 	 * 
 	 * @method rawMode
+	 * @static
 	 * @param {boolean} [enable=true] Whether to enable or disable raw mode
 	 * @return void
 	 */
-	public function rawMode($enable = true)
+	static function rawMode($enable = true)
 	{
 		if (Q_Utils::isWindows()) return;
 
@@ -237,17 +364,125 @@ class Q_Terminal
 	}
 
 	/**
-	 * 
+	 * Read high-level input events (mouse + keyboard).
+	 * @method readEvents
+	 * @static
+	 * @return {array}
+	 */
+	static function readEvents()
+	{
+		$input = self::readInput();
+		if ($input === '') {
+			return array();
+		}
+
+		$events = self::parseMouseEvents($input);
+
+		// Keyboard fallback (single characters)
+		$clean = preg_replace('/\x1b\[<[^mM]+[mM]/', '', $input);
+		for ($i = 0; $i < strlen($clean); $i++) {
+			$ch = $clean[$i];
+			if ($ch >= ' ' && $ch <= '~') {
+				$events[] = array(
+					'type' => 'key',
+					'key'  => $ch
+				);
+			}
+		}
+
+		return $events;
+	}
+
+
+	/**
 	 * Read raw terminal input (key sequences, mouse events).
 	 * Non-blocking. Returns empty string if none.
 	 *
 	 * @method readInput
+	 * @static
 	 * @return {string}
 	 */
-	public function readInput()
+	static function readInput()
 	{
 		stream_set_blocking(STDIN, false);
 		$input = fread(STDIN, 1024);
 		return $input !== false ? $input : '';
 	}
+
+	/**
+	 * Parse mouse events from raw terminal input.
+	 * Supports Xterm SGR (1006) mode.
+	 *
+	 * @method parseMouseEvents
+	 * @static
+	 * @param {string} $input
+	 * @return {array}
+	 */
+	static function parseMouseEvents($input)
+	{
+		$events = array();
+
+		if (!preg_match_all('/\x1b\[<(\d+);(\d+);(\d+)([mM])/', $input, $matches, PREG_SET_ORDER)) {
+			return $events;
+		}
+
+		foreach ($matches as $m) {
+			$code = (int)$m[1];
+			$x    = (int)$m[2] - 1;
+			$y    = (int)$m[3] - 1;
+			$type = $m[4];
+
+			$isMotion = ($code & 32) === 32;
+			$buttonId = ($code & 3);
+
+			$button = 'none';
+
+			// Only assign button meaningfully
+			if (!$isMotion) {
+				if ($buttonId === 0) $button = 'left';
+				if ($buttonId === 1) $button = 'middle';
+				if ($buttonId === 2) $button = 'right';
+			}
+
+			if ($type === 'm') {
+				$events[] = array(
+					'type'   => 'mouseup',
+					'button' => $button,
+					'x'      => $x,
+					'y'      => $y
+				);
+				continue;
+			}
+
+			if ($isMotion) {
+				$events[] = array(
+					'type'   => 'mousemove',
+					'button' => $button, // may be 'none'
+					'x'      => $x,
+					'y'      => $y
+				);
+				continue;
+			}
+
+			$events[] = array(
+				'type'   => 'mousedown',
+				'button' => $button,
+				'x'      => $x,
+				'y'      => $y
+			);
+		}
+
+		return $events;
+	}
+
+	static function shutdown()
+	{
+		self::disableMouse();
+		self::rawMode(false);
+		echo "\033[0m";     // reset colors
+		echo "\033[?25h";   // show cursor
+	}
 }
+
+Q_Terminal::start();
+register_shutdown_function(array('Q_Terminal', 'shutdown'));
