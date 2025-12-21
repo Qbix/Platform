@@ -329,6 +329,10 @@ class Q_WebServer
 				'<li><a href="../">&lt; One Level Up</a></li>';
 		}
 
+		// Previewable media extensions
+		$imageExts = array('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg');
+		$videoExts = array('mp4', 'webm', 'ogg');
+		$audioExts = array('mp3', 'wav', 'ogg');
 
 		foreach ($items as $name) {
 			if ($name === '.' || $name === '..') continue;
@@ -348,11 +352,6 @@ class Q_WebServer
 			$rows[] =
 				'<li>&#128196; <a href="' . htmlspecialchars($urlPath . $name) . '">' .
 				htmlspecialchars($name) . '</a></li>';
-
-			// Previewable media extensions
-			$imageExts = array('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg');
-			$videoExts = array('mp4', 'webm', 'ogg');
-			$audioExts = array('mp3', 'wav', 'ogg');
 
 			if (
 				in_array($ext, $imageExts) ||
