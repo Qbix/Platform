@@ -294,12 +294,14 @@ Q.Color.between = function(startColor, endColor, fraction) {
  * @method setWindowTheme
  * @static
  * @param {String} color in any CSS format, such as "#aabbcc"
+ * @param {Boolean} skipBodyElement by default, also updates body element for iOS >= 26
  * @return {String} the previous color
  */
-Q.Color.setWindowTheme = function (color) {
+Q.Color.setWindowTheme = function (color, skipBodyElement) {
     if (Q.Color.setWindowTheme.ignore) {
         return color;
     }
+    debugger;
     var meta = document.querySelector('meta[name="theme-color"]');
     var prevColor = null;
     if (meta) {
@@ -312,6 +314,9 @@ Q.Color.setWindowTheme = function (color) {
         }
         meta.setAttribute('content', color);
     }
+    if (!skipBodyElement) {
+        document.body.style.backgroundColor = color;
+    }
     return prevColor;
 };
 /**
@@ -323,7 +328,9 @@ Q.Color.setWindowTheme = function (color) {
  */
 Q.Color.getWindowTheme = function () {
     var meta = document.querySelector('meta[name="theme-color"]');
-    return meta ? meta.getAttribute('content') : null;
+    return meta ? meta.getAttribute('content') : (
+        document.body.computedStyle().backgroundColor || null
+    );
 };
 /**
  * Generates 3 stable color components from a seed string
