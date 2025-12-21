@@ -349,18 +349,45 @@ class Q_WebServer
 				'<li>&#128196; <a href="' . htmlspecialchars($urlPath . $name) . '">' .
 				htmlspecialchars($name) . '</a></li>';
 
-			if (in_array($ext, array('png', 'jpg', 'jpeg', 'gif', 'webp'))) {
+			// Previewable media extensions
+			$imageExts = array('png', 'jpg', 'jpeg', 'gif', 'webp', 'svg');
+			$videoExts = array('mp4', 'webm', 'ogg');
+			$audioExts = array('mp3', 'wav', 'ogg');
+
+			if (
+				in_array($ext, $imageExts) ||
+				in_array($ext, $videoExts) ||
+				in_array($ext, $audioExts)
+			) {
 				if (count($images) < self::$maxListingImages) {
 					$href = htmlspecialchars($urlPath . $name);
+					$caption = htmlspecialchars($name);
+
+					if (in_array($ext, $imageExts)) {
+						$media =
+							'<a href="' . $href . '">' .
+								'<img src="' . $href . '" loading="lazy">' .
+							'</a>';
+					} elseif (in_array($ext, $videoExts)) {
+						$media =
+							'<video src="' . $href . '" controls preload="metadata">' .
+								'<a href="' . $href . '">' . $caption . '</a>' .
+							'</video>';
+					} else { // audio
+						$media =
+							'<audio src="' . $href . '" controls preload="metadata">' .
+								'<a href="' . $href . '">' . $caption . '</a>' .
+							'</audio>';
+					}
+
 					$images[] =
 						'<div class="image-item">' .
-							'<a href="' . $href . '">' .
-								'<img src="' . $href . '">' .
-							'</a>' .
-							'<div class="caption">' . htmlspecialchars($name) . '</div>' .
+							$media .
+							'<div class="caption">' . $caption . '</div>' .
 						'</div>';
 				}
 			}
+
 		}
 
 		sort($rows);
@@ -397,6 +424,17 @@ class Q_WebServer
 			height: auto;
 			display: block;
 			margin: 0 auto 6px;
+		}
+
+		.image-item video,
+		.image-item audio {
+			max-width: 200px;
+			display: block;
+			margin: 0 auto 6px;
+		}
+
+		.image-item video {
+			max-height: 200px;
 		}
 
 		.image-item .caption {
@@ -442,13 +480,37 @@ HTML;
 	private static $maxListingImages = 100;
 
 	static $allowedExtensions = array(
+		// Markup / text
 		'html', 'htm',
+		'txt', 'md', 'markdown',
+		'json', 'xml', 'yaml', 'yml',
+		'csv', 'tsv',
+		'log',
+
+		// Styles / scripts
 		'css',
-		'js',
+		'js', 'mjs',
+		'map',
+
+		// Images
 		'png',
 		'gif',
 		'webp',
-		'jpg',
-		'jpeg'
+		'jpg', 'jpeg',
+		'svg',
+		'bmp',
+		'ico',
+
+		// Fonts (often useful to eyeball)
+		'woff', 'woff2',
+		'ttf', 'otf',
+
+		// Media (safe for inspection)
+		'mp3', 'wav', 'ogg',
+		'mp4', 'webm',
+
+		// Data / misc
+		'pdf'
 	);
+
 }
