@@ -301,7 +301,6 @@ Q.Color.setWindowTheme = function (color, skipBodyElement) {
     if (Q.Color.setWindowTheme.ignore) {
         return color;
     }
-    debugger;
     var meta = document.querySelector('meta[name="theme-color"]');
     var prevColor = null;
     if (meta) {
