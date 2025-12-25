@@ -477,6 +477,9 @@ class Q_Terminal
 
 	static function shutdown()
 	{
+		if (!self::$started) {
+			return;
+		}
 		self::disableMouse();
 		self::rawMode(false);
 		echo "\033[0m";     // reset colors
