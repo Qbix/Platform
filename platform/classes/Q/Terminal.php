@@ -487,5 +487,4 @@ class Q_Terminal
 	}
 }
 
-Q_Terminal::start();
 register_shutdown_function(array('Q_Terminal', 'shutdown'));
