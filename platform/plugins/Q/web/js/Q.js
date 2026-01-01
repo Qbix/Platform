@@ -16852,7 +16852,11 @@ Q.Tool.define({
 	"Q/image": "{{Q}}/js/tools/image.js",
 	"Q/clip": "{{Q}}/js/tools/clip.js",
 	"Q/floating": "{{Q}}/js/tools/floating.js",
-	"Q/htmleditor": "{{Q}}/js/tools/htmleditor.js"
+	"Q/htmleditor": "{{Q}}/js/tools/htmleditor.js",
+	"Q/scanQR": {
+		js: ["{{Q}}/js/qrcode/html5-qrcode.min.js", "{{Q}}/js/qrcode/scanQR.js"],
+		css: "{{Q}}/js/qrcode/scanQR.css"
+	}
 });
 
 Q.Tool.jQuery({
@@ -17287,8 +17291,9 @@ Q.Camera = {
 		 * @static
 		 * @param {Function|Q.Event} onResult occurs when one complete QR was scanned
 		 * @param {Function|Q.Event} onEachQR occurs when each QR code was scanned, beginning with index=1
+		 * @param {Object} [options]
 		 */
-		animatedQR: function (onResult, onEachQR) {
+		animatedQR: function (onResult, onEachQR, options) {
 			var sawContent = {}, result = {}, started = false;
 			Q.Camera.Scan.QR(function (content) {
 				// exclude content we've already processed this time around
@@ -17340,7 +17345,7 @@ Q.Camera = {
 
 				// time to report the result
 				return Q.handle(onResult, Q.Camera.Scan.animatedQR, [result]);
-			});
+			}, options);
 		},
 		adapters: {
 			/**
@@ -17448,6 +17453,23 @@ Q.Camera = {
 
 					var elementId = "Q_instascan_" + Date.now();
 					$element.prop("id", elementId);
+
+					if (Q.getObject("instascan.mode", options) === "scanQR") {
+						return $element.tool("Q/scanQR", {
+							audio,
+							fps: 5,
+							qrbox: {
+								width: elementWidth-50,
+								height: elementHeight-50
+							}
+						}).activate(function () {
+							this.state.onSuccess.set(callback);
+							this.state.onFailure.set(function (error) {
+								//console.warn(`Code scan error = ${error}`);
+							});
+						});
+					}
+
 					var html5QrcodeScanner = new root.Html5QrcodeScanner(elementId, { fps: 5, qrbox: {width: elementWidth-50, height: elementHeight-50}},
 						/* verbose= */ false);
 
