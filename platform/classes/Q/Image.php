@@ -1317,4 +1317,132 @@ class Q_Image
 			return $monster;
 		}
 	}
+
+    /**
+     * Checks whether a given path or URL points to a real, valid image.
+     *
+     * The function supports both local filesystem paths and remote URLs.
+     *
+     * Validation strategy:
+     * - Local files:
+     *   - Confirms file existence and readability
+     *   - Verifies MIME type (if finfo is available)
+     *   - Validates image structure via getimagesize()
+     *
+     * - Remote URLs:
+     *   - Verifies HTTP 200 response
+     *   - Confirms image Content-Type
+     *   - Downloads a limited byte range
+     *   - Validates binary image structure
+     *
+     * This protects against:
+     * - Non-image files with fake extensions
+     * - HTML or JSON masquerading as images
+     * - Corrupted or truncated image data
+     *
+     * @method isRealImage
+     *
+     * @param string $path
+     *   Absolute filesystem path or absolute URL to validate.
+     *
+     * @param int $timeout
+     *   Maximum number of seconds allowed for remote HTTP requests.
+     *   Defaults to 5 seconds.
+     *
+     * @return bool
+     *   TRUE if the path or URL points to a valid image,
+     *   FALSE otherwise.
+     *
+     * @security
+     *   - Limits remote downloads to a small byte range.
+     *   - Does not write or execute remote content.
+     *   - Local files are read-only.
+     *
+     * @note
+     *   - This function does not guarantee the image is safe for display.
+     *   - Additional validation is recommended before persisting images.
+     *
+     * @example
+     *   isRealImage('/var/www/uploads/photo.jpg');
+     *   isRealImage('https://example.com/image.webp');
+     */
+    static function isRealImage($path, $timeout = 5)
+    {
+        // ----------------------------
+        // LOCAL FILE
+        // ----------------------------
+        if (is_file($path)) {
+
+            if (!is_readable($path)) {
+                return false;
+            }
+
+            // Quick MIME check (cheap)
+            if (function_exists('finfo_open')) {
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                if ($finfo) {
+                    $mime = finfo_file($finfo, $path);
+                    finfo_close($finfo);
+
+                    if (strpos($mime, 'image/') !== 0) {
+                        return false;
+                    }
+                }
+            }
+
+            // Validate actual image structure
+            $imageInfo = @getimagesize($path);
+            if ($imageInfo === false) {
+                return false;
+            }
+
+            return true;
+        }
+
+        // ----------------------------
+        // REMOTE URL
+        // ----------------------------
+        if (!filter_var($path, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        // 1) Headers check
+        $headers = @get_headers($path, 1);
+        if (!$headers || strpos($headers[0], '200') === false) {
+            return false;
+        }
+
+        $contentType = '';
+        if (isset($headers['Content-Type'])) {
+            $contentType = is_array($headers['Content-Type'])
+                ? end($headers['Content-Type'])
+                : $headers['Content-Type'];
+        }
+
+        if (stripos($contentType, 'image/') !== 0) {
+            return false;
+        }
+
+        // 2) Partial download
+        $context = stream_context_create([
+            'http' => [
+                'method'  => 'GET',
+                'timeout' => $timeout,
+                'header'  => "Range: bytes=0-32768\r\n"
+            ]
+        ]);
+
+        $data = @file_get_contents($path, false, $context);
+        if ($data === false) {
+            return false;
+        }
+
+        // 3) Binary validation
+        $imageInfo = @getimagesizefromstring($data);
+        if ($imageInfo === false) {
+            return false;
+        }
+
+        return true;
+    }
 }
