@@ -918,7 +918,7 @@ abstract class Db
 	 */
 	static function decimalToString($number, $decimals = 2)
 	{
-		return sprintf("%015.{$decimals}f", $r);
+		return sprintf("%015.{$decimals}f", $number);
 	}
 	
 	/**
