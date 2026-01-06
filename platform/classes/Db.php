@@ -909,14 +909,14 @@ abstract class Db
 
 	/**
 	 * Converts number to string in a standard way
-	 * @method numberToString
+	 * @method decimalToString
 	 * @static
 	 * @param {double} $number
 	 * @param {integer} [$decimals=2]
 	 * @return {string}
 	 *	The hash string
 	 */
-	static function numberToString($number, $decimals = 2)
+	static function decimalToString($number, $decimals = 2)
 	{
 		return sprintf("%015.{$decimals}f", $r);
 	}
