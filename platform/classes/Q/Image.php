@@ -293,15 +293,73 @@ class Q_Image
 		}
 		return empty($results) ? null : @file_get_contents(reset($results));
 	}
-	
-	/**
-	 * Get an image from google image search
-	 * @param {string} $keywords Specify some string to search people on facebook
-	 * @param {array} [$options=array()] Any additional options for pixabay api as per its documentation
-	 * @param {boolean} [$returnFirstImage=false] If true, downloads and returns the first image as data
-	 * @return {array} An array of image URLs representing large photos
-	 * @throws Q_Exception_MissingConfig
-	 */
+
+    /**
+     * Searches Google Images using the Google Custom Search JSON API.
+     *
+     * This method performs an image search query and returns image results
+     * filtered by minimum width and/or height if specified.
+     *
+     * @method google
+     * @static
+     *
+     * @param {String} keywords
+     *   Search query keywords (e.g. "human face portrait photo").
+     *
+     * @param {Object} [options]
+     *   Optional search configuration.
+     *
+     * @param {String} [options.imgType="face"]
+     *   Image type filter.
+     *   Allowed values: clipart, face, lineart, news, photo.
+     *
+     * @param {String} [options.imgSize="large"]
+     *   Image size category.
+     *   Allowed values: icon, small, medium, large, xlarge, xxlarge, huge.
+     *
+     * @param {Number} [options.amount=10]
+     *   Number of images to request (maximum 10).
+     *
+     * @param {Object} [options.min]
+     *   Minimum image dimensions filter (applied locally).
+     *
+     * @param {Number} [options.min.width]
+     *   Minimum required image width in pixels.
+     *
+     * @param {Number} [options.min.height]
+     *   Minimum required image height in pixels.
+     *
+     * @param {Boolean} [returnFirstImage=false]
+     *   Whether to return only the first image result.
+     *
+     * @return {Array|String|null}
+     *   If returnFirstImage is FALSE:
+     *     Returns an array of image result objects:
+     *     {
+     *       url: String,
+     *       width: Number,
+     *       height: Number,
+     *       mime: String|null
+     *     }
+     *
+     *   If returnFirstImage is TRUE:
+     *     Returns the first image URL as a string,
+     *     or NULL if no valid results were found.
+     *
+     * @example
+     *     Images.google(
+     *         'human face portrait photo',
+     *         {
+     *             imgSize: 'large',
+     *             min: {
+     *                 width: 400,
+     *                 height: 400
+     *             }
+     *         }
+     *     );
+     *
+     * @see https://developers.google.com/custom-search/v1/overview
+     */
 	static function google($keywords, $options = array(), $returnFirstImage = false)
 	{
 		$key = Q_Config::expect('Q', 'images', 'google', 'key');
@@ -310,16 +368,27 @@ class Q_Image
 			'imgType' => Q::ifset($options, 'imgType', 'face'),
 			'searchType' => Q::ifset($options, 'searchType', 'image'),
 			'imgSize' => Q::ifset($options, 'imgSize', 'medium'),
-			'num' => 3,
+			'num' => Q::ifset($options, 'amount', 10),
 			'cx' => '009593684493750256938:4qicgdisydu',
 			'key' => $key,
 			'q' => $keywords
 		));
+        $minWidth = Q::ifset($options, 'min', 'width', null);
+        $minHeight = Q::ifset($options, 'min', 'height', null);
+
 		$json = Q_Utils::get($url);
 		$result = Q::json_decode($json, true);
 		$results = array();
 		if (!empty($result['items'])) {
 			foreach ($result['items'] as $item) {
+                if (
+                    ($minWidth && Q::ifset($item, 'image', 'width', 0) < $minWidth)
+                    ||
+                    ($minHeight && Q::ifset($item, 'image', 'height', 0) < $minHeight)
+                ) {
+                    continue;
+                }
+
 				$results[] = $item['link'];
 			}
 		}
@@ -1248,4 +1317,132 @@ class Q_Image
 			return $monster;
 		}
 	}
+
+    /**
+     * Checks whether a given path or URL points to a real, valid image.
+     *
+     * The function supports both local filesystem paths and remote URLs.
+     *
+     * Validation strategy:
+     * - Local files:
+     *   - Confirms file existence and readability
+     *   - Verifies MIME type (if finfo is available)
+     *   - Validates image structure via getimagesize()
+     *
+     * - Remote URLs:
+     *   - Verifies HTTP 200 response
+     *   - Confirms image Content-Type
+     *   - Downloads a limited byte range
+     *   - Validates binary image structure
+     *
+     * This protects against:
+     * - Non-image files with fake extensions
+     * - HTML or JSON masquerading as images
+     * - Corrupted or truncated image data
+     *
+     * @method isRealImage
+     *
+     * @param string $path
+     *   Absolute filesystem path or absolute URL to validate.
+     *
+     * @param int $timeout
+     *   Maximum number of seconds allowed for remote HTTP requests.
+     *   Defaults to 5 seconds.
+     *
+     * @return bool
+     *   TRUE if the path or URL points to a valid image,
+     *   FALSE otherwise.
+     *
+     * @security
+     *   - Limits remote downloads to a small byte range.
+     *   - Does not write or execute remote content.
+     *   - Local files are read-only.
+     *
+     * @note
+     *   - This function does not guarantee the image is safe for display.
+     *   - Additional validation is recommended before persisting images.
+     *
+     * @example
+     *   isRealImage('/var/www/uploads/photo.jpg');
+     *   isRealImage('https://example.com/image.webp');
+     */
+    static function isRealImage($path, $timeout = 5)
+    {
+        // ----------------------------
+        // LOCAL FILE
+        // ----------------------------
+        if (is_file($path)) {
+
+            if (!is_readable($path)) {
+                return false;
+            }
+
+            // Quick MIME check (cheap)
+            if (function_exists('finfo_open')) {
+                $finfo = finfo_open(FILEINFO_MIME_TYPE);
+                if ($finfo) {
+                    $mime = finfo_file($finfo, $path);
+                    finfo_close($finfo);
+
+                    if (strpos($mime, 'image/') !== 0) {
+                        return false;
+                    }
+                }
+            }
+
+            // Validate actual image structure
+            $imageInfo = @getimagesize($path);
+            if ($imageInfo === false) {
+                return false;
+            }
+
+            return true;
+        }
+
+        // ----------------------------
+        // REMOTE URL
+        // ----------------------------
+        if (!filter_var($path, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        // 1) Headers check
+        $headers = @get_headers($path, 1);
+        if (!$headers || strpos($headers[0], '200') === false) {
+            return false;
+        }
+
+        $contentType = '';
+        if (isset($headers['Content-Type'])) {
+            $contentType = is_array($headers['Content-Type'])
+                ? end($headers['Content-Type'])
+                : $headers['Content-Type'];
+        }
+
+        if (stripos($contentType, 'image/') !== 0) {
+            return false;
+        }
+
+        // 2) Partial download
+        $context = stream_context_create([
+            'http' => [
+                'method'  => 'GET',
+                'timeout' => $timeout,
+                'header'  => "Range: bytes=0-32768\r\n"
+            ]
+        ]);
+
+        $data = @file_get_contents($path, false, $context);
+        if ($data === false) {
+            return false;
+        }
+
+        // 3) Binary validation
+        $imageInfo = @getimagesizefromstring($data);
+        if ($imageInfo === false) {
+            return false;
+        }
+
+        return true;
+    }
 }
