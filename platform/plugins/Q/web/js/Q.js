@@ -7730,7 +7730,9 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 						try {
 							store.index(indexName); // throws if missing
 						} catch (e) {
-							storeNeedsRecreate = true;
+							if (e && e.name === 'NotFoundError') {
+								storeNeedsRecreate = true;
+							}
 							break;
 						}
 					}
