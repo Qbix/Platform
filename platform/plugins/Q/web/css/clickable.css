@@ -8,7 +8,7 @@
 
 /* Press (scale down) */
 .Q_clickable:active {
-	transform: scale(0.85);:active
+	transform: scale(0.90);
 	opacity: 1;
 	transition: transform 100ms linear, opacity 100ms linear;
 }
