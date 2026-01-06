@@ -906,6 +906,20 @@ abstract class Db
 	{
 		return md5(Db::normalize($text));
 	}
+
+	/**
+	 * Converts number to string in a standard way
+	 * @method numberToString
+	 * @static
+	 * @param {double} $number
+	 * @param {integer} [$decimals=2]
+	 * @return {string}
+	 *	The hash string
+	 */
+	static function numberToString($number, $decimals = 2)
+	{
+		return sprintf("%015.{$decimals}f", $r);
+	}
 	
 	/**
 	 * Generates a class name given a table name
