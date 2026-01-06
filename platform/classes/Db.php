@@ -1840,6 +1840,20 @@ class Db
 	}
 	
 	/**
+	 * Converts number to string in a standard way
+	 * @method decimalToString
+	 * @static
+	 * @param {double} $number
+	 * @param {integer} [$decimals=2]
+	 * @return {string}
+	 *	The hash string
+	 */
+	static function decimalToString($number, $decimals = 2)
+	{
+		return sprintf("%015.{$decimals}f", $number);
+	}
+	
+	/**
 	 * Generates a class name given a table name
 	 * @method generateTableClassName
 	 * @static
