@@ -15,7 +15,7 @@ Q.exports(function (Q) {
      * @param {String} data the data to sign
      * @param {Array} privateKeyPKCS8Strings array of strings containing
      *   PKCS8 encodings of private keys
-     * @param {Object} [algo] youc an specify a different algorithm
+     * @param {Object} [algo] you can specify a different algorithm
      * @param {String} [algo.name="ECDSA"]
      * @param {String} [algo.namedCurve="P-256"]
      * @param {String} [algo.hash="SHA-256"]
