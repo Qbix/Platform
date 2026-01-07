@@ -78,16 +78,16 @@ class Q_Utils
 	}
 
 	/**
-	 * Encodes some data in base64
-	 * @method toBase64
+	 * Encodes hex data in base64
+	 * @method hexToBase64
 	 * @static
 	 * @param {array|string} $data
 	 * @return {string}
 	 */
-	static function toBase64($data)
+	static function hexToBase64($data)
 	{
-		if (!is_string($data)) {
-			$data = Q::json_encode($data);
+		if (!ctype_xdigit($data) || (strlen($data) & 1)) {
+			return false;
 		}
 		$data = base64_encode(pack('H*', $data));
 		return str_replace(
@@ -99,12 +99,12 @@ class Q_Utils
 
 	/**
 	 * Decodes some data from base64
-	 * @method fromBase64
+	 * @method base64ToHex
 	 * @static
 	 * @param {array|string} $encoded
 	 * @return {string}
 	 */
-	static function fromBase64($encoded)
+	static function base64ToHex($encoded)
 	{
 		if (!$encoded) {
 			return '';
@@ -134,7 +134,7 @@ class Q_Utils
 		if ($i < $len) {
 			$result .= $encoded[$i];
 		}
-		return base64_decode($result);
+		return bin2hex(base64_decode($result));
 	}
 
 	/**
@@ -2341,6 +2341,89 @@ class Q_Utils
 		$hash = $hash & 0xFFFFFFFF;
 		return ($hash % $segments) === 0;
 	}
+
+	/**
+	 * Check whether a string is base64-encoded data (no data URI).
+	 * @method isBase64
+	 * @static
+	 * @param {string} $input
+	 * @return {bool}
+	 */
+	public static function isBase64($input)
+	{
+		if (!is_string($input)) {
+			return false;
+		}
+		$input = trim($input);
+		if ($input === '') {
+			return false;
+		}
+		// Reject data URIs explicitly
+		if (stripos($input, 'data:') === 0) {
+			return false;
+		}
+		// Only base64 chars + whitespace
+		if (!preg_match('#^[A-Za-z0-9+/=\s]+$#', $input)) {
+			return false;
+		}
+		$clean = preg_replace('#\s+#', '', $input);
+		// Length sanity
+		if (strlen($clean) < 16 || (strlen($clean) % 4) !== 0) {
+			return false;
+		}
+		// Strict decode must succeed
+		return base64_decode($clean, true) !== false;
+	}
+
+
+	/**
+	 * Normalize to raw binary.
+	 * Accepts raw binary, base64, or data URI.
+	 * @method toRawBinary
+	 * @static
+	 * @param {string} $input
+	 * @return {string|false}
+	 */
+	public static function toRawBinary($input)
+	{
+		if (!is_string($input) || $input === '') {
+			return false;
+		}
+		$input = trim($input);
+		// data:*;base64,...
+		if (preg_match('#^data:[^;]+;base64,#i', $input)) {
+			$payload = preg_replace('#^data:[^;]+;base64,#i', '', $input);
+			$payload = preg_replace('#\s+#', '', $payload);
+
+			$decoded = base64_decode($payload, true);
+			return ($decoded !== false) ? $decoded : false;
+		}
+		// Bare base64
+		if (self::isBase64($input)) {
+			$clean = preg_replace('#\s+#', '', $input);
+			return base64_decode($clean, true);
+		}
+		// Assume raw binary
+		return $input;
+	}
+
+	/**
+	 * Normalize input to base64 (no data URI).
+	 * @method toBase64
+	 * @static
+	 * @param {string} $input Raw binary, base64, or data URI
+	 * @return {string|false} Base64-encoded data
+	 */
+	public static function toBase64($input)
+	{
+		$raw = self::toRawBinary($input);
+		if ($raw === false) {
+			return false;
+		}
+
+		return base64_encode($raw);
+	}
+
 	
 	private static function unsigned_right_shift($x, $n) {
 		return ($x >= 0) ? ($x >> $n) : (($x + 0x100000000) >> $n);

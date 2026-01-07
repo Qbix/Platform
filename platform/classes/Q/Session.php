@@ -1295,7 +1295,7 @@ class Q_Session
 			$id .= substr($sig, 0, 32);
 		}
 		$prefix = Q_Config::expect('Q', 'session', 'id', 'prefixes', $prefixType);
-		return $prefix . Q_Utils::toBase64($id);
+		return $prefix . Q_Utils::hexToBase64($id);
 	}
 	
 	/**
@@ -1307,8 +1307,7 @@ class Q_Session
 	*/
 	protected static function decodeId($id)
 	{
-		$data = Q_Utils::fromBase64($id);
-		$result = bin2hex($data);
+		$result = Q_Utils::base64ToHex($id);
 		$a = substr($result, 0, 32);
 		$b = substr($result, 32, 32);
 		$b = $b ? $b : ''; // for older PHP
