@@ -424,7 +424,7 @@ class Q_Utils
 		for ($i=0; $i<$len; ++$i) {
 			$c = ord($text[$i]);
 			$hash = $hash % 16777216;
-			$hash = (($hash<<5)-$hash)*c+$c;
+			$hash = (($hash<<5)-$hash)*$c+$c;
 			$hash = $hash & $hash; // Convert to 32bit integer
 		}
 		return abs($hash);
@@ -636,7 +636,7 @@ class Q_Utils
 	 * @param {array} $arr2
 	 * @return {$array}
 	 */
-	function recursiveDiff($arr1, $arr2)
+	static function recursiveDiff($arr1, $arr2)
 	{
 		$outputDiff = array();
 		foreach ($arr1 as $key => $value) {
@@ -644,7 +644,7 @@ class Q_Utils
 			// if it is an array, otherwise check if the value is in arr2
 			if (array_key_exists($key, $arr2)) {
 				if (is_array($value)) {
-					$recursiveDiff = recursiveDiff($value, $arr2[$key]);
+					$recursiveDiff = self::recursiveDiff($value, $arr2[$key]);
 					if (count($recursiveDiff)) {
 						$outputDiff[$key] = $recursiveDiff;
 					}
@@ -997,6 +997,7 @@ class Q_Utils
 	{
 		return self::request('POST', $url, $data, $user_agent, $curl_opts, $header, $timeout);
 	}
+	
 	/**
 	 * Issues a PUT request, and returns the response
 	 * @method put
@@ -1046,42 +1047,132 @@ class Q_Utils
 	{
 		return self::request('GET', $url, null, $user_agent, $curl_opts, $header, $timeout);
 	}
+
 	/**
-	 * Issues multiple HTTP requests via HTTP/2, and returns the response
+	 * Start batching HTTP requests.
+	 * Subsequent calls to batchRequest() will be queued.
+	 * @method batchStart
+	 * @static
+	 */
+	static function batchStart()
+	{
+		if (self::$batching) {
+			throw new Q_Exception("Nested batching not supported");
+		}
+		self::$batching = true;
+		self::$batchQueue = array();
+	}
+
+	/**
+	 * Execute batched HTTP requests all at once
+	 * @mehod batchExecute
+	 * @static
+	 */
+	static function batchExecute()
+	{
+		if (!self::$batching) {
+			return array();
+		}
+
+		self::$batching = false;
+
+		if (!self::$batchQueue) {
+			return array();
+		}
+
+		$paramsArray = array();
+		foreach (self::$batchQueue as $i => $item) {
+			$paramsArray[$i] = $item['params'];
+		}
+
+		$results = self::requestMulti($paramsArray);
+
+		foreach ($results as $i => $result) {
+			$cb = self::$batchQueue[$i]['callback'];
+			if ($cb && is_callable($cb)) {
+				try {
+					call_user_func($cb, $result, $i);
+				} catch (Exception $e) {
+					error_log($e);
+				}
+			}
+		}
+
+		self::$batchQueue = array();
+		return $results;
+	}
+
+
+	/**
+	 * Issues multiple HTTP requests via curl_multi, and returns the responses
 	 * @method requestMulti
 	 * @static
-	 * @param {array} $paramsArray An array where each each entry is an array of parameters to ::request
+	 * @param {array} $paramsArray An array where each entry is an array of parameters to ::request
 	 *   Can be an associative array, in which case the results will match by key.
-	 * @return {array} The array of results from curl_multi_getcontent, with keys matching the $paramsArray if it was associative.
+	 * @return {array} The array of results from curl_multi_getcontent, with keys matching $paramsArray.
 	 */
 	static function requestMulti($paramsArray)
 	{
+		if (!function_exists('curl_multi_init')) {
+			throw new Q_Exception("requestMulti requires curl_multi");
+		}
+
 		$mh = curl_multi_init();
 		curl_multi_setopt($mh, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
+
 		$handles = array();
+
 		foreach ($paramsArray as $k => $params) {
-			$params = $params + array(
-				null, null, 
-				null, null, array(), 
-				null, Q_UTILS_CONNECTION_TIMEOUT, null
-			);
-			$params[] = $mh;
-			$handles[$k] = $ch = call_user_func_array(array('Q_Utils', 'request'), $params);
+			if (!is_array($params)) {
+				throw new Q_Exception("requestMulti: each entry must be an array of request() params");
+			}
+
+			// Normalize to positional array
+			$params = array_values($params);
+
+			// Ensure at least 9 parameters
+			for ($i = count($params); $i < 9; ++$i) {
+				$params[$i] = null;
+			}
+
+			// Force $returnHandle = true (index 8)
+			$params[8] = true;
+
+			// NOTE: requestMulti() always forces $returnHandle=true
+			// so that batching never intercepts curl_multi internals
+			$ch = call_user_func_array(array('Q_Utils', 'request'), $params);
+
+			if (!is_resource($ch)) {
+				throw new Q_Exception("requestMulti: request() did not return a curl handle");
+			}
+
+			$handles[$k] = $ch;
 			curl_multi_add_handle($mh, $ch);
 		}
-		//execute the multi handle
+
+		// Execute all requests safely
 		do {
-			$status = curl_multi_exec($mh, $active);
+			do {
+				$status = curl_multi_exec($mh, $active);
+			} while ($status === CURLM_CALL_MULTI_PERFORM);
+
 			if ($active) {
-				// Wait a short time for more activity
-				curl_multi_select($mh);
+				$rc = curl_multi_select($mh, 1.0);
+				if ($rc === -1) {
+					// Prevent busy loop if no file descriptors are ready
+					usleep(1000);
+				}
 			}
-		} while ($active && $status == CURLM_OK);
+		} while ($active && $status === CURLM_OK);
+
+		// Collect results
 		$results = array();
 		foreach ($handles as $k => $ch) {
 			$results[$k] = curl_multi_getcontent($ch);
 			curl_multi_remove_handle($mh, $ch);
+			curl_close($ch);
 		}
+
 		curl_multi_close($mh);
 		return $results;
 	}
@@ -1105,7 +1196,7 @@ class Q_Utils
 	 * @param {boolean} [$returnHandle=false] Set to true to return the curl handle instead of executing it
 	 * @return {string|false} The response, or false if not received
 	 * 
-	 * **NOTE:** *The function waits for it, which might take a while!*
+	 * **NOTE:** *The function waits for it, which might take a while! But you can call startBatch()*
 	 */
 	public static function request(
 		$method,
@@ -1116,8 +1207,23 @@ class Q_Utils
 		$header = null,
 		$timeout = Q_UTILS_CONNECTION_TIMEOUT,
 		$callback = null,
-		$returnHandle = false)
-	{
+		$returnHandle = false
+	) {
+		// FIX 1: only batch logical requests, never internal plumbing
+		if (!empty(self::$batching) && !$returnHandle) {
+			$index = count(self::$batchQueue);
+
+			// FIX 2: strip callback from params; batchExecute owns callbacks
+			$args = func_get_args();
+			$args[7] = null; // remove callback from request params
+
+			self::$batchQueue[] = array(
+				'params' => $args,
+				'callback' => $callback
+			);
+			return $index;
+		}
+
 		$method = strtoupper($method);
 		if (!isset($user_agent)) {
 			$user_agent = Q_Config::expect('Q', 'curl', 'userAgent');
@@ -1139,8 +1245,7 @@ class Q_Utils
 		$parts = parse_url($url);		
 		$host = $parts['host'];
 		if (!isset($ip)) $ip = $host;
-		$request_uri = $parts['path'];
-//		if (!empty($parts['query'])) $request_uri .= "?".$parts['query'];
+		$request_uri = isset($parts['path']) ? $parts['path'] : '/';
 		$port = isset($parts['port']) ? ':'.$parts['port'] : '';
 		$url = $parts['scheme']."://".$ip.$port.$request_uri;
 		if (!empty($parts['query'])) {
@@ -1159,12 +1264,11 @@ class Q_Utils
 			$header = $temp;
 		}
 
-		// NOTE: this works for http(s) only
 		$headers = array("Host: ".$host);
-        
-        $found = false;
+		$found = false;
 		$h = null;
-        if (is_array($header)) {
+
+		if (is_array($header)) {
 			foreach ($header as $h) {
 				if (Q::startsWith($h, 'Content-Type:')) {
 					$found = true;
@@ -1173,26 +1277,24 @@ class Q_Utils
 			}
 		}
 
-        if (isset($header) and is_array($header)
+		if (isset($header) and is_array($header)
 		and $h === 'Content-Type: multipart/form-data') {
 			if (function_exists('curl_init')) {
-				// let curl build query
 				$dataContent = $data;
 			} else {
-				$dataContent = self::multipartFormData($data);
+				list($contentType, $dataContent) = self::multipartFormData($data);
 			}
-        } else {
-            if (is_array($data)) {
-                $dataContent = http_build_query($data, '', '&');
-            } else {
-                $dataContent = is_string($data) ? $data : '';
-            }
-        }
+		} else {
+			if (is_array($data)) {
+				$dataContent = http_build_query($data, '', '&');
+			} else {
+				$dataContent = is_string($data) ? $data : '';
+			}
+		}
 
 		if (is_array($header)) {
-			// try to guard against some injections
 			foreach ($header as $h2) {
-				if  (preg_match("/[^._ :;.,\/\"'?!(){}[\]@<>=\-+*#$&`|~\\^%a-zA-Z0-9]/", $h2)) {
+				if (preg_match("/[^._ :;.,\/\"'?!(){}[\]@<>=\-+*#$&`|~\\^%a-zA-Z0-9]/", $h2)) {
 					throw new Q_Exception_WrongType(array(
 						'field' => 'header',
 						'type' => 'valid HTTP header'
@@ -1200,7 +1302,7 @@ class Q_Utils
 				}
 			}
 		}
-		
+
 		if (!isset($header) or is_array($header)) {
 			$headers[] = "User-Agent: $user_agent";
 			if (!isset($header)) {
@@ -1241,43 +1343,43 @@ class Q_Utils
 		} else {
 			$header = explode("\r\n", $header);
 		}
+
 		if (function_exists('curl_init')) {
-			// Use CURL if installed...
 			$ch = curl_init();
-			$curl_opts = $curl_opts + array( // defaults unless something different is specified
+			$curl_opts = $curl_opts + array(
 				CURLOPT_USERAGENT => $user_agent,
-				CURLOPT_RETURNTRANSFER => true,	 // return web page
-				CURLOPT_HEADER		 => false,	// don't return headers
-				CURLOPT_FOLLOWLOCATION => true,	 // follow redirects
-				CURLOPT_ENCODING	   => "",	   // handle all encodings
-				CURLOPT_AUTOREFERER	=> true,	 // set referer on redirect
-				CURLOPT_CONNECTTIMEOUT => $timeout,	  // timeout on connect
-				CURLOPT_TIMEOUT		=> $timeout,	  // timeout on response
-				CURLOPT_MAXREDIRS	  => 10,	   // stop after 10 redirects
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_HEADER => false,
+				CURLOPT_FOLLOWLOCATION => true,
+				CURLOPT_ENCODING => "",
+				CURLOPT_AUTOREFERER => true,
+				CURLOPT_CONNECTTIMEOUT => $timeout,
+				CURLOPT_TIMEOUT => $timeout,
+				CURLOPT_MAXREDIRS => 10,
 			);
 			curl_setopt_array($ch, $curl_opts);
-			$method = strtoupper($method);
+
 			switch ($method) {
 				case 'GET':
-					// default method for cURL
 					curl_setopt($ch, CURLOPT_URL, $url);
 					break;
 				default:
-					$o = ($method === 'POST')
-						? array(CURLOPT_POST => true)
-						: array(CURLOPT_CUSTOMREQUEST => $method);
-					curl_setopt_array($ch, $o + array(
+					curl_setopt_array($ch, array(
 						CURLOPT_URL => $url,
-						CURLOPT_POSTFIELDS => $dataContent
+						CURLOPT_POSTFIELDS => $dataContent,
+						CURLOPT_CUSTOMREQUEST => $method
 					));
 					break;
 			}
+
 			if (!empty($headers)) {
 				curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
 			}
+
 			if ($returnHandle) {
 				return $ch;
 			}
+
 			$result = curl_exec($ch);
 
 			if (!$result) {
@@ -1292,26 +1394,28 @@ class Q_Utils
 			}
 			curl_close($ch);
 		} else {
-			// Non-CURL based version...
 			$context = stream_context_create(array(
 				'http' => array(
 					'method' => $method,
 					'header' => $header,
 					'content' => $dataContent,
 					'max_redirects' => 10,
-					'timeout' => isset($timeout) ? $timeout : Q_UTILS_CONNECTION_TIMEOUT
+					'timeout' => $timeout
 				)
 			));
 			$sock = fopen($url, 'rb', false, $context);
 			if ($sock) {
 				$result = '';
-				while (! feof($sock))
+				while (!feof($sock)) {
 					$result .= fgets($sock, 4096);
+				}
 				fclose($sock);
 			}
 		}
+
 		return $result;
 	}
+
 
 	/**
 	 * Generates multipart/form-data content, for
@@ -1319,7 +1423,7 @@ class Q_Utils
 	 * @method multipartFormData
 	 * @static
 	 * @param {array} $postfields
-	 * @return {string}
+	 * @return {array} array(contentType, body)
 	 */
 	static function multipartFormData($postfields)
 	{
@@ -1369,7 +1473,7 @@ class Q_Utils
 		$body[] = '--' . $boundary . '--';
 		$body[] = '';
 		$contentType = 'multipart/form-data; boundary=' . $boundary;
-		return join($crlf, $body);
+		return array($contentType, join($crlf, $body));
 	}
 
 	/**
@@ -1400,12 +1504,15 @@ class Q_Utils
 		} else {
 			$server = "$url/action.php/$handler";
 		}
-
 		$response = self::post(
-			$server, self::sign($data), null, true, null, 
-			Q_UTILS_CONNECTION_TIMEOUT, Q_UTILS_CONNECTION_TIMEOUT
+			$server,
+			self::sign($data),
+			null,
+			array(),        // curl_opts
+			null,           // header
+			Q_UTILS_CONNECTION_TIMEOUT
 		);
-		if (empty($result)) {
+		if (empty($response)) {
 			throw new Q_Exception("Utils::queryExternal: not sent");
 		}
 		$result = Q::json_decode($response, true);
@@ -1451,8 +1558,14 @@ class Q_Utils
 		} else {
 			$server = "$url/$handler";
 		}
-
-		$response = self::post($server, self::sign($data), null, true, null, Q_UTILS_CONNECTION_TIMEOUT);
+		$response = self::post(
+			$server,
+			self::sign($data),
+			null,
+			array(),   // curl_opts
+			null,
+			Q_UTILS_CONNECTION_TIMEOUT
+		);
 		if (empty($response)) {
 			throw new Q_Exception("Utils::queryInternal: not sent");
 		}
@@ -2202,7 +2315,7 @@ class Q_Utils
 	 */
 	static function sortKeysByArea(&$arr)
 	{
-		return uksort($arr, array('Q_Utils', 'compareKeysNumerically'));
+		return uksort($arr, array('Q_Utils', 'compareKeysByArea'));
 	}
 
 	/**
@@ -2331,11 +2444,11 @@ class Q_Utils
 			$hash ^= ord($mixedStr[$i]); // XOR with character's ASCII value
 			// JavaScript-style 32-bit multiplication (prevents PHP overflow)
 			$hash = (int) (($hash * 0x01000193) & 0xFFFFFFFF);
-			$hash = unsigned_right_shift($hash ^ unsigned_right_shift($hash, 17), 0);
+			$hash = self::unsigned_right_shift($hash ^ self::unsigned_right_shift($hash, 17), 0);
 			$hash = (int) (($hash * 0x85ebca6b) & 0xFFFFFFFF);
-			$hash = unsigned_right_shift($hash ^ unsigned_right_shift($hash, 13), 0);
+			$hash = self::unsigned_right_shift($hash ^ self::unsigned_right_shift($hash, 13), 0);
 			$hash = (int) (($hash * 0xc2b2ae35) & 0xFFFFFFFF);
-			$hash = unsigned_right_shift($hash ^ unsigned_right_shift($hash, 16), 0);
+			$hash = self::unsigned_right_shift($hash ^ self::unsigned_right_shift($hash, 16), 0);
 		}
 		// Exact JavaScript-like unsigned integer handling
 		$hash = $hash & 0xFFFFFFFF;
@@ -2434,9 +2547,12 @@ class Q_Utils
 		$ap = preg_split('/\D/', $a, -1);
 		$bp = preg_split('/\D/', $b, -1);
 		foreach ($ap as $i => $av) {
+			if (!isset($bp[$i])) {
+				return 1;
+			}
 			$av = floatval($av);
 			$bv = floatval($bp[$i]);
-			if (!isset($bp[$i]) || $bv < $av) {
+			if ($bv < $av) {
 				return 1;
 			} else if ($bv > $av) {
 				return -1;
@@ -2477,4 +2593,8 @@ class Q_Utils
 	public static $nodeUrlRouters = array();
 
 	public static $echoVerbose = false;
+
+	protected static $batching = false;
+	protected static $batchQueue = array();
+
 }

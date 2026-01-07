@@ -301,7 +301,7 @@ class Q_Text
 		static $info = null;
 		if (!$info) {
 			$content = file_get_contents(Q_FILES_DIR.DS.'Q'.DS.'languages.json');
-			$info = Q::json_decode($content);
+			$info = Q::json_decode($content, true);
 		}
 		return $info;
 	}
