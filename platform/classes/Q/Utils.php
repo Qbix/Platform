@@ -983,9 +983,11 @@ class Q_Utils
 	 * @param {array} [$curl_opts=array()] Any curl options you want define obviously. These options will rewrite default.
 	 * @param {string|array} [$header=null] Set the headers, if any, here instead of curl_opts
 	 * @param {integer} [$timeout=30] number of seconds before timeout, defaults to 30 if you pass null
-	 * @return {string|false} The response, or false if not received
+	 * @param {callable} [$callback=null] Optional callback invoked with ($ch, $result)
+	 * @param {boolean} [$returnHandle=false] Whether to return the curl handle instead of executing
+	 * @return {string|false|resource} The response, false if not received, or curl handle if requested
 	 * 
-	 * **NOTE:** *The function waits for it, which might take a while!*
+	 * **NOTE:** *The function waits for it, which might take a while! Consider using startBarch()*
 	 */
 	static function post (
 		$url,
@@ -993,11 +995,13 @@ class Q_Utils
 		$user_agent = null,
 		$curl_opts = array(),
 		$header = null,
-		$timeout = Q_UTILS_CONNECTION_TIMEOUT)
-	{
-		return self::request('POST', $url, $data, $user_agent, $curl_opts, $header, $timeout);
+		$timeout = Q_UTILS_CONNECTION_TIMEOUT,
+		$callback = null,
+		$returnHandle = false
+	) {
+		return self::request('POST', $url, $data, $user_agent, $curl_opts, $header, $timeout, $callback, $returnHandle);
 	}
-	
+
 	/**
 	 * Issues a PUT request, and returns the response
 	 * @method put
@@ -1009,9 +1013,12 @@ class Q_Utils
 	 * @param {string} [$user_agent=null] The user-agent string to send. Defaults to Mozilla.
 	 * @param {array} [$curl_opts=array()] Any curl options you want define obviously. These options will rewrite default.
 	 * @param {string|array} [$header=null] Set the headers, if any, here instead of curl_opts
-	 * @return {string|false} The response, or false if not received
+	 * @param {integer} [$timeout=30] number of seconds before timeout, defaults to 30 if you pass null
+	 * @param {callable} [$callback=null] Optional callback invoked with ($ch, $result)
+	 * @param {boolean} [$returnHandle=false] Whether to return the curl handle instead of executing
+	 * @return {string|false|resource} The response, false if not received, or curl handle if requested
 	 *
-	 * **NOTE:** *The function waits for it, which might take a while!*
+	 * **NOTE:** *The function waits for it, which might take a while! Consider using startBarch()*
 	 */
 	static function put (
 		$url,
@@ -1019,10 +1026,13 @@ class Q_Utils
 		$user_agent = null,
 		$curl_opts = array(),
 		$header = null,
-		$timeout = Q_UTILS_CONNECTION_TIMEOUT)
-	{
-		return self::request('PUT', $url, $data, $user_agent, $curl_opts, $header, $timeout);
+		$timeout = Q_UTILS_CONNECTION_TIMEOUT,
+		$callback = null,
+		$returnHandle = false
+	) {
+		return self::request('PUT', $url, $data, $user_agent, $curl_opts, $header, $timeout, $callback, $returnHandle);
 	}
+
 	/**
 	 * Issues a GET request, and returns the response
 	 * @method get
@@ -1034,18 +1044,22 @@ class Q_Utils
 	 * @param {array} [$curl_opts=array()] Any curl options you want define obviously. These options will rewrite default.
 	 * @param {string|array} [$header=null] Set the headers, if any, here instead of curl_opts
 	 * @param {integer} [$timeout=30] number of seconds before timeout, defaults to 30 if you pass null
-	 * @return {string|false} The response, or false if not received
+	 * @param {callable} [$callback=null] Optional callback invoked with ($ch, $result)
+	 * @param {boolean} [$returnHandle=false] Whether to return the curl handle instead of executing
+	 * @return {string|false|resource} The response, false if not received, or curl handle if requested
 	 * 
-	 * **NOTE:** *The function waits for it, which might take a while!*
+	 * **NOTE:** *The function waits for it, which might take a while! Consider using startBarch()*
 	 */
 	static function get (
-		$url, 
-		$user_agent = null, 
+		$url,
+		$user_agent = null,
 		$curl_opts = array(),
-		$header = null, 
-		$timeout = Q_UTILS_CONNECTION_TIMEOUT)
-	{
-		return self::request('GET', $url, null, $user_agent, $curl_opts, $header, $timeout);
+		$header = null,
+		$timeout = Q_UTILS_CONNECTION_TIMEOUT,
+		$callback = null,
+		$returnHandle = false
+	) {
+		return self::request('GET', $url, null, $user_agent, $curl_opts, $header, $timeout, $callback, $returnHandle);
 	}
 
 	/**
@@ -1065,8 +1079,9 @@ class Q_Utils
 
 	/**
 	 * Execute batched HTTP requests all at once
-	 * @mehod batchExecute
+	 * @method batchExecute
 	 * @static
+	 * @return {array} The array of response bodies, keyed by batch index
 	 */
 	static function batchExecute()
 	{
@@ -1085,13 +1100,20 @@ class Q_Utils
 			$paramsArray[$i] = $item['params'];
 		}
 
-		$results = self::requestMulti($paramsArray);
+		$resultsInfo = array();
 
-		foreach ($results as $i => $result) {
+		// Bodies come back as return value, infos by reference
+		$results = self::requestMulti($paramsArray, $resultsInfo);
+
+		foreach ($results as $i => $body) {
 			$cb = self::$batchQueue[$i]['callback'];
 			if ($cb && is_callable($cb)) {
 				try {
-					call_user_func($cb, $result, $i);
+					call_user_func(
+						$cb,
+						isset($resultsInfo[$i]) ? $resultsInfo[$i] : array(),
+						$body
+					);
 				} catch (Exception $e) {
 					error_log($e);
 				}
@@ -1111,7 +1133,7 @@ class Q_Utils
 	 *   Can be an associative array, in which case the results will match by key.
 	 * @return {array} The array of results from curl_multi_getcontent, with keys matching $paramsArray.
 	 */
-	static function requestMulti($paramsArray)
+	static function requestMulti($paramsArray, &$resultsArray = array())
 	{
 		if (!function_exists('curl_multi_init')) {
 			throw new Q_Exception("requestMulti requires curl_multi");
@@ -1142,7 +1164,7 @@ class Q_Utils
 			// so that batching never intercepts curl_multi internals
 			$ch = call_user_func_array(array('Q_Utils', 'request'), $params);
 
-			if (!is_resource($ch)) {
+			if (!$ch || !self::isCurlHandle($ch)) {
 				throw new Q_Exception("requestMulti: request() did not return a curl handle");
 			}
 
@@ -1169,6 +1191,14 @@ class Q_Utils
 		$results = array();
 		foreach ($handles as $k => $ch) {
 			$results[$k] = curl_multi_getcontent($ch);
+			$resultsArray[$k] = array_merge(
+				curl_getinfo($ch),
+				array(
+					'index' => $k,
+					'errno' => curl_errno($ch),
+					'error' => curl_error($ch)
+				)
+			);
 			curl_multi_remove_handle($mh, $ch);
 			curl_close($ch);
 		}
@@ -1390,7 +1420,8 @@ class Q_Utils
 			}
 
 			if ($callback and is_callable($callback)) {
-				call_user_func($callback, $ch, $result);
+				$info = curl_getinfo($ch);
+				call_user_func($callback, $info, $result);
 			}
 			curl_close($ch);
 		} else {
@@ -2585,6 +2616,17 @@ class Q_Utils
 		$bpArea = array_product(array_map('intval', $bp));
 
 		return ($apArea < $bpArea) ? -1 : (($apArea > $bpArea) ? 1 : 0);
+	}
+
+	private static function isCurlHandle($ch)
+	{
+		if (is_resource($ch)) {
+			return true;
+		}
+		if (is_object($ch) && get_class($ch) === 'CurlHandle') {
+			return true;
+		}
+		return false;
 	}
 
 	protected static $urand;
