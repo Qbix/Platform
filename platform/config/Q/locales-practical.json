@@ -1,0 +1,49 @@
+{
+  "zh": ["CN", "HK", "MO", "SG", "TW"],
+  "en": [
+    "AE","AT","AU","BE","BH","BS","BW","CA","CH","CM","CY","CZ",
+    "DE","DK","EE","FI","GB","GE","GH","GL","HK","IE","IL","IN",
+    "IS","JM","JO","KE","LB","LI","LK","LT","LU","LV","MO","MT",
+    "MY","NG","NL","NO","NZ","OM","PH","PK","PR","QA","RW","SA",
+    "SE","SG","SK","SS","TZ","UG","US","VA","ZA","ZM","ZW"
+  ],
+  "es": [
+    "AR","BO","CL","CO","CR","CU","DO","EC","ES","HN","MX",
+    "PA","PE","PR","PY","SV","US","UY","VE"
+  ],
+  "hi": ["IN"],
+  "ar": ["AE","BH","DZ","EG","IL","JO","LB","LY","MA","OM","QA","SA","SD","SY","TN","YE"],
+  "bn": ["BD"],
+  "pt": ["AO","BR","CV","MO","MZ","PT"],
+  "ru": [
+    "AM","AZ","BY","EE","GE","IL","KG","KZ","LT","LV","MD",
+    "RU","TJ","TM","UA","UZ"
+  ],
+  "ja": ["JP"],
+  "de": ["AT","CH","DE","LI","LU"],
+  "fr": [
+    "BE","BF","BI","BJ","CD","CF","CG","CH","CI","CM","CV",
+    "DZ","FR","GA","HT","LU","MA","MC","MG","ML","NE","RW",
+    "SN","TN"
+  ],
+  "ur": ["PK"],
+  "id": ["ID"],
+  "tr": ["CY","TR"],
+  "it": ["CH","IT","VA"],
+  "ko": ["KR"],
+  "ta": ["LK","SG"],
+  "vi": ["VN"],
+  "th": ["TH"],
+  "pl": ["PL"],
+  "uk": ["UA"],
+  "fa": ["AF","IR"],
+  "nl": ["BE","NL"],
+  "ms": ["MY","SG"],
+  "sw": ["KE","TZ","UG"],
+  "ro": ["MD","RO"],
+  "hu": ["HU"],
+  "el": ["CY","GR"],
+  "cs": ["CZ"],
+  "sv": ["FI","SE"],
+  "he": ["IL"]
+}
