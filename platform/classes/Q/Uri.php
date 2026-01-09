@@ -29,8 +29,7 @@ class Q_Uri
 	 $source,
 	 $route = null)
 	{
-
-		if (empty($source)) {
+		if (empty($source) && !is_array($source)) {
 			return null;
 		}
 		

@@ -1620,6 +1620,9 @@ class Q_Response
 
 		$baseUrl = Q_Request::baseUrl();
 		$dest = parse_url(Q_Request::url(), PHP_URL_PATH);
+		if (!$dest) {
+			return '';
+		}
 
 		$sheets = self::stylesheetsArray($slotName, false);
 		$sheets_for_slots = $imported_for_slots

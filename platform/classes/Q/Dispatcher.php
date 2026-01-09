@@ -159,7 +159,7 @@ class Q_Dispatcher
 			self::$uri = Q_Uri::from($uri);
 		} else {
 			$request_uri = Q_Request::uri();
-			self::$uri = clone($request_uri);
+			self::$uri = $request_uri ? clone($request_uri) : Q_Uri::from(array());
 		}
 		if (empty(self::$uri->fields)) {
 			$url = Q_Request::url();

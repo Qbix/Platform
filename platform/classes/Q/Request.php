@@ -621,23 +621,38 @@ class Q_Request
 	 */
 	static function expectsJSON()
 	{
-		$acceptHeader = !empty($_SERVER['HTTP_ACCEPT']) ? $_SERVER['HTTP_ACCEPT'] : '';
-		$acceptHeader = strtolower(trim($acceptHeader));
-		$acceptTypes = array_map('trim', explode(',', $acceptHeader));
-		foreach ($acceptTypes as $type) {
-			// Allow only "application/json" or variations like "application/json; charset=UTF-8"
-			if (preg_match('#^application/json($|[ ;])#', $type)) {
-				return true;
+		$accept = isset($_SERVER['HTTP_ACCEPT'])
+			? strtolower($_SERVER['HTTP_ACCEPT'])
+			: '';
+
+		if ($accept === '') {
+			return false;
+		}
+
+		$types = array_map('trim', explode(',', $accept));
+		$acceptsJson = false;
+
+		foreach ($types as $type) {
+			// Strip q-value
+			$type = preg_replace('/;q=[0-9.]+$/', '', $type);
+
+			// application/json or application/*+json
+			if ($type === 'application/json'
+			|| preg_match('#^application/.+\+json$#', $type)
+			) {
+				$acceptsJson = true;
+				continue;
 			}
 
-			// False if any type accepts text/html or other non-JSON types
-			if (strpos($type, 'text/html') !== false
-			 || strpos($type, 'application/xhtml+xml') !== false) {
-				return false;
+			// */* is neutral
+			if ($type === '*/*') {
+				continue;
 			}
 		}
-		return false;
+
+		return $acceptsJson;
 	}
+
 
 	/**
 	 * Use this to determine whether or not we should work with
