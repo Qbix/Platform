@@ -1204,10 +1204,10 @@ class Q
 	 * Tests whether a particular handler exists
 	 * @method canHandle
 	 * @static
-	 * @param {string} $handler_name
+	 * @param {string} $eventName
 	 *  The name of the handler. The handler can be overridden
 	 *  via the include path, but an exception is thrown if it is missing.
-	 * @param {boolean} $skip_include=false
+	 * @param {boolean} $skipIncludes=false
 	 *  Defaults to false. If true, no file is loaded;
 	 *  the handler is executed only if the function is already defined;
 	 *  otherwise, null is returned.
@@ -1216,25 +1216,25 @@ class Q
 	 * @throws {Q_Exception_MissingFile}
 	 */
 	static function canHandle(
-	 $handler_name,
-	 $skip_include = false)
+	 $eventName,
+	 $skipIncludes = false)
 	{
-		if (!isset($handler_name) || isset(self::$event_empty[$handler_name])) {
+		if (!isset($eventName) || isset(self::$event_empty[$eventName])) {
 			return false;
 		}
-		$handler_name_parts = explode('/', $handler_name);
-		$function_name = str_replace('-', '_', implode('_', $handler_name_parts));
+		$eventName_parts = explode('/', $eventName);
+		$function_name = str_replace('-', '_', implode('_', $eventName_parts));
 		if (function_exists($function_name))
 		 	return true;
-		if ($skip_include)
+		if ($skipIncludes)
 			return false;
 		// try to load appropriate file using relative filename
 		// (may search multiple include paths)
-		$filename = 'handlers'.DS.implode(DS, $handler_name_parts).'.php';
+		$filename = 'handlers'.DS.implode(DS, $eventName_parts).'.php';
 		try {
 			self::includeFile($filename, array(), true);
 		} catch (Q_Exception_MissingFile $e) {
-			self::$event_empty[$handler_name] = true;
+			self::$event_empty[$eventName] = true;
 			return false;
 		}
 		return function_exists($function_name);
@@ -1245,13 +1245,13 @@ class Q
 	 * @method handle
 	 * @static
 	 * @protected
-	 * @param {string} $handler_name
+	 * @param {string} $eventName
 	 *  The name of the handler. The handler can be overridden
 	 *  via the include path, but an exception is thrown if it is missing.
 	 * @param {array} $params=array()
 	 *  Parameters to pass to the handler.
 	 *  They may be altered by the handler, if it accepts $params as a reference.
-	 * @param {boolean} $skip_include=false
+	 * @param {boolean} $skipIncludes=false
 	 *  Defaults to false. If true, no file is loaded;
 	 *  the handler is executed only if the function is already defined;
 	 *  otherwise, null is returned.
@@ -1262,35 +1262,35 @@ class Q
 	 * @throws {Q_Exception_MissingFunction}
 	 */
 	protected static function handle(
-	 $handler_name,
+	 $eventName,
 	 &$params = array(),
-	 $skip_include = false,
+	 $skipIncludes = false,
 	 &$result = null)
 	{
-		if (!isset($handler_name)) {
+		if (!isset($eventName)) {
 			return null;
 		}
 
 		// Check if remote override is configured
-		$remote = Q_Config::get('Q', 'handlersUsingRemote', $handler_name, null);
+		$remote = Q_Config::get('Q', 'handlersUsingRemote', $eventName, null);
 		if (is_array($remote)) {
-			return Q::handleUsingRemote($handler_name, $params, $remote);
+			return Q::handleUsingRemote($eventName, $params, $remote, $result);
 		}
 
 		// Otherwise proceed with standard include and function resolution
-		$handler_name_parts = explode('/', $handler_name);
-		if (count($handler_name_parts) > 1) {
-			$function_name = str_replace('-', '_', implode('_', $handler_name_parts));
+		$eventName_parts = explode('/', $eventName);
+		if (count($eventName_parts) > 1) {
+			$function_name = str_replace('-', '_', implode('_', $eventName_parts));
 			if (!is_array($params)) {
 				$params = array();
 			}
 			if (!function_exists($function_name)) {
-				if ($skip_include) {
+				if ($skipIncludes) {
 					return null;
 				}
 				// try to load appropriate file using relative filename
 				// (may search multiple include paths)
-				$filename = 'handlers'.DS.implode(DS, $handler_name_parts).'.php';
+				$filename = 'handlers'.DS.implode(DS, $eventName_parts).'.php';
 				self::includeFile($filename, $params, true);
 				if (!function_exists($function_name)) {
 					require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Exception'.DS.'MissingFunction.php');
@@ -1298,7 +1298,7 @@ class Q
 				}
 			}
 		} else {
-			$function_name = $handler_name;
+			$function_name = $eventName;
 		}
 		// The following avoids the bug in PHP where
 		// call_user_func doesn't work with references being passed
@@ -1309,22 +1309,27 @@ class Q
 	/**
 	 * Executes a particular event handler remotely, if configured via Q_Config.
 	 * This method is called internally by Q::handle when a handler is marked for remote execution
-	 * in the 'Q/handlersUsingRemote/$handler_name' configuration path.
+	 * in the 'Q/handlersUsingRemote/$eventName' configuration path.
 	 *
 	 * @method handleUsingRemote
 	 * @static
 	 * @protected
-	 * @param {string} $handler_name
+	 * @param {string} $eventName
 	 *  The name of the handler. Used as the 'function' in the remote payload.
 	 * @param {array} $params=array()
 	 *  Parameters to pass to the handler remotely.
+	 * @param {array} $remote
+	 * @param {string} [$remote.baseUrl] Defaults to Q_Request::baseUrl()
+	 * @param {string} [$remote.returnType] Can be "bool", "int", "array", "object", "raw",
+	 *  or the name of a class to instantiate, in all cases receives result[data]
 	 * @param {&mixed} $result=null
-	 *  Optional. Will be populated with the result returned by the remote handler.
+	 *  Optional. Will be populated with the result returned by the remote handler,
+	 *  including keys like "success", "data" and possibly "exception"
 	 * @return {mixed}
 	 *  Whatever the remote call returns, potentially cast to a specific type based on config.
 	 * @throws {Exception} If the remote call fails or returns an error.
 	 */
-	protected static function handleUsingRemote($eventName, $params, $remote)
+	protected static function handleUsingRemote($eventName, $params, $remote, &$result)
 	{
 		if (!isset($remote['baseUrl'])) {
 			$remote['baseUrl'] = Q_Request::baseUrl();
@@ -1344,7 +1349,8 @@ class Q
 		$payload = json_encode(array(
 			'function' => $eventName,
 			'params' => $params,
-			'context' => $context
+			'context' => $context,
+			'timestamp' => time()
 		));
 	
 		$secret = Q_Config::expect('Q', 'remote', 'secret');

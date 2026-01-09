@@ -20,9 +20,21 @@ class Q_RemoteController
 				throw new Exception("Invalid payload");
 			}
 
-			$function = $payload['function'];
+			$eventName = $payload['function'];
 			$params = $payload['params'];
+			$timestamp = $payload['timestamp'];
 			$context = isset($payload['context']) ? $payload['context'] : array();
+
+			$now = time();
+			$skew = Q_Config::get('Q', 'remote', 'maxSkew', 60); // seconds
+			if ($timestamp <= 0 || abs($now - $timestamp) > $skew) {
+				throw new Exception("Request timestamp is incorrect");
+			}
+
+			$remote = Q_Config::get('Q', 'handlersUsingRemote', $eventName, null);
+			if (!is_array($remote)) {
+				throw new Exception("Handler not enabled for remote execution: $eventName");
+			}
 
 			// Restore globals if any
 			$cgs = isset($context['globals']) ? $context['globals'] : array();
@@ -30,19 +42,14 @@ class Q_RemoteController
 				$GLOBALS[$k] = $v;
 			}
 
-			// Only allow event-style function names
-			if (!preg_match('/^Q_[A-Za-z0-9_]+$/', $function)) {
-				throw new Exception("Unauthorized function: $function");
-			}
-
 			$result = null;
-			Q::event($function, $params, false, false, $result);
+			Q::event($eventName, $params, false, false, $result);
 
 			echo json_encode(array(
 				'success' => true,
 				'data' => $result
             ));
-		} catch (Throwable $e) {
+		} catch (Exception $e) {
 			echo json_encode(array(
 				'success' => false,
 				'exception' => array(

@@ -442,7 +442,7 @@ class Q_Dispatcher
 					}
 				}
 
-				// If we got this far, then this event can be by various plugins
+				// If we got this far, then this event can be hooked by various plugins
 				// to persist various payment & micropayment transactions to the database.
 				$eventName = 'Q/payments';
 				self::startSessionBeforeEvent($eventName);
