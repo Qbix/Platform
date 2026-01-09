@@ -73,6 +73,39 @@ class Db_Range
 	}
 
 	/**
+	 * Union multiple Db_Range objects into a single OR-composed range.
+	 *
+	 * @method union
+	 * @static
+	 * @return Db_Range
+	 */
+	public static function union()
+	{
+		$ranges = func_get_args();
+		if (empty($ranges)) {
+			throw new InvalidArgumentException("Db_Range::union requires at least one range");
+		}
+
+		$base = null;
+
+		foreach ($ranges as $r) {
+			if (!$r instanceof Db_Range) {
+				throw new InvalidArgumentException("All arguments must be Db_Range");
+			}
+
+			if (!$base) {
+				$base = $r;
+				continue;
+			}
+
+			$base->additionalRanges[] = $r;
+		}
+
+		return $base;
+	}
+
+
+	/**
 	 * Get new Db_Range
 	 * @method unicode
 	 * @static
