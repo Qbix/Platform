@@ -312,7 +312,7 @@
 		},
 		"images": {
 			"x": {
-				"sizes": {"x": "x.png"},
+				"sizes": {"x": "x.jpg"},
 				"defaultSize": "x",
 				"maxStretch": 1
 			},

@@ -46,6 +46,7 @@ class Q_Image
 		$sizes = Q_Config::expect("Q", "images", $type, 'sizes');
 		$maxStretch = Q_Config::get("Q", "images", $type, 'maxStretch', 1);
 		$defaultSize = Q_Config::get("Q", "images", $type, 'defaultSize', 40);
+		$ext = Q_Config::get("Q", "images", $type, 'extension', 'jpg');
 		if (Q::isAssociative($sizes)) {
 			Q_Utils::sortKeysByLargestNumber($sizes);
 			return $sizes;
@@ -53,7 +54,7 @@ class Q_Image
 
 		$sizes2 = array();
 		foreach ($sizes as $size) {
-			$sizes2[$size] = "$size.png";
+			$sizes2[$size] = "$size.$ext";
 		}
 
 		Q_Utils::sortKeysByLargestNumber($sizes2);
@@ -655,11 +656,11 @@ class Q_Image
 			if (empty($name)) {
 				// generate a filename
 				do {
-					$name = Q_Utils::randomString(8).'.png';
+					$name = Q_Utils::randomString(8).'.jpg';
 				} while (file_exists($writePath.$name));
 			}
 			if (strrpos($name, '.') === false) {
-				$name .= '.png';
+				$name .= '.jpg';
 			}
 			$parts = explode('.', $name);
 			$ext = end($parts);
