@@ -36,7 +36,14 @@ Q.exports(function (Q) {
 
 		SandboxRunner.prototype.createWorker = function () {
 			const script = `
-				self.onmessage = async function(e) {
+				// --- Hard-disable network & import capabilities ---
+				self.fetch = undefined;
+				self.XMLHttpRequest = undefined;
+				self.WebSocket = undefined;
+				self.EventSource = undefined;
+				self.importScripts = undefined;
+
+				self.onmessage = async function (e) {
 					try {
 						const { code, context } = e.data;
 
@@ -44,15 +51,32 @@ Q.exports(function (Q) {
 						const safeEval = async (code, ctx) => {
 							const keys = Object.keys(ctx || {});
 							const values = Object.values(ctx || {});
-							const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-							const fn = new AsyncFunction(...keys, '"use strict"; return (async () => { ' + code + ' })()');
+
+							const AsyncFunction =
+								Object.getPrototypeOf(async function () {}).constructor;
+
+							const fn = new AsyncFunction(
+								...keys,
+								'"use strict";\\n' +
+								// Shadow dangerous globals inside evaluation scope
+								'const fetch = undefined;\\n' +
+								'const XMLHttpRequest = undefined;\\n' +
+								'const WebSocket = undefined;\\n' +
+								'const EventSource = undefined;\\n' +
+								'const importScripts = undefined;\\n' +
+								'return (async () => { ' + code + ' })();'
+							);
+
 							return fn(...values);
 						};
 
 						const result = await safeEval(code, context);
 						self.postMessage({ ok: true, result });
 					} catch (err) {
-						self.postMessage({ ok: false, error: String(err && err.message || err) });
+						self.postMessage({
+							ok: false,
+							error: String(err && err.message || err)
+						});
 					}
 				};
 			`;
