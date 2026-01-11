@@ -13,13 +13,15 @@ Q.exports(function (Q) {
 	 * @method run
 	 * @param {String} code JavaScript source to execute
 	 * @param {Object} [context] Variables accessible inside the sandbox
+	 * @param {Object} [methods] Async RPC methods exposed as stubs
 	 * @param {Object} [options] Additional sandbox configuration
 	 * @param {String} [options.name] Reuse a persistent sandbox worker under this name
 	 * @param {Number} [options.timeout=2000] Timeout in milliseconds before aborting execution
 	 * @return {Q.Promise} Resolves with result or rejects on error
 	 */
-	return function Q_Sandbox_run(code, context, options) {
+	return function Q_Sandbox_run(code, context, methods, options) {
 		context = context || {};
+		methods = methods || {};
 		options = options || {};
 
 		// Persistent runners by name
@@ -32,6 +34,8 @@ Q.exports(function (Q) {
 			};
 			this.worker = null;
 			this.url = null;
+			this.rpcId = 0;
+			this.pending = {};
 		}
 
 		SandboxRunner.prototype.createWorker = function () {
@@ -43,37 +47,60 @@ Q.exports(function (Q) {
 				self.EventSource = undefined;
 				self.importScripts = undefined;
 
+				let rpcCounter = 0;
+				const pending = {};
+
+				function call(method, args) {
+					return new Promise((resolve, reject) => {
+						const id = ++rpcCounter;
+						pending[id] = { resolve, reject };
+						self.postMessage({ type: "rpc", id, method, args });
+					});
+				}
+
 				self.onmessage = async function (e) {
+					const msg = e.data;
+
+					// RPC response
+					if (msg && msg.type === "rpcResult") {
+						const p = pending[msg.id];
+						if (!p) return;
+						delete pending[msg.id];
+						msg.ok ? p.resolve(msg.result) : p.reject(msg.error);
+						return;
+					}
+
+					// Initial execution
 					try {
-						const { code, context } = e.data;
+						const { code, context, methodNames } = msg;
 
-						// Build an isolated evaluation function
-						const safeEval = async (code, ctx) => {
-							const keys = Object.keys(ctx || {});
-							const values = Object.values(ctx || {});
+						const methods = {};
+						for (const name of methodNames) {
+							methods[name] = (...args) => call(name, args);
+						}
 
-							const AsyncFunction =
-								Object.getPrototypeOf(async function () {}).constructor;
+						const keys = Object.keys(context || {}).concat("methods");
+						const values = Object.values(context || {}).concat(methods);
 
-							const fn = new AsyncFunction(
-								...keys,
-								'"use strict";\\n' +
-								// Shadow dangerous globals inside evaluation scope
-								'const fetch = undefined;\\n' +
-								'const XMLHttpRequest = undefined;\\n' +
-								'const WebSocket = undefined;\\n' +
-								'const EventSource = undefined;\\n' +
-								'const importScripts = undefined;\\n' +
-								'return (async () => { ' + code + ' })();'
-							);
+						const AsyncFunction =
+							Object.getPrototypeOf(async function () {}).constructor;
 
-							return fn(...values);
-						};
+						const fn = new AsyncFunction(
+							...keys,
+							'"use strict";\\n' +
+							'const fetch = undefined;\\n' +
+							'const XMLHttpRequest = undefined;\\n' +
+							'const WebSocket = undefined;\\n' +
+							'const EventSource = undefined;\\n' +
+							'const importScripts = undefined;\\n' +
+							'return (async () => { ' + code + ' })();'
+						);
 
-						const result = await safeEval(code, context);
-						self.postMessage({ ok: true, result });
+						const result = await fn(...values);
+						self.postMessage({ type: "done", ok: true, result });
 					} catch (err) {
 						self.postMessage({
+							type: "done",
 							ok: false,
 							error: String(err && err.message || err)
 						});
@@ -87,19 +114,21 @@ Q.exports(function (Q) {
 			return this.worker;
 		};
 
-		SandboxRunner.prototype.run = function (code, ctx, opts) {
+		SandboxRunner.prototype.run = function (code, ctx, methods, opts) {
 			const self = this;
 			const worker = this.worker || this.createWorker();
 			const timeoutMs = (opts && opts.timeout) || this.defaults.timeout;
 
-			// Deep clone context to avoid prototype pollution / unserializable data
+			// Deep clone context (NO function fallback)
 			let safeCtx;
 			try {
 				safeCtx = JSON.parse(JSON.stringify(ctx));
 			} catch (e) {
-				console.warn("[Q.Sandbox] Failed to clone context, using shallow copy");
-				safeCtx = Object.assign({}, ctx);
+				console.warn("[Q.Sandbox] Failed to clone context, using empty context");
+				safeCtx = {};
 			}
+
+			const methodNames = Object.keys(methods);
 
 			return new Q.Promise(function (resolve, reject) {
 				let timer;
@@ -115,8 +144,47 @@ Q.exports(function (Q) {
 				};
 
 				worker.onmessage = function (e) {
-					cleanup();
-					e.data.ok ? resolve(e.data.result) : reject(e.data.error);
+					const msg = e.data;
+
+					// RPC request from sandbox
+					if (msg && msg.type === "rpc") {
+						const fn = methods[msg.method];
+						if (!fn) {
+							worker.postMessage({
+								type: "rpcResult",
+								id: msg.id,
+								ok: false,
+								error: "Unknown method: " + msg.method
+							});
+							return;
+						}
+
+						Promise.resolve()
+							.then(() => fn(...msg.args))
+							.then(result => {
+								worker.postMessage({
+									type: "rpcResult",
+									id: msg.id,
+									ok: true,
+									result
+								});
+							})
+							.catch(err => {
+								worker.postMessage({
+									type: "rpcResult",
+									id: msg.id,
+									ok: false,
+									error: String(err && err.message || err)
+								});
+							});
+						return;
+					}
+
+					// Final result
+					if (msg && msg.type === "done") {
+						cleanup();
+						msg.ok ? resolve(msg.result) : reject(msg.error);
+					}
 				};
 
 				worker.onerror = function (err) {
@@ -129,7 +197,11 @@ Q.exports(function (Q) {
 					reject(new Error("Worker timeout / infinite loop"));
 				}, timeoutMs);
 
-				worker.postMessage({ code, context: safeCtx });
+				worker.postMessage({
+					code,
+					context: safeCtx,
+					methodNames
+				});
 			});
 		};
 
@@ -146,6 +218,6 @@ Q.exports(function (Q) {
 		}
 
 		// Q.Method will resolve the returned promise automatically
-		return runner.run(code, context, options);
+		return runner.run(code, context, methods, options);
 	};
 });
