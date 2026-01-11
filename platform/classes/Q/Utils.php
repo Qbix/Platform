@@ -1063,40 +1063,46 @@ class Q_Utils
 	}
 
 	/**
-	 * Start batching HTTP requests.
-	 * Subsequent calls to batchRequest() will be queued.
-	 * @method batchStart
+	 * Start batching HTTP requests, or switch to an existing batch.
+	 * Can also be used to start and switch between concurrent batches.
+	 * @method batchUse
+	 * @param {string} [$batchName=''] You can pass a batch name here, to handle concurrent batching flows
 	 * @static
 	 */
-	static function batchStart()
+	static function batchUse($batchName = '')
 	{
-		if (self::$batching) {
+		if (!empty(self::$batching[$batchName])) {
 			throw new Q_Exception("Nested batching not supported");
 		}
-		self::$batching = true;
-		self::$batchQueue = array();
+		self::$batchName = $batchName;
+		self::$batching[$batchName] = true;
+		if (empty(self::$batchQueue[$batchName])) {
+			self::$batchQueue[$batchName] = array();
+		}
 	}
 
 	/**
-	 * Execute batched HTTP requests all at once
+	 * Execute batched HTTP requests all at once.
+	 * Use this to 
 	 * @method batchExecute
+	 * @param {string} [$batchName=''] You can pass a batch name here, to handle concurrent batching flows
 	 * @static
 	 * @return {array} The array of response bodies, keyed by batch index
 	 */
-	static function batchExecute()
+	static function batchExecute($batchName = '')
 	{
-		if (!self::$batching) {
+		if (empty(self::$batching[$batchName])) {
 			return array();
 		}
 
-		self::$batching = false;
+		self::$batching[$batchName] = false;
 
-		if (!self::$batchQueue) {
+		if (empty(self::$batchQueue[$batchName])) {
 			return array();
 		}
 
 		$paramsArray = array();
-		foreach (self::$batchQueue as $i => $item) {
+		foreach (self::$batchQueue[$batchName] as $i => $item) {
 			$paramsArray[$i] = $item['params'];
 		}
 
@@ -1106,7 +1112,7 @@ class Q_Utils
 		$results = self::requestMulti($paramsArray, $resultsInfo);
 
 		foreach ($results as $i => $body) {
-			$cb = self::$batchQueue[$i]['callback'];
+			$cb = self::$batchQueue[$batchName][$i]['callback'];
 			if ($cb && is_callable($cb)) {
 				try {
 					call_user_func(
@@ -1120,10 +1126,27 @@ class Q_Utils
 			}
 		}
 
-		self::$batchQueue = array();
+		self::$batchQueue[$batchName] = array();
 		return $results;
 	}
 
+	/**
+	 * Cancel batched HTTP requests on named batch.
+	 * @method batchCancel
+	 * @param {string} [$batchName=''] You can pass a batch name here, to handle concurrent batching flows
+	 * @static
+	 * @return {array} The array of response bodies, keyed by batch index
+	 */
+	static function batchCancel($batchName = '')
+	{
+		if (empty(self::$batching[$batchName])
+		or empty(self::$batchQueue[$batchName])) {
+			return array();
+		}
+		self::$batching[$batchName] = false;
+		self::$batchQueue[$batchName] = array();
+		return $results;
+	}
 
 	/**
 	 * Issues multiple HTTP requests via curl_multi, and returns the responses
@@ -1240,14 +1263,15 @@ class Q_Utils
 		$returnHandle = false
 	) {
 		// FIX 1: only batch logical requests, never internal plumbing
-		if (!empty(self::$batching) && !$returnHandle) {
-			$index = count(self::$batchQueue);
+		$batchName = self::$batchName;
+		if (!empty(self::$batching[$batchName]) && !$returnHandle) {
+			$index = count(self::$batchQueue[$batchName]);
 
 			// FIX 2: strip callback from params; batchExecute owns callbacks
 			$args = func_get_args();
 			$args[7] = null; // remove callback from request params
 
-			self::$batchQueue[] = array(
+			self::$batchQueue[$batchName][] = array(
 				'params' => $args,
 				'callback' => $callback
 			);
@@ -2636,7 +2660,8 @@ class Q_Utils
 
 	public static $echoVerbose = false;
 
-	protected static $batching = false;
+	protected static $batching = array();
 	protected static $batchQueue = array();
+	public static $batchName = '';
 
 }
