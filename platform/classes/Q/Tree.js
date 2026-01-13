@@ -133,11 +133,23 @@ module.exports = function (linked) {
 		return false;
 	};
 
-	this.depthFirst = function(cb, ctx) { _depthFirst.call(this,[],linked,cb,ctx); };
-	this.breadthFirst = function(cb,ctx) { cb([],linked,linked,ctx); _breadthFirst.call(this,[],linked,cb,ctx); };
+	this.depthFirst = function(cb, ctx) {
+		_depthFirst.call(this,[],linked,cb,ctx);
+	};
+	this.breadthFirst = function(cb, ctx) {
+		var rootCont = cb([], linked, linked, ctx);
+		if (rootCont === false || rootCont === true) return;
+		_breadthFirst.call(this, [], linked, cb, ctx);
+	};
 
-	this.diff = function(tree, skipUndefinedValues) {
-		var context = {from:this,to:tree,diff:new Q.Tree(),skipUndefinedValues:!!skipUndefinedValues};
+	this.diff = function(tree, skipUndefinedValues, keyField) {
+		var context = {
+			from: this,
+			to: tree,
+			diff: new Q.Tree(),
+			skipUndefinedValues: !!skipUndefinedValues,
+			keyField: keyField || null
+		};
 		this.depthFirst(_diffTo,context);
 		tree.depthFirst(_diffFrom,context);
 		return context.diff;
@@ -157,12 +169,10 @@ module.exports = function (linked) {
 		if ((!isAssocValue || !isAssocValueTo) && valueTo !== value) {
 			// handle keyed arrays if both are arrays and not associative
 			if (Q.isArrayLike(value) && Q.isArrayLike(valueTo)) {
-
-				var keyField = _detectKeyField(
+				var keyField = context.keyField || _detectKeyField(
 					Q.isArrayLike(value) ? value : [],
 					Q.isArrayLike(valueTo) ? valueTo : []
 				);
-
 				if (keyField) {
 					var d = _diffByKey(value, valueTo, context.keyField || keyField);
 					if (Object.keys(d).length) {
@@ -204,7 +214,7 @@ module.exports = function (linked) {
 		getArgs.push(null);
 		var valueFrom = context.from.get.apply(context.from, getArgs);
 		// If from-tree doesn't have the key -> add it
-		if (valueFrom === undefined) {
+		if (valueFrom === undefined) { // undefined wouldn't have been assigned normally
 			context.diff.set(path, value);
 			// PHP: return true -> skip children but continue siblings
 			return true;
@@ -263,7 +273,9 @@ module.exports = function (linked) {
 			}
 		}
 
-		var resultObj = Array.isArray(first) ? first.slice() : Object.assign({}, first);
+		var resultObj = Array.isArray(first)
+			? (noNumericArrays ? Object.assign([], first) : first.slice())
+			: Object.assign({}, first);
 		for (var k in second) {
 			if (!(k in resultObj)) resultObj[k] = second[k];
 			else if (typeof resultObj[k] !== 'object' || resultObj[k] === null) resultObj[k] = second[k];
@@ -315,8 +327,8 @@ function _depthFirst(subpath, obj, callback, context) {
 			continue;
 		}
 
-		// descend only if associative object
-		if (Q.isPlainObject(v)) {
+		// descend into arrays or objects
+		if (typeof v === 'object' && v !== null) {
 			_depthFirst.call(this, path, v, callback, context);
 		}
 	}
@@ -356,8 +368,8 @@ function _breadthFirst(subpath, node, callback, context) {
 				continue;
 			}
 
-			// descend only into associative objects
-			if (Q.isPlainObject(value)) {
+			// descend into arrays or objects (match PHP)
+			if (typeof value === 'object' && value !== null) {
 				queue.push([childPath, value, current]);
 			}
 		}

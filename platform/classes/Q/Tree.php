@@ -215,7 +215,7 @@ class Q_Tree
 			}
 
 			// descend normally into associative arrays
-			if (Q::isAssociative($a)) {
+			if (is_array($a)) {
 				if (false === $this->_depthFirst($path, $a, $callback, $context)) {
 					return false;
 				}
@@ -330,10 +330,13 @@ class Q_Tree
 			// handle keyed arrays if keyField is specified
 			if (is_array($value) && !Q::isAssociative($value)
 			|| is_array($valueTo) && !Q::isAssociative($valueTo)) {
-				if ($keyField = $this->detectKeyField(
+				$keyField = isset($context->keyField)
+				? $context->keyField
+				: $this->detectKeyField(
 					is_array($value) ? $value : array(),
 					is_array($valueTo) ? $valueTo : array()
-				)) {
+				);
+				if ($keyField) {
 					$diff = self::diffByKey($value, $valueTo, $context->keyField);
 					if (!empty($diff)) {
 						call_user_func_array(array($context->diff, 'set'), array_merge($path, array($diff)));
@@ -457,7 +460,7 @@ class Q_Tree
 	 $key1)
 	{
 		if (!isset($key1)) {
-			$this->parameters = self::$cache = array();
+			$this->parameters = self::$cache[$this->filename] = array();
 			return;
 		}
 		$args = func_get_args();
@@ -614,11 +617,10 @@ class Q_Tree
 			$content = "<?php return <<<EOT".PHP_EOL.$content.PHP_EOL."EOT;";
 		}
 		$success = file_put_contents(
-			$filename2, 
-			!empty($toSave) 
-				? Q::json_encode($toSave, $flags)
-				: '{}',
-			LOCK_EX);
+			$filename2,
+			$content,
+			LOCK_EX
+		);
 		clearstatcache(true, $filename2);
 
 		umask($mask);
@@ -771,8 +773,9 @@ class Q_Tree
 		}
 
 		$result = $array1;
+		$isNumeric = !$noNumericArrays && !Q::isAssociative($array1) && !Q::isAssociative($array2);
 		foreach ($array2 as $key => $value) {
-			if (!$noNumericArrays && !Q::isAssociative($array2)) {
+			if ($isNumeric) {
 				if (!in_array($value, $result, true)) {
 					$result[] = $value;
 				}
