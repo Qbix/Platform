@@ -460,7 +460,7 @@ class Q_Tree
 	 $key1)
 	{
 		if (!isset($key1)) {
-			$this->parameters = self::$cache[$this->filename] = array();
+			$this->parameters = self::$cache = array();
 			return;
 		}
 		$args = func_get_args();
