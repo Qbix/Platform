@@ -327,7 +327,7 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 			throw new Q.Exception("The fields to select need to be specified correctly.");
 		}
 
-		this.clauses['SELECT'] = (this.clauses['SELECT'] !== undefined) ? fields : this.clauses['SELECT'] + ", " + fields;
+		this.clauses['SELECT'] = this.clauses['SELECT'] ? this.clauses['SELECT'] + ", " + fields : fields;
 		if (!tables) {
 			return this;
 		}

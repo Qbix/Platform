@@ -1296,7 +1296,7 @@ abstract class Db_Query extends Db_Expression
 			throw new Exception("The fields to select need to be specified correctly.", -1);
 		}
 
-		if (!isset($this->clauses['SELECT'])) {
+		if (empty($this->clauses['SELECT'])) {
 			$this->clauses['SELECT'] = $fields;
 		} else {
 			$this->clauses['SELECT'] .= ", $fields";
