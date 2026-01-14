@@ -5,9 +5,11 @@ class Q_WebServer
 	/**
 	 * Start the web server.
 	 *
-	 * @param string $dir  Document root
-	 * @param string $host e.g. "127.0.0.1"
-	 * @param int    $port e.g. 8080
+	 * @method start
+	 * @static
+	 * @param {string} $dir  Document root
+	 * @param {string} $host e.g. "127.0.0.1"
+	 * @param {int}    $port e.g. 8080
 	 */
 	static function start($dir, $host = '0.0.0.0', $port = 8080)
 	{
@@ -53,6 +55,8 @@ class Q_WebServer
 
 	/**
 	 * Stop the web server.
+	 * @method stop
+	 * @static
 	 */
 	static function stop()
 	{
@@ -70,7 +74,25 @@ class Q_WebServer
 	}
 
 	/**
+	 * Run the server loop using stream_select (no busy waiting).
+	 *
+	 * @param {int|null} $timeoutSec  Seconds to wait (null = block forever)
+	 * @param {int|null} $timeoutUsec Microseconds
+	 */
+	static function run($timeoutSec = null, $timeoutUsec = null)
+	{
+		if (!self::$running) return;
+
+		while (self::$running) {
+			self::tick($timeoutSec, $timeoutUsec);
+		}
+	}
+
+
+	/**
 	 * Process one event loop iteration.
+	 * @method tick
+	 * @static
 	 */
 	static function tick()
 	{
