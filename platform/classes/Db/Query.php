@@ -1351,6 +1351,72 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
+	 * Assign aliases to base tables in the FROM clause.
+	 *
+	 * This rewrites the FROM clause directly by applying aliases
+	 * to one or more base tables. This is primarily used to disambiguate
+	 * column references when performing self-joins.
+	 *
+	 * Semantics:
+	 * - Applies ONLY to tables in the FROM clause (not JOINs)
+	 * - Aliases are applied literally in SQL (no hidden state)
+	 * - Keys may be:
+	 *   - table name (string match)
+	 *   - numeric index into FROM list
+	 *
+	 * Examples:
+	 *
+	 *     ->as(array('streams_related_to' => 'r0'))
+	 *
+	 *     FROM streams_related_to r0
+	 *
+	 *     ->as(array(0 => 'r0'))
+	 *
+	 * @method aliases
+	 * @param {array} $aliases
+	 *   Map of tableName|index => alias
+	 * @return {Db_Query_Mysql}
+	 * @chainable
+	 * @throws {Exception}
+	 */
+	function aliases (array $aliases)
+	{
+		if (empty($this->clauses['FROM'])) {
+			throw new Exception("Cannot apply alias before FROM clause is defined.", -1);
+		}
+
+		$tables = array_map('trim', explode(',', $this->clauses['FROM']));
+
+		foreach ($aliases as $key => $alias) {
+
+			if (!is_string($alias) || $alias === '') {
+				throw new Exception("Alias must be a non-empty string.", -1);
+			}
+
+			// Index-based aliasing
+			if (is_int($key)) {
+				if (!isset($tables[$key])) {
+					throw new Exception("FROM table index $key does not exist.", -1);
+				}
+
+				$tables[$key] = preg_replace('/\s+\S+$/', '', $tables[$key]) . " $alias";
+				continue;
+			}
+
+			// Name-based aliasing
+			foreach ($tables as $i => $table) {
+				$base = preg_replace('/\s+\S+$/', '', $table);
+				if ($base === $key) {
+					$tables[$i] = "$base $alias";
+				}
+			}
+		}
+
+		$this->clauses['FROM'] = implode(', ', $tables);
+		return $this;
+	}
+
+	/**
 	 * Surround the query with "EXISTS()" or "NOT EXISTS()"
 	 * to be used as a Db_Expression object
 	 * @param {boolean} $shouldExist
