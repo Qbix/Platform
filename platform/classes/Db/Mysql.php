@@ -295,7 +295,7 @@ class Db_Mysql implements Db_Interface
 	 */
 	function select ($fields = '*', $tables = '')
 	{
-		if (empty($fields))
+		if (!isset($fields))
 			throw new Exception("fields not specified in call to 'select'.");
 		if (!isset($tables))
 			throw new Exception("tables not specified in call to 'select'.");
