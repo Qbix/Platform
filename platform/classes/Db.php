@@ -1036,7 +1036,11 @@ class Db
 
 		try {
 			// Fetch rows within transaction (snapshot isolation)
-			$rows = $query->selectBatch($table, $field, $limit, $order);
+			$rows = $query
+				->select('*', $table)
+				->orderBy($field, $order === 'ASC')
+				->limit($limit)
+				->fetchAll();
 			if (!$rows || !count($rows)) {
 				// nothing to archive
 				$this->newQuery(Db_Query::TYPE_COMMIT)
@@ -1109,13 +1113,16 @@ class Db
 
 			// Delete exported rows (still in same transaction)
 			if (!$options['dryRun']) {
-				$range = $options['desc']
-					? new Db_Range($cutoff, false, true, null)
-					: new Db_Range(null, false, false, $cutoff);
-
-				$this->newQuery(Db_Query::TYPE_DELETE)
-					->deleteRange($table, $field, $range)
-					->execute();
+				$delete = $this->newQuery(Db_Query::TYPE_DELETE)
+					->delete($table);
+				if ($options['desc']) {
+					// DESC: delete rows with field >= cutoff
+					$delete->where(array("$field >=" => $cutoff));
+				} else {
+					// ASC: delete rows with field <= cutoff
+					$delete->where(array("$field <=" => $cutoff));
+				}
+				$delete->execute();					
 			}
 
 			// Commit transaction
