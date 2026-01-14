@@ -869,42 +869,6 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
-	 * Delete rows from a table within a given range.
-	 *
-	 * Works across MySQL, PostgreSQL, and SQLite. Relies on each adapter’s
-	 * implementation of static::quoted() for identifier quoting.
-	 *
-	 * @method deleteRange
-	 * @param {string}   $table Table name
-	 * @param {string}   $field Column to filter on
-	 * @param {Db_Range} $range Range object defining min/max + inclusivity
-	 * @return {int} Number of rows deleted
-	 */
-	public function deleteRange($table, $field, Db_Range $range)
-	{
-		$clauses = [];
-		$params  = [];
-
-		if ($range->min !== null) {
-			$op = $range->includeMin ? '>=' : '>';
-			$clauses[] = static::quoted($field) . " $op :min";
-			$params[':min'] = $range->min;
-		}
-		if ($range->max !== null) {
-			$op = $range->includeMax ? '<=' : '<';
-			$clauses[] = static::quoted($field) . " $op :max";
-			$params[':max'] = $range->max;
-		}
-
-		$where = $clauses ? ('WHERE ' . implode(' AND ', $clauses)) : '';
-		$sql   = "DELETE FROM " . static::quoted($table) . " $where";
-
-		$stmt = $this->db->reallyConnect()->prepare($sql);
-		$stmt->execute($params);
-		return $stmt->rowCount();
-	}
-
-	/**
 	 * Make partition from array of points
 	 * @method map_shard
 	 * @private

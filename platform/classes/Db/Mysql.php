@@ -770,13 +770,19 @@ class Db_Mysql implements Db_Interface
 
 			// Delete exported rows (still in same transaction)
 			if (!$options['dryRun']) {
-				$range = $options['desc']
-					? new Db_Range($cutoff, false, true, null)
-					: new Db_Range(null, false, false, $cutoff);
+				$delete = $this->newQuery(Db_Query::TYPE_DELETE)
+					->delete($table);
 
-				$this->newQuery(Db_Query::TYPE_DELETE)
-					->deleteRange($table, $field, $range)
-					->execute();
+				if ($options['desc']) {
+					// DESC: delete rows with field >= cutoff
+					$delete->where(array("$field >=" => $cutoff));
+				} else {
+					// ASC: delete rows with field <= cutoff
+					$delete->where(array("$field <=" => $cutoff));
+				}
+
+				$delete->execute();
+
 			}
 
 			// Commit transaction
