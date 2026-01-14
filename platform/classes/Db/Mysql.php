@@ -693,7 +693,11 @@ class Db_Mysql implements Db_Interface
 
 		try {
 			// Fetch rows within transaction (snapshot isolation)
-			$rows = $query->selectBatch($table, $field, $limit, $order);
+			$rows = $query
+				->select('*', $table)
+				->orderBy($field, $order === 'ASC')
+				->limit($limit)
+				->fetchAll();
 			if (!$rows || !count($rows)) {
 				// nothing to archive
 				$this->newQuery(Db_Query::TYPE_COMMIT)

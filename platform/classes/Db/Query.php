@@ -396,112 +396,6 @@ abstract class Db_Query extends Db_Expression
 		// them when we modify them in the copy.
 		return clone($this);
 	}
-
-	/**
-	 * Select the next chunk of rows using cursor-based pagination.
-	 *
-	 * This method avoids LIMIT/OFFSET and instead advances through
-	 * the result set using a unique, ordered index column.
-	 *
-	 * Database-agnostic. Requires:
-	 * - deterministic ordering
-	 * - a unique, monotonic index
-	 *
-	 * @method selectNextChunk
-	 * @param {Object} [options]
-	 * @param {Number} [options.chunkSize=100]
-	 *   Maximum number of rows to return.
-	 * @param {String} [options.index="id"]
-	 *   Cursor column (may be qualified, e.g. "u.id").
-	 * @return {Array|null}
-	 *   Array of rows, or null when exhausted.
-	 * @throws {Exception}
-	 *   If ORDER BY is incompatible or cursor column missing.
-	 */
-	public function selectNextChunk(array $options = array())
-	{
-		if ($this->chunkDone) {
-			return null;
-		}
-
-		$chunkSize = isset($options['chunkSize'])
-			? (int)$options['chunkSize']
-			: 100;
-
-		$index = isset($options['index'])
-			? (string)$options['index']
-			: 'id';
-
-		// Clone to keep base query immutable
-		$q = clone $this;
-
-		/* ---------- WHERE cursor ---------- */
-
-		if ($this->chunkCursor !== null) {
-			$q->andWhere("$index > :__chunk_cursor");
-			$q->bind(array(
-				'__chunk_cursor' => $this->chunkCursor
-			));
-		}
-
-		/* ---------- ORDER BY validation ---------- */
-
-		if (!empty($q->clauses['ORDER BY'])) {
-
-			$order = trim($q->clauses['ORDER BY']);
-
-			// Disallow random order
-			if (stripos($order, 'RAND()') !== false) {
-				throw new Exception(
-					"selectNextChunk() cannot be used with random ORDER BY"
-				);
-			}
-
-			// Must start with the cursor index
-			// Normalize minimal comparison
-			$expectedPrefix = preg_quote($index, '#') . '\s+ASC';
-
-			if (!preg_match('#^' . $expectedPrefix . '(\s*,|\s*$)#i', $order)) {
-				throw new Exception(
-					"Existing ORDER BY must start with '$index ASC' for cursor pagination"
-				);
-			}
-
-		} else {
-			// No ORDER BY yet → enforce canonical order
-			$q->orderBy($index, true);
-		}
-
-		/* ---------- LIMIT ---------- */
-
-		$q->limit($chunkSize);
-
-		$rows = $q->fetchAll();
-		if (!$rows) {
-			$this->chunkDone = true;
-			return null;
-		}
-
-		/* ---------- Advance cursor ---------- */
-
-		$last = end($rows);
-
-		// Support qualified index (e.g. u.id → id)
-		$indexKey = strpos($index, '.') !== false
-			? substr($index, strrpos($index, '.') + 1)
-			: $index;
-
-		if (!array_key_exists($indexKey, $last)) {
-			throw new Exception(
-				"Cursor column '$indexKey' not found in result set"
-			);
-		}
-
-		$this->chunkCursor = $last[$indexKey];
-
-		return $rows;
-	}
-
 	
 	/**
 	 * This method returns the shard index that is used, if any.
@@ -870,23 +764,108 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
-	 * Select a batch of rows ordered by an indexed field.
+	 * Select the next chunk of rows using cursor-based pagination.
 	 *
-	 * @method selectBatch
-	 * @param {string} $table Table name
-	 * @param {string} $field Field to order by
-	 * @param {int} $limit Number of rows
-	 * @param {string} $order "ASC" or "DESC"
-	 * @return {array} Rows as associative arrays
+	 * This method avoids LIMIT/OFFSET and instead advances through
+	 * the result set using a unique, ordered index column.
+	 *
+	 * Database-agnostic. Requires:
+	 * - deterministic ordering
+	 * - a unique, monotonic index
+	 *
+	 * @method selectNextChunk
+	 * @param {Object} [$options]
+	 * @param {Number} [$options.chunkSize=100]
+	 *   Maximum number of rows to return.
+	 * @param {String} [$options.index="id"]
+	 *   Cursor column (may be qualified, e.g. "u.id").
+	 * @return {array|null}
+	 *   Array of rows, or null when exhausted.
+	 * @throws {Exception}
+	 *   If ORDER BY is incompatible or cursor column missing.
 	 */
-	public function selectBatch($table, $field, $limit, $order = 'ASC')
+	public function selectNextChunk(array $options = array())
 	{
-		$sql = "SELECT * FROM " . self::quoted($table) .
-			" ORDER BY " . self::quoted($field) . " $order LIMIT :limit";
-		$stmt = $this->db->reallyConnect()->prepare($sql);
-		$stmt->bindValue(':limit', (int)$limit, PDO::PARAM_INT);
-		$stmt->execute();
-		return $stmt->fetchAll(PDO::FETCH_ASSOC);
+		if ($this->chunkDone) {
+			return null;
+		}
+
+		$chunkSize = isset($options['chunkSize'])
+			? (int)$options['chunkSize']
+			: 100;
+
+		$index = isset($options['index'])
+			? (string)$options['index']
+			: 'id';
+
+		// Clone to keep base query immutable
+		$q = clone $this;
+
+		// WHERE cursor
+
+		if ($this->chunkCursor !== null) {
+			$q->andWhere("$index > :__chunk_cursor");
+			$q->bind(array(
+				'__chunk_cursor' => $this->chunkCursor
+			));
+		}
+
+		// ORDER BY validation
+
+		if (!empty($q->clauses['ORDER BY'])) {
+
+			$order = trim($q->clauses['ORDER BY']);
+
+			// Disallow random order
+			if (stripos($order, 'RAND()') !== false) {
+				throw new Exception(
+					"selectNextChunk() cannot be used with random ORDER BY"
+				);
+			}
+
+			// Must start with the cursor index
+			// Normalize minimal comparison
+			$expectedPrefix = preg_quote($index, '#') . '\s+ASC';
+
+			if (!preg_match('#^' . $expectedPrefix . '(\s*,|\s*$)#i', $order)) {
+				throw new Exception(
+					"Existing ORDER BY must start with '$index ASC' for cursor pagination"
+				);
+			}
+
+		} else {
+			// No ORDER BY yet → enforce canonical order
+			$q->orderBy($index, true);
+		}
+
+		// LIMIT
+
+		$q->limit($chunkSize);
+
+		$rows = $q->fetchAll();
+		if (!$rows) {
+			$this->chunkDone = true;
+			return null;
+		}
+
+		// advance cursor
+
+		$last = end($rows);
+
+		// Support qualified index (e.g. u.id → id)
+		$indexKey = strpos($index, '.') !== false
+			? substr($index, strrpos($index, '.') + 1)
+			: $index;
+
+		if (!array_key_exists($indexKey, $last)) {
+			throw new Exception(
+				"Cursor column '$indexKey' not found in result set"
+			);
+		}
+
+		$this->chunkCursor = $last[$indexKey];
+
+		return $rows;
 	}
 
 	/**
