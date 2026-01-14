@@ -3366,7 +3366,7 @@ abstract class Db_Query extends Db_Expression
 			return;
 		}
 
-		$class = $this->className ?? null;
+		$class = isset($this->className) ? $this->className : null;
 		if (!$class || !is_callable([$class, 'indexes'])) {
 			return;
 		}
