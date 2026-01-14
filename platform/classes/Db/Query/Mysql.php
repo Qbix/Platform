@@ -1076,7 +1076,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			throw new Exception("The fields to select need to be specified correctly.", -1);
 		}
 
-		if (!isset($this->clauses['SELECT'])) {
+		if (empty($this->clauses['SELECT'])) {
 			$this->clauses['SELECT'] = $fields;
 		} else {
 			$this->clauses['SELECT'] .= ", $fields";
