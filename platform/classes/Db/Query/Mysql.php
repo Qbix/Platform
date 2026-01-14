@@ -1082,7 +1082,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 			$this->clauses['SELECT'] .= ", $fields";
 		}
 
-		if ($repeat) {
+		if (!$repeat) {
 			$prev_tables_list = explode(',', $this->clauses['FROM']);
 		}
 
@@ -1098,7 +1098,7 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					} else {
 						$table_string = is_int($alias) ? "$table" : "$table $as $alias";
 					}
-					if ($repeat and in_array($table_string, $prev_tables_list)) {
+					if (!$repeat and in_array($table_string, $prev_tables_list)) {
 						continue;
 					}
 					$tables_list[] = $table_string;
