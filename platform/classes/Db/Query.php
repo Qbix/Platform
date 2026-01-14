@@ -841,7 +841,8 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
-	 * Select the next chunk of rows using cursor-based pagination.
+	 * Call on an existing SELECT/DELETE/UPDATE query to work with next chunk
+	 * using a cursor-style approach that works across many DB adapters, shards, etc.
 	 *
 	 * This method avoids LIMIT/OFFSET and instead advances through
 	 * the result set using a unique, ordered index column.
@@ -849,22 +850,30 @@ abstract class Db_Query extends Db_Expression
 	 * Database-agnostic. Requires:
 	 * - deterministic ordering
 	 * - a unique, monotonic index
+	 * 
+	 * This method:
+	 * - does NOT execute the query
+	 * - does NOT change query type
+	 * - only mutates WHERE / ORDER / LIMIT clauses
 	 *
-	 * @method selectNextChunk
-	 * @param {Object} [options]
-	 * @param {Number} [options.chunkSize=100]
+	 * Caller is responsible for executing the query and deciding
+	 * whether to continue based on fetchAll()/rowCount().
+	 *
+	 * @method nextChunk
+	 * @param {Object} [$options]
+	 * @param {Number} [$options.chunkSize=100]
 	 *   Maximum number of rows to return.
-	 * @param {String} [options.index="id"]
+	 * @param {String} [$options.index="id"]
 	 *   Cursor column (may be qualified, e.g. "u.id").
-	 * @return {Array|null}
+	 * @return {array|null}
 	 *   Array of rows, or null when exhausted.
 	 * @throws {Exception}
 	 *   If ORDER BY is incompatible or cursor column missing.
 	 */
-	public function selectNextChunk(array $options = array())
+	public function nextChunk(array $options = array())
 	{
-		if ($this->chunkDone) {
-			return null;
+		if (!empty($this->chunkDone)) {
+			return $this;
 		}
 
 		$chunkSize = isset($options['chunkSize'])
@@ -875,74 +884,40 @@ abstract class Db_Query extends Db_Expression
 			? (string)$options['index']
 			: 'id';
 
-		// Clone to keep base query immutable
-		$q = clone $this;
-
-		// WHERE cursor
-
-		if ($this->chunkCursor !== null) {
-			$q->andWhere("$index > :__chunk_cursor");
-			$q->bind(array(
-				'__chunk_cursor' => $this->chunkCursor
+		// Cursor predicate
+		if ($this->lastChunkValue !== null) {
+			$this->andWhere(array(
+				"$index >" => $this->lastChunkValue
 			));
 		}
 
-		// ORDER BY validation
+		// ORDER BY validation / enforcement
+		if (!empty($this->clauses['ORDER BY'])) {
 
-		if (!empty($q->clauses['ORDER BY'])) {
+			$order = trim($this->clauses['ORDER BY']);
 
-			$order = trim($q->clauses['ORDER BY']);
-
-			// Disallow random order
 			if (stripos($order, 'RAND()') !== false) {
 				throw new Exception(
-					"selectNextChunk() cannot be used with random ORDER BY"
+					"nextChunk() cannot be used with random ORDER BY"
 				);
 			}
 
-			// Must start with the cursor index
-			// Normalize minimal comparison
 			$expectedPrefix = preg_quote($index, '#') . '\s+ASC';
 
 			if (!preg_match('#^' . $expectedPrefix . '(\s*,|\s*$)#i', $order)) {
 				throw new Exception(
-					"Existing ORDER BY must start with '$index ASC' for cursor pagination"
+					"ORDER BY must start with '$index ASC' for cursor pagination"
 				);
 			}
 
 		} else {
-			// No ORDER BY yet → enforce canonical order
-			$q->orderBy($index, true);
+			$this->orderBy($index, true);
 		}
 
-		// LIMIT
+		// LIMIT (no OFFSET ever)
+		$this->limit($chunkSize);
 
-		$q->limit($chunkSize);
-
-		$rows = $q->fetchAll();
-		if (!$rows) {
-			$this->chunkDone = true;
-			return null;
-		}
-
-		// advance cursor
-
-		$last = end($rows);
-
-		// Support qualified index (e.g. u.id → id)
-		$indexKey = strpos($index, '.') !== false
-			? substr($index, strrpos($index, '.') + 1)
-			: $index;
-
-		if (!array_key_exists($indexKey, $last)) {
-			throw new Exception(
-				"Cursor column '$indexKey' not found in result set"
-			);
-		}
-
-		$this->chunkCursor = $last[$indexKey];
-
-		return $rows;
+		return $this;
 	}
 
 	/**
@@ -3455,5 +3430,7 @@ abstract class Db_Query extends Db_Expression
 	static $cache = array();
 	
 	protected $cachedShardIndex = null;
+
+	protected $lastChunkValue = null;
 
 }
