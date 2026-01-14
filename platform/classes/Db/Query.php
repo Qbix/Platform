@@ -909,6 +909,70 @@ abstract class Db_Query extends Db_Expression
 		return $this;
 	}
 
+	/**
+	 * Prefix base-table field names in a where-clause array.
+	 *
+	 * Only rewrites keys that:
+	 * - start with a known field name
+	 * - are followed by a non-alphanumeric character or end of string
+	 *
+	 * Examples:
+	 *   'title LIKE '  -> 'r0.title LIKE '
+	 *   'weight >='    -> 'r0.weight >='
+	 *
+	 * @method prefixFields
+	 * @param {array} $where
+	 * @param {string} $prefix e.g. 'r0.'
+	 * @param {array} $fieldNames list of valid field names
+	 * @return {array}
+	 */
+	function prefixFields(array $where, $prefix, $fieldNames = null)
+	{
+		if (!$prefix) {
+			return $where;
+		}
+
+		$result = array();
+
+		if (!$fieldNames) {
+			$callable = array($this->className, 'fieldNames');
+			if (is_callable($callable)) {
+				$fieldNames = call_user_func($callable);
+			} else {
+				return $where;
+			}
+		}
+
+		foreach ($where as $key => $value) {
+
+			if (!is_string($key)) {
+				$result[$key] = $value;
+				continue;
+			}
+
+			$rewritten = false;
+
+			foreach ($fieldNames as $field) {
+				$len = strlen($field);
+
+				if (
+					strncmp($key, $field, $len) === 0 &&
+					(
+						strlen($key) === $len ||
+						!ctype_alnum($key[$len])
+					)
+				) {
+					$key = $prefix . $key;
+					$rewritten = true;
+					break;
+				}
+			}
+
+			$result[$key] = $value;
+		}
+
+		return $result;
+	}
 
 	/**
 	 * Make partition from array of points
