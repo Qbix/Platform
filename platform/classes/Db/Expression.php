@@ -67,6 +67,64 @@ class Db_Expression
 	}
 
 	/**
+	 * Creates a safe copy of this Db_Expression.
+	 *
+	 * The copy is shallow (PHP copy-on-write semantics apply), but all bound
+	 * parameter placeholders are **renamed** to ensure the copied expression
+	 * can be reused in the same query without parameter collisions.
+	 *
+	 * This is critical when the same Db_Expression (or a subquery built from it)
+	 * is injected multiple times into a larger query (e.g. in WHERE clauses
+	 * and again in SELECT expressions such as relevance scoring).
+	 *
+	 * Each call to copy() generates a unique namespace prefix for parameters,
+	 * guaranteeing that:
+	 * - named placeholders do not collide
+	 * - parameter values remain correctly bound
+	 * - prepared statements remain valid
+	 *
+	 * @method copy
+	 * @return {Db_Expression} A cloned expression with rewritten parameter names
+	 */
+	function copy()
+	{
+		// We only need a shallow clone of the object.
+		// The expression and parameters are duplicated lazily (copy-on-write),
+		// and we explicitly rewrite parameter names to avoid collisions when
+		// the same expression is reused in a larger query.
+		static $j = 1;
+
+		$copy = clone $this;
+
+		if (empty($copy->parameters) || !is_array($copy->parameters)) {
+			return $copy;
+		}
+
+		$newParams = array();
+		$replacements = array();
+
+		foreach ($copy->parameters as $key => $value) {
+			if (!is_string($key)) {
+				$newParams[$key] = $value;
+				continue;
+			}
+
+			$newKey = '_copy_' . $j . '_' . $key;
+
+			$replacements[":$key"] = ":$newKey";
+			$newParams[$newKey] = $value;
+		}
+
+		$j++;
+
+		// Replace all occurrences safely; keys are unique by construction
+		$copy->expression = strtr($copy->expression, $replacements);
+		$copy->parameters = $newParams;
+
+		return $copy;
+	}
+
+	/**
 	 * Walks through an array and calls Q::interpolate() on
 	 * expressions inside Db_Expression objects.
 	 * @method interpolateArray

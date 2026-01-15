@@ -744,14 +744,6 @@ abstract class Db_Query extends Db_Expression
 		}
 	}
 
-	function copy()
-	{
-		// We only have to do a shallow copy of the object,
-		// because all its properties are arrays, and PHP will copy-on-write
-		// them when we modify them in the copy.
-		return clone($this);
-	}
-
 	/**
 	 * Connects to database
 	 * @method reallyConnect
