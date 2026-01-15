@@ -67,7 +67,7 @@ class Db_Expression
 	}
 
 	/**
-	 * Creates a safe copy of this Db_Query.
+	 * Creates a safe copy of this Db_Expression.
 	 *
 	 * The copy is shallow (PHP copy-on-write semantics apply), but all bound
 	 * parameter placeholders are **renamed** to ensure the copied expression

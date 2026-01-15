@@ -388,6 +388,52 @@ abstract class Db_Query extends Db_Expression
 	 * @default 7
 	 */
 	const HASH_LEN = 7;
+
+	/**
+	 * Creates a deep copy of the query that is safe to reuse.
+	 *
+	 * This rewrites all embedded Db_Expression instances so that
+	 * parameter placeholders do not collide when the query is reused
+	 * or combined with other queries.
+	 *
+	 * Prepared statements, execution state, and timing info are reset.
+	 *
+	 * @method copy
+	 * @return {Db_Query_Mysql}
+	 */
+	function copy()
+	{
+		/** @var Db_Query_Mysql $q */
+		$q = clone $this;
+
+		// Reset execution state
+		$q->statement = null;
+		$q->startedTime = null;
+		$q->endedTime = null;
+		$q->nestedTransactionCount = 0;
+
+		// Copy arrays explicitly (defensive)
+		$q->clauses     = $this->clauses;
+		$q->after       = $this->after;
+		$q->criteria    = $this->criteria;
+		$q->dontQuote   = $this->dontQuote;
+		$q->replacements = $this->replacements;
+		$q->basedOn     = $this->basedOn;
+
+		// Rebuild parameters from scratch
+		$q->parameters = array();
+
+		// Rewrite all clauses
+		foreach ($q->clauses as $name => $clause) {
+			$q->clauses[$name] = $this->copyClause($clause, $q);
+		}
+
+		foreach ($q->after as $name => $clause) {
+			$q->after[$name] = $this->copyClause($clause, $q);
+		}
+
+		return $q;
+	}
 	
 	/**
 	 * This method returns the shard index that is used, if any.
