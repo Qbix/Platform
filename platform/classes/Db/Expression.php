@@ -110,11 +110,10 @@ class Db_Expression
 	 * @type array
 	 * @public
 	 */
-	public $parameters;
+	public $parameters = array();
 
 	function __toString ()
 	{
 		return $this->expression;
 	}
 }
-;
