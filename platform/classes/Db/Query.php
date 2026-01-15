@@ -390,16 +390,20 @@ abstract class Db_Query extends Db_Expression
 	const HASH_LEN = 7;
 
 	/**
-	 * Creates a deep copy of the query that is safe to reuse.
+	 * Creates a deep, parameter-safe copy of this query.
 	 *
-	 * This rewrites all embedded Db_Expression instances so that
-	 * parameter placeholders do not collide when the query is reused
-	 * or combined with other queries.
+	 * All embedded Db_Expression instances are cloned and rewritten so that
+	 * their parameter placeholders are uniquely namespaced. This allows the
+	 * copied query (and any of its subqueries or expressions) to be safely
+	 * reused, combined, or injected multiple times into a larger query
+	 * without parameter collisions.
 	 *
-	 * Prepared statements, execution state, and timing info are reset.
+	 * Execution-related state (prepared statements, timing, transactions)
+	 * is cleared, and parameters are rebuilt from scratch during the copy
+	 * process.
 	 *
 	 * @method copy
-	 * @return {Db_Query_Mysql}
+	 * @return {Db_Query_Mysql} A deep copy of the query, safe for reuse
 	 */
 	function copy()
 	{
@@ -412,18 +416,18 @@ abstract class Db_Query extends Db_Expression
 		$q->endedTime = null;
 		$q->nestedTransactionCount = 0;
 
-		// Copy arrays explicitly (defensive)
-		$q->clauses     = $this->clauses;
-		$q->after       = $this->after;
-		$q->criteria    = $this->criteria;
-		$q->dontQuote   = $this->dontQuote;
+		// Defensive copies of structural properties
+		$q->clauses      = $this->clauses;
+		$q->after        = $this->after;
+		$q->criteria     = $this->criteria;
+		$q->dontQuote    = $this->dontQuote;
 		$q->replacements = $this->replacements;
-		$q->basedOn     = $this->basedOn;
+		$q->basedOn      = $this->basedOn;
 
-		// Rebuild parameters from scratch
+		// Rebuild parameters from scratch during clause rewriting
 		$q->parameters = array();
 
-		// Rewrite all clauses
+		// Rewrite all SQL-bearing clauses
 		foreach ($q->clauses as $name => $clause) {
 			$q->clauses[$name] = $this->copyClause($clause, $q);
 		}
@@ -432,8 +436,12 @@ abstract class Db_Query extends Db_Expression
 			$q->after[$name] = $this->copyClause($clause, $q);
 		}
 
+		// Rewrite criteria separately (may contain expressions or arrays)
+		$q->criteria = $this->copyClause($this->criteria, $q);
+
 		return $q;
 	}
+
 	
 	/**
 	 * This method returns the shard index that is used, if any.
@@ -1023,7 +1031,7 @@ abstract class Db_Query extends Db_Expression
 		return self::$mapping[implode('.', $a)];
 	}
 
-	/**
+/**
 	 * Deep-copies Db_Expression instances inside a clause.
 	 *
 	 * @private
@@ -1051,7 +1059,6 @@ abstract class Db_Query extends Db_Expression
 
 		return $clause;
 	}
-
 
 	/**
 	 * Signals an event if the query appears to not use any suitable index
