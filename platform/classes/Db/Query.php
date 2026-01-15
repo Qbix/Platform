@@ -1025,6 +1025,36 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
+	 * Deep-copies Db_Expression instances inside a clause.
+	 *
+	 * @private
+	 */
+	protected function copyClause($clause, Db_Query_Mysql $target)
+	{
+		if ($clause instanceof Db_Expression) {
+			$expr = $clause->copy();
+			if (is_array($expr->parameters)) {
+				$target->parameters = array_merge(
+					$target->parameters,
+					$expr->parameters
+				);
+			}
+			return (string)$expr;
+		}
+
+		if (is_array($clause)) {
+			$out = array();
+			foreach ($clause as $k => $v) {
+				$out[$k] = $this->copyClause($v, $target);
+			}
+			return $out;
+		}
+
+		return $clause;
+	}
+
+
+	/**
 	 * Signals an event if the query appears to not use any suitable index
 	 * @method signalMissingIndex
 	 * @param {string} $sql
