@@ -416,28 +416,25 @@ abstract class Db_Query extends Db_Expression
 		$q->endedTime = null;
 		$q->nestedTransactionCount = 0;
 
-		// Defensive copies of structural properties
+		// Defensive array copies
 		$q->clauses      = $this->clauses;
 		$q->after        = $this->after;
 		$q->criteria     = $this->criteria;
 		$q->dontQuote    = $this->dontQuote;
 		$q->replacements = $this->replacements;
 		$q->basedOn      = $this->basedOn;
+		$q->parameters   = $this->parameters;
 
-		// Rebuild parameters from scratch during clause rewriting
-		$q->parameters = array();
+		// 1) Rename query-level placeholders everywhere
+		$this->renameQueryParameters($q);
 
-		// Rewrite all SQL-bearing clauses
+		// 2) Deep-copy expressions inside clauses (expression-level renaming)
 		foreach ($q->clauses as $name => $clause) {
 			$q->clauses[$name] = $this->copyClause($clause, $q);
 		}
-
 		foreach ($q->after as $name => $clause) {
 			$q->after[$name] = $this->copyClause($clause, $q);
 		}
-
-		// Rewrite criteria separately (may contain expressions or arrays)
-		$q->criteria = $this->copyClause($this->criteria, $q);
 
 		return $q;
 	}
@@ -1031,11 +1028,70 @@ abstract class Db_Query extends Db_Expression
 		return self::$mapping[implode('.', $a)];
 	}
 
-/**
-	 * Deep-copies Db_Expression instances inside a clause.
-	 *
-	 * @private
-	 */
+	protected function renameQueryParameters(Db_Query_Mysql $q)
+	{
+		static $j = 1;
+		$prefix = '_copy_q' . $j . '_';
+		$j++;
+
+		if (empty($q->parameters)) {
+			return;
+		}
+
+		$replacements = array();
+		$newParams = array();
+
+		foreach ($q->parameters as $key => $value) {
+			if (!is_string($key)) {
+				$newParams[$key] = $value;
+				continue;
+			}
+
+			$newKey = $prefix . $key;
+			$replacements[":$key"] = ":$newKey";
+			$newParams[$newKey] = $value;
+		}
+
+		$q->parameters = $newParams;
+
+		// Rewrite all SQL-bearing strings
+		foreach ($q->clauses as $k => $v) {
+			if (is_string($v)) {
+				$q->clauses[$k] = strtr($v, $replacements);
+			}
+		}
+
+		foreach ($q->after as $k => $v) {
+			if (is_string($v)) {
+				$q->after[$k] = strtr($v, $replacements);
+			}
+		}
+
+		// Rewrite criteria arrays (values may be strings or expressions)
+		$q->criteria = $this->rewriteCriteria($q->criteria, $replacements);
+	}
+
+	protected function rewriteCriteria($criteria, array $replacements)
+	{
+		if (is_string($criteria)) {
+			return strtr($criteria, $replacements);
+		}
+
+		if ($criteria instanceof Db_Expression) {
+			return $criteria->copy(); // expression handles itself
+		}
+
+		if (is_array($criteria)) {
+			$out = array();
+			foreach ($criteria as $k => $v) {
+				$out[$k] = $this->rewriteCriteria($v, $replacements);
+			}
+			return $out;
+		}
+
+		return $criteria;
+	}
+
 	protected function copyClause($clause, Db_Query_Mysql $target)
 	{
 		if ($clause instanceof Db_Expression) {
