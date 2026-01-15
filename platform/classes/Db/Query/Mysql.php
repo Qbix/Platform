@@ -138,14 +138,6 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 	protected $after = array();
 
 	/**
-	 * The parameters passed to this query
-	 * @property $parameters
-	 * @type array
-	 * @default array()
-	 */
-	public $parameters = array();
-
-	/**
 	 * Sometimes tells the build() function not to quote the value,
 	 * e.g. if it is numeric
 	 * @property $dontQuote

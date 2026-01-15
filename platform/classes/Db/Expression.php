@@ -108,9 +108,9 @@ class Db_Expression
 	 * The parameters to bind with the expression
 	 * @property $parameters
 	 * @type array
-	 * @protected
+	 * @public
 	 */
-	protected $parameters;
+	public $parameters;
 
 	function __toString ()
 	{
