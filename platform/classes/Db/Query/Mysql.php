@@ -1060,7 +1060,25 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		if (is_array($fields)) {
 			$fields_list = array();
 			foreach ($fields as $alias => $column) {
-				$fields_list[] = self::column($column) . (is_int($alias) ? '' : "$as$alias");
+				if ($column instanceof Db_Expression) {
+					// Merge expression parameters immediately
+					if (!empty($column->parameters)) {
+						$this->parameters = array_merge(
+							$this->parameters,
+							$column->parameters
+						);
+					}
+
+					$expr = (string)$column;
+					$fields_list[] = is_int($alias)
+						? $expr
+						: "$expr$as$alias";
+
+					continue;
+				}
+
+				$fields_list[] = self::column($column)
+					. (is_int($alias) ? '' : "$as$alias");
 			}
 			$fields = implode(', ', $fields_list);
 		}
@@ -2034,10 +2052,10 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 					}
 				} else if ($value instanceof Db_Range) {
 					$ranges = array_merge([$value], $value->additionalRanges);
-					$rangeCriteria = [];
+					$rangeCriteria = array();
 
 					foreach ($ranges as $range) {
-						$parts = [];
+						$parts = array();
 
 						if (isset($range->min)) {
 							$op = $range->includeMin ? '>=' : '>';
