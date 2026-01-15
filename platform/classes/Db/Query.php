@@ -606,6 +606,56 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
+	 * Creates a deep, parameter-safe copy of this query.
+	 *
+	 * All embedded Db_Expression instances are cloned and rewritten so that
+	 * their parameter placeholders are uniquely namespaced. This allows the
+	 * copied query (and any of its subqueries or expressions) to be safely
+	 * reused, combined, or injected multiple times into a larger query
+	 * without parameter collisions.
+	 *
+	 * Execution-related state (prepared statements, timing, transactions)
+	 * is cleared, and parameters are rebuilt from scratch during the copy
+	 * process.
+	 *
+	 * @method copy
+	 * @return {Db_Query_Mysql} A deep copy of the query, safe for reuse
+	 */
+	function copy()
+	{
+		/** @var Db_Query_Mysql $q */
+		$q = clone $this;
+
+		// Reset execution state
+		$q->statement = null;
+		$q->startedTime = null;
+		$q->endedTime = null;
+		$q->nestedTransactionCount = 0;
+
+		// Defensive array copies
+		$q->clauses      = $this->clauses;
+		$q->after        = $this->after;
+		$q->criteria     = $this->criteria;
+		$q->dontQuote    = $this->dontQuote;
+		$q->replacements = $this->replacements;
+		$q->basedOn      = $this->basedOn;
+		$q->parameters   = $this->parameters;
+
+		// 1) Rename query-level placeholders everywhere
+		$this->renameQueryParameters($q);
+
+		// 2) Deep-copy expressions inside clauses (expression-level renaming)
+		foreach ($q->clauses as $name => $clause) {
+			$q->clauses[$name] = $this->copyClause($clause, $q);
+		}
+		foreach ($q->after as $name => $clause) {
+			$q->after[$name] = $this->copyClause($clause, $q);
+		}
+
+		return $q;
+	}
+
+	/**
 	 * Computes the adapter class name for a given Db instance.
 	 * Example: Db_Mysql to Db_Query_Mysql
 	 *
@@ -1271,7 +1321,25 @@ abstract class Db_Query extends Db_Expression
 		if (is_array($fields)) {
 			$fields_list = array();
 			foreach ($fields as $alias => $column) {
-				$fields_list[] = static::column($column) . (is_int($alias) ? '' : "$as$alias");
+				if ($column instanceof Db_Expression) {
+					// Merge expression parameters immediately
+					if (!empty($column->parameters)) {
+						$this->parameters = array_merge(
+							$this->parameters,
+							$column->parameters
+						);
+					}
+
+					$expr = (string)$column;
+					$fields_list[] = is_int($alias)
+						? $expr
+						: "$expr$as$alias";
+
+					continue;
+				}
+
+				$fields_list[] = self::column($column)
+					. (is_int($alias) ? '' : "$as$alias");
 			}
 			$fields = implode(', ', $fields_list);
 		}
@@ -2683,14 +2751,14 @@ abstract class Db_Query extends Db_Expression
 		}
 
 		if (!isset(self::$nestedTransactions[$dsn])) {
-			self::$nestedTransactions[$dsn] = [
+			self::$nestedTransactions[$dsn] = array(
 				'count' => 0,
-				'keys' => [],
-				'connections' => [],
-				'backtraces' => [],
-				'shardNames' => [],
-				'pdos' => []
-			];
+				'keys' => array(),
+				'connections' => array(),
+				'backtraces' => array(),
+				'shardNames' => array(),
+				'pdos' => array()
+			);
 		}
 
 		$query->startedTime = Db::milliseconds(true);
@@ -2719,7 +2787,7 @@ abstract class Db_Query extends Db_Expression
 		} elseif (!empty($query->clauses["ROLLBACK"])) {
 			$pdo->rollBack();
 			$nt['count'] = 0;
-			$nt['keys'] = $nt['shardNames'] = $nt['pdos'] = [];
+			$nt['keys'] = $nt['shardNames'] = $nt['pdos'] = array();
 		}
 	}
 
@@ -2796,7 +2864,7 @@ abstract class Db_Query extends Db_Expression
 		if ($nt['count']) {
 			$pdo->rollBack();
 			$nt['count'] = 0;
-			$nt['keys'] = $nt['shardNames'] = $nt['pdos'] = [];
+			$nt['keys'] = $nt['shardNames'] = $nt['pdos'] = array();
 		}
 	}
 
@@ -3054,7 +3122,7 @@ abstract class Db_Query extends Db_Expression
 		}
 
 		if (is_array($criteria)) {
-			$criteria_list = [];
+			$criteria_list = array();
 			foreach ($criteria as $expr => $value) {
 				$criteria_list[] = $this->criteria_internal_handleExpression($expr, $value, $fillCriteria, $i);
 			}
@@ -3106,15 +3174,15 @@ abstract class Db_Query extends Db_Expression
 			throw new Exception("Db_Query: The value should be an array of arrays");
 		}
 
-		$columnSql = [];
+		$columnSql = array();
 		foreach ($columns as $column) {
 			$columnSql[] = static::column($column);
 			if (!empty($fillCriteria[$column])) {
-				$fillCriteria[$column] = [];
+				$fillCriteria[$column] = array();
 			}
 		}
 
-		$list = [];
+		$list = array();
 		foreach ($value as $arr) {
 			if (!is_array($arr)) {
 				throw new Exception("Db.Query.Mysql: Value ".json_encode($arr)." needs to be an array");
@@ -3122,7 +3190,7 @@ abstract class Db_Query extends Db_Expression
 			if (count($arr) !== $c) {
 				throw new Exception("Db_Query: Arrays should have $c elements to match tuple expression");
 			}
-			$vector = [];
+			$vector = array();
 			foreach ($arr as $j => $v) {
 				$param = ":_where_$i";
 				$this->parameters["_where_$i"] = $v;
@@ -3161,7 +3229,7 @@ abstract class Db_Query extends Db_Expression
 		}
 
 		$value = array_unique($value);
-		$placeholders = [];
+		$placeholders = array();
 		foreach ($value as $v) {
 			$param = ":_where_$i";
 			$this->parameters["_where_$i"] = $v;
@@ -3190,10 +3258,10 @@ abstract class Db_Query extends Db_Expression
 	protected function criteria_internal_range($expr, Db_Range $value, &$i)
 	{
 		$ranges = array_merge([$value], $value->additionalRanges);
-		$rangeCriteria = [];
+		$rangeCriteria = array();
 
 		foreach ($ranges as $range) {
-			$conditions = [];
+			$conditions = array();
 			if (isset($range->min)) {
 				$cmp = $range->includeMin ? '>=' : '>';
 				$param = ":_where_$i";
@@ -3467,6 +3535,95 @@ abstract class Db_Query extends Db_Expression
 	 */
 	static protected function map_shard($a) {
 		return self::$mapping[implode('.', $a)];
+	}
+
+
+	protected function renameQueryParameters(Db_Query_Mysql $q)
+	{
+		static $j = 1;
+		$prefix = '_copy_q' . $j . '_';
+		$j++;
+
+		if (empty($q->parameters)) {
+			return;
+		}
+
+		$replacements = array();
+		$newParams = array();
+
+		foreach ($q->parameters as $key => $value) {
+			if (!is_string($key)) {
+				$newParams[$key] = $value;
+				continue;
+			}
+
+			$newKey = $prefix . $key;
+			$replacements[":$key"] = ":$newKey";
+			$newParams[$newKey] = $value;
+		}
+
+		$q->parameters = $newParams;
+
+		// Rewrite all SQL-bearing strings
+		foreach ($q->clauses as $k => $v) {
+			if (is_string($v)) {
+				$q->clauses[$k] = strtr($v, $replacements);
+			}
+		}
+
+		foreach ($q->after as $k => $v) {
+			if (is_string($v)) {
+				$q->after[$k] = strtr($v, $replacements);
+			}
+		}
+
+		// Rewrite criteria arrays (values may be strings or expressions)
+		$q->criteria = $this->rewriteCriteria($q->criteria, $replacements);
+	}
+
+	protected function rewriteCriteria($criteria, array $replacements)
+	{
+		if (is_string($criteria)) {
+			return strtr($criteria, $replacements);
+		}
+
+		if ($criteria instanceof Db_Expression) {
+			return $criteria->copy(); // expression handles itself
+		}
+
+		if (is_array($criteria)) {
+			$out = array();
+			foreach ($criteria as $k => $v) {
+				$out[$k] = $this->rewriteCriteria($v, $replacements);
+			}
+			return $out;
+		}
+
+		return $criteria;
+	}
+
+	protected function copyClause($clause, Db_Query_Mysql $target)
+	{
+		if ($clause instanceof Db_Expression) {
+			$expr = $clause->copy();
+			if (is_array($expr->parameters)) {
+				$target->parameters = array_merge(
+					$target->parameters,
+					$expr->parameters
+				);
+			}
+			return (string)$expr;
+		}
+
+		if (is_array($clause)) {
+			$out = array();
+			foreach ($clause as $k => $v) {
+				$out[$k] = $this->copyClause($v, $target);
+			}
+			return $out;
+		}
+
+		return $clause;
 	}
 
 	/**
