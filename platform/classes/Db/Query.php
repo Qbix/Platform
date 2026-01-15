@@ -441,14 +441,6 @@ abstract class Db_Query extends Db_Expression
 	protected $after = array();
 
 	/**
-	 * The parameters passed to this query
-	 * @property $parameters
-	 * @type array
-	 * @default array()
-	 */
-	public $parameters = array();
-
-	/**
 	 * Sometimes tells the build() function not to quote the value,
 	 * e.g. if it is numeric
 	 * @property $dontQuote
