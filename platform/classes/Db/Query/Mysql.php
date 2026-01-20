@@ -1323,6 +1323,9 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		}
 
 		if (empty($this->clauses['WHERE'])) {
+			if (empty($or_criteria)) {
+				return $this->where($criteria);
+			}
 			throw new Exception("Don't call andWhere() when you haven't called where() yet", -1);
 		}
 

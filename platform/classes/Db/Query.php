@@ -918,7 +918,7 @@ abstract class Db_Query extends Db_Expression
 
 		// Cursor predicate
 		if ($this->lastChunkValue !== null) {
-			$this->andWhere(array(
+			$this->where(array(
 				"$index >" => $this->lastChunkValue
 			));
 		}
