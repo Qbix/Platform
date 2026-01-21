@@ -256,10 +256,9 @@ html[xmlns] .Q_clearfix { display: block; }
 .Q_badge { text-align: center; justify-content: center; align-items: center; }
 
 /* the overlayed element */
-.Q_overlay { 
-	background: url(../img/bg/overlay.png); display:none; padding: 0; border: 2px solid #444; z-index: 9000;
-	opacity: 1; border-radius: 7px; box-shadow: 0 0 20px #333; display: flex; flex-direction: column;
-}
+.Q_overlay { background: url(../img/bg/overlay.png); padding: 0; border: 2px solid #444; z-index: 9000;
+ opacity: 1; border-radius: 7px; box-shadow: 0 0 20px #333; display: flex; flex-direction: column; max-height: calc(100lvh - 300px);
+ }
 
 .Q_overlay .Q_title_slot {
     border-top-left-radius: 7px;

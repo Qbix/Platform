@@ -667,7 +667,7 @@ function _handlePosAndScroll(o)
 		var prevDisplay = $this.css('display');
 		$this.css('visibility', 'visible');
 		$this.css('max-height', parentHeight - topMargin - bottomMargin);
-		if (prevDisplay !== 'block') {
+		if (prevDisplay !== 'block' && prevDisplay !== 'flex') {
 			clearInterval(interval);
 			return;
 		}

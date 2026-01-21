@@ -12621,7 +12621,7 @@ Q.Data = Q.Method.define({
 	decompress: new Q.Method(),
 	hkdf: new Q.Method(),
 	importKey: new Q.Method(),
-	combinieSecrets: new Q.Method(),
+	combineSecrets: new Q.Method(),
 	encrypt: new Q.Method(),
 	decrypt: new Q.Method(),
 	sign: new Q.Method(),
