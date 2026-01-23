@@ -12675,6 +12675,20 @@ Q.Data = Q.Method.define({
 });
 
 /**
+ * Higher-level methods for working with our crypto framework and for eip712
+ * @class Q.Crypto
+ */
+Q.Crypto = Q.Method.define({
+	delegate: new Q.Method(),
+	sign: new Q.Method(),
+	verify: new Q.Method(),
+	verifyDelegated: new Q.Method(),
+	internalKeypair: new Q.Method(),
+}, "{{Q}}/js/methods/Q/Crypto", function() {
+	return [Q];
+});
+
+/**
  * Methods for working with models
  * @class Q.Models
  */
