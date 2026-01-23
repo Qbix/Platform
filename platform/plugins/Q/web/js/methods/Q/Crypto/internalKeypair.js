@@ -44,7 +44,7 @@ Q.exports(function (Q) {
 
 				// Domain-separated deterministic seed
 				const info = new TextEncoder().encode(
-					"q.crypto.eip712.private-key"
+					"q.crypto.k256.private-key"
 				);
 
 				const material = new Uint8Array(info.length + secret.length);

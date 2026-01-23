@@ -563,14 +563,18 @@ class Q_Bootstrap
 				'problem' => 'both arrays have to be same length, greater than 1'
 			));
 		}
-		foreach ($publicKeys as $i => $pk) {
-			if (!in_array($pk, $pks)) {
+	
+		foreach ($publicKeys as $pk) {
+			if (!in_array($pk, $pks, true)) {
 				throw new Q_Exception_BadValue(array(
 					'internal' => $pk,
 					'problem' => 'not among whitelisted public keys'
 				));
 			}
-			if (!Q_Crypto::verify($source, $signatures[$i], $pk)) {
+		}
+		$results = Q_Data::verify($source, $publicKeys, $signatures);
+		foreach ($results as $ok) {
+			if (!$ok) {
 				throw new Q_Exception_BadValue(array(
 					'internal' => 'source code',
 					'problem' => 'invalid signature'
