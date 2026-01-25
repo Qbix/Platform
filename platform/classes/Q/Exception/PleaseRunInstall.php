@@ -13,4 +13,4 @@ class Q_Exception_PleaseRunInstall extends Q_Exception
 	 */
 };
 
-Q_Exception::add('Q_Exception_PleaseRunInstall', 'Please run {{prefix}}'.'scripts/Q/install.php --all');
+Q_Exception::add('Q_Exception_PleaseRunInstall', 'Please run {{prefix}}'.'Q/install.php --all');
