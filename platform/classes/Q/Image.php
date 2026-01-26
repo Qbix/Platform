@@ -1408,39 +1408,29 @@ class Q_Image
         }
 
         // 1) Headers check
-        $headers = @get_headers($path, 1);
+        $context = stream_context_create(array(
+            'http' => array(
+                'method' => 'HEAD',
+                'follow_location' => 1,
+                'max_redirects' => 5,
+                'header' => array(
+                    'User-Agent: '.Q_Config::expect('Q', 'curl', 'userAgent'),
+                    'Accept: image/webp,image/*,*/*;q=0.8'
+                ),
+                'timeout' => 10
+            )
+        ));
+        $headers = @get_headers($path, 1, $context);
         if (!$headers || strpos($headers[0], '200') === false) {
             return false;
         }
 
-        $contentType = '';
-        if (isset($headers['Content-Type'])) {
-            $contentType = is_array($headers['Content-Type'])
-                ? end($headers['Content-Type'])
-                : $headers['Content-Type'];
-        }
+        $headers = array_change_key_case($headers, CASE_LOWER);
+
+        $contentType = Q::ifset($headers, 'content-type', "");
+        $contentType = is_array($contentType) ? end($contentType) : $contentType;
 
         if (stripos($contentType, 'image/') !== 0) {
-            return false;
-        }
-
-        // 2) Partial download
-        $context = stream_context_create([
-            'http' => [
-                'method'  => 'GET',
-                'timeout' => $timeout,
-                'header'  => "Range: bytes=0-32768\r\n"
-            ]
-        ]);
-
-        $data = @file_get_contents($path, false, $context);
-        if ($data === false) {
-            return false;
-        }
-
-        // 3) Binary validation
-        $imageInfo = @getimagesizefromstring($data);
-        if ($imageInfo === false) {
             return false;
         }
 
