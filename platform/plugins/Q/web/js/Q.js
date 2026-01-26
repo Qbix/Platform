@@ -2930,44 +2930,37 @@ Q.swapElements = function(element1, element2) {
  * @return {Element}
  */
 Q.element = function (tagName, attributes, elementsToAppend) {
-    var element = document.createElement(tagName);
-
-    // Set attributes
-    if (attributes) {
-        for (var k in attributes) {
-            if (k.startsWith("on") && typeof attributes[k] === "function") {
-                // Assign event handlers directly
-                element[k] = attributes[k];
-            } else {
-                element.setAttribute(k, attributes[k]);
-            }
-        }
-    }
-
-    // Append children or raw HTML
-    if (elementsToAppend) {
-        if (typeof elementsToAppend === 'string') {
-            element.innerHTML = elementsToAppend; // Direct HTML insertion
-        } else {
-            var fragment = document.createDocumentFragment(); // Optimize appending multiple elements
-            for (var i = 0, l = elementsToAppend.length; i < l; ++i) {
-                var e = elementsToAppend[i];
-                if (e) {
-                    if (typeof e === 'string') {
-                        var temp = document.createElement("div");
-                        temp.innerHTML = e;
-                        while (temp.firstChild) {
-                            fragment.appendChild(temp.firstChild);
-                        }
-                    } else {
-                        fragment.appendChild(e); // Use appendChild for better browser compatibility
-                    }
-                }
-            }
-            element.appendChild(fragment); // Append everything at once
-        }
-    }
-    return element;
+	var element = document.createElement(tagName);
+	if (attributes) {
+		for (var k in attributes) {
+			if (k.startsWith("on") && typeof attributes[k] === "function") {
+				element[k] = attributes[k];
+			} else {
+				element.setAttribute(k, attributes[k]);
+			}
+		}
+	}
+	if (elementsToAppend) {
+		if (typeof elementsToAppend === 'string') {
+			element.innerHTML = elementsToAppend;
+		} else {
+			for (var i=0, l=elementsToAppend.length; i<l; ++i) {
+				var e = elementsToAppend[i];
+				if (e) {
+					if (typeof(e) === 'string') {
+						var temp = document.createElement("div");
+						temp.innerHTML = e;
+						while (temp.firstChild) {
+							element.appendChild(temp.firstChild);
+						} // append as HTML, not text
+					} else {
+						element.append(e);
+					}
+				}
+			}
+		}
+	}
+	return element;
 };
 
 /**
@@ -7976,48 +7969,58 @@ Q.page = function _Q_page(page, handler, key) {
  * @static
  * @method init
  * @param {Object} options
- * @param {boolean} [options.isLocalFile] set this to true if you are calling Q.init from local file:/// context.
- * @param {boolean} [options.isCordova] set this to true if you're loading this inside a Cordova environment
- * @return {boolean} returns false if init was already called
+ * @param {boolean} [options.isLocalFile]
+ * @param {boolean} [options.isCordova]
+ * @return {boolean}
  */
 Q.init = function _Q_init(options) {
 	if (Q.init.called) {
 		return false;
 	}
 	Q.init.called = true;
+
 	Q.info.baseUrl = Q.info.baseUrl || new URL('.', document.baseURI).href.slice(0, -1);
 	Q.loadUrl.options.slotNames = Q.info.slotNames;
+
 	_startCachingWithServiceWorker();
 	_detectOrientation();
+
 	Q.addEventListener(root, 'orientationchange', _detectOrientation);
 	Q.addEventListener(root, 'unload', Q.onUnload.handle);
 	Q.addEventListener(root, 'online', Q.onOnline.handle);
 	Q.addEventListener(root, 'offline', Q.onOffline.handle);
 	Q.addEventListener(root, Q.Visual.focusout, _onPointerBlurHandler);
+
+	// --------------------------------------------------
+	// Readiness checks (EXTENDABLE)
+	// --------------------------------------------------
 	var checks = ["init", "ready"];
+
 	if (Q.ServiceWorker.started) {
 		checks.push("serviceWorker");
 	}
+
 	if (options && options.isCordova) {
 		_isCordova = options.isCordova;
 	}
+
 	if (_isCordova) {
 		var cordova = root.cordova;
 		checks.push("device");
-		Q.Visual.preventRubberBand(); // call it by default
-	
+
+		Q.Visual.preventRubberBand();
+
 		Q.onReady.set(function _Q_handleOpenUrl() {
 			root.handleOpenURL = function (url) {
 				Q.handle(Q.onHandleOpenUrl, Q, [url]);
 			};
 		}, 'Q.handleOpenUrl');
-	
+
 		Q.onReady.set(function _Q_browsertab() {
 			if (!(cordova.plugins && cordova.plugins.browsertabs)) {
 				return;
 			}
-			cordova.plugins.browsertabs.isAvailable(function(result) {
-				var a = root.open;
+			cordova.plugins.browsertabs.isAvailable(function (result) {
 				delete root.open;
 				root.open = function (url, target, options) {
 					var noopener = options && options.noopener;
@@ -8027,7 +8030,7 @@ Q.init = function _Q_init(options) {
 						return root;
 					}
 					if (result) {
-						cordova.plugins.browsertabs.openUrl(url, options, function() {}, function() {});
+						cordova.plugins.browsertabs.openUrl(url, options, function () {}, function () {});
 					} else if (cordova.InAppBrowser) {
 						cordova.InAppBrowser.open(url, '_system', options);
 					}
@@ -8042,13 +8045,19 @@ Q.init = function _Q_init(options) {
 			}, function () {});
 		}, 'Q.browsertabs');
 	}
+
+	// --------------------------------------------------
+	// Create readiness pipe EARLY
+	// --------------------------------------------------
 	var p = Q.pipe(checks, 1, function _Q_init_pipe_callback() {
 		if (!Q.info) Q.info = {};
 		Q.info.isCordova = !!Q.info.isCordova;
+
 		if (options && options.isLocalFile) {
 			Q.info.isLocalFile = true;
 			Q.handle.options.loadUsingAjax = true;
 		}
+
 		if (Q.info.isCordova && !Q.cookie('Q_cordova')) {
 			Q.cookie('Q_cordova', 'yes');
 		}
@@ -8060,8 +8069,7 @@ Q.init = function _Q_init(options) {
 		}
 
 		var baseUrl = Q.baseUrl();
-		if (options && options.isLocalFile
-		&& !baseUrl.startsWith('file://')) {
+		if (options && options.isLocalFile && !baseUrl.startsWith('file://')) {
 			Q.loadUrl(baseUrl, {
 				ignoreHistory: true,
 				skipNonce: true,
@@ -8073,85 +8081,113 @@ Q.init = function _Q_init(options) {
 		}
 	});
 
+	// --------------------------------------------------
+	// Allow onInit to ADD checks
+	// --------------------------------------------------
+	Q.init.addCheck = function (name) {
+		if (checks.indexOf(name) < 0) {
+			checks.push(name);
+		}
+		return p.fill(name);
+	};
+
+	// --------------------------------------------------
+	// DOM ready
+	// --------------------------------------------------
 	function _domReady() {
 		p.fill("ready")();
 	}
 
-	function _waitForDeviceReady() {
-		if (checks.indexOf("device") < 0) {
-			return;
-		}
-		var _Q_init_deviceready_handler = Q.once(function() {
-			if (!Q.info) Q.info = {};
-			Q.info.isCordova = true;
-			// avoid opening external urls in app window
-			Q.addEventListener(document, "click", function (e) {
-				var t = e.target, s;
-				do {
-					if (t && t.nodeName === "A" && t.href && !t.outerHTML.match(/\Whref=[',"]#[',"]\W/) && t.href.match(/^https?:\/\//)) {
-						e.preventDefault();
-						s = t.target && (t.target === "_blank" ? "_blank" : "_system");
-						root.open(t.href, s, "location=no");
-					}
-				} while ((t = t.parentElement));
-			});
-			p.fill("device")();
-		});
-		if (root.device) {
-			_Q_init_deviceready_handler();
-		} else {
-			Q.addEventListener(document, 'deviceready', _Q_init_deviceready_handler, false);
-            let ival = setInterval(function () {
-                if (window.device) {
-                    _Q_init_deviceready_handler();
-                    clearInterval(ival);
-                }
-            }, 100);
-		}
-	}
-
-	function _waitForServiceWorker() {
-		Q.ServiceWorker.onActive.addOnce(p.fill('serviceWorker'), 'Q');
-	}
-
-	// Bind document ready event
 	if (root.jQuery) {
 		Q.jQueryPluginPlugin();
 		Q.onJQuery.handle(root.jQuery, [root.jQuery]);
 		root.jQuery(document).ready(_domReady);
 	} else {
 		document.addEventListener("DOMContentLoaded", _domReady);
-		var _timer = setInterval(function() { // for old browsers
+		var _timer = setInterval(function () {
 			if (/loaded|complete/.test(document.readyState)) {
 				clearInterval(_timer);
 				_domReady();
 			}
 		}, 10);
 	}
-	
+
+	// --------------------------------------------------
+	// Cordova device ready
+	// --------------------------------------------------
+	function _waitForDeviceReady() {
+		if (checks.indexOf("device") < 0) return;
+
+		var handler = Q.once(function () {
+			if (!Q.info) Q.info = {};
+			Q.info.isCordova = true;
+
+			Q.addEventListener(document, "click", function (e) {
+				var t = e.target, s;
+				do {
+					if (
+						t &&
+						t.nodeName === "A" &&
+						t.href &&
+						!t.outerHTML.match(/\Whref=[',"]#[',"]\W/) &&
+						t.href.match(/^https?:\/\//)
+					) {
+						e.preventDefault();
+						s = t.target === "_blank" ? "_blank" : "_system";
+						root.open(t.href, s, "location=no");
+					}
+				} while ((t = t.parentElement));
+			});
+
+			p.fill("device")();
+		});
+
+		if (root.device) {
+			handler();
+		} else {
+			Q.addEventListener(document, 'deviceready', handler, false);
+			var ival = setInterval(function () {
+				if (window.device) {
+					handler();
+					clearInterval(ival);
+				}
+			}, 100);
+		}
+	}
+
 	if (_isCordova) {
 		_waitForDeviceReady();
 	}
+
 	if (Q.ServiceWorker.started) {
-		_waitForServiceWorker();
+		Q.ServiceWorker.onActive.addOnce(p.fill('serviceWorker'), 'Q');
 	}
+
+	// --------------------------------------------------
+	// BEFORE INIT
+	// --------------------------------------------------
 	Q.handle(Q.beforeInit);
-	
-	// Time to call all the onInit handlers
+
+	// --------------------------------------------------
+	// onInit (may ADD CHECKS)
+	// --------------------------------------------------
 	var p2 = Q.pipe();
 	var waitFor = [];
 	var urls = Q.info.urls;
+
 	if (urls && urls.updateBeforeInit && (urls.caching || urls.integrity)) {
 		waitFor.push('Q.info.urls.updateBeforeInit');
 		Q.updateUrls(p2.fill('Q.info.urls.updateBeforeInit'));
 	}
+
 	if (!Q.isEmpty(Q.getObject('Q.info.text.loadBeforeInit'))) {
 		waitFor.push('loadBeforeInit');
 		Q.Text.get(Q.info.text.loadBeforeInit, p2.fill('loadBeforeInit'));
 	}
+
 	p2.add(waitFor, 1, function () {
 		p.fill('init')();
-		Q.handle(Q.onInit, Q);
+		Q.handle(Q.onInit, Q, [p, checks]);
 	}).run();
 };
 
@@ -12598,10 +12634,34 @@ Q.Template.render = Q.promisify(function _Q_Template_render(name, fields, callba
 	});
 }, false, 2);
 
-Q.leaves = new Q.Method();
+/**
+ * Traverse all the leaves and optionally modify the values
+ * @static
+ * @method leaves
+ * @param {Object|Array|mixed} structure 
+ * @param {Function} callback This will be called for every leaf. 
+ *   It receives the current value of the leaf, and must return a value
+ *   that will be set there (to skip changes, simply return the current value)
+ * @return {Object}
+ */
+Q.leaves = function _Q_leaves(structure, callback) {
+	if (Q.isArrayLike(structure)) {
+		for (var i=0, l=structure.length; i<l; ++i) {
+			structure[i] = Q.leaves(structure[i], callback);
+		}
+	} else if (typeof structure === 'object') {
+		for (var k in structure) {
+			structure[k] = Q.leaves(structure[k], callback);
+		}
+	} else { // we found a scalar leaf
+		structure = callback(structure);
+	}
+	return structure;
+};
+
 Q.sanitize = new Q.Method();
 Q.globalMemoryWalk = new Q.Method();
-Q.Method.define(Q);
+Q.Method.define(Q, "{{Q}}/js/methods/Q", function () { return [Q]; });
 
 /**
  * Sandboxed code execution utilities

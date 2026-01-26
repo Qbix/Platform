@@ -22,7 +22,6 @@
 .Q_expandable_tool h2.Q_expandable_title:hover,
 .Q_expandable_tool h2.Q_expandable_title.Q_hover,
 .Q_expandable_tool h2.Q_expandable_title.Q_expanded {
-    color: #333;
     font-weight: 400;
 	background: rgba(180, 200, 220, .7);
 }

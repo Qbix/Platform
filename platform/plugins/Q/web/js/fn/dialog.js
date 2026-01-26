@@ -571,6 +571,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 		mask: true,
 		fullscreen: Q.info.useFullscreen,
 		fadeInOut: !Q.info.isTouchscreen,
+		fadeTime: 200,
 		alignByParent: false,
 		waitForBackgroundImage: !Q.info.isTouchscreen,
 		noClose: false,

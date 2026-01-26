@@ -1145,6 +1145,7 @@ html.Q_layout_sidebar {
 .Q_expandable_tool:not(.Q_expanded) .Q_expandable_whenExpanded,
 .Q_expandable_tool:not(.Q_expanded):not(.Q_expanding):not(.Q_collapsing) .Q_expandable_content {
 	display: none;
+	overflow: hidden;
 }
 /* </Q expandable> */
 
