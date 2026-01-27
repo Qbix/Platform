@@ -1328,46 +1328,29 @@ class Q_Image
      * - Local files:
      *   - Confirms file existence and readability
      *   - Verifies MIME type (if finfo is available)
-     *   - Validates image structure via getimagesize()
      *
      * - Remote URLs:
      *   - Verifies HTTP 200 response
      *   - Confirms image Content-Type
-     *   - Downloads a limited byte range
-     *   - Validates binary image structure
      *
      * This protects against:
      * - Non-image files with fake extensions
      * - HTML or JSON masquerading as images
-     * - Corrupted or truncated image data
      *
      * @method isRealImage
      *
      * @param string $path
      *   Absolute filesystem path or absolute URL to validate.
      *
-     * @param int $timeout
-     *   Maximum number of seconds allowed for remote HTTP requests.
-     *   Defaults to 5 seconds.
-     *
      * @return bool
      *   TRUE if the path or URL points to a valid image,
      *   FALSE otherwise.
      *
      * @security
-     *   - Limits remote downloads to a small byte range.
      *   - Does not write or execute remote content.
      *   - Local files are read-only.
-     *
-     * @note
-     *   - This function does not guarantee the image is safe for display.
-     *   - Additional validation is recommended before persisting images.
-     *
-     * @example
-     *   isRealImage('/var/www/uploads/photo.jpg');
-     *   isRealImage('https://example.com/image.webp');
      */
-    static function isRealImage($path, $timeout = 5)
+    static function isRealImage($path)
     {
         // ----------------------------
         // LOCAL FILE
