@@ -583,6 +583,7 @@ div.Q_placeholder { pointer-events: none; }
 	max-width: none !important;
 	max-height: none !important;
 	display: inline-block !important;
+	line-height: normal !important;
 }
 .Q_textfill_resized {
 	overflow: hidden;
