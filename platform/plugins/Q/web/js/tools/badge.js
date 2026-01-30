@@ -277,7 +277,8 @@ Q.Tool.define("Q/badge", function () {
 			interval && clearInterval(interval);
 
 			if (!this.state.skipOverlapped) {
-				$(this.element).data('Q_badge incrementedClass').decrementClass('Q_badge_parent_overlapped');
+				var incrementedClass = $(this.element).data('Q_badge incrementedClass');
+				incrementedClass && incrementedClass.decrementClass('Q_badge_parent_overlapped');
 			}
 		}
 	}

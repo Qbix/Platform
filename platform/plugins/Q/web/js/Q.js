@@ -2875,34 +2875,56 @@ Q.timeRemaining = function (timestamp) {
 Q.zIndexTopmost = function (container, filter) {
 	container = container || document.body;
 	filter = filter || function (element) {
-		var style = element.computedStyle();
-		return style.pointerEvents !== 'none'
-			&& !element.hasClass('Q_click_mask')
-			&& element.getAttribute('id') !== 'notices_slot';
-	};
+		// Skip non-visual tags (FAST)
+		if (['SCRIPT', 'STYLE', 'LINK', 'META', 'HEAD', 'TITLE', 'NOSCRIPT'].includes(element.tagName)) {
+			return true;
+		}
 
-	function getTopZ(el) {
-		var topZ = -1;
-		Q.each(el.children, function () {
-			if (!filter(this)) {
-				return;
-			}
-			var style = this.computedStyle();
-			var z = style.zIndex;
-			if (z === 'auto') {
-				// recurse into children, since stacking may come from them
-				topZ = Math.max(topZ, getTopZ(this));
-			} else {
-				z = parseInt(z);
-				if (!isNaN(z) && z < 2147483647) {
-					topZ = Math.max(topZ, z);
-				}
-			}
-		});
-		return topZ;
+		// Skip known Qbix exclusions
+		if (
+			element.id === 'notices_slot'
+			|| (element.classList && ['Q_click_mask', 'Q_touchlabel'].some(cls => element.classList.contains(cls)))
+		) {
+			return true;
+		}
+	};
+	var getZIndex = function (el) {
+		var zIndex;
+		// Tier 1: inline style (O(1))
+		if (el.style && el.style.zIndex) {
+			zIndex = parseInt(el.style.zIndex, 10);
+			if (!isNaN(zIndex)) return zIndex;
+		}
+
+		// Tier 2: computed style (slow fallback)
+		var cs = window.getComputedStyle(el, null);
+		if (!cs) return null;
+
+		zIndex = cs.zIndex;
+		if (zIndex === 'auto') return null;
+
+		zIndex = parseInt(zIndex, 10);
+		return isNaN(zIndex) ? null : zIndex;
 	}
 
-	return getTopZ(container);
+	var max = 0;
+	var elements = container.getElementsByTagName('*');
+	var i, el, zIndex;
+
+	for (i = 0; i < elements.length; i++) {
+		el = elements[i];
+
+		if (filter(el)) {
+			continue;
+		}
+
+		zIndex = getZIndex(el);
+		if (zIndex < 2147483647 && zIndex > max) {
+			max = zIndex;
+		}
+	}
+
+	return max;
 };
 
 /**
