@@ -365,7 +365,6 @@ class Q_Session
 					if ($throwIfMissingOrInvalid) {
 						self::throwInvalidSession();
 					}
-					self::writeHandler($id, '');
 				}
 				if (!empty($_SERVER['HTTP_HOST']) and empty($options['temporary'])) {
 					$durationName = self::durationName();
@@ -516,6 +515,7 @@ class Q_Session
 	{
 		if (session_status() === PHP_SESSION_ACTIVE) {
 			session_abort(); // abort current session, don't save it here
+			self::$session_db_row = null;
 		}
 		
 		$old_SESSION = $_SESSION;
@@ -803,7 +803,9 @@ class Q_Session
 				$duration_field = self::$session_db_duration_field;
 				$platform_field = self::$session_db_platform_field;
 				if (!self::$session_db_row) {
-					self::$session_db_row = new $db_row_class();
+					throw new Q_Exception(
+						"Q_Session::writeHandler called without prior readHandler"
+					);
 				}
 				// Make sure it has a primary key!
 				if (count(self::$session_db_row->getPrimaryKey()) != 1) {
