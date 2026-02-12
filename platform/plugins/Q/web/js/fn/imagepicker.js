@@ -698,7 +698,7 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 				}
 
 
-				return Q.request(url, null, _callback, {
+				return Q.request(url, ['data'], _callback, {
 					method: 'POST',
 					formdata: fd
 				});
