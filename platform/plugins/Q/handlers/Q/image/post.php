@@ -34,6 +34,8 @@ function Q_image_post($params = null)
 		$params['icon'] = $_REQUEST['icon'];
 		$params['save'] = $_REQUEST['save'];
 	}
+	$params['setSlot'] = 'data';
 
-	return Q_Image::postNewImage($params);
+	$data = Q_Image::postNewImage($params);
+	return Q_Response::setSlot('data', $data);
 }

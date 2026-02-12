@@ -422,7 +422,6 @@ class Q_Image
 	 * either in the $_FILES superglobal or passed inside the "data" parameter.
 	 * You can also override any of the parameters from the request by passing them in.
 	 *
-	 * @class HTTP Q image
 	 * @method postNewImage
 	 *
 	 * @param {array} [$params] Parameters that can come from the request
@@ -440,9 +439,6 @@ class Q_Image
 	 *
 	 * @param {string} [$params.save='x']
 	 *       Name of config under Q/image/sizes for image sizes
-	 *
-	 * @param {bool} [$override=false]
-	 *       If true, tells handlers of "after" hooks to update references to new image
 	 *
 	 * @return {array} Information about the saved image
 	 */
@@ -535,11 +531,6 @@ class Q_Image
 				throw new Q_Exception("Image type not supported");
 			}
 			file_put_contents($data['writePath'].'original.'.$data['ext'], $p['icon']['original']);
-		}
-
-		// If no $params passed directly, this is a normal HTTP response → set slot
-		if (empty($params)) {
-			Q_Response::setSlot('data', $data);
 		}
 
 		return $data;
