@@ -17,6 +17,7 @@ Q.exports(function (Q) {
 	 * @param {Object} [options] Additional sandbox configuration
 	 * @param {String} [options.name] Reuse a persistent sandbox worker under this name
 	 * @param {Number} [options.timeout=2000] Timeout in milliseconds before aborting execution
+	 * @param {Boolean} [options.db=false] Whether to expose indexedDB inside sandbox
 	 * @return {Q.Promise} Resolves with result or rejects on error
 	 */
 	return function Q_Sandbox_run(code, context, methods, options) {
@@ -24,21 +25,20 @@ Q.exports(function (Q) {
 		methods = methods || {};
 		options = options || {};
 
-		// Persistent runners by name
 		if (!Q.Sandbox._runners) Q.Sandbox._runners = {};
 
-		// --- Worker-based sandbox runner ---
 		function SandboxRunner(defaults) {
 			this.defaults = {
-				timeout: (defaults && defaults.timeout) || 2000
+				timeout: (defaults && defaults.timeout) || 2000,
+				db: !!(defaults && defaults.db)
 			};
 			this.worker = null;
 			this.url = null;
-			this.rpcId = 0;
-			this.pending = {};
 		}
 
 		SandboxRunner.prototype.createWorker = function () {
+			const allowDB = !!this.defaults.db;
+
 			const script = `
 				// --- Hard-disable network & import capabilities ---
 				self.fetch = undefined;
@@ -46,6 +46,30 @@ Q.exports(function (Q) {
 				self.WebSocket = undefined;
 				self.EventSource = undefined;
 				self.importScripts = undefined;
+
+				// --- Safe stubs instead of deleting env ---
+				try {
+					Object.defineProperty(self, "navigator", {
+						value: { userAgent: "sandbox", language: "en-US" },
+						configurable: false
+					});
+				} catch {}
+
+				self.location = undefined;
+				self.caches = undefined;
+
+				// Optional DB
+				if (!${allowDB}) {
+					self.indexedDB = undefined;
+				}
+
+				// --- Block prototype mutation entry points (Safari-safe) ---
+				try {
+					Object.defineProperty(Object.prototype, "__defineSetter__", { value: undefined });
+					Object.defineProperty(Object.prototype, "__defineGetter__", { value: undefined });
+					Object.defineProperty(Object.prototype, "__lookupGetter__", { value: undefined });
+					Object.defineProperty(Object.prototype, "__lookupSetter__", { value: undefined });
+				} catch {}
 
 				let rpcCounter = 0;
 				const pending = {};
@@ -61,7 +85,6 @@ Q.exports(function (Q) {
 				self.onmessage = async function (e) {
 					const msg = e.data;
 
-					// RPC response
 					if (msg && msg.type === "rpcResult") {
 						const p = pending[msg.id];
 						if (!p) return;
@@ -70,7 +93,6 @@ Q.exports(function (Q) {
 						return;
 					}
 
-					// Initial execution
 					try {
 						const { code, context, methodNames } = msg;
 
@@ -93,6 +115,10 @@ Q.exports(function (Q) {
 							'const WebSocket = undefined;\\n' +
 							'const EventSource = undefined;\\n' +
 							'const importScripts = undefined;\\n' +
+							'const indexedDB = ' + (${allowDB} ? 'indexedDB' : 'undefined') + ';\\n' +
+							'const IDBFactory = undefined;\\n' +
+							'const IDBDatabase = undefined;\\n' +
+							'const IDBObjectStore = undefined;\\n' +
 							'return (async () => { ' + code + ' })();'
 						);
 
@@ -115,16 +141,13 @@ Q.exports(function (Q) {
 		};
 
 		SandboxRunner.prototype.run = function (code, ctx, methods, opts) {
-			const self = this;
 			const worker = this.worker || this.createWorker();
 			const timeoutMs = (opts && opts.timeout) || this.defaults.timeout;
 
-			// Deep clone context (NO function fallback)
 			let safeCtx;
 			try {
 				safeCtx = JSON.parse(JSON.stringify(ctx));
-			} catch (e) {
-				console.warn("[Q.Sandbox] Failed to clone context, using empty context");
+			} catch {
 				safeCtx = {};
 			}
 
@@ -137,7 +160,7 @@ Q.exports(function (Q) {
 					clearTimeout(timer);
 					if (!opts.name) {
 						try {
-							URL.revokeObjectURL(self.url);
+							URL.revokeObjectURL(this.url);
 							worker.terminate();
 						} catch {}
 					}
@@ -146,7 +169,6 @@ Q.exports(function (Q) {
 				worker.onmessage = function (e) {
 					const msg = e.data;
 
-					// RPC request from sandbox
 					if (msg && msg.type === "rpc") {
 						const fn = methods[msg.method];
 						if (!fn) {
@@ -180,7 +202,6 @@ Q.exports(function (Q) {
 						return;
 					}
 
-					// Final result
 					if (msg && msg.type === "done") {
 						cleanup();
 						msg.ok ? resolve(msg.result) : reject(msg.error);
@@ -202,10 +223,9 @@ Q.exports(function (Q) {
 					context: safeCtx,
 					methodNames
 				});
-			});
+			}.bind(this));
 		};
 
-		// --- Choose or create a runner ---
 		let runner;
 		if (options.name) {
 			runner = Q.Sandbox._runners[options.name];
@@ -217,7 +237,6 @@ Q.exports(function (Q) {
 			runner = new SandboxRunner(options);
 		}
 
-		// Q.Method will resolve the returned promise automatically
 		return runner.run(code, context, methods, options);
 	};
 });
