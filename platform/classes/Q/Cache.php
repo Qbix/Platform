@@ -20,6 +20,7 @@ class Q_Cache
 			|| (is_callable('apcu_enabled') ? apcu_enabled() : false);
 		self::$stores[self::$namespace] = array();
 		self::$durations[self::$namespace] = array();
+		self::$expires[self::$namespace] = array();
 		self::$changed[self::$namespace] = array();
 	}
 	
@@ -66,6 +67,7 @@ class Q_Cache
 		$store = &self::fetchStore($fetched);
 		$store[$key] = $value;
 		self::$durations[self::$namespace][$key] = $duration;
+		self::$expires[self::$namespace][$key] = time() + $duration;
 		self::$changed[self::$namespace][$key] = true; // it will be saved at shutdown
 		return $fetched;
 	}
@@ -81,17 +83,34 @@ class Q_Cache
 	static function exists($key, &$fetched = null)
 	{
 		if (self::$ignore) {
+			$fetched = false;
 			return false;
 		}
-		$name = "Q_Cache\t".self::$namespace."\t$key";
-		if (is_callable('apcu_fetch')) {
-			$store = apcu_fetch($name, $fetched);
-		} else if (is_callable('apc_fetch')) {
-			$store = apc_fetch($name, $fetched);
-		} else {
-			$store = self::fetchStore($fetched);
+
+		$store = &self::fetchStore($fetched);
+
+		// In-process hit (respect TTL)
+		if (array_key_exists($key, $store)) {
+			if (isset(self::$expires[self::$namespace][$key])
+			&& self::$expires[self::$namespace][$key] < time()) {
+				unset($store[$key]);
+				unset(self::$expires[self::$namespace][$key]);
+				return false;
+			}
+			return true;
 		}
-		return array_key_exists($key, $store);
+
+		// APC/APCu hit
+		$name = "Q_Cache\t" . self::$namespace . "\t" . $key;
+		if (is_callable('apcu_fetch')) {
+			apcu_fetch($name, $found);
+		} else if (is_callable('apc_fetch')) {
+			apc_fetch($name, $found);
+		} else {
+			$found = false;
+		}
+
+		return $found;
 	}
 
 	/**
@@ -106,25 +125,46 @@ class Q_Cache
 	static function get($key, $default = null, &$found = null)
 	{
 		if (self::$ignore) {
+			$found = false;
 			return $default;
 		}
 		$store = &self::fetchStore();
 		if (array_key_exists($key, $store)) {
-			$found = !empty(self::$found[self::$namespace][$key]);
+			// TTL eviction for in-process cache
+			if (isset(self::$expires[self::$namespace][$key])
+			&& self::$expires[self::$namespace][$key] < time()) {
+				unset($store[$key]);
+				unset(self::$expires[self::$namespace][$key]);
+				$found = false;
+				return $default;
+			}
+			$found = true;
+			return $store[$key];
+		}
+
+		// APC/APCu fetch
+		$name = "Q_Cache\t" . self::$namespace . "\t" . $key;
+		if (is_callable('apcu_fetch')) {
+			$value = apcu_fetch($name, $found);
+		} else if (is_callable('apc_fetch')) {
+			$value = apc_fetch($name, $found);
 		} else {
 			$found = false;
-			$name = "Q_Cache\t".self::$namespace."\t$key";
-			if (is_callable('apcu_fetch')) {
-				$value = apcu_fetch($name, $found);
-			} else if (is_callable('apc_fetch')) {
-				$value = apc_fetch($name, $found);
-			}
-			// no such $key was stored in cache until now
-			$store[$key] = $found ? $value : $default;
-			self::$found[self::$namespace][$key] = $found;
 		}
-		return $store[$key];
+		if ($found) {
+			$store[$key] = $value;
+			// Track in-process expiration
+			$duration = Q::ifset(
+				self::$durations[self::$namespace],
+				$key,
+				Q_Config::get('Q', 'cache', 'duration', 600)
+			);
+			self::$expires[self::$namespace][$key] = time() + $duration;
+			return $value;
+		}
+		return $default;
 	}
+
 
 	/**
 	 * Clear Q_Cache entry
@@ -152,7 +192,6 @@ class Q_Cache
 				opcache_reset(); // also reset all the PHP cached files
 			}
 			self::$changed = array();
-			self::$found[self::$namespace] = array(); // reset all cache entries to not found
 			return $fetched;
 		}
 		if (array_key_exists($key, $store)) {
@@ -167,7 +206,6 @@ class Q_Cache
 				unset($store[$key]);
 			}
 			self::$changed[$namespace][$key] = true; // it will be saved at shutdown
-			self::$found[self::$namespace][$key] = false; // mark cache entry as not found in cache
 		}
 		return $fetched;
 	}
@@ -183,6 +221,16 @@ class Q_Cache
 	 */
 	protected static function &fetchStore(&$fetched = null)
 	{
+		static $gcCounter = 0;
+		if ((++$gcCounter % 100) === 0 && isset(self::$expires[self::$namespace])) {
+			$now = time();
+			foreach (self::$expires[self::$namespace] as $k => $exp) {
+				if ($exp < $now) {
+					unset(self::$stores[self::$namespace][$k]);
+					unset(self::$expires[self::$namespace][$k]);
+				}
+			}
+		}
 		if (!isset(self::$stores[self::$namespace])) {
 			$fetched = false;
 			return self::$stores[self::$namespace] = array();
@@ -207,7 +255,7 @@ class Q_Cache
 		foreach (self::$changed as $namespace => $changed) {
 			foreach (self::$changed[$namespace] as $key => $value) {
 				$name = "Q_Cache\t$namespace\t$key";
-				$duration = Q::ifset(self::$durations, $key, $d);
+				$duration = Q::ifset(self::$durations[self::$namespace], $key, $d);
 				$store = self::$stores[$namespace];
 				if (array_key_exists($key, $store)) {
 					if (is_callable('apcu_store')) {
@@ -260,6 +308,12 @@ class Q_Cache
 	 * @type array
 	 */
 	protected static $durations = array();
+	/**
+	 * @property $expires
+	 * @protected
+	 * @type array
+	 */
+	protected static $expires = array();
 	/**
 	 * @property $changed
 	 * @protected
