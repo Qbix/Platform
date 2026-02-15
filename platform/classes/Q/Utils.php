@@ -1163,7 +1163,8 @@ class Q_Utils
 		}
 
 		$mh = curl_multi_init();
-		curl_multi_setopt($mh, CURLMOPT_PIPELINING, CURLPIPE_MULTIPLEX);
+		$pipe = defined('CURLPIPE_MULTIPLEX') ? CURLPIPE_MULTIPLEX : 0;
+		curl_multi_setopt($mh, CURLMOPT_PIPELINING, $pipe);
 
 		$handles = array();
 
