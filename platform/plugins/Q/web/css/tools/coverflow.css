@@ -31,6 +31,12 @@
 	margin: 0;
 }
 
+.Q_coverflow_covers {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scroll-behavior: smooth;
+}
+
 :root {
 	--Q-coverflow-cover-size: 12rem;
 }
