@@ -7,6 +7,18 @@
  * Implements an Apple-style "cover flow" effect based on this demo:
  * https://scroll-driven-animations.style/demos/cover-flow/css/
  * @class Q coverflow
+ * @constructor
+ * @param {Object}   [options] Override various options for this tool
+ *  @param {Array} [options.elements=null] Indicate the HTML elements. The elements may have a "title"
+ *    attribute, in which case it is used unless the titles option is specified.
+ *  @param {Array} [options.titles=null] Indicate the titles corresponding to the elements.
+
+ *  @param {Boolean} [options.dontSnapScroll] Set to true to stop snapping the scroll to each item
+ *  @param {integer}  [options.index] You can specify an index of the item to bring to the front first
+ *  @param {Number} [options.scrollOnMouseMove=0] Scroll factor between 0 and 1 when mousemove happens if (not touchscreen)
+ *  @param {Number}  [options.index] You can specify an index of the item to bring to the front first
+ *  @param {Q.Event} [options.onInvoke] Triggered when the middle item was clicked
+ * @return {Q.Tool}
  */
 Q.Tool.define("Q/coverflow", function _Q_coverflow(options) {
     var tool = this;

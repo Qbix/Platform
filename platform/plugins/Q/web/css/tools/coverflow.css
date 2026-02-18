@@ -1,12 +1,20 @@
 .Q_coverflow_tool {
 	position: relative; /* can override this to be absolute or fixed */
-	background: black;
-	color: white;
+	background: linear-gradient(to bottom, #cccccc, #eeeeee);
+	color: black;
+}
+
+@media (prefers-color-scheme: dark) {
+	.Q_coverflow_tool {
+		position: relative; /* can override this to be absolute or fixed */
+		background: black;
+		color: white;
+	}
 }
 
 .Q_coverflow_tool .Q_coverflow_caption {
 	position: absolute;
-    height: 50px;
+    height: 30px;
     line-height: 50px;
     font-size: 40px;
     width: 100%;
@@ -16,9 +24,9 @@
     font-weight: bold;
 	padding: 2px;
 }
-/* .Q_notMobile .Q_coverflow_tool .Q_coverflow_caption {
+.Q_notMobile .Q_coverflow_tool .Q_coverflow_caption {
 	padding: 10px;
-} */
+}
 .Q_mobile .Q_coverflow_tool .Q_coverflow_caption {
 	bottom: 0px;
 	line-height: 20px;
@@ -29,12 +37,6 @@
 	box-sizing: border-box;
 	padding: 0;
 	margin: 0;
-}
-
-.Q_coverflow_covers {
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-x: contain;
-    scroll-behavior: smooth;
 }
 
 :root {

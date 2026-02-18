@@ -15972,6 +15972,19 @@ Q.Dialogs = {
 			} catch (e) {
 				console.warn(e);
 			}
+			if (Q.Dialogs.interval) {
+				return;
+			}
+			Q.Dialogs.interval = setInterval(function () {
+				// just in case, hide the mask when the last dialog is hidden
+				var e1 = document.querySelector('.Q_overlay_open');
+				if ((!e1 || !e1.getBoundingClientRect().width)) {
+					Q.Masks.hide('Q.dialog.mask');
+					o.htmlClass && document.documentElement.removeClass(o.htmlClass);
+					clearInterval(Q.Dialogs.interval);
+					Q.Dialogs.interval = null;
+				}
+			}, 300);
 		}
 	},
 	
