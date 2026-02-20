@@ -1158,6 +1158,8 @@ class Q
 						$handlersCalled[] = $handler;
 						if (false === self::handle($handler, $params, $skipIncludes, $result)) {
 							// return this result instead
+							array_pop(self::$event_stack);
+							--self::$event_stack_length;
 							return $result;
 						}
 					}
@@ -1183,6 +1185,8 @@ class Q
 						$handlersCalled[] = $handler;
 						if (false === self::handle($handler, $params, $skipIncludes, $result)) {
 							// return this result instead
+							array_pop(self::$event_stack);
+							--self::$event_stack_length;
 							return $result;
 						}
 					}
