@@ -9330,7 +9330,7 @@ Q.url.options = {
 
 /**
  * Interpolate some standard placeholders inside a url, such as 
- * {{AppName}} or {{PluginName}}
+ * {{AppName}} or {{PluginName}} or {{baseUrl}} or {{currentUrl}}
  * @static
  * @method interpolateUrl
  * @param {String} url
@@ -9342,8 +9342,13 @@ Q.interpolateUrl = function (url, additional) {
 		return url;
 	}
 	url = url.interpolate(Q.interpolateUrl.substitutions);
+	url = url.interpolate({currentUrl: location.href});
 	if (additional) {
 		url = url.interpolate(additional);
+	}
+	var parts = url.split('?');
+	if (parts.length > 2) {
+		url = parts.slice(0, 2).join('?') + '&' + parts.slice(2).join('&');
 	}
 	return url;
 };
