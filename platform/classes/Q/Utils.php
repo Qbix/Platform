@@ -971,6 +971,94 @@ class Q_Utils
 		return $result;
 	}
 
+		/**
+ 	 * Sends an asynchronous HTTP-style POST request over a Unix domain socket
+ 	 * and returns immediately.
+ 	 * The receiving script should ignore user aborts if it needs to complete
+ 	 * processing regardless of client connection state.
+	 * For example, in PHP call ignore_user_abort(true) at the top of that script.
+	 *
+	 * This method uses HTTP framing but communicates over a Unix socket
+	 * instead of TCP. It is intended for internal communication with
+	 * a local Node.js process listening on a socket such as
+	 * "/run/qbix/<app>.sock".
+	 *
+	 * @method postAsyncSocket
+	 * @static
+	 * @param {string} $socketPath Absolute filesystem path to the Unix socket
+	 * @param {string} $path The HTTP path to post to (e.g. "/Q/node")
+	 * @param {array} $params An associative array of params
+	 * @param {string} [$user_agent=null] The user-agent string to send.
+	 *  If null, replaced by default of "Mozilla/5.0".
+	 *  If false, not sent.
+	 * @param {integer} [$timeout=30] Number of seconds before timeout.
+	 *  Defaults to Q_UTILS_CONNECTION_TIMEOUT if null.
+	 * @param {boolean} [$throwIfRefused=false] Pass true to throw an exception
+	 *  if the socket cannot be opened or the request is refused.
+	 * @param {boolean} [$closeSocket=false] Pass true to close the socket
+	 *  after sending. The default is to use HTTP keep-alive semantics.
+	 * @return {boolean} Returns whether the post succeeded.
+	 */
+	static function postAsyncSocket(
+		$socketPath,
+		$path,
+		$params,
+		$user_agent = null,
+		$timeout = Q_UTILS_CONNECTION_TIMEOUT,
+		$throwIfRefused = false,
+		$closeSocket = false)
+	{
+		if (!is_array($params)) {
+			throw new Exception("\$params must be an array");
+		}
+
+		$post_string = http_build_query($params);
+
+		if (empty($path)) {
+			$path = '/';
+		}
+
+		$headers = array();
+		$headers[] = "POST $path HTTP/1.1";
+		$headers[] = "Host: localhost";
+		$headers[] = "Content-Type: application/x-www-form-urlencoded";
+		$headers[] = "Content-Length: " . strlen($post_string);
+
+		if ($user_agent !== false) {
+			if (is_null($user_agent)) {
+				$user_agent = 'Mozilla/5.0';
+			}
+			$headers[] = "User-Agent: $user_agent";
+		}
+
+		$out = implode("\r\n", $headers);
+		$out .= "\r\nConnection: " . ($closeSocket ? 'Close' : 'Keep-Alive');
+		$out .= "\r\n\r\n";
+		$out .= $post_string;
+
+		$fp = @stream_socket_client(
+			"unix://".$socketPath,
+			$errno,
+			$errstr,
+			$timeout
+		);
+
+		if (!$fp) {
+			if ($throwIfRefused) {
+				throw new Q_Exception(
+					"PHP couldn't open Unix socket $socketPath ($errstr)"
+				);
+			}
+			return false;
+		}
+
+		$result = (fwrite($fp, $out) !== false);
+		$result = $result && fflush($fp);
+		$result = $result && fclose($fp);
+
+		return $result;
+	}
+
 	/**
 	 * Issues a POST request, and returns the response
 	 * @method post
@@ -1652,44 +1740,73 @@ class Q_Utils
 	static function sendToNode($data, $url = null, $throwIfRefused = false)
 	{
 		if (!is_array($data)) {
-			throw new Q_Exception_WrongType(array('field' => 'data', 'type' => 'array'));
+			throw new Q_Exception_WrongType(array(
+				'field' => 'data',
+				'type' => 'array'
+			));
 		}
 		if (empty($data['Q/method'])) {
-			throw new Q_Exception_RequiredField(array('field' => 'Q/method'));
+			throw new Q_Exception_RequiredField(array(
+				'field' => 'Q/method'
+			));
 		}
-		
+
 		$clientId = Q_Request::special('clientId', null);
 		if (isset($clientId)) {
 			$data['Q.clientId'] = $clientId;
 		}
-		
-		// The following hook may modify the url
-		/**
-		 * @event Q/Utils/sendToNode {before}
-		 * @param {array} data
-		 * @param {string|array} 'url'
-		 */
-		Q::event('Q/Utils/sendToNode', array('data' => $data, 'url' => $url), 'before');
 
-		if (!$url) {
-			$nodeh = Q_Config::get('Q', 'nodeInternal', 'host', null);
-			$nodep = Q_Config::get('Q', 'nodeInternal', 'port', null);
-			$url = $nodep && $nodeh ? "http://$nodeh:$nodep/Q/node" : false;
+		Q::event(
+			'Q/Utils/sendToNode',
+			array('data' => $data, 'url' => $url),
+			'before'
+		);
+
+		// Determine socket
+		$socketPath = Q_Config::get('Q', 'nodeInternal', 'socket', null);
+		if (!$socketPath) {
+			$app = Q::app();
+			$socketPath = "/run/qbix/$app.sock";
 		}
 
-		if (!$url) {
-			$result = false;
-		} else {
-			// Should we switch to sending JSON over TCP?
-			$result = Q_Utils::postAsync(
-				$url, self::sign($data), null, 
-				Q_UTILS_INTERNAL_TIMEOUT, $throwIfRefused
+		$path = '/Q/node';
+
+		// Try socket first
+		if ($socketPath && file_exists($socketPath)) {
+			$result = Q_Utils::postAsyncSocket(
+				$socketPath,
+				$path,
+				self::sign($data),
+				null,
+				Q_UTILS_INTERNAL_TIMEOUT,
+				$throwIfRefused
+			);
+
+			if ($result !== false) {
+				return $result;
+			}
+		}
+
+		// Fallback to TCP
+		$nodeh = Q_Config::get('Q', 'nodeInternal', 'host', null);
+		$nodep = Q_Config::get('Q', 'nodeInternal', 'port', null);
+
+		if ($nodeh && $nodep) {
+			$url = "http://$nodeh:$nodep$path";
+
+			return Q_Utils::postAsync(
+				$url,
+				self::sign($data),
+				null,
+				Q_UTILS_INTERNAL_TIMEOUT,
+				$throwIfRefused
 			);
 		}
-		return $result;
-//		if (!$result) {
-//			throw new Q_Exception_SendingToNode(array('method' => $data['Q/method']));
-//		}
+
+		//		if (!$result) {
+		//			throw new Q_Exception_SendingToNode(array('method' => $data['Q/method']));
+		//		}
+		return false;
 	}
 
 	/**

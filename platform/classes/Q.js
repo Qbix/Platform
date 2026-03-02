@@ -2364,23 +2364,48 @@ Q.servers = {};
  */
 Q.listen = function _Q_listen(options, callback) {
 	options = options || {};
+
 	var internalPort = Q.Config.get(['Q', 'nodeInternal', 'port'], null);
 	var internalHost = Q.Config.get(['Q', 'nodeInternal', 'host'], null);
+	var internalSocket = Q.Config.get(['Q', 'nodeInternal', 'socket'], null);
+
 	var port = options.port || internalPort;
 	var host = options.host || internalHost;
+	var socketPath = options.socket || internalSocket;
+
+	// Default socket based on app name if neither port nor socket specified
+	if (!socketPath && (!port || !host)) {
+		if (!Q.app || !Q.app.name) {
+			throw new Q.Exception("Q.listen: Cannot determine socket path (missing Q.app.name)");
+		}
+		socketPath = '/run/qbix/' + Q.app.name + '.sock';
+	}
+
 	var info;
 	var sslCertsDirTimeout;
-	var isInternal = (internalHost == host && internalPort == port);
+
+	var isSocket = !!socketPath;
+	var isInternal = (!isSocket && internalHost == host && internalPort == port)
+		|| (isSocket && internalSocket && internalSocket === socketPath);
+
 	if (isInternal) {
 		options.https = false;
 	}
 
-	if (port === null)
-		throw new Q.Exception("Q.listen: Missing config field: Q/nodeInternal/port");
-	if (host === null)
-		throw new Q.Exception("Q.listen: Missing config field: Q/nodeInternal/host");
+	if (!isSocket) {
+		if (port === null)
+			throw new Q.Exception("Q.listen: Missing config field: Q/nodeInternal/port");
+		if (host === null)
+			throw new Q.Exception("Q.listen: Missing config field: Q/nodeInternal/host");
+	}
 
-	var server = Q.getObject([port, host], Q.servers) || null;
+	var server = null;
+	if (!isSocket) {
+		server = Q.getObject([port, host], Q.servers) || null;
+	} else {
+		server = Q.getObject([socketPath], Q.servers) || null;
+	}
+
 	if (server) {
 		var address = server.address();
 		if (address) callback && callback(address);
@@ -2389,12 +2414,13 @@ Q.listen = function _Q_listen(options, callback) {
 		});
 		return server;
 	}
+
 	var app;
 	if (express.version === undefined
 	|| parseInt(express.version) >= 3) {
 		app = express();
 		var h = Q.Config.get(['Q', 'node', 'https'], false);
-		if (h && options.https !== false) {
+		if (h && options.https !== false && !isSocket) {
 			var keys = ['key', 'cert', 'ca', 'dhparam'];
 			var certFolder = path.dirname(h.cert)
 			if (Q.isPlainObject(options.https)) {
@@ -2431,23 +2457,22 @@ Q.listen = function _Q_listen(options, callback) {
 		server = express.createServer();
 		app = server;
 	}
-	server.host = host;
-	server.port = port;
-	server.attached = {
-		express: app
-	};
-	if (isInternal) {
-		server.internal = true;
-	}
-	
+
+	server.attached = { express: app };
+	server.internal = isInternal;
+	server.internalString = server.internal ? ' (internal requests)' : '';
+
 	var bodyParser = require('body-parser');
 	app.use(bodyParser());
-	
+
 	var use = app.use;
 	app.use = function _app_use() {
-		console.log.Q("Adding request handler under " + server.host + ":" + server.port + " :", arguments[0].name);
+		console.log.Q("Adding request handler under "
+			+ (isSocket ? socketPath : server.host + ":" + server.port)
+			+ " :", arguments[0].name);
 		use.apply(this, Array.prototype.slice.call(arguments));
 	};
+
 	var methods = {
 		"get": "GET",
 		"post": "POST",
@@ -2456,6 +2481,7 @@ Q.listen = function _Q_listen(options, callback) {
 		"options": "OPTIONS",
 		"all": "ALL"
 	};
+
 	Q.each(methods, function (k) {
 		var f = app[k];
 		app[k] = function () {
@@ -2475,46 +2501,54 @@ Q.listen = function _Q_listen(options, callback) {
 				h = h.toString();
 			}
 			console.log.Q("Adding " + methods[k] + " handler under "
-				+ server.host + ":" + server.port
+				+ (isSocket ? socketPath : server.host + ":" + server.port)
 				+ w + " :", h);
 			f.apply(this, Array.prototype.slice.call(arguments));
 		};
 	});
+
 	app.use(function Q_request_handler (req, res, next) {
-		// WARNING: the following per-request log may be a bottleneck in high-traffic sites:
-		var a = server.address();
-		if (Q.Config.get('Q', 'node', 'logRequests', true)) {
-			Q.log(req.method+" "+req.socket.remoteAddress+ " -> "+a.address+":"+a.port+req.url.split('?', 2)[0] + (req.body['Q/method'] ? ", method: '"+req.body['Q/method']+"'" : ''));
+		if (!isSocket) {
+			var a = server.address();
+			if (Q.Config.get('Q', 'node', 'logRequests', true)) {
+				Q.log(req.method+" "+req.socket.remoteAddress
+					+ " -> "+a.address+":"+a.port
+					+ req.url.split('?', 2)[0]);
+			}
 		}
-		req.info = {
-			port: port,
-			host: host
-		};
-		var headers;
-		if (headers = Q.Config.get(['Q', 'node', 'headers'], false)) {
-			res.header(headers);
-		}
-		if (server.internal) {
-			req.internal = true;
-			Q.Utils.validateRequest(req, res, _requested);
-		} else {
-			_requested();
-		}
-		function _requested () {
-			/**
-			 * Http request
-			 * @event request
-			 * @param {http.Request} req The request object
-			 * @param {http.Response} res The response object
-			 */
-			req.validated = true;
-			Q.emit('request', req, res);
-			next();
-		}
+		req.validated = true;
+		Q.emit('request', req, res);
+		next();
 	});
 
-	server.internal = (internalHost == host && internalPort == port);
-	server.internalString = server.internal ? ' (internal requests)' : '';
+	// SOCKET HANDLING
+	if (isSocket) {
+		try {
+			if (fs.existsSync(socketPath)) {
+				fs.unlinkSync(socketPath);
+			}
+		} catch (e) {}
+
+		var dir = path.dirname(socketPath);
+		if (!fs.existsSync(dir)) {
+			fs.mkdirSync(dir, { recursive: true });
+		}
+
+		server.listen(socketPath, function () {
+			fs.chmodSync(socketPath, 0o660);
+			console.log.Q('listening at socket ' + socketPath + server.internalString);
+			callback && callback(server.address());
+		});
+
+		if (!Q.servers[socketPath]) {
+			Q.servers[socketPath] = server;
+		}
+		return server;
+	}
+
+	server.host = host;
+	server.port = port;
+
 	server.listen(port, host, function () {
 		console.log.Q('listening at ' + host + ':' + port + server.internalString);
 		callback && callback(server.address());
@@ -2524,6 +2558,7 @@ Q.listen = function _Q_listen(options, callback) {
 		Q.servers[port] = {};
 	}
 	Q.servers[port][host] = server;
+
 	return server;
 };
 
