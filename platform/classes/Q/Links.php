@@ -188,6 +188,85 @@ class Q_Links
 		return 'googlechrome://navigate?url=' . $url; // note: don't encode
 	}
 
+/**
+	 * Generates a link to open a dapp in MetaMask mobile
+	 * @static
+	 * @method metamask
+	 * @param {string} $dappUrl
+	 * @return {string}
+	 */
+	static function metamask($dappUrl)
+	{
+		$url = preg_replace('#^https?://#', '', $dappUrl);
+		return 'https://metamask.app.link/dapp/' . $url;
+	}
+
+	/**
+	 * Generates a link to open a dapp in Trust Wallet
+	 * @static
+	 * @method trustWallet
+	 * @param {string} $dappUrl
+	 * @return {string}
+	 */
+	static function trustWallet($dappUrl)
+	{
+		return 'trust://open_url?url=' . rawurlencode($dappUrl);
+	}
+
+	/**
+	 * Generates a link to open a dapp in Coinbase Wallet
+	 * @static
+	 * @method coinbaseWallet
+	 * @param {string} $dappUrl
+	 * @return {string}
+	 */
+	static function coinbaseWallet($dappUrl)
+	{
+		return 'https://go.cb-w.com/dapp?cb_url=' . rawurlencode($dappUrl);
+	}
+
+	/**
+	 * Generates a link to open a dapp in Rainbow wallet
+	 * @static
+	 * @method rainbow
+	 * @param {string} $dappUrl
+	 * @return {string}
+	 */
+	static function rainbow($dappUrl)
+	{
+		return 'rainbow://open?url=' . rawurlencode($dappUrl);
+	}
+
+	/**
+	 * Generates an Ethereum payment URI (EIP-681)
+	 * @static
+	 * @method ethereumPay
+	 * @param {string} $address
+	 * @param {array} [$options]
+	 * @param {string|int} [$options['value']]
+	 * @param {string|int} [$options['gas']]
+	 * @param {string|int} [$options['gasLimit']]
+	 * @param {string|int} [$options['chainId']]
+	 * @return {string}
+	 */
+	static function ethereumPay($address, $options = array())
+	{
+		$url = 'ethereum:' . $address;
+		$params = array();
+
+		foreach (array('value','gas','gasLimit','chainId') as $k) {
+			if (isset($options[$k])) {
+				$params[$k] = $options[$k];
+			}
+		}
+
+		if ($params) {
+			$url .= '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+		}
+
+		return $url;
+	}
+
 	/**
 	 * Extends Q_Links with custom method names, e.g. named after an external platform or app
 	 * @static

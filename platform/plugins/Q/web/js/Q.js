@@ -6665,6 +6665,75 @@ Q.Links = {
 	 */
 	androidChrome: function (url) {
 		return 'googlechrome://navigate?url=' + url; // note: don't encodeURIComponent
+	},
+	/**
+	 * Opens a dapp in MetaMask mobile.
+	 * @static
+	 * @method metamask
+	 * @param {String} dappUrl
+	 * @return {String}
+	 */
+	metamask: function (dappUrl) {
+		var url = dappUrl.replace(/^https?:\/\//, '');
+		return 'https://metamask.app.link/dapp/' + url;
+	},
+	/**
+	 * Opens a dapp in Trust Wallet.
+	 * @static
+	 * @method trustWallet
+	 * @param {String} dappUrl
+	 * @return {String}
+	 */
+	trustWallet: function (dappUrl) {
+		return 'trust://open_url?url=' + encodeURIComponent(dappUrl);
+	},
+	/**
+	 * Opens a dapp in Coinbase Wallet.
+	 * @static
+	 * @method coinbaseWallet
+	 * @param {String} dappUrl
+	 * @return {String}
+	 */
+	coinbaseWallet: function (dappUrl) {
+		return 'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(dappUrl);
+	},
+	/**
+	 * Opens a dapp in Rainbow wallet.
+	 * @static
+	 * @method rainbow
+	 * @param {String} dappUrl
+	 * @return {String}
+	 */
+	rainbow: function (dappUrl) {
+		return 'rainbow://open?url=' + encodeURIComponent(dappUrl);
+	},
+	/**
+	 * Generates an Ethereum payment URI (EIP-681).
+	 * @static
+	 * @method ethereumPay
+	 * @param {String} address
+	 * @param {Object} [options]
+	 * @param {String|Number} [options.value]
+	 * @param {String|Number} [options.gas]
+	 * @param {String|Number} [options.gasLimit]
+	 * @param {String|Number} [options.chainId]
+	 * @return {String}
+	 */
+	ethereumPay: function (address, options) {
+		options = options || {};
+		var url = 'ethereum:' + address;
+		var params = [];
+
+		if (options.value) params.push('value=' + options.value);
+		if (options.gas) params.push('gas=' + options.gas);
+		if (options.gasLimit) params.push('gasLimit=' + options.gasLimit);
+		if (options.chainId) params.push('chainId=' + options.chainId);
+
+		if (params.length) {
+			url += '?' + params.join('&');
+		}
+
+		return url;
 	}
 };
 Q.Links.whatsapp = Q.Links.whatsApp;
