@@ -12688,6 +12688,7 @@ Q.leaves = function _Q_leaves(structure, callback) {
 
 Q.sanitize = new Q.Method();
 Q.globalMemoryWalk = new Q.Method();
+Q.registerWebComponent = new Q.Method();
 Q.Method.define(Q, "{{Q}}/js/methods/Q", function () { return [Q]; });
 
 /**
