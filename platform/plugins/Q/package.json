@@ -1,0 +1,25 @@
+{
+	"name": "@qbix/q",
+	"description": "Qbix Q core plugin frontend tooling",
+	"author": "Qbix",
+	"homepage": "https://qbix.com/platform",
+	"license": "AGPL-3.0",
+	"version": "1.0.0",
+	"private": true,
+	"engines": {
+		"node": ">=18"
+	},
+	"devDependencies": {
+		"tailwindcss": "3.4.4",
+		"postcss": "8.4.38",
+		"autoprefixer": "10.4.19"
+	},
+	"scripts": {
+		"build:css": "tailwindcss -i web/css/tailwind.input.css -o web/css/tailwind.css --minify",
+		"watch:css": "tailwindcss -i web/css/tailwind.input.css -o web/css/tailwind.css --watch"
+	},
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Qbix/Q.git"
+	}
+}
