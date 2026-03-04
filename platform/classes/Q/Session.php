@@ -1293,6 +1293,13 @@ class Q_Session
 		$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		if (isset($secret)) {
 			$id = substr($id, 0, 32);
+			$time = (string)time();
+			$len = strlen($time);
+			if ($len < 11) {
+				$time = '0' . $time;
+				++$len;
+			}
+			$id = $time . substr($id, $len);
 			$sig = Q_Utils::signature($id, "$secret");
 			$id .= substr($sig, 0, 32);
 		}
