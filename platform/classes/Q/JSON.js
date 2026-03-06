@@ -1,8 +1,6 @@
 /**
  * Deterministic JSON utilities
- *
- * IMPORTANT
- * This file implements canonical JSON used for:
+ * This file implements canonical JSON used for things like:
  * - Safebox workflow hashing
  * - warrant signing
  * - action verification
@@ -227,6 +225,10 @@ Q_JSON.canonical = function canonical(v)
 		return v.map(Q_JSON.canonical);
 	}
 
+    if (v && typeof v === 'object' && v.constructor !== Object && !Array.isArray(v)) {
+        throw new Error("Q.JSON: unsupported object type in canonical JSON");
+    }
+
 	if (typeof v === 'object') {
 
 		const keys = Object.keys(v)
@@ -310,7 +312,6 @@ Q_JSON.hash = function hash(obj)
  */
 Q_JSON.cid = function cid(obj)
 {
-	const crypto = require('crypto');
 	const canonical = Q_JSON.stringify(obj);
 	const digest = crypto
 		.createHash('sha256')
@@ -348,21 +349,6 @@ Q_JSON.cid = function cid(obj)
 	]);
 
 	return base32Encode(cidBytes);
-};
-
-/**
- * Compute deterministic workflow CID
- *
- * Uses canonical JSON serialization.
- *
- * @method cid
- * @static
- * @param {Array} ast Normalized workflow AST
- * @return {String} CID string
- */
-Workflows.cid = function cid(ast)
-{
-	return Q_JSON.cid(ast);
 };
 
 /**
@@ -480,5 +466,32 @@ Q_JSON.decode = function decode(json, assoc = false, depth = 512, options = 0)
 
 	return result;
 };
+
+function base32Encode(buf)
+{
+	const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+	let bits = 0;
+	let value = 0;
+	let output = "";
+
+	for (let i = 0; i < buf.length; i++) {
+
+		value = (value << 8) | buf[i];
+		bits += 8;
+
+		while (bits >= 5) {
+
+			output += alphabet[(value >>> (bits - 5)) & 31];
+			bits -= 5;
+
+		}
+	}
+
+	if (bits > 0) {
+		output += alphabet[(value << (5 - bits)) & 31];
+	}
+
+	return "b" + output;
+}
 
 module.exports = Q_JSON;
