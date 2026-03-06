@@ -293,6 +293,79 @@ Q_JSON.hash = function hash(obj)
 };
 
 /**
+ * Deterministic CID (Content Identifier) of canonical JSON
+ *
+ * Uses:
+ *   CIDv1
+ *   codec: dag-json
+ *   hash: sha2-256
+ *
+ * Result example:
+ *   bafyreihd...
+ *
+ * @method cid
+ * @static
+ * @param {Object} obj Object to hash
+ * @return {String} CID string
+ */
+Q_JSON.cid = function cid(obj)
+{
+	const crypto = require('crypto');
+	const canonical = Q_JSON.stringify(obj);
+	const digest = crypto
+		.createHash('sha256')
+		.update(canonical)
+		.digest();
+
+	/*
+	Multihash encoding
+
+	sha2-256 code = 0x12
+	length = 32
+	*/
+
+	const multihash = Buffer.concat([
+		Buffer.from([0x12, 0x20]),
+		digest
+	]);
+
+	/*
+	CIDv1 binary format
+
+	<cid-version><codec><multihash>
+
+	version = 1
+	codec = dag-json (0x0129)
+	*/
+
+	const version = Buffer.from([0x01]);
+	const codec = Buffer.from([0x01, 0x29]);
+
+	const cidBytes = Buffer.concat([
+		version,
+		codec,
+		multihash
+	]);
+
+	return base32Encode(cidBytes);
+};
+
+/**
+ * Compute deterministic workflow CID
+ *
+ * Uses canonical JSON serialization.
+ *
+ * @method cid
+ * @static
+ * @param {Array} ast Normalized workflow AST
+ * @return {String} CID string
+ */
+Workflows.cid = function cid(ast)
+{
+	return Q_JSON.cid(ast);
+};
+
+/**
  * Encode JSON safely
  *
  * @method encode
