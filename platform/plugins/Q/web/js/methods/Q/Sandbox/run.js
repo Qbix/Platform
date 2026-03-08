@@ -18,6 +18,8 @@ Q.exports(function (Q) {
 	 * @param {String} [options.name] Reuse a persistent sandbox worker under this name
 	 * @param {Number} [options.timeout=2000] Timeout in milliseconds before aborting execution
 	 * @param {Boolean} [options.db=false] Whether to expose indexedDB inside sandbox
+	 * @param {Boolean|Object} [options.deterministic=false] Set to true or object to make the code run deterministically
+	 * @param {Number} [options.deterministic.seed=1] Seed for deterministic RNG
 	 * @return {Q.Promise} Resolves with result or rejects on error
 	 */
 	return function Q_Sandbox_run(code, context, methods, options) {
@@ -38,6 +40,7 @@ Q.exports(function (Q) {
 
 		SandboxRunner.prototype.createWorker = function () {
 			const allowDB = !!this.defaults.db;
+			const indexedDBExpr = allowDB ? 'indexedDB' : 'undefined';
 
 			const script = `
 				// --- Hard-disable network & import capabilities ---
@@ -94,7 +97,98 @@ Q.exports(function (Q) {
 					}
 
 					try {
-						const { code, context, methodNames } = msg;
+						const { code, context, methodNames, deterministic } = msg;
+
+						let __seed = 1;
+						if (deterministic && typeof deterministic === "object" && deterministic.seed !== undefined) {
+							__seed = deterministic.seed >>> 0;
+						}
+
+						const __timers = [];
+						let __timerGuard = 1000;
+
+						// --- Deterministic runtime injected only if requested ---
+						if (deterministic) {
+							let __randSeed = (__seed >>> 0) || 1;
+
+							function __rand(){
+								__randSeed = (__randSeed * 1664525 + 1013904223) >>> 0;
+								return __randSeed / 4294967296;
+							}
+
+							Object.defineProperty(self, "__deterministicSeed", {
+								value: __randSeed,
+								writable: false,
+								configurable: false
+							});
+
+							Math.random = __rand;
+							Object.defineProperty(Math, "random", {
+								value: __rand,
+								writable: false,
+								configurable: false
+							});
+
+							const __start = 0;
+
+							Date.now = function(){ return __start };
+
+							if (typeof performance !== "undefined") {
+								performance.now = function(){ return 0 };
+							}
+
+							const __RealDate = Date;
+
+							function DeterministicDate(...args) {
+								if (!(this instanceof DeterministicDate)) {
+									return new __RealDate(__start).toString();
+								}
+								if (args.length === 0) {
+									return new __RealDate(__start);
+								}
+								return new __RealDate(...args);
+							}
+
+							DeterministicDate.UTC = __RealDate.UTC;
+							DeterministicDate.parse = __RealDate.parse;
+							DeterministicDate.prototype = __RealDate.prototype;
+							DeterministicDate.prototype.constructor = DeterministicDate;
+
+							Date = DeterministicDate;
+
+							setTimeout = function(fn){ __timers.push(fn); return __timers.length };
+							setInterval = function(fn){ __timers.push(fn); return __timers.length };
+
+							clearTimeout = function(){};
+							clearInterval = function(){};
+
+							if (typeof crypto !== "undefined") {
+								crypto.getRandomValues = function(arr){
+									for (let i=0;i<arr.length;i++){
+										arr[i] = Math.floor(__rand()*256);
+									}
+									return arr;
+								};
+
+								crypto.randomUUID = function(){
+									return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
+										const r = Math.floor(__rand()*16);
+										return (c==='x'?r:(r&0x3|0x8)).toString(16);
+									});
+								};
+							}
+
+							self.fetch = undefined;
+							self.XMLHttpRequest = undefined;
+							self.WebSocket = undefined;
+							self.EventSource = undefined;
+							self.navigator = undefined;
+
+							try {
+								Object.freeze(Math);
+								Object.freeze(Date);
+							} catch {}
+						}
 
 						const methods = {};
 						for (const name of methodNames) {
@@ -115,15 +209,26 @@ Q.exports(function (Q) {
 							'const WebSocket = undefined;\\n' +
 							'const EventSource = undefined;\\n' +
 							'const importScripts = undefined;\\n' +
-							'const indexedDB = ' + (${allowDB} ? 'indexedDB' : 'undefined') + ';\\n' +
+							'const indexedDB = ${allowDB ? 'self.indexedDB' : 'undefined'};\\n' +
 							'const IDBFactory = undefined;\\n' +
 							'const IDBDatabase = undefined;\\n' +
 							'const IDBObjectStore = undefined;\\n' +
-							'return (async () => { ' + code + ' })();'
+							'const __user = async function(){\\n' +
+							code + '\\n' +
+							'};\\n' +
+							'return __user();'
 						);
 
 						const result = await fn(...values);
+
+						// run deterministic timers
+						while (__timers.length && __timerGuard--) {
+							try { __timers.shift()(); } catch {}
+						}
+						__timers.length = 0;
+
 						self.postMessage({ type: "done", ok: true, result });
+
 					} catch (err) {
 						self.postMessage({
 							type: "done",
@@ -141,8 +246,9 @@ Q.exports(function (Q) {
 		};
 
 		SandboxRunner.prototype.run = function (code, ctx, methods, opts) {
+			opts = opts || {};
 			const worker = this.worker || this.createWorker();
-			const timeoutMs = (opts && opts.timeout) || this.defaults.timeout;
+			const timeoutMs = opts.timeout || this.defaults.timeout;
 
 			let safeCtx;
 			try {
@@ -156,15 +262,19 @@ Q.exports(function (Q) {
 			return new Q.Promise(function (resolve, reject) {
 				let timer;
 
+				const runner = this;
 				const cleanup = () => {
 					clearTimeout(timer);
 					if (!opts.name) {
 						try {
-							URL.revokeObjectURL(this.url);
+							URL.revokeObjectURL(runner.url);
 							worker.terminate();
 						} catch {}
 					}
 				};
+
+				const rpcLog = [];
+				let finished = false;
 
 				worker.onmessage = function (e) {
 					const msg = e.data;
@@ -184,6 +294,11 @@ Q.exports(function (Q) {
 						Promise.resolve()
 							.then(() => fn(...msg.args))
 							.then(result => {
+								rpcLog.push({
+									method: msg.method,
+									args: msg.args,
+									result
+								});
 								worker.postMessage({
 									type: "rpcResult",
 									id: msg.id,
@@ -192,6 +307,12 @@ Q.exports(function (Q) {
 								});
 							})
 							.catch(err => {
+								rpcLog.push({
+									method: msg.method,
+									args: msg.args,
+									error: String(err && err.message || err)
+								});
+
 								worker.postMessage({
 									type: "rpcResult",
 									id: msg.id,
@@ -203,8 +324,35 @@ Q.exports(function (Q) {
 					}
 
 					if (msg && msg.type === "done") {
-						cleanup();
-						msg.ok ? resolve(msg.result) : reject(msg.error);
+						if (finished) return;
+						finished = true;
+						
+						const execution = {
+							code,
+							context: safeCtx,
+							seed: (opts.deterministic && typeof opts.deterministic === "object")
+								? opts.deterministic.seed
+								: (opts.deterministic ? 1 : undefined),
+							rpc: rpcLog,
+							ok: !!msg.ok,
+							result: msg.ok ? msg.result : undefined,
+							error: msg.ok ? undefined : msg.error
+						};
+
+						Q.Data.digest("SHA-256", JSON.stringify(execution))
+						.then(function (hash) {
+							cleanup();
+							if (msg.ok) {
+								resolve({
+									result: msg.result,
+									hash
+								});
+							} else {
+								const err = new Error(msg.error || "Sandbox error");
+								err.hash = hash;
+								reject(err);
+							}
+						});
 					}
 				};
 
@@ -221,7 +369,8 @@ Q.exports(function (Q) {
 				worker.postMessage({
 					code,
 					context: safeCtx,
-					methodNames
+					methodNames,
+					deterministic: opts.deterministic || false
 				});
 			}.bind(this));
 		};
