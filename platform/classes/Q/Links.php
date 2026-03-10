@@ -15,14 +15,17 @@ class Q_Links
 	{
 		
 	}
-	
+
 	/**
 	 * Generates a link for sending an sms message
 	 * @static
 	 * @method sms
-	 * @param {string} [body]
-	 * @param {string|Array} [mobileNumbers]
+	 * @param {string} [$body]
+	 *   SMS message body.
+	 * @param {string|Array} [$mobileNumbers]
+	 *   Recipient number or array of numbers.
 	 * @return {string}
+	 *   An `sms:` URI.
 	 */
 	static function sms ($body, $mobileNumbers = null)
 	{
@@ -38,16 +41,23 @@ class Q_Links
 		$char = $ios ? '&' : '?';
 		return $url . $char . http_build_query(@compact('body'), '', '&', PHP_QUERY_RFC3986);
 	}
+
 	/**
 	 * Generates a link for sending an email message
 	 * @static
 	 * @method email
-	 * @param {string} [subject]
-	 * @param {string} [body]
-	 * @param {string|Array} [to]
-	 * @param {string|Array} [cc]
-	 * @param {string|Array} [bcc]
+	 * @param {string} [$subject]
+	 *   Email subject.
+	 * @param {string} [$body]
+	 *   Email body text.
+	 * @param {string|Array} [$to]
+	 *   Recipient email address or array of addresses.
+	 * @param {string|Array} [$cc]
+	 *   CC email address or array of addresses.
+	 * @param {string|Array} [$bcc]
+	 *   BCC email address or array of addresses.
 	 * @return {string}
+	 *   A `mailto:` URI.
 	 */
 	static function email ($subject, $body, $to = null, $cc = null, $bcc = null)
 	{
@@ -67,146 +77,236 @@ class Q_Links
 		}
 		return $url;
 	}
-	
+
 	/**
-	 * Generates a link for opening a WhatsApp message to a number
+	 * Generates a link for opening a WhatsApp chat to a number
+	 * with an optional pre-filled message.
+	 *
 	 * @static
 	 * @method whatsApp
-	 * @param {string} [$phoneNumber] This should include the country code, without the "+"
-	 * @param {string} [$text] The text can include a URL that will be expanded in the chat
+	 * @param {string} [$phoneNumber]
+	 *   Phone number including country code, without "+".
+	 * @param {string} [$text]
+	 *   Text message to prefill.
 	 * @return {string}
+	 *   A `whatsapp://` deep link.
 	 */
 	static function whatsApp ($phoneNumber, $text = null)
 	{
 		return 'whatsapp://send/?phone=' . $phoneNumber
 			. ($text ? '&' . http_build_query(@compact('text'), '', '&', PHP_QUERY_RFC3986) : '');
 	}
-	
+
 	/**
-     * Generates a link for opening Telegram to a channel and taking an action,
-     * or prefilling text and URL and/or offering to share it with contacts.
-     * More info here: https://core.telegram.org/api/links#group-channel-bot-links
-     *
-     * @method telegram
-     * @static
-     * @param {string} [to] Phone number with country code e.g. "+1", or username starting with "@".
-     *  Or pass null here and supply text (and optional URL) to open Telegram and let the user
-     *  choose Telegram users, channels, and groups to share to.
-     * @param {string} [text] The text to share. Although it can contain a URL, try using options.url when "to" is empty.
-     * @param {array} [options]
-     * @param {string} [options.action] Can be "voicechat", "videochat" or "livestream" if it was scheduled already.
-     * @param {string} [options.actionValue] If action is specified, optionally provide an invite hash here.
-     * @param {string} [options.url] Optionally put a URL to share here, which will appear ahead of the text.
-     * @param {string} [options.start] “start” parameter for a bot.
-     * @param {string} [options.startgroup] “startgroup” parameter for a bot.
-     * @param {string} [options.startchannel] "startchannel" parameter for a bot.
-     * @param {string} [options.startapp] “startapp” parameter for a bot to launch a mini-app.
-     * @param {string} [options.admin] Admin permissions for a bot to have in a group or channel.
-     * @param {string} [options.appname] "appname" name of the mini-app for the bot to launch, if it has several.
-     * @param {string} [options.startattach] "startattach" parameter for a bot after being attached to a user, group, or channel.
-     * @param {string|array} [options.choose] Can be one or more of "users", "bots", "groups", "channels".
-     * @param {string} [options.attach] If to is a chat, then this is the name of a bot to attach to a chat.
-     * @param {string} [options.game] The short_name of a game to share with a bot.
-     * @return {string} The generated Telegram URL.
-     */
-	static function telegram ($to = null, $text = null, $options = array()) {
-        $urlParams = array();
-        $options = isset($options) ? $options : array();
-
-        if (!$to) { // Share URL with some users to select in Telegram
-            $command = 'msg';
-            if (!empty($options['url'])) {
-                // NOTE: special characters won't work in text,
-                // better to keep options.url blank and place URL in text
-                array_unshift($urlParams, 'url=' . urlencode($options['url']));
-                $command = 'msg_url';
-            }
-            if ($text) {
-                $urlParams[] = 'text=' . urlencode($text);
-            }
-            return 'tg://' . $command . '?' . implode('&', $urlParams);
-        }
-
-        $where = ($to[0] === '@' ? 'domain=' . substr($to, 1) : 'phone=' . $to);
-
-        if (!empty($options['action'])) {
-            $v = !empty($options['actionValue']) ? ('=' . urlencode($options['actionValue'])) : '';
-            return 'tg://resolve?' . $where . '&' . $options['action'] . $v;
-        }
-
-        $botcommands = false;
-        $keys = ['start', 'startgroup', 'startchannel', 'admin', 'startapp', 'appname', 'startattach', 'choose', 'game'];
-        foreach ($keys as $k) {
-            if (!empty($options[$k])) {
-                $botcommands = true;
-                $urlParams[] = $k . '=' . urlencode($options[$k]);
-            }
-        }
-
-        if ($botcommands) {
-            if (!empty($options['choose'])) {
-                if (is_array($options['choose'])) {
-                    $options['choose'] = implode('+', $options['choose']);
-                }
-            }
-            return 'tg://resolve?' . $where . '&' . implode('&', $urlParams);
-        }
-
-        $urlParams[] = 'to=' . $to;
-        if ($text) {
-            $urlParams[] = 'text=' . urlencode($text);
-        }
-
-        return 'tg://msg?' . implode('&', $urlParams);
-    }
-	
-	/**
-	 * Generates a link for sharing a link in Skype
+	 * Generates Telegram deep links for messaging, bots, channels, and actions.
+	 * See: https://core.telegram.org/api/links#group-channel-bot-links
+	 *
+	 * @method telegram
 	 * @static
-	 * @method telegramShare
-	 * @param {string} [$text] The text to share, can contain a URL
-	 * @param {string} [$url] The URL to share
+	 * @param {string} [$to]
+	 *   Phone number with country code (e.g. "+1") or username beginning with "@".
+	 *   If omitted, Telegram will open with share options.
+	 * @param {string} [$text]
+	 *   Text to send or share.
+	 * @param {array} [$options]
+	 *   Optional Telegram parameters.
+	 * @param {string} [$options['action']]
+	 *   Scheduled action such as `voicechat`, `videochat`, or `livestream`.
+	 * @param {string} [$options['actionValue']]
+	 *   Invite hash associated with the action.
+	 * @param {string} [$options['url']]
+	 *   URL to share alongside the text.
+	 * @param {string} [$options['start']]
+	 * @param {string} [$options['startgroup']]
+	 * @param {string} [$options['startchannel']]
+	 * @param {string} [$options['startapp']]
+	 * @param {string} [$options['admin']]
+	 * @param {string} [$options['appname']]
+	 * @param {string} [$options['startattach']]
+	 * @param {string|array} [$options['choose']]
+	 *   One or more of `"users"`, `"bots"`, `"groups"`, `"channels"`.
+	 * @param {string} [$options['attach']]
+	 *   Bot to attach to a chat.
+	 * @param {string} [$options['game']]
+	 *   Telegram game short name.
 	 * @return {string}
+	 *   The generated `tg://` deep link.
+	 */
+	static function telegram ($to = null, $text = null, $options = array()) {
+
+		$urlParams = array();
+
+		if (!$to) {
+			$command = 'msg';
+			if (!empty($options['url'])) {
+				array_unshift($urlParams, 'url=' . urlencode($options['url']));
+				$command = 'msg_url';
+			}
+			if ($text) {
+				$urlParams[] = 'text=' . urlencode($text);
+			}
+			return 'tg://' . $command . '?' . implode('&', $urlParams);
+		}
+
+		$where = ($to[0] === '@' ? 'domain=' . substr($to, 1) : 'phone=' . $to);
+
+		if (!empty($options['action'])) {
+			$v = !empty($options['actionValue']) ? ('=' . urlencode($options['actionValue'])) : '';
+			return 'tg://resolve?' . $where . '&' . $options['action'] . $v;
+		}
+
+		$botcommands = false;
+		$keys = ['start', 'startgroup', 'startchannel', 'admin', 'startapp', 'appname', 'startattach', 'game'];
+
+		foreach ($keys as $k) {
+			if (!empty($options[$k])) {
+				$botcommands = true;
+				$urlParams[] = $k . '=' . urlencode($options[$k]);
+			}
+		}
+
+		if (!empty($options['choose'])) {
+			$botcommands = true;
+			if (is_array($options['choose'])) {
+				$options['choose'] = implode('+', $options['choose']);
+			}
+			$urlParams[] = 'choose=' . $options['choose'];
+		}
+
+		if ($botcommands) {
+			return 'tg://resolve?' . $where . '&' . implode('&', $urlParams);
+		}
+
+		$urlParams[] = 'to=' . $to;
+
+		if ($text) {
+			$urlParams[] = 'text=' . urlencode($text);
+		}
+
+		return 'tg://msg?' . implode('&', $urlParams);
+	}
+
+	/**
+	 * Generates a link for sharing on X (Twitter) or composing a DM.
+	 *
+	 * If `$options['recipientId']` is provided, opens a DM compose window.
+	 * Otherwise opens the tweet composer.
+	 *
+	 * @static
+	 * @method twitter
+	 * @param {string} [$text]
+	 *   Tweet text or DM text.
+	 * @param {string} [$url]
+	 *   URL to include in the tweet.
+	 * @param {array} [$options]
+	 * @param {string|array} [$options['hashtags']]
+	 *   One or more hashtags without "#".
+	 * @param {string} [$options['via']]
+	 *   Twitter username to attribute the tweet to.
+	 * @param {string|int} [$options['recipientId']]
+	 *   If provided, opens a DM compose window to this user ID.
+	 * @return {string}
+	 *   Twitter/X intent URL.
+	 */
+	static function twitter($text = null, $url = null, $options = array())
+	{
+		if (!empty($options['recipientId'])) {
+			$urlDm = 'https://twitter.com/messages/compose?recipient_id=' . $options['recipientId'];
+			if ($text) {
+				$urlDm .= '&text=' . rawurlencode($text);
+			}
+			return $urlDm;
+		}
+
+		$params = array();
+
+		if ($text) $params['text'] = $text;
+		if ($url) $params['url'] = $url;
+
+		if (!empty($options['hashtags'])) {
+			$hashtags = $options['hashtags'];
+			if (is_array($hashtags)) {
+				$hashtags = implode(',', $hashtags);
+			}
+			$params['hashtags'] = $hashtags;
+		}
+
+		if (!empty($options['via'])) {
+			$params['via'] = $options['via'];
+		}
+
+		return 'https://twitter.com/intent/tweet?' .
+			http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+	}
+
+	/**
+	 * Generates a link for sharing content via Skype.
+	 *
+	 * @static
+	 * @method skype
+	 * @param {string} [$text]
+	 *   Text to share.
+	 * @param {string} [$url]
+	 *   URL to share.
+	 * @return {string}
+	 *   Skype share URL.
 	 */
 	static function skype ($text, $url = null)
 	{
-		return 'https://web.skype.com/share?'
-			. ($text ? '&' . http_build_query(@compact('text')) : '')
-			. ($url ? '&' . http_build_query(@compact('url'), '', '&', PHP_QUERY_RFC3986) : '');
+		$params = array();
+
+		if ($text) {
+			$params['text'] = $text;
+		}
+		if ($url) {
+			$params['url'] = $url;
+		}
+
+		return 'https://web.skype.com/share?' .
+			http_build_query($params, '', '&', PHP_QUERY_RFC3986);
 	}
-	
+
 	/**
-	 * Generates a link for opening in android chrome browser.
-	 * Usable in other browsers on Android.
+	 * Generates a link for opening a URL in Android Chrome.
+	 *
 	 * @static
 	 * @method androidChrome
 	 * @param {string} [$url]
+	 *   URL to open.
 	 * @return {string}
+	 *   `googlechrome://` URI.
 	 */
 	static function androidChrome ($url)
 	{
-		return 'googlechrome://navigate?url=' . $url; // note: don't encode
+		return 'googlechrome://navigate?url=' . $url;
 	}
 
-/**
-	 * Generates a link to open a dapp in MetaMask mobile
+	/**
+	 * Generates a link to open a dapp in MetaMask mobile.
+	 *
 	 * @static
 	 * @method metamask
 	 * @param {string} $dappUrl
+	 *   URL of the decentralized application.
 	 * @return {string}
+	 *   MetaMask deep link.
 	 */
 	static function metamask($dappUrl)
 	{
+		$dappUrl = $dappUrl ?: '';
 		$url = preg_replace('#^https?://#', '', $dappUrl);
 		return 'https://metamask.app.link/dapp/' . $url;
 	}
 
 	/**
-	 * Generates a link to open a dapp in Trust Wallet
+	 * Generates a link to open a dapp in Trust Wallet.
+	 *
 	 * @static
 	 * @method trustWallet
 	 * @param {string} $dappUrl
+	 *   URL of the decentralized application.
 	 * @return {string}
+	 *   Trust Wallet deep link.
 	 */
 	static function trustWallet($dappUrl)
 	{
@@ -214,11 +314,14 @@ class Q_Links
 	}
 
 	/**
-	 * Generates a link to open a dapp in Coinbase Wallet
+	 * Generates a link to open a dapp in Coinbase Wallet.
+	 *
 	 * @static
 	 * @method coinbaseWallet
 	 * @param {string} $dappUrl
+	 *   URL of the decentralized application.
 	 * @return {string}
+	 *   Coinbase Wallet deep link.
 	 */
 	static function coinbaseWallet($dappUrl)
 	{
@@ -226,11 +329,14 @@ class Q_Links
 	}
 
 	/**
-	 * Generates a link to open a dapp in Rainbow wallet
+	 * Generates a link to open a dapp in Rainbow wallet.
+	 *
 	 * @static
 	 * @method rainbow
 	 * @param {string} $dappUrl
+	 *   URL of the decentralized application.
 	 * @return {string}
+	 *   Rainbow wallet deep link.
 	 */
 	static function rainbow($dappUrl)
 	{
@@ -238,16 +344,23 @@ class Q_Links
 	}
 
 	/**
-	 * Generates an Ethereum payment URI (EIP-681)
+	 * Generates an Ethereum payment URI (EIP-681).
+	 *
 	 * @static
 	 * @method ethereumPay
 	 * @param {string} $address
+	 *   Ethereum address or contract.
 	 * @param {array} [$options]
 	 * @param {string|int} [$options['value']]
+	 *   Amount of ETH or token.
 	 * @param {string|int} [$options['gas']]
+	 *   Gas price.
 	 * @param {string|int} [$options['gasLimit']]
+	 *   Gas limit.
 	 * @param {string|int} [$options['chainId']]
+	 *   Chain ID.
 	 * @return {string}
+	 *   `ethereum:` payment URI.
 	 */
 	static function ethereumPay($address, $options = array())
 	{

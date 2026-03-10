@@ -6464,7 +6464,6 @@ Q.Tool.onLoadedConstructor = Q.Event.factory({}, ["", function (name) {
 }]);
 Q.Tool.onMissingConstructor = new Q.Event();
 
-
 /**
  * Methods for working with links
  * @class Q.Links
@@ -6474,19 +6473,27 @@ Q.Links = {
 	 * Generates a link for making a call
 	 * @static
 	 * @method tel
-	 * @param {String} [mobileNumbers]
+	 * @param {String} mobileNumber
+	 *   Phone number to call.
+	 * @param {String} [extension]
+	 *   Optional extension to dial after connection.
 	 * @return {String}
+	 *   A `tel:` URI.
 	 */
 	tel: function (mobileNumber, extension) {
 		return 'tel:' + mobileNumber + (extension ? 'p' + extension : '');
 	},
+
 	/**
 	 * Generates a link for sending an sms message
 	 * @static
 	 * @method sms
 	 * @param {String} [body]
+	 *   SMS message body.
 	 * @param {String|Array} [mobileNumbers]
+	 *   Recipient number or array of numbers.
 	 * @return {String}
+	 *   An `sms:` URI.
 	 */
 	sms: function (body, mobileNumbers) {
 		var ios = (Q.info.browser.OS === 'ios');
@@ -6501,43 +6508,56 @@ Q.Links = {
 		var char = ios ? '&' : '?';
 		return url + char + 'body=' + encodeURIComponent(body);
 	},
+
 	/**
 	 * Generates a link for sending an email message
 	 * @static
 	 * @method email
 	 * @param {String} [subject]
+	 *   Email subject.
 	 * @param {String} [body]
+	 *   Email body text.
 	 * @param {String|Array} [to]
+	 *   Recipient email address or array of addresses.
 	 * @param {String|Array} [cc]
+	 *   CC email address or array of addresses.
 	 * @param {String|Array} [bcc]
+	 *   BCC email address or array of addresses.
 	 * @return {String}
+	 *   A `mailto:` URI.
 	 */
 	email: function (subject, body, to, cc, bcc) {
-		var ios = (Q.info.browser.OS === 'ios');
 		to = to && Q.isArrayLike(to) ? to.join(',') : to;
 		cc = cc && Q.isArrayLike(cc) ? cc.join(',') : cc;
 		bcc = bcc && Q.isArrayLike(bcc) ? bcc.join(',') : bcc;
+
 		var names = ['cc', 'bcc', 'subject', 'body'];
 		var parts = [cc, bcc, subject, body];
 		var url = "mailto:" + (to || '');
 		var char = '?';
-		for (var i=0, l=names.length; i<l; ++i) {
+
+		for (var i = 0, l = names.length; i < l; ++i) {
 			if (parts[i]) {
-				url += char + names[i] + '=' + 
+				url += char + names[i] + '=' +
 					(i >= 2 ? encodeURIComponent(parts[i]) : parts[i]);
 				char = '&';
 			}
 		}
 		return url;
 	},
+
 	/**
 	 * Generates a link for opening a WhatsApp chat to a number,
-	 * witha an optional pre-filled message.
+	 * with an optional pre-filled message.
+	 *
 	 * @static
 	 * @method whatsApp
-	 * @param {String} [phoneNumber] This should include the country code, without the "+"
-	 * @param {String} [message] The text can include a URL that will be expanded in the chat
+	 * @param {String} [phoneNumber]
+	 *   Phone number including country code, without "+".
+	 * @param {String} [message]
+	 *   Text message to pre-fill.
 	 * @return {String}
+	 *   A `whatsapp://` deep link.
 	 */
 	whatsApp: function (phoneNumber, message) {
 		var urlParams = [];
@@ -6551,183 +6571,298 @@ Q.Links = {
 
 		return 'whatsapp://send/?' + urlParams.join('&');
 	},
+
 	/**
-	 * Generates a link for opening Telegram to a channel and taking an action,
-	 * or prefilling text and URL and/or offering to share it with contacts.
-	 * More info here: https://core.telegram.org/api/links#group-channel-bot-links
+	 * Generates Telegram deep links.
+	 * Supports messaging, bot commands, and channel/group actions.
+	 *
 	 * @static
 	 * @method telegram
-	 * @param {String} [to] Phone number with country code e.g. "+1", or username starting with "@".
-	 *  Or pass null here and supply text (and optional url) to open Telegram and let the user
-	 *  choose Telegram users, channels and groups to share to.
-	 * @param {String} [text] The text to share. Although it can contain a URL, try using options.url when "to" is empty
+	 * @param {String} [to]
+	 *   Phone number with country code (e.g. "+1") or username beginning with "@".
+	 * @param {String} [text]
+	 *   Text message to send or share.
 	 * @param {Object} [options]
-	 * @param {String} [options.action] Can be "voicechat", "videochat" or "livestream" if it was scheduled already
-	 * @param {String} [options.actionValue] If action is specified, optionally provide an invite hash here
-	 * @param {String} [options.url] Optionally put a URL to share here, which will appear ahead of the text
-	 * @param {String} [options.start] “start” parameter for a bot
-	 * @param {String} [options.startgroup] “startgroup” parameter for a bot
-	 * @param {String} [options.startchannel] "startchannel" parameter for a bot
-	 * @param {String} [options.startapp] “startapp” parameter for a bot to launch a mini-app
-	 * @param {String} [options.admin] admin permissions for a bot to have in a group or channel
-	 * @param {String} [options.appname] "appname" name of the mini-app for the bot to launch, if it has several
-	 * @param {String} [options.startattach] "startattach" parameter for a bot after being attached to a user, group, channel
-	 * @param {String|Array} [options.choose] can be one or more of "users", "bots", "groups", "channels"
-	 * @param {String} [options.attach] if to is a chat, then this is the name of a bot to attach to a chat
-	 * @param {String} [options.game] the short_name of a game to share with a bot
+	 *   Optional parameters controlling bot actions and sharing behavior.
+	 * @param {String} [options.url]
+	 *   URL to share along with text.
+	 * @param {String} [options.action]
+	 *   Scheduled action such as `voicechat`, `videochat`, or `livestream`.
+	 * @param {String} [options.actionValue]
+	 *   Invite hash associated with the action.
+	 * @param {String} [options.start]
+	 * @param {String} [options.startgroup]
+	 * @param {String} [options.startchannel]
+	 * @param {String} [options.startapp]
+	 * @param {String} [options.admin]
+	 * @param {String} [options.appname]
+	 * @param {String} [options.startattach]
+	 * @param {String|Array} [options.choose]
+	 *   One or more of `"users"`, `"bots"`, `"groups"`, `"channels"`.
+	 * @param {String} [options.game]
+	 *   Telegram game short name.
 	 * @return {String}
+	 *   A `tg://` deep link.
 	 */
 	telegram: function (to, text, options) {
 		var urlParams = [];
 		options = options || {};
-		if (!to) { //share URL with some users to select in telegram
+
+		if (!to) {
 			var command = 'msg';
+
 			if (options.url) {
-				// NOTE: special characters won't work in text,
-				// better to keep options.url blank and place URL in text
 				urlParams.unshift('url=' + (options.url || ''));
 				command = 'msg_url';
 			}
+
 			if (text) {
 				urlParams.push('text=' + encodeURIComponent(text));
 			}
+
 			return 'tg://' + command + '?' + urlParams.join('&');
 		}
+
 		var where = (to[0] === '@' ? 'domain=' + to.substring(1) : 'phone=' + to);
+
 		if (options.action) {
 			var v = options.actionValue ? ('=' + options.actionValue) : '';
 			return 'tg://resolve?' + where + '&' + options.action + v;
 		}
+
 		var botcommands = false;
-		for (var k in {
+		var botParams = {
 			start:1, startgroup:1, startchannel:1, admin:1,
-			startapp:1, appname:1, startattach:1, choose:1, game:1
-		}) {
+			startapp:1, appname:1, startattach:1, game:1
+		};
+
+		for (var k in botParams) {
 			if (options[k]) {
 				botcommands = true;
 				urlParams.push(k + '=' + encodeURIComponent(options[k]));
 			}
 		}
-		if (botcommands) {
-			if (options.choose) {
-				if (Q.isArrayLike(options.choose)) {
-					options.choose = options.choose.join('+');
-				}
+
+		if (options.choose) {
+			botcommands = true;
+			if (Q.isArrayLike(options.choose)) {
+				options.choose = options.choose.join('+');
 			}
+			urlParams.push('choose=' + options.choose);
+		}
+
+		if (botcommands) {
 			return 'tg://resolve?' + where + '&' + urlParams.join('&');
 		}
+
 		urlParams.push('to=' + to);
+
 		if (text) {
 			urlParams.push('text=' + encodeURIComponent(text));
 		}
+
 		return 'tg://msg?' + urlParams.join('&');
 	},
+	
 	/**
-	 * Generates a link for opening Linkedin profile in native app
+	 * Generates a link for sharing on X (Twitter) or composing a DM.
+	 *
+	 * If `options.recipientId` is provided, opens a DM compose window.
+	 * Otherwise opens the tweet composer.
+	 *
+	 * @static
+	 * @method twitter
+	 * @param {String} [text]
+	 *   Tweet text or DM text.
+	 * @param {String} [url]
+	 *   URL to include in the tweet.
+	 * @param {Object} [options]
+	 * @param {String|Array} [options.hashtags]
+	 *   One or more hashtags without "#".
+	 * @param {String} [options.via]
+	 *   Twitter username to attribute the tweet to.
+	 * @param {String|Number} [options.recipientId]
+	 *   If provided, opens a DM compose window to this user ID.
+	 * @return {String}
+	 *   A Twitter/X intent URL.
+	 */
+	twitter: function (text, url, options) {
+		options = options || {};
+
+		if (options.recipientId) {
+			var dm = 'https://twitter.com/messages/compose?recipient_id=' + options.recipientId;
+			if (text) {
+				dm += '&text=' + encodeURIComponent(text);
+			}
+			return dm;
+		}
+
+		var params = [];
+
+		if (text) params.push('text=' + encodeURIComponent(text));
+		if (url) params.push('url=' + encodeURIComponent(url));
+
+		if (options.hashtags) {
+			var hashtags = options.hashtags;
+			if (Q.isArrayLike(hashtags)) {
+				hashtags = hashtags.join(',');
+			}
+			params.push('hashtags=' + encodeURIComponent(hashtags));
+		}
+
+		if (options.via) {
+			params.push('via=' + encodeURIComponent(options.via));
+		}
+
+		return 'https://twitter.com/intent/tweet?' + params.join('&');
+	},	
+
+	/**
+	 * Opens a LinkedIn profile in the native app.
+	 *
 	 * @static
 	 * @method linkedin
-	 * @param {String} [username] Username of profile to open
+	 * @param {String} username
+	 *   LinkedIn profile username.
 	 * @return {String}
+	 *   A `linkedin://` deep link.
 	 */
 	linkedin: function (username) {
 		return 'linkedin://profile/' + username;
 	},
+
 	/**
-	 * Generates a link for opening chat with User in WeChat app
+	 * Opens a WeChat chat with a user.
+	 *
 	 * @static
 	 * @method wechat
-	 * @param {String} [username] Username to chat with
+	 * @param {String} username
+	 *   WeChat username.
 	 * @return {String}
+	 *   A `weixin://` deep link.
 	 */
 	wechat: function (username) {
 		return 'weixin://dl/chat?' + username;
 	},
+
 	/**
-	 * Generates a link for sharing a link in Skype
+	 * Generates a link for sharing content via Skype.
+	 *
 	 * @static
 	 * @method skype
-	 * @param {String} [text] The text to share, can contain a URL
-	 * @param {String} [url] The URL to share
+	 * @param {String} [text]
+	 *   Text to share.
+	 * @param {String} [url]
+	 *   URL to share.
 	 * @return {String}
+	 *   Skype share URL.
 	 */
 	skype: function (text, url) {
-		return 'https://web.skype.com/share?'
-			+ (text ? '&text=' + encodeURIComponent(text) : '')
-			+ (url ? '&url=' + encodeURIComponent(url) : '');
+		var params = [];
+		if (text) params.push('text=' + encodeURIComponent(text));
+		if (url) params.push('url=' + encodeURIComponent(url));
+		return 'https://web.skype.com/share?' + params.join('&');
 	},
+
 	/**
-	 * Generates a link for opening in android chrome browser.
-	 * Usable in other browsers on Android.
+	 * Opens a URL in Android Chrome.
+	 *
 	 * @static
 	 * @method androidChrome
-	 * @param {String} [url]
+	 * @param {String} url
+	 *   URL to open.
 	 * @return {String}
+	 *   `googlechrome://` URI.
 	 */
 	androidChrome: function (url) {
-		return 'googlechrome://navigate?url=' + url; // note: don't encodeURIComponent
+		return 'googlechrome://navigate?url=' + url;
 	},
+
 	/**
-	 * Opens a dapp in MetaMask mobile.
+	 * Opens a decentralized application in MetaMask mobile wallet.
+	 *
 	 * @static
 	 * @method metamask
 	 * @param {String} dappUrl
+	 *   URL of the dApp.
 	 * @return {String}
+	 *   MetaMask deep link.
 	 */
 	metamask: function (dappUrl) {
-		var url = dappUrl.replace(/^https?:\/\//, '');
+		var url = (dappUrl || '').replace(/^https?:\/\//, '');
 		return 'https://metamask.app.link/dapp/' + url;
 	},
+
 	/**
-	 * Opens a dapp in Trust Wallet.
+	 * Opens a decentralized application in Trust Wallet.
+	 *
 	 * @static
 	 * @method trustWallet
 	 * @param {String} dappUrl
+	 *   URL of the dApp.
 	 * @return {String}
+	 *   Trust Wallet deep link.
 	 */
 	trustWallet: function (dappUrl) {
 		return 'trust://open_url?url=' + encodeURIComponent(dappUrl);
 	},
+
 	/**
-	 * Opens a dapp in Coinbase Wallet.
+	 * Opens a decentralized application in Coinbase Wallet.
+	 *
 	 * @static
 	 * @method coinbaseWallet
 	 * @param {String} dappUrl
+	 *   URL of the dApp.
 	 * @return {String}
+	 *   Coinbase Wallet deep link.
 	 */
 	coinbaseWallet: function (dappUrl) {
 		return 'https://go.cb-w.com/dapp?cb_url=' + encodeURIComponent(dappUrl);
 	},
+
 	/**
-	 * Opens a dapp in Rainbow wallet.
+	 * Opens a decentralized application in Rainbow wallet.
+	 *
 	 * @static
 	 * @method rainbow
 	 * @param {String} dappUrl
+	 *   URL of the dApp.
 	 * @return {String}
+	 *   Rainbow wallet deep link.
 	 */
 	rainbow: function (dappUrl) {
 		return 'rainbow://open?url=' + encodeURIComponent(dappUrl);
 	},
+
 	/**
 	 * Generates an Ethereum payment URI (EIP-681).
+	 *
 	 * @static
 	 * @method ethereumPay
 	 * @param {String} address
+	 *   Ethereum address or contract.
 	 * @param {Object} [options]
 	 * @param {String|Number} [options.value]
+	 *   Amount of ETH or token value.
 	 * @param {String|Number} [options.gas]
+	 *   Gas price.
 	 * @param {String|Number} [options.gasLimit]
+	 *   Gas limit.
 	 * @param {String|Number} [options.chainId]
+	 *   Chain ID.
 	 * @return {String}
+	 *   An `ethereum:` payment URI.
 	 */
 	ethereumPay: function (address, options) {
 		options = options || {};
 		var url = 'ethereum:' + address;
 		var params = [];
 
-		if (options.value) params.push('value=' + options.value);
-		if (options.gas) params.push('gas=' + options.gas);
-		if (options.gasLimit) params.push('gasLimit=' + options.gasLimit);
-		if (options.chainId) params.push('chainId=' + options.chainId);
+		if (options.value != null) params.push('value=' + options.value);
+		if (options.gas != null) params.push('gas=' + options.gas);
+		if (options.gasLimit != null) params.push('gasLimit=' + options.gasLimit);
+		if (options.chainId != null) params.push('chainId=' + options.chainId);
 
 		if (params.length) {
 			url += '?' + params.join('&');
@@ -6736,6 +6871,7 @@ Q.Links = {
 		return url;
 	}
 };
+
 Q.Links.whatsapp = Q.Links.whatsApp;
 
 /**
@@ -12766,7 +12902,7 @@ Q.Method.define(Q, "{{Q}}/js/methods/Q", function () { return [Q]; });
  */
 Q.Sandbox = Q.Method.define({
 	run: new Q.Method()
-});
+}, "{{Q}}/js/methods/Q/Sandbox", function () { return [Q]; });
 
 /**
  * Methods for working with data

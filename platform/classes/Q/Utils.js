@@ -6,6 +6,7 @@ var Q = require('Q');
 var fs = require('fs');
 var path = require('path');
 var util = require('util');
+var crypto = require('crypto');
 var Db = Q.require('Db');
 var Db_Mysql = Q.require('Db/Mysql');
 
@@ -394,7 +395,7 @@ Utils.queryExternal = function(handler, data /* {} */, url /* null */, headers /
 
 /**
  * Sends a query to Node.js internal server and gets the response
- * This method shall make communications behind firewal
+ * This method shall make communications behind firewall
  * @method queryInternal
  * @param {string} handler the handler to call
  * @param {array} [data={}] Associative array of data of the message to send.
@@ -1140,5 +1141,94 @@ Utils.splitId = function(id, lengths, delimiter, internalDelimiter, checkRegEx) 
 	}
 	return prefix + segments.join(delimiter);
 };
+
+/**
+ * Deterministic CID (Content Identifier) for raw content
+ *
+ * Uses:
+ *   CIDv1
+ *   codec: raw (0x55)
+ *   hash: sha2-256
+ *
+ * @method cid
+ * @static
+ * @param {String|Buffer} content
+ * @return {String} CID string
+ */
+Q.Utils.cid = function cid(content)
+{
+	if (content === undefined || content === null) {
+		throw new Error("Q.Utils.cid requires content");
+	}
+
+	if (!Buffer.isBuffer(content)) {
+		content = Buffer.from(String(content), "utf8");
+	}
+
+	const digest = crypto
+		.createHash("sha256")
+		.update(content)
+		.digest();
+
+	/*
+	multihash
+
+	sha2-256 code = 0x12
+	length = 32
+	*/
+
+	const multihash = Buffer.concat([
+		Buffer.from([0x12, 0x20]),
+		digest
+	]);
+
+	/*
+	CIDv1
+
+	<version><codec><multihash>
+
+	version = 1
+	codec = raw = 0x55
+	*/
+
+	const version = Buffer.from([0x01]);
+	const codec = Buffer.from([0x55]);
+
+	const cidBytes = Buffer.concat([
+		version,
+		codec,
+		multihash
+	]);
+
+	return Q.Utils.base32(cidBytes);
+};
+
+/**
+ * Base32 encoding (CID compatible)
+ */
+Q.Utils.base32 = function (buffer)
+{
+	const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+
+	let bits = 0;
+	let value = 0;
+	let output = "";
+
+	for (let i = 0; i < buffer.length; i++) {
+		value = (value << 8) | buffer[i];
+		bits += 8;
+
+		while (bits >= 5) {
+			output += alphabet[(value >>> (bits - 5)) & 31];
+			bits -= 5;
+		}
+	}
+
+	if (bits > 0) {
+		output += alphabet[(value << (5 - bits)) & 31];
+	}
+
+	return "b" + output;
+}
 
 module.exports = Utils;

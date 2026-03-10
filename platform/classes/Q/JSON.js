@@ -299,56 +299,22 @@ Q_JSON.hash = function hash(obj)
  *
  * Uses:
  *   CIDv1
- *   codec: dag-json
+ *   codec: dag-json (0x0129)
  *   hash: sha2-256
- *
- * Result example:
- *   bafyreihd...
  *
  * @method cid
  * @static
- * @param {Object} obj Object to hash
- * @return {String} CID string
+ * @param {Object} obj
+ * @return {String}
  */
 Q_JSON.cid = function cid(obj)
 {
 	const canonical = Q_JSON.stringify(obj);
-	const digest = crypto
-		.createHash('sha256')
-		.update(canonical)
-		.digest();
 
-	/*
-	Multihash encoding
-
-	sha2-256 code = 0x12
-	length = 32
-	*/
-
-	const multihash = Buffer.concat([
-		Buffer.from([0x12, 0x20]),
-		digest
-	]);
-
-	/*
-	CIDv1 binary format
-
-	<cid-version><codec><multihash>
-
-	version = 1
-	codec = dag-json (0x0129)
-	*/
-
-	const version = Buffer.from([0x01]);
-	const codec = Buffer.from([0x01, 0x29]);
-
-	const cidBytes = Buffer.concat([
-		version,
-		codec,
-		multihash
-	]);
-
-	return base32Encode(cidBytes);
+	return Q.Utils.cid(
+		canonical,
+		Buffer.from([0x01, 0x29]) // dag-json
+	);
 };
 
 /**

@@ -2710,6 +2710,100 @@ class Q_Utils
 		return base64_encode($raw);
 	}
 
+	/**
+	 * Deterministic CID (Content Identifier) for raw content
+	 *
+	 * Uses:
+	 *   CIDv1
+	 *   codec: raw (0x55)
+	 *   hash: sha2-256
+	 *
+	 * @method cid
+	 * @static
+	 * @param string $content
+	 * @return string CID string
+	 */
+	static function cid($content)
+	{
+		if ($content === null) {
+			throw new Exception("Q_Utils::cid requires content");
+		}
+
+		if (!is_string($content)) {
+			$content = strval($content);
+		}
+
+		$digest = hash('sha256', $content, true);
+
+		/*
+		multihash
+
+		sha2-256 code = 0x12
+		length = 32
+		*/
+
+		$multihash = chr(0x12) . chr(0x20) . $digest;
+
+		/*
+		CIDv1
+
+		<version><codec><multihash>
+
+		version = 1
+		codec = raw = 0x55
+		*/
+
+		$version = chr(0x01);
+		$codec = chr(0x55);
+
+		$cidBytes = $version . $codec . $multihash;
+
+		return self::base32($cidBytes);
+	}
+
+	/**
+	 * Base32 encoding (CID compatible)
+	 *
+	 * lowercase RFC4648 without padding
+	 *
+	 * @method base32
+	 * @static
+	 * @param string $buffer
+	 * @return string
+	 */
+	static function base32($buffer)
+	{
+		$alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+
+		$bits = 0;
+		$value = 0;
+		$output = "";
+
+		$len = strlen($buffer);
+
+		for ($i = 0; $i < $len; $i++) {
+
+			$value = ($value << 8) | ord($buffer[$i]);
+			$bits += 8;
+
+			while ($bits >= 5) {
+
+				$index = ($value >> ($bits - 5)) & 31;
+
+				$output .= $alphabet[$index];
+
+				$bits -= 5;
+			}
+		}
+
+		if ($bits > 0) {
+			$index = ($value << (5 - $bits)) & 31;
+			$output .= $alphabet[$index];
+		}
+
+		return "b" . $output;
+	}
+
 	
 	private static function unsigned_right_shift($x, $n) {
 		return ($x >= 0) ? ($x >> $n) : (($x + 0x100000000) >> $n);
