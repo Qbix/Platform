@@ -2516,6 +2516,7 @@ Q.listen = function _Q_listen(options, callback) {
 					+ req.url.split('?', 2)[0]);
 			}
 		}
+		req.internal = !!server.internal;
 		req.validated = true;
 		Q.emit('request', req, res);
 		next();
