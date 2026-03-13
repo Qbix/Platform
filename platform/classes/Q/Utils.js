@@ -1155,7 +1155,7 @@ Utils.splitId = function(id, lengths, delimiter, internalDelimiter, checkRegEx) 
  * @param {String|Buffer} content
  * @return {String} CID string
  */
-Q.Utils.cid = function cid(content)
+Utils.cid = function cid(content)
 {
 	if (content === undefined || content === null) {
 		throw new Error("Q.Utils.cid requires content");
@@ -1200,13 +1200,13 @@ Q.Utils.cid = function cid(content)
 		multihash
 	]);
 
-	return Q.Utils.base32(cidBytes);
+	return Utils.base32(cidBytes);
 };
 
 /**
  * Base32 encoding (CID compatible)
  */
-Q.Utils.base32 = function (buffer)
+Utils.base32 = function (buffer)
 {
 	const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
 
