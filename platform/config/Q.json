@@ -21,7 +21,12 @@
 					"PHP": "7.3",
 					"extensions": ["gmp"],
 					"functions": ["gmp_init", "hex2bin", "chunk_split"]
-				}
+				},
+				"Crypto_EthSigRecover.php": { "PHP": 7.3 },
+				"Crypto_Keccak": { "PHP": 7.3 },
+				"Crypto_PointMathGMP": { "PHP": 7.3 },
+				"Crypto_SECp256k1.php": { "PHP": 7.3 },
+				"Crypto_Signature": { "PHP": 7.3 }
 			}
 		},
 		"routes": {

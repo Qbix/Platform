@@ -82,7 +82,7 @@ class Q_Crypto
 		$types       = $options['types'];
 		$primaryType = $options['primaryType'];
 		$domain      = $options['domain'] ?? [];
-		$format      = $options['format'] ?? 'p256';
+		$format      = self::normalizeFormat($options['format'] ?? 'qcrypto');
 
 		// -------------------------------------------------
 		// Derive keypair ONCE
@@ -96,34 +96,56 @@ class Q_Crypto
 		 * k256 (secp256k1 + keccak256)
 		 * ================================================= */
 		if ($format === 'k256') {
-
-			$payload = array(
-				'domain'       => $domain,
-				'primaryType' => $primaryType,
-				'types'        => $types,
-				'message'      => $message
+            $digest = Q_Data::hashTypedData(
+                $domain,
+                $primaryType,
+                $message,
+                $types
             );
 
-			$canonical = Q_Utils::serialize($payload);
-			$digest    = hash('sha3-256', $canonical, true);
+            /*
+            * IMPORTANT:
+            * This must produce a recoverable Ethereum-style signature:
+            * 64-byte compact (r||s) + recovery id -> 65 bytes total (r||s||v)
+            *
+            * If Q_ECC::sign() only returns DER or only returns [r, s] without recovery,
+            * you must replace this call with your SimpleWeb3 / secp256k1 adapter that
+            * returns:
+            *   - 'compact' => 64-byte binary string
+            *   - 'recovery' => 0 or 1
+            */
+            $sig = Q_ECC::signRecoverable(
+                $digest,
+                $kp['privateKey'],
+                'K256'
+            );
 
-			$rs = Q_ECC::sign(
-				$digest,
-				$kp['privateKey'],
-				'K256'
-			);
+            $compact = $sig['compact'];
+            $recovery = $sig['recovery'];
 
-			return [
-				'format'      => 'k256',
-				'curve'       => 'secp256k1',
-				'hashAlg'     => 'keccak256',
-				'domain'      => $domain,
-				'primaryType'=> $primaryType,
-				'digest'      => bin2hex($digest),
-				'signature'   => Q_ECC::RStoDER($rs),
-				'publicKey'   => $kp['publicKey']
-			];
-		}
+            if (!is_string($compact) || strlen($compact) !== 64) {
+                throw new Exception("recoverable k256 signature must contain 64-byte compact signature");
+            }
+            if (!is_int($recovery) && !ctype_digit((string)$recovery)) {
+                throw new Exception("recoverable k256 signature must contain recovery id");
+            }
+
+            $v = chr(27 + (int)$recovery);
+            $signature = $compact . $v;
+
+            return [
+                'format'       => 'eip712',
+                'curve'        => 'secp256k1',
+                'hashAlg'      => 'keccak256',
+                'domain'       => $domain,
+                'primaryType'  => $primaryType,
+                'digest'       => bin2hex($digest),
+                'signature'    => $signature,
+                'signatureHex' => '0x' . bin2hex($signature),
+                'publicKey'    => $kp['publicKey'],
+                'address'      => $kp['address']
+            ];
+        }
 
 		/* =================================================
 		 * p256 (NIST P-256 + SHA-256)
@@ -137,24 +159,27 @@ class Q_Crypto
         );
 
 		$canonical = Q_Utils::serialize($payload);
-		$digest    = hash('sha256', $canonical, true);
+		$digest = Q_Data::digest($canonical, 'sha256');
 
-		$rs = Q_ECC::sign(
-			$digest,
-			bin2hex($kp['privateKey']),
-			'P256'
-		);
+		$rs = Q_ECC::signDigest(
+            $digest,
+            bin2hex($kp['privateKey']),
+            'P256'
+        );
 
-		return [
-			'format'      => 'p256',
-			'curve'       => 'p256',
-			'hashAlg'     => 'sha256',
-			'domain'      => $domain,
-			'primaryType'=> $primaryType,
-			'digest'      => bin2hex($digest),
-			'signature'   => Q_ECC::RStoDER($rs),
-			'publicKey'   => $kp['publicKey']
-		];
+		$der = Q_ECC::RStoDER($rs);
+
+        return [
+            'format'       => 'qcrypto',
+            'curve'        => 'p256',
+            'hashAlg'      => 'sha256',
+            'domain'       => $domain,
+            'primaryType'  => $primaryType,
+            'digest'       => bin2hex($digest),
+            'signature'    => $der,
+            'signatureHex' => '0x' . bin2hex($der),
+            'publicKey'    => $kp['publicKey']
+        ];
 	}
 
 
@@ -199,7 +224,7 @@ class Q_Crypto
         $rootSecret = $options['rootSecret'];
         $label      = $options['label'];
         $context    = $options['context'] ?? '';
-        $format     = $options['format'] ?? 'p256';
+        $format     = self::normalizeFormat($options['format'] ?? 'qcrypto');
 
         // -------------------------------------------------
         // Derive delegated capability secret
@@ -294,7 +319,7 @@ class Q_Crypto
      * @param array $options['message']
      *   Message payload.
      * @param string $options['signature']
-     *   Signature (DER binary for qcrypto, hex r||s for eip712).
+     *   Signature (DER binary for qcrypto, binary or hex r||s||v for eip712).
      * @param string $options['primaryType']
      *   Root type name (required for eip712).
      * @param string $options['address']
@@ -312,19 +337,17 @@ class Q_Crypto
             throw new Exception("options required");
         }
 
-        $format = $options['format'] ?? 'qcrypto';
+        $format = self::normalizeFormat($options['format'] ?? 'qcrypto');
 
         /* =================================================
         * Ethereum / EIP-712
         * ================================================= */
-        if ($format === 'eip712') {
-
+        if ($format === 'k256') {
             if (empty($options['primaryType'])) {
-                throw new Exception("primaryType required for eip712 verification");
+                throw new Exception("primaryType required for k256 verification");
             }
 
             try {
-                // Canonical EIP-712 hash (same as JS path)
                 $digest = Q_Data::hashTypedData(
                     $options['domain'] ?? [],
                     $options['primaryType'],
@@ -332,38 +355,61 @@ class Q_Crypto
                     $options['types']
                 );
 
-                // Signature: r||s hex
-                $sigHex = $options['signature'];
-                if (!is_string($sigHex) || strlen($sigHex) !== 128) {
+                $sigBin = is_string($options['signature']) && (
+                    strpos($options['signature'], '0x') === 0 ||
+                    ctype_xdigit($options['signature'])
+                )
+                    ? self::hexToBinMaybe($options['signature'])
+                    : $options['signature'];
+
+                if (strlen($sigBin) === 65) {
+                    $compact = substr($sigBin, 0, 64);
+                    $v = ord($sigBin[64]);
+
+                    if ($v === 27 || $v === 28) {
+                        $recoveries = [$v - 27];
+                    } elseif ($v === 0 || $v === 1) {
+                        $recoveries = [$v];
+                    } else {
+                        return false;
+                    }
+
+                } elseif (strlen($sigBin) === 64) {
+                    $compact = $sigBin;
+                    $recoveries = [0, 1]; // match JS behavior
+
+                } else {
                     return false;
                 }
 
-                $r = substr($sigHex, 0, 64);
-                $s = substr($sigHex, 64, 64);
+                $pub = null;
 
-                // Recover public key
-                $pub = Q_ECC::recoverPublicKey(
-                    $digest,
-                    [$r, $s],
-                    'K256'
-                );
+                foreach ($recoveries as $recovery) {
+                    $pub = Q_ECC::recoverPublicKey(
+                        $digest,
+                        $compact,
+                        $recovery,
+                        'K256'
+                    );
+                    if ($pub) break;
+                }
 
                 if (!$pub) {
                     return false;
                 }
 
-                // Ethereum address = keccak(pub[1:]) last 20 bytes
-                $addr = '0x' . substr(
-                    bin2hex(hash('sha3-256', substr($pub, 1), true)),
-                    -40
-                );
+                $addr = self::publicKeyToAddress($pub);
 
                 if (isset($options['recovered']) && is_array($options['recovered'])) {
                     $options['recovered']['address'] = $addr;
+                    $options['recovered']['publicKey'] = $pub;
                 }
 
                 if (!empty($options['address'])) {
-                    return strtolower($addr) === strtolower($options['address']);
+                    return hash_equals(
+                        strtolower($addr),
+                        strtolower($options['address'])
+                    );
                 }
 
                 return true;
@@ -376,12 +422,12 @@ class Q_Crypto
         /* =================================================
         * qcrypto (P-256 + SHA-256)
         * ================================================= */
-        if ($format === 'qcrypto') {
+        if ($format === 'p256') {
 
             if (empty($options['publicKey']) || !is_string($options['publicKey'])) {
                 throw new Exception("qcrypto verify requires publicKey (hex)");
             }
-            if (empty($options['signature']) || !is_string($options['signature'])) {
+            if (empty($options['signature'])) {
                 throw new Exception("qcrypto verify requires signature (DER binary)");
             }
 
@@ -393,13 +439,20 @@ class Q_Crypto
             );
 
             // Deep canonicalization (must match sign)
-            $canonical = Q::serialize($payload);
+            $canonical = Q_Utils::serialize($payload);
             $digest = Q_Data::digest($canonical, 'sha256');
 
             try {
-                return Q_ECC::verify(
+                $sigBin = is_string($options['signature']) && (
+                    strpos($options['signature'], '0x') === 0 ||
+                    ctype_xdigit($options['signature'])
+                )
+                    ? self::hexToBinMaybe($options['signature'])
+                    : $options['signature'];
+
+                return Q_ECC::verifyDigest(
                     $digest,
-                    Q_ECC::DERtoRS($options['signature']),
+                    Q_ECC::DERtoRS($sigBin),
                     $options['publicKey'],
                     'P256'
                 );
@@ -449,7 +502,7 @@ class Q_Crypto
             throw new Exception("derivedSecret must be binary string");
         }
 
-        $format    = isset($options['format']) ? $options['format'] : 'qcrypto';
+        $format = self::normalizeFormat(isset($options['format']) ? $options['format'] : 'qcrypto');
         $statement = $options['statement'];
         $context   = isset($statement['context']) ? $statement['context'] : '';
 
@@ -480,7 +533,7 @@ class Q_Crypto
             'Delegation' => array(
                 array(
                     'name' => 'parent',
-                    'type' => ($format === 'eip712') ? 'address' : 'bytes32'
+                    'type' => ($format === 'k256') ? 'address' : 'bytes32'
                 ),
                 array('name' => 'label',      'type' => 'string'),
                 array('name' => 'issuedTime', 'type' => 'uint64'),
@@ -495,7 +548,7 @@ class Q_Crypto
         // -------------------------------------------------
         // EIP-712 (secp256k1)
         // -------------------------------------------------
-        if ($format === 'eip712') {
+        if ($format === 'k256') {
 
             if (empty($options['signature'])) {
                 throw new Exception("signature required");
@@ -530,7 +583,7 @@ class Q_Crypto
         // -------------------------------------------------
         // qcrypto (P-256)
         // -------------------------------------------------
-        if ($format === 'qcrypto') {
+        if ($format === 'p256') {
 
             if (empty($options['parentPublicKey']) || !is_string($options['parentPublicKey'])) {
                 throw new Exception("parentPublicKey required for qcrypto");
@@ -588,7 +641,7 @@ class Q_Crypto
         }
 
         $secret = $options['secret'];
-        $format = $options['format'] ?? 'p256';
+        $format = self::normalizeFormat($options['format'] ?? 'qcrypto');
 
         $adapter = EccFactory::getAdapter();
 
@@ -601,7 +654,7 @@ class Q_Crypto
             $material = $info . $secret;
 
             // keccak256
-            $digest = hash('sha3-256', $material, true);
+            $digest = \Crypto\Keccak::hash($material, 256, true);
 
             $generator = CurveFactory::getGeneratorByName('secp256k1');
             $n = $generator->getOrder();
@@ -617,14 +670,16 @@ class Q_Crypto
             // Uncompressed public key: 04 || X || Y
             $x = str_pad(gmp_strval($publicKey->getPoint()->getX(), 16), 64, '0', STR_PAD_LEFT);
             $y = str_pad(gmp_strval($publicKey->getPoint()->getY(), 16), 64, '0', STR_PAD_LEFT);
+
             $publicKeyRaw = hex2bin('04' . $x . $y);
 
             return [
-                'format'     => 'k256',
+                'format'     => 'eip712',
                 'curve'      => 'secp256k1',
                 'hashAlg'    => 'keccak256',
-                'privateKey' => str_pad(gmp_strval($d, 16), 64, '0', STR_PAD_LEFT),
-                'publicKey'  => $publicKeyRaw
+                'privateKey' => hex2bin(str_pad(gmp_strval($d, 16), 64, '0', STR_PAD_LEFT)),
+                'publicKey'  => $publicKeyRaw,
+                'address'    => self::publicKeyToAddress($publicKeyRaw)
             ];
         }
 
@@ -636,7 +691,7 @@ class Q_Crypto
             $info = "q.crypto.p256.private-key";
             $material = $info . $secret;
 
-            $digest = hash('sha256', $material, true);
+            $digest = Q_Data::digest($material, 'sha256');
 
             $generator = EccFactory::getNistCurves()->generator256();
             $n = $generator->getOrder();
@@ -654,7 +709,7 @@ class Q_Crypto
             $publicKeyRaw = hex2bin('04' . $x . $y);
 
             return [
-                'format'     => 'p256',
+                'format'     => 'qcrypto',
                 'curve'      => 'p256',
                 'hashAlg'    => 'sha256',
                 'privateKey' => hex2bin(str_pad(gmp_strval($d, 16), 64, '0', STR_PAD_LEFT)),
@@ -663,6 +718,48 @@ class Q_Crypto
         }
 
         throw new Exception("Unsupported format: {$format}");
+    }
+
+    private static function normalizeFormat($format)
+    {
+        $format = strtolower((string)$format);
+
+        if ($format === 'eip712') return 'k256';
+        if ($format === 'qcrypto') return 'p256';
+
+        return $format;
+    }
+
+    private static function hexToBinMaybe($value)
+    {
+        if (!is_string($value)) {
+            throw new Exception("signature must be a string");
+        }
+
+        if (strpos($value, '0x') === 0 || strpos($value, '0X') === 0) {
+            $value = substr($value, 2);
+        }
+
+        if (strlen($value) % 2 !== 0) {
+            throw new Exception("invalid hex");
+        }
+
+        $bin = hex2bin($value);
+        if ($bin === false) {
+            throw new Exception("invalid hex");
+        }
+
+        return $bin;
+    }
+
+    private static function publicKeyToAddress($publicKeyRaw)
+    {
+        if (!is_string($publicKeyRaw) || strlen($publicKeyRaw) !== 65 || ord($publicKeyRaw[0]) !== 0x04) {
+            throw new Exception("publicKey must be 65-byte uncompressed key");
+        }
+
+        $hash = \Crypto\Keccak::hash(substr($publicKeyRaw, 1), 256, true);
+        return '0x' . substr(bin2hex($hash), -40);
     }
 
 }

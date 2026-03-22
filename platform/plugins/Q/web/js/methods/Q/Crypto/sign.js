@@ -12,6 +12,13 @@ Q.exports(function (Q) {
 		return out;
 	}
 
+	function toHex(bytes) {
+		if (!(bytes instanceof Uint8Array)) {
+			bytes = new Uint8Array(bytes);
+		}
+		return Array.prototype.slice.call(bytes).toHex();
+	}
+
 	return function Q_Crypto_sign(options) {
 
 		return new Q.Promise(async function (resolve) {
@@ -45,73 +52,44 @@ Q.exports(function (Q) {
 			 * ================================================= */
 			if (format === "eip712") {
 
-				let digestBytes;
-				let signatureDer;
+				const [{ hashTypedData }, secp] = await Promise.all([
+					import(Q.url("{{Q}}/src/js/crypto/eip712.js")),
+					import(Q.url("{{Q}}/src/js/crypto/secp256k1.js"))
+				]);
 
-				// Prefer ethers (ecosystem parity)
-				if (globalThis.ethers && globalThis.ethers.TypedDataEncoder) {
+				// ---------- Digest (single source of truth) ----------
+				const digestBytes = hashTypedData(
+					domain,
+					options.primaryType,
+					options.message,
+					options.types
+				);
 
-					const digestHex = globalThis.ethers.TypedDataEncoder
-						.from(options.types)
-						.hash(domain, options.message);
+				// ---------- Sign ----------
+				const sig = secp.secp256k1.sign(digestBytes, kp.privateKey, {
+					recovered: true,
+					der: false
+				});
 
-					digestBytes = Q.Data.fromHex(digestHex);
+				let compact, recovery;
 
-					const sigHex = await kp._wallet._signTypedData(
-						domain,
-						options.types,
-						options.message
-					);
-
-					const sigBytes = Q.Data.fromHex(sigHex);
-
-					const secp = await import(
-						Q.url("{{Q}}/src/js/crypto/secp256k1.js")
-					);
-					const { encodeEcdsaDer } = await import(
-						Q.url("{{Q}}/src/js/crypto/encoder.js")
-					);
-
-					const sig = secp.secp256k1.Signature.fromCompact(
-						sigBytes.slice(0, 64)
-					).normalizeS();
-
-					// ethers BN path — OK to use toArrayLike
-					signatureDer = encodeEcdsaDer(
-						sig.r.toArrayLike(Uint8Array),
-						sig.s.toArrayLike(Uint8Array)
-					);
-
+				if (Array.isArray(sig)) {
+					compact = sig[0];
+					recovery = sig[1];
 				} else {
-
-					const [{ hashTypedData }] = await Promise.all([
-						import(Q.url("{{Q}}/src/js/crypto/eip712.js"))
-					]);
-
-					digestBytes = hashTypedData(
-						domain,
-						options.primaryType,
-						options.message,
-						options.types
-					);
-
-					const secp = await import(
-						Q.url("{{Q}}/src/js/crypto/secp256k1.js")
-					);
-					const { encodeEcdsaDer } = await import(
-						Q.url("{{Q}}/src/js/crypto/encoder.js")
-					);
-
-					const sig = secp.secp256k1
-						.sign(digestBytes, kp.privateKey)
-						.normalizeS();
-
-					// noble returns BigInt → convert explicitly
-					signatureDer = encodeEcdsaDer(
-						bigIntTo32Bytes(sig.r),
-						bigIntTo32Bytes(sig.s)
-					);
+					compact = sig.signature;
+					recovery = sig.recovery;
 				}
+
+				// Ensure Uint8Array
+				if (!(compact instanceof Uint8Array)) {
+					compact = new Uint8Array(compact);
+				}
+
+				// ---------- Build Ethereum signature (r || s || v) ----------
+				const signature = new Uint8Array(65);
+				signature.set(compact, 0);
+				signature[64] = 27 + recovery;
 
 				resolve({
 					format: "eip712",
@@ -119,14 +97,15 @@ Q.exports(function (Q) {
 					hashAlg: "keccak256",
 					domain: domain,
 					primaryType: options.primaryType,
-					digest: Q.Data.toHex(digestBytes),
-					signature: signatureDer,
+					digest: toHex(digestBytes),
+					signature: signature,
+					signatureHex: toHex(signature),
 					publicKey: kp.publicKey,
 					address: kp.address
 				});
+
 				return;
 			}
-
 			/* =================================================
 			 * qcrypto (P-256 + SHA-256)
 			 * ================================================= */

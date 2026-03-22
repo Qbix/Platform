@@ -47,14 +47,19 @@ Q.exports(function (Q) {
 					"q.crypto.k256.private-key"
 				);
 
+				if (!(secret instanceof Uint8Array)) {
+					throw new Error("secret must be Uint8Array");
+				}
+
 				const material = new Uint8Array(info.length + secret.length);
 				material.set(info, 0);
 				material.set(secret, info.length);
 
-				const digestHex = await Q.Data.digest(
-					"KECCAK-256",
-					material
-				);
+				const [{ keccak_256 }] = await Promise.all([
+					import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
+				]);
+
+				const digestHex = keccak_256(material);
 
 				// Proper scalar derivation: mod curve order
 				const secp = await import(

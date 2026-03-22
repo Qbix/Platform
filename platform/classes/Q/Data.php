@@ -20,8 +20,36 @@ class Q_Data
 	 * @throws {Exception}
 	 *   If the algorithm is unsupported.
 	 */
-
 	public static function digest($data, $algo = 'sha256') {
+		$algo = strtolower($algo);
+
+		switch ($algo) {
+			case 'sha256':
+			case 'sha-256':
+				$algo = 'sha256';
+				break;
+
+			case 'sha384':
+			case 'sha-384':
+				$algo = 'sha384';
+				break;
+
+			case 'sha512':
+			case 'sha-512':
+				$algo = 'sha512';
+				break;
+
+			case 'sha3-256':
+				$algo = 'sha3-256';
+				break;
+
+			case 'keccak256':
+			case 'keccak-256':
+				return \Crypto\Keccak::hash($data, 256, true);
+
+			default:
+				throw new Exception("Unsupported hash algorithm: $algo");
+		}
 		return hash($algo, $data, true);
 	}
 
