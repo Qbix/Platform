@@ -12,13 +12,13 @@ Q.exports(function (Q) {
 	 * @static
 	 * @method verify
 	 * @param {Object} options
-	 * @param {String} [options.format='qcrypto']
+	 * @param {String} [options.format='ES256']
 	 * @param {Object} options.domain
 	 * @param {Object} options.types
 	 * @param {Object} options.message
 	 * @param {String|Uint8Array} options.signature
-	 * @param {String} [options.address] Expected signer address (eip712)
-	 * @param {Uint8Array} [options.publicKey] Expected signer public key (qcrypto)
+	 * @param {String} [options.address] Expected signer address (EIP712)
+	 * @param {Uint8Array} [options.publicKey] Expected signer public key (ES256)
 	 * @param {Object} [options.recovered] If provided, signer info is written here
 	 * @return {Q.Promise} resolves to true or false
 	 */
@@ -30,12 +30,12 @@ Q.exports(function (Q) {
 				throw new Error("options required");
 			}
 
-			const format = options.format || "qcrypto";
+			const format = options.format || "ES256";
 
 			/* =================================================
 			 * Ethereum / EIP-712
 			 * ================================================= */
-			if (format === "eip712") {
+			if (format === "EIP712") {
 
 				if (typeof options.primaryType !== "string") {
 					throw new Error("primaryType required for eip712 verification");
@@ -149,18 +149,18 @@ Q.exports(function (Q) {
 			}
 
 			/* =================================================
-			 * qcrypto (P-256 + SHA-256)
+			 * es256 (P-256 + SHA-256)
 			 * =================================================
 			 *
-			 * qcrypto signatures are DER-encoded ECDSA (WebCrypto compatible)
+			 * es256 signatures are DER-encoded ECDSA (WebCrypto compatible)
 			 */
-			if (format === "qcrypto") {
+			if (format === "ES256") {
 
 				if (!(options.publicKey instanceof Uint8Array)) {
-					throw new Error("qcrypto verify requires publicKey (Uint8Array)");
+					throw new Error("ES256 verify requires publicKey (Uint8Array)");
 				}
 				if (!(options.signature instanceof Uint8Array)) {
-					throw new Error("qcrypto verify requires signature (Uint8Array)");
+					throw new Error("ES256 verify requires signature (Uint8Array)");
 				}
 
 				const payload = {
@@ -175,8 +175,7 @@ Q.exports(function (Q) {
 				const data = new TextEncoder().encode(canonical);
 
 				try {
-					const digestHex = await Q.Data.digest("SHA-256", data);
-					const digestBytes = Q.Data.fromHex(digestHex);
+					const digestBytes = await Q.Data.digest("SHA-256", data);
 
 					const key = await crypto.subtle.importKey(
 						"raw",

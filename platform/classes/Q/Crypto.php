@@ -1,5 +1,8 @@
 <?php
 
+use Mdanter\Ecc\Curves\CurveFactory;
+use Crypto\Keccak;
+
 /**
  * @module Q
  */
@@ -9,129 +12,116 @@
  */
 class Q_Crypto
 {
-	/**
-	 * Sign a typed message using a deterministically derived keypair.
-	 *
-	 * This is the PHP counterpart of `Q_Crypto_sign` in JS.
-	 * It performs protocol-level typed signing (not raw message signing).
-	 *
-	 * Supported formats:
-	 * - `p256` → NIST P-256 + SHA-256 (Q-native)
-	 * - `k256` → secp256k1 + keccak256 (Ethereum-style)
-	 *
-	 * SECURITY PROPERTIES:
-	 * - Secret is never stored
-	 * - Keypair derivation is deterministic
-	 * - Exactly one hash + one signature
-	 * - Output is a verifiable proof object
-	 *
-	 * @method sign
-	 * @static
-	 *
-	 * @param {Object} options
-	 * @param {String} options.secret
-	 *   Raw binary secret material.
-	 * @param {Object} options.message
-	 *   Typed message payload.
-	 * @param {Object} options.types
-	 *   Type definitions (EIP-712–style).
-	 * @param {String} options.primaryType
-	 *   Root type name.
-	 * @param {Object} [options.domain]
-	 *   Optional domain separator.
-	 * @param {String} [options.format="p256"]
-	 *   Signing format: `"p256"` or `"k256"`.
-	 *
-	 * @return {Object}
-	 * @return {String} return.format
-	 *   Signing format used.
-	 * @return {String} return.curve
-	 *   Elliptic curve name.
-	 * @return {String} return.hashAlg
-	 *   Hash algorithm used.
-	 * @return {Object} return.domain
-	 *   Domain separator.
-	 * @return {String} return.primaryType
-	 *   Root type name.
-	 * @return {String} return.digest
-	 *   Hex-encoded message digest.
-	 * @return {String} return.signature
-	 *   DER-encoded ECDSA signature (binary).
-	 * @return {String} return.publicKey
-	 *   Raw uncompressed public key.
-	 *
-	 * @throws {Exception}
-	 */
-	public static function sign(array $options): array
-	{
-		if (empty($options['secret']) || !is_string($options['secret'])) {
-			throw new Exception("secret must be a binary string");
-		}
-		if (empty($options['message']) || !is_array($options['message'])) {
-			throw new Exception("message required");
-		}
-		if (empty($options['types']) || !is_array($options['types'])) {
-			throw new Exception("types required");
-		}
-		if (empty($options['primaryType']) || !is_string($options['primaryType'])) {
-			throw new Exception("primaryType required");
-		}
+    /**
+     * Sign a typed message using a deterministically derived keypair.
+     *
+     * This is the PHP counterpart of Q_Crypto_sign in JS.
+     * It performs protocol-level typed signing (not raw message signing).
+     *
+     * Supported formats:
+     * - "ES256" / "p256" → NIST P-256 + SHA-256 (Q-native)
+     * - "EIP712" / "k256" → secp256k1 + keccak256 (Ethereum-style)
+     *
+     * SECURITY PROPERTIES:
+     * - Secret is never stored
+     * - Keypair derivation is deterministic
+     * - Exactly one hash + one signature
+     * - Output is a verifiable proof object
+     *
+     * @method sign
+     * @static
+     *
+     * @param array  $options
+     * @param string $options['secret']      Raw binary secret material.
+     * @param array  $options['message']     Typed message payload.
+     * @param array  $options['types']       Type definitions (EIP-712 style).
+     * @param string $options['primaryType'] Root type name.
+     * @param array  $options['domain']      Optional domain separator fields.
+     * @param string $options['format']      "ES256" or "EIP712" (default: "ES256").
+     *
+     * @return array Associative array with the following keys:
+     *
+     *   'format'       {string} Signing format used: "eip712" or "es256".
+     *   'curve'        {string} Elliptic curve: "secp256k1" or "p256".
+     *   'hashAlg'      {string} Hash algorithm: "keccak256" or "sha256".
+     *   'domain'       {array}  Domain separator (may be empty for ES256).
+     *   'primaryType'  {string} Root type name.
+     *   'digest'       {string} Hex-encoded message digest.
+     *   'signature'    {string} Raw binary signature.
+     *                           EIP712: 65 bytes r||s||v (v = 27 + recovery).
+     *                           ES256:  DER-encoded ECDSA signature.
+     *   'signatureHex' {string} "0x"-prefixed hex of signature.
+     *   'publicKey'    {string} Raw binary uncompressed public key (65 bytes).
+     *
+     *   EIP712 only:
+     *   'address'      {string} Ethereum address of signer ("0x...").
+     *
+     * @throws Exception
+     */
+    public static function sign(array $options): array
+    {
+        if (empty($options['secret']) || !is_string($options['secret'])) {
+            throw new Exception("secret must be a binary string");
+        }
+        if (empty($options['message']) || !is_array($options['message'])) {
+            throw new Exception("message required");
+        }
+        if (empty($options['types']) || !is_array($options['types'])) {
+            throw new Exception("types required");
+        }
+        if (empty($options['primaryType']) || !is_string($options['primaryType'])) {
+            throw new Exception("primaryType required");
+        }
 
-		$secret      = $options['secret'];
-		$message     = $options['message'];
-		$types       = $options['types'];
-		$primaryType = $options['primaryType'];
-		$domain      = $options['domain'] ?? [];
-		$format      = self::normalizeFormat($options['format'] ?? 'qcrypto');
+        $secret      = $options['secret'];
+        $message     = $options['message'];
+        $types       = $options['types'];
+        $primaryType = $options['primaryType'];
+        $domain      = $options['domain'] ?? [];
+        $format      = self::normalizeFormat($options['format'] ?? 'ES256');
 
-		// -------------------------------------------------
-		// Derive keypair ONCE
-		// -------------------------------------------------
-		$kp = self::internalKeypair([
-			'secret' => $secret,
-			'format' => $format
-		]);
+        // -------------------------------------------------
+        // Derive keypair ONCE
+        // -------------------------------------------------
+        $kp = self::internalKeypair([
+            'secret' => $secret,
+            'format' => $format
+        ]);
 
-		/* =================================================
-		 * k256 (secp256k1 + keccak256)
-		 * ================================================= */
-		if ($format === 'k256') {
-            $digest = Q_Data::hashTypedData(
+        /* =================================================
+         * k256 (secp256k1 + keccak256) — EIP-712
+         * ================================================= */
+        if ($format === 'k256') {
+
+            // Full EIP-712 typed data digest.
+            // Q_Crypto_EIP712::hashTypedData() is the single source of truth
+            // for this encoding — byte-identical to eip712.js on the JS side.
+            $digestBin = Q_Crypto_EIP712::hashTypedData(
                 $domain,
                 $primaryType,
                 $message,
                 $types
             );
 
-            /*
-            * IMPORTANT:
-            * This must produce a recoverable Ethereum-style signature:
-            * 64-byte compact (r||s) + recovery id -> 65 bytes total (r||s||v)
-            *
-            * If Q_ECC::sign() only returns DER or only returns [r, s] without recovery,
-            * you must replace this call with your SimpleWeb3 / secp256k1 adapter that
-            * returns:
-            *   - 'compact' => 64-byte binary string
-            *   - 'recovery' => 0 or 1
-            */
+            // Recoverable secp256k1 signature: compact(64) + recovery(1)
+            $privateKeyHex = bin2hex($kp['privateKey']);
+
             $sig = Q_ECC::signRecoverable(
-                $digest,
-                $kp['privateKey'],
+                $digestBin,
+                $privateKeyHex,
                 'K256'
             );
 
-            $compact = $sig['compact'];
-            $recovery = $sig['recovery'];
+            $compact  = $sig['compact'];  // 64-byte binary r||s
+            $recovery = $sig['recovery']; // 0 or 1
 
             if (!is_string($compact) || strlen($compact) !== 64) {
-                throw new Exception("recoverable k256 signature must contain 64-byte compact signature");
-            }
-            if (!is_int($recovery) && !ctype_digit((string)$recovery)) {
-                throw new Exception("recoverable k256 signature must contain recovery id");
+                throw new Exception("signRecoverable must return 64-byte compact signature");
             }
 
-            $v = chr(27 + (int)$recovery);
-            $signature = $compact . $v;
+            // Ethereum-style: r||s||v  (v = 27 + recovery)
+            $signature    = $compact . chr(27 + (int)$recovery);
+            $signatureHex = '0x' . bin2hex($signature);
 
             return [
                 'format'       => 'eip712',
@@ -139,49 +129,46 @@ class Q_Crypto
                 'hashAlg'      => 'keccak256',
                 'domain'       => $domain,
                 'primaryType'  => $primaryType,
-                'digest'       => bin2hex($digest),
+                'digest'       => bin2hex($digestBin),
                 'signature'    => $signature,
-                'signatureHex' => '0x' . bin2hex($signature),
+                'signatureHex' => $signatureHex,
                 'publicKey'    => $kp['publicKey'],
                 'address'      => $kp['address']
             ];
         }
 
-		/* =================================================
-		 * p256 (NIST P-256 + SHA-256)
-		 * ================================================= */
+        /* =================================================
+         * p256 (NIST P-256 + SHA-256) — ES256
+         * ================================================= */
 
-		$payload = array(
-			'domain'       => $domain,
-			'primaryType' => $primaryType,
-			'types'        => $types,
-			'message'      => $message
-        );
+        // Canonical JSON payload — must match JS Q.serialize() output exactly
+        $payload = [
+            'domain'      => $domain,
+            'primaryType' => $primaryType,
+            'types'       => $types,
+            'message'     => $message
+        ];
 
-		$canonical = Q_Utils::serialize($payload);
-		$digest = Q_Data::digest($canonical, 'sha256');
+        $canonical = Q_Utils::serialize($payload);
+        $digestBin = Q_Data::digest('sha256', $canonical);
 
-		$rs = Q_ECC::signDigest(
-            $digest,
-            bin2hex($kp['privateKey']),
-            'P256'
-        );
+        $privateKeyHex = bin2hex($kp['privateKey']);
 
-		$der = Q_ECC::RStoDER($rs);
+        $rs  = Q_ECC::signDigest($digestBin, $privateKeyHex, 'P256');
+        $der = Q_ECC::RStoDER($rs);
 
         return [
-            'format'       => 'qcrypto',
+            'format'       => 'es256',
             'curve'        => 'p256',
             'hashAlg'      => 'sha256',
             'domain'       => $domain,
             'primaryType'  => $primaryType,
-            'digest'       => bin2hex($digest),
+            'digest'       => bin2hex($digestBin),
             'signature'    => $der,
             'signatureHex' => '0x' . bin2hex($der),
             'publicKey'    => $kp['publicKey']
         ];
-	}
-
+    }
 
     /**
      * Perform a cryptographic delegation ceremony.
@@ -194,20 +181,38 @@ class Q_Crypto
      * SECURITY MODEL:
      * - rootSecret is never returned
      * - secret is the sole bearer of delegated capability
-     * - Authority is proven by the parent’s signature
+     * - Authority is proven by the parent's signature
      * - context is treated as an opaque, signed string
+     *
+     * SIGNING FORMATS:
+     * - "p256" / "es256" → P-256 + SHA-256.
+     *   Digest = SHA-256(canonical JSON payload).
+     *   secretHash = sha256(derivedSecret).
+     *   Domain: empty (unused).
+     *
+     * - "k256" / "EIP712" → secp256k1 + keccak256 + full EIP-712 struct encoding.
+     *   Domain: { name: "Q.Crypto", version: "1", salt: keccak256(label) }
+     *   The label is placed in the domain salt, making cross-label signature
+     *   replay structurally impossible at the cryptographic level.
+     *   secretHash = keccak256(derivedSecret).
      *
      * @method delegate
      * @static
      *
-     * @param {array} $options
-     * @param {string} $options['rootSecret'] Raw binary parent secret
-     * @param {string} $options['label'] Delegation label (domain-separated)
-     * @param {string|null} $options['context'] Optional opaque context
-     * @param {string} $options['format'] 'p256' (default) or 'k256'
+     * @param array  $options
+     * @param string $options['rootSecret'] Raw binary parent secret
+     * @param string $options['label']      Delegation label (domain-separated)
+     * @param string $options['context']    Optional opaque context string
+     * @param string $options['format']     "ES256" (default), 'p256', 'k256', or "EIP712"
      *
-     * @return {array}
-     * @throws {Exception}
+     * @return array {
+     *   label:     string,
+     *   context:   string,
+     *   secret:    string (raw binary derived secret),
+     *   statement: array,
+     *   proof:     array (from Q_Crypto::sign())
+     * }
+     * @throws Exception
      */
     public static function delegate(array $options): array
     {
@@ -224,7 +229,7 @@ class Q_Crypto
         $rootSecret = $options['rootSecret'];
         $label      = $options['label'];
         $context    = $options['context'] ?? '';
-        $format     = self::normalizeFormat($options['format'] ?? 'qcrypto');
+        $format     = self::normalizeFormat($options['format'] ?? "ES256");
 
         // -------------------------------------------------
         // Derive delegated capability secret
@@ -236,49 +241,89 @@ class Q_Crypto
         );
 
         // -------------------------------------------------
-        // Derive parent identity
+        // Derive parent keypair + identity
         // -------------------------------------------------
-        $parentKp = Q_Crypto::internalKeypair([
+        $parentKp = self::internalKeypair([
             'secret' => $rootSecret,
             'format' => $format
         ]);
 
         if ($format === 'k256') {
+            // eip712: parent identity is the Ethereum address
             $parentIdentity = $parentKp['address'];
-            $parentType = 'address';
+            $parentType     = 'address';
         } else {
-            $parentIdentity = bin2hex(
-                Q_Data::digest($parentKp['publicKey'], 'sha256')
-            );
-            $parentType = 'bytes32';
+            // es256: parent identity is SHA-256 of the public key
+            $pub = $parentKp['publicKey'];
+            if (ctype_xdigit($pub)) {
+                $pub = hex2bin($pub);
+            }
+            $parentIdentity = bin2hex(Q_Data::digest('sha256', $pub));
+            $parentType     = 'bytes32';
+        }
+
+        // -------------------------------------------------
+        // Compute secret hash
+        // k256/eip712: keccak256(derivedSecret)
+        // p256/es256:  sha256(derivedSecret)
+        // -------------------------------------------------
+        if ($format === 'k256') {
+            $secretHash = bin2hex(Keccak::hash($derivedSecret, 256, true));
+        } else {
+            $secretHash = bin2hex(Q_Data::digest('sha256', $derivedSecret));
         }
 
         // -------------------------------------------------
         // Construct delegation statement (protocol-fixed)
         // -------------------------------------------------
-        $statement = array(
+        $statement = [
             'parent'     => $parentIdentity,
             'label'      => $label,
             'issuedTime' => time(),
             'context'    => $context,
-            'secretHash' => bin2hex(
-                Q_Data::digest($derivedSecret, 'sha256')
-            )
-        );
+            'secretHash' => $secretHash
+        ];
 
         // -------------------------------------------------
-        // Parent signs the delegation
+        // Build domain
+        // k256/eip712: { name, version, salt }
+        //   salt = keccak256(utf8(label)) as bytes32 hex.
+        //   Placing the label in the domain salt makes cross-label
+        //   replay impossible at the digest level.
+        // p256/es256: empty (unused by sign()).
         // -------------------------------------------------
-        $proof = Q_Crypto::sign([
+        if ($format === 'k256') {
+            $labelSalt = bin2hex(Keccak::hash($label, 256, true));
+            $domain = [
+                'name'    => 'Q.Crypto',
+                'version' => '1',
+                'salt'    => $labelSalt
+            ];
+        } else {
+            $domain = [];
+        }
+
+        // -------------------------------------------------
+        // Sign via Q_Crypto::sign()
+        // k256/eip712 path uses Q_Crypto_EIP712::hashTypedData().
+        // p256/es256  path uses SHA-256(canonical JSON).
+        // -------------------------------------------------
+        $proof = self::sign([
             'secret'      => $rootSecret,
+            'domain'      => $domain,
             'message'     => $statement,
             'types'       => [
+                'EIP712Domain' => [
+                    ['name' => 'name',    'type' => 'string'  ],
+                    ['name' => 'version', 'type' => 'string'  ],
+                    ['name' => 'salt',    'type' => 'bytes32' ]
+                ],
                 'Delegation' => [
                     ['name' => 'parent',     'type' => $parentType],
-                    ['name' => 'label',      'type' => 'string'],
-                    ['name' => 'issuedTime', 'type' => 'uint64'],
-                    ['name' => 'context',    'type' => 'string'],
-                    ['name' => 'secretHash', 'type' => 'bytes32']
+                    ['name' => 'label',      'type' => 'string'   ],
+                    ['name' => 'issuedTime', 'type' => 'uint64'   ],
+                    ['name' => 'context',    'type' => 'string'   ],
+                    ['name' => 'secretHash', 'type' => 'bytes32'  ]
                 ]
             ],
             'primaryType' => 'Delegation',
@@ -286,10 +331,11 @@ class Q_Crypto
         ]);
 
         return [
-            'label'   => $label,
-            'context' => $context,
-            'secret'  => $derivedSecret,
-            'proof'   => $proof
+            'label'     => $label,
+            'context'   => $context,
+            'secret'    => $derivedSecret,
+            'statement' => $statement,
+            'proof'     => $proof
         ];
     }
 
@@ -311,7 +357,7 @@ class Q_Crypto
      *
      * @param array $options
      * @param string $options['format']
-     *   Signature format: "qcrypto" (default) or "eip712".
+     *   Signature format: "es256" (default) or "EIP712".
      * @param array $options['domain']
      *   Typed data domain.
      * @param array $options['types']
@@ -319,13 +365,13 @@ class Q_Crypto
      * @param array $options['message']
      *   Message payload.
      * @param string $options['signature']
-     *   Signature (DER binary for qcrypto, binary or hex r||s||v for eip712).
+     *   Signature (DER binary for es256, binary or hex r||s||v for eip712).
      * @param string $options['primaryType']
      *   Root type name (required for eip712).
      * @param string $options['address']
      *   Expected signer address (eip712).
      * @param string $options['publicKey']
-     *   Expected signer public key hex (qcrypto).
+     *   Expected signer public key hex (es256).
      * @param array $options['recovered']
      *   If provided, signer info is written here.
      *
@@ -337,7 +383,7 @@ class Q_Crypto
             throw new Exception("options required");
         }
 
-        $format = self::normalizeFormat($options['format'] ?? 'qcrypto');
+        $format = self::normalizeFormat($options['format'] ?? "ES256");
 
         /* =================================================
         * Ethereum / EIP-712
@@ -348,7 +394,7 @@ class Q_Crypto
             }
 
             try {
-                $digest = Q_Data::hashTypedData(
+                $digest = Q_Crypto_EIP712::hashTypedData(
                     $options['domain'] ?? [],
                     $options['primaryType'],
                     $options['message'],
@@ -420,15 +466,15 @@ class Q_Crypto
         }
 
         /* =================================================
-        * qcrypto (P-256 + SHA-256)
+        * es256 (P-256 + SHA-256)
         * ================================================= */
         if ($format === 'p256') {
 
             if (empty($options['publicKey']) || !is_string($options['publicKey'])) {
-                throw new Exception("qcrypto verify requires publicKey (hex)");
+                throw new Exception("es256 verify requires publicKey (hex)");
             }
             if (empty($options['signature'])) {
-                throw new Exception("qcrypto verify requires signature (DER binary)");
+                throw new Exception("es256 verify requires signature (DER binary)");
             }
 
             $payload = array(
@@ -440,7 +486,7 @@ class Q_Crypto
 
             // Deep canonicalization (must match sign)
             $canonical = Q_Utils::serialize($payload);
-            $digest = Q_Data::digest($canonical, 'sha256');
+            $digest = Q_Data::digest('sha256', $canonical);
 
             try {
                 $sigBin = is_string($options['signature']) && (
@@ -483,11 +529,11 @@ class Q_Crypto
      * @static
      *
      * @param array $options
-     * @param string $options['format'] 'qcrypto' (default) or 'eip712'
+     * @param string $options['format'] "ES256" (default) or "EIP712"
      * @param array  $options['statement'] Delegation statement
-     * @param string $options['signature'] Signature (DER for qcrypto, hex/bytes for eip712)
+     * @param string $options['signature'] Signature (DER for es256, hex/bytes for eip712)
      * @param string $options['derivedSecret'] Raw binary derived secret
-     * @param string $options['parentPublicKey'] Raw public key (qcrypto only)
+     * @param string $options['parentPublicKey'] Raw public key (es256 only)
      * @param array  $options['domain'] Optional EIP-712 domain
      *
      * @return bool
@@ -502,7 +548,7 @@ class Q_Crypto
             throw new Exception("derivedSecret must be binary string");
         }
 
-        $format = self::normalizeFormat(isset($options['format']) ? $options['format'] : 'qcrypto');
+        $format = self::normalizeFormat(isset($options['format']) ? $options['format'] : "ES256");
         $statement = $options['statement'];
         $context   = isset($statement['context']) ? $statement['context'] : '';
 
@@ -518,9 +564,11 @@ class Q_Crypto
         // -------------------------------------------------
         // Verify secret binding
         // -------------------------------------------------
-        $actualHash = bin2hex(
-            Q_Data::digest($options['derivedSecret'], 'sha256')
-        );
+        if ($format === 'k256') {
+            $actualHash = bin2hex(Keccak::hash($options['derivedSecret'], 256, true));
+        } else {
+            $actualHash = bin2hex(Q_Data::digest('sha256', $options['derivedSecret']));
+        }
 
         if (!hash_equals($actualHash, $statement['secretHash'])) {
             return false;
@@ -530,6 +578,11 @@ class Q_Crypto
         // Protocol-fixed delegation schema
         // -------------------------------------------------
         $types = array(
+            'EIP712Domain' => [
+                ['name' => 'name',    'type' => 'string'  ],
+                ['name' => 'version', 'type' => 'string'  ],
+                ['name' => 'salt',    'type' => 'bytes32' ]
+            ],
             'Delegation' => array(
                 array(
                     'name' => 'parent',
@@ -557,7 +610,7 @@ class Q_Crypto
             $recovered = array();
 
             $ok = Q_Crypto::verify(array(
-                'format'      => 'eip712',
+                'format'      => "EIP712",
                 'domain'      => isset($options['domain']) ? $options['domain'] : array(),
                 'types'       => $types,
                 'primaryType' => 'Delegation',
@@ -581,16 +634,16 @@ class Q_Crypto
         }
 
         // -------------------------------------------------
-        // qcrypto (P-256)
+        // es256 (P-256)
         // -------------------------------------------------
         if ($format === 'p256') {
 
             if (empty($options['parentPublicKey']) || !is_string($options['parentPublicKey'])) {
-                throw new Exception("parentPublicKey required for qcrypto");
+                throw new Exception("parentPublicKey required for es256");
             }
 
             $expectedParent = bin2hex(
-                Q_Data::digest($options['parentPublicKey'], 'sha256')
+                Q_Data::digest('sha256', $options['parentPublicKey'])
             );
 
             if (!hash_equals($expectedParent, $statement['parent'])) {
@@ -598,7 +651,7 @@ class Q_Crypto
             }
 
             return Q_Crypto::verify(array(
-                'format'      => 'qcrypto',
+                'format'      => "ES256",
                 'types'       => $types,
                 'primaryType' => 'Delegation',
                 'message'     => $message,
@@ -609,7 +662,6 @@ class Q_Crypto
 
         throw new Exception("Unsupported format: {$format}");
     }
-
 
     /**
      * Deterministically derive a signing keypair from a secret.
@@ -624,15 +676,36 @@ class Q_Crypto
      * - "k256" → secp256k1 (Ethereum / EIP-712)
      * - "p256" → NIST P-256 (Q-native crypto)
      *
+     * Derivation method:
+     * - k256: digest = keccak256("q.crypto.k256.private-key" || secret),
+     *         scalar = digest mod curveOrder.
+     * - p256: scalar = HKDF-SHA256(secret, "q.crypto.p256.private-key")
+     *         via Q_Data::derive() — matches JS Q.Data.derive() exactly.
+     *
      * @method internalKeypair
      * @static
      *
-     * @param {array} $options
-     * @param {string} $options['secret'] Raw binary secret
-     * @param {string} $options['format'] "k256" or "p256" (default: "p256")
+     * @param array  $options
+     * @param string $options['secret'] Raw binary secret (32 bytes recommended).
+     *                                  Never hex or base64 — raw binary only.
+     * @param string $options['format'] "ES256" / "EIP712" (default: "ES256").
      *
-     * @return {array}
-     * @throws {Exception}
+     * @return array Associative array with the following keys:
+     *
+     *   'format'     {string} Resolved format: "EIP712" (k256) or "ES256" (p256).
+     *   'curve'      {string} Curve name: "secp256k1" or "p256".
+     *   'hashAlg'    {string} Hash algorithm: "keccak256" or "sha256".
+     *   'privateKey' {string} Raw binary private key scalar (32 bytes).
+     *                         Never log, store, or transmit this value.
+     *   'publicKey'  {string} Raw uncompressed public key (65 bytes): 0x04 || X || Y.
+     *
+     *   The following key is only present for k256:
+     *   'address'    {string} Ethereum address: "0x" + last 20 bytes of
+     *                         keccak256(publicKey[1..64]).
+     *
+     * @throws Exception If secret is missing or not a binary string.
+     * @throws Exception If format is unsupported.
+     * @throws Exception If derived private key scalar is zero (astronomically unlikely).
      */
     public static function internalKeypair(array $options): array
     {
@@ -641,20 +714,17 @@ class Q_Crypto
         }
 
         $secret = $options['secret'];
-        $format = self::normalizeFormat($options['format'] ?? 'qcrypto');
-
-        $adapter = EccFactory::getAdapter();
+        $format = self::normalizeFormat($options['format'] ?? 'ES256');
 
         // -------------------------------------------------
         // k256 / secp256k1 (Ethereum)
+        // Derivation: keccak256("q.crypto.k256.private-key" || secret) mod n
+        // Matches JS internalKeypair EIP712 path exactly.
         // -------------------------------------------------
         if ($format === 'k256') {
 
-            $info = "q.crypto.k256.private-key";
-            $material = $info . $secret;
-
-            // keccak256
-            $digest = \Crypto\Keccak::hash($material, 256, true);
+            $material = "q.crypto.k256.private-key" . $secret;
+            $digest   = Keccak::hash($material, 256, true);
 
             $generator = CurveFactory::getGeneratorByName('secp256k1');
             $n = $generator->getOrder();
@@ -667,17 +737,17 @@ class Q_Crypto
             $privateKey = $generator->getPrivateKeyFrom($d);
             $publicKey  = $privateKey->getPublicKey();
 
-            // Uncompressed public key: 04 || X || Y
             $x = str_pad(gmp_strval($publicKey->getPoint()->getX(), 16), 64, '0', STR_PAD_LEFT);
             $y = str_pad(gmp_strval($publicKey->getPoint()->getY(), 16), 64, '0', STR_PAD_LEFT);
 
-            $publicKeyRaw = hex2bin('04' . $x . $y);
+            $publicKeyRaw    = hex2bin('04' . $x . $y);
+            $privateKeyBytes = hex2bin(str_pad(gmp_strval($d, 16), 64, '0', STR_PAD_LEFT));
 
             return [
-                'format'     => 'eip712',
+                'format'     => 'EIP712',
                 'curve'      => 'secp256k1',
                 'hashAlg'    => 'keccak256',
-                'privateKey' => hex2bin(str_pad(gmp_strval($d, 16), 64, '0', STR_PAD_LEFT)),
+                'privateKey' => $privateKeyBytes,
                 'publicKey'  => $publicKeyRaw,
                 'address'    => self::publicKeyToAddress($publicKeyRaw)
             ];
@@ -685,18 +755,22 @@ class Q_Crypto
 
         // -------------------------------------------------
         // p256 / secp256r1 (Q-native)
+        // Derivation: HKDF-SHA256(secret, "q.crypto.p256.private-key")
+        // Matches JS internalKeypair ES256 path exactly — both use Q.Data.derive().
         // -------------------------------------------------
         if ($format === 'p256') {
 
-            $info = "q.crypto.p256.private-key";
-            $material = $info . $secret;
-
-            $digest = Q_Data::digest($material, 'sha256');
+            // HKDF derivation — byte-identical to JS Q.Data.derive()
+            $privateKeyBytes = Q_Data::derive(
+                $secret,
+                'q.crypto.p256.private-key',
+                ['size' => 32]
+            );
 
             $generator = EccFactory::getNistCurves()->generator256();
             $n = $generator->getOrder();
 
-            $d = gmp_mod(gmp_init(bin2hex($digest), 16), $n);
+            $d = gmp_mod(gmp_init(bin2hex($privateKeyBytes), 16), $n);
             if (gmp_cmp($d, 0) === 0) {
                 throw new Exception("Derived invalid p256 scalar");
             }
@@ -706,13 +780,14 @@ class Q_Crypto
 
             $x = str_pad(gmp_strval($publicKey->getPoint()->getX(), 16), 64, '0', STR_PAD_LEFT);
             $y = str_pad(gmp_strval($publicKey->getPoint()->getY(), 16), 64, '0', STR_PAD_LEFT);
+
             $publicKeyRaw = hex2bin('04' . $x . $y);
 
             return [
-                'format'     => 'qcrypto',
+                'format'     => 'ES256',
                 'curve'      => 'p256',
                 'hashAlg'    => 'sha256',
-                'privateKey' => hex2bin(str_pad(gmp_strval($d, 16), 64, '0', STR_PAD_LEFT)),
+                'privateKey' => $privateKeyBytes,
                 'publicKey'  => $publicKeyRaw
             ];
         }
@@ -722,12 +797,16 @@ class Q_Crypto
 
     private static function normalizeFormat($format)
     {
-        $format = strtolower((string)$format);
-
-        if ($format === 'eip712') return 'k256';
-        if ($format === 'qcrypto') return 'p256';
-
-        return $format;
+        switch (strtolower((string)$format)) {
+            case 'eip712':
+            case 'k256':
+                return 'k256';
+            case 'es256':
+            case 'p256':
+                return 'p256';
+            default:
+                throw new Exception("Unsupported format: $format");
+        }
     }
 
     private static function hexToBinMaybe($value)
@@ -758,7 +837,7 @@ class Q_Crypto
             throw new Exception("publicKey must be 65-byte uncompressed key");
         }
 
-        $hash = \Crypto\Keccak::hash(substr($publicKeyRaw, 1), 256, true);
+        $hash = Keccak::hash(substr($publicKeyRaw, 1), 256, true);
         return '0x' . substr(bin2hex($hash), -40);
     }
 

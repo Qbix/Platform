@@ -26,7 +26,7 @@ Q.exports(function (Q) {
      */
     return function Q_Data_verify(data, publicKeyRawStrings, signatures, algo) {
 		const sigs = [];
-		for (sig of signatures) {
+		for (var sig of signatures) {
 			sigs.push(typeof sig === 'string' ? Q.Data.fromBase64(sig) : sig);
 		}
         algo = Q.extend({

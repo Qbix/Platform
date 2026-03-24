@@ -27,9 +27,14 @@ Q.exports(function (Q) {
 			key,
 			plaintext
 		).then(function (ciphertext) {
+			const ct = new Uint8Array(ciphertext);
+			const tag = ct.slice(ct.length - 16);
+			const data = ct.slice(0, ct.length - 16);
+
 			return {
 				iv: Q.Data.toBase64(iv),
-				ciphertext: Q.Data.toBase64(ciphertext)
+				ciphertext: Q.Data.toBase64(data),
+				tag: Q.Data.toBase64(tag)
 			};
 		});
 	};

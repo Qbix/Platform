@@ -672,24 +672,24 @@ Sp.matchTypes = function (types, options) {
 
 Sp.matchTypes.adapters = {
 	url: function (options) {
-		const input = this;
-		const res = [];
+		var input = this;
+		var res = [];
 
-		const fileRegExp = /file:\/\/\/[^\s]+/gi;
+		var fileRegExp = /file:\/\/\/[^\s]+/gi;
 
-		const urlRegExp = (options && options.requireScheme)
+		var urlRegExp = (options && options.requireScheme)
 			? /\bhttps?:\/\/[^\s]+/gi
 			: /\b(?:https?:\/\/)?(?:localhost|(?:\d{1,3}\.){3}\d{1,3}|[a-z0-9\-]+(?:\.[a-z0-9\-]+)*\.[a-z]{2,})(:\d{1,5})?(\/[^\s]*)?/gi;
 
 		// Match file URLs if not excluded
 		if (!options || !options.excludeLocalFiles) {
-			const fileMatches = input.match(fileRegExp);
+			var fileMatches = input.match(fileRegExp);
 			if (fileMatches) res.push(...fileMatches);
 		}
 
-		const urlMatches = input.match(urlRegExp);
+		var urlMatches = input.match(urlRegExp);
 		if (urlMatches) {
-			for (let url of urlMatches) {
+			for (var url of urlMatches) {
 				// Remove trailing punctuation
 				url = url.replace(/[.,!?)\]]+$/, '');
 				res.push(url);
@@ -3070,7 +3070,7 @@ Q.Daystamp = {
 	 * @return {Number}
 	 */
 	fromYMD: function (year, month, day) {
-		const date = new Date();
+		var date = new Date();
 		date.setUTCFullYear(year, month-1, day);
 		date.setUTCHours(0, 0, 0);
 		return Math.round(
@@ -3119,7 +3119,7 @@ Q.Daystamp = {
 	 * @return {String} String of the form "yyyy-mm-dd 00:00:00"
 	 */
 	toDateTime(daystamp, separator) {
-		const date = Q.Daystamp.toDate(daystamp);
+		var date = Q.Daystamp.toDate(daystamp);
 		if (separator === undefined) {
 			separator = ' ';
 		}
@@ -3137,7 +3137,7 @@ Q.Daystamp = {
 	 * @return {Array} [year, month, date] with month, January is 1
 	 */
 	toYMD: function (daystamp) {
-		const date = Q.Daystamp.toDate(daystamp);
+		var date = Q.Daystamp.toDate(daystamp);
 		return [
 			date.getUTCFullYear(),
 			date.getUTCMonth() + 1,
@@ -7875,7 +7875,7 @@ Q.IndexedDB = {
  */
 Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 	if (!root.indexedDB) {
-		const err = new Error("IndexedDB not supported");
+		var err = new Error("IndexedDB not supported");
 		if (callback) callback(err);
 		return false; // prevents Q.getter from caching failure
 	}
@@ -7910,15 +7910,15 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 			// ignore indexedDB.databases errors on older browsers
 		}
 
-		const req = version ? indexedDB.open(dbName, version) : indexedDB.open(dbName);
+		var req = version ? indexedDB.open(dbName, version) : indexedDB.open(dbName);
 
 		req.onupgradeneeded = function () {
-			const db = req.result;
+			var db = req.result;
 			if (db.version > 1 && !db.objectStoreNames.contains(storeName) && !triedCreatingStore) {
 				triedCreatingStore = true;
-				const store = db.createObjectStore(storeName, { keyPath: params.keyPath });
-				for (let i = 0; i < indexes.length; ++i) {
-					const [name, keyPath, opts] = indexes[i];
+				var store = db.createObjectStore(storeName, { keyPath: params.keyPath });
+				for (var i = 0; i < indexes.length; ++i) {
+					var [name, keyPath, opts] = indexes[i];
 					store.createIndex(name, keyPath, opts);
 				}
 			}
@@ -7929,7 +7929,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 		};
 
 		req.onsuccess = function () {
-			const db = req.result;
+			var db = req.result;
 
 			if (!db._versionchangeAttached) {
 				db._versionchangeAttached = true;
@@ -7984,9 +7984,9 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 	cache: Q.Cache.document("Q.IndexedDB.open", 10),
 	resolveWithSecondArgument: true,
 	prepare: function (s, p, callback, args) {
-		const getter = this;
-		const [dbName, storeName, params] = args;
-		const db = p[1];
+		var getter = this;
+		var [dbName, storeName, params] = args;
+		var db = p[1];
 
 		try {
 			db.transaction(storeName, 'readonly'); // triggers exception if closed
@@ -7997,9 +7997,9 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 			}
 			// Connection is closing or closed — refresh manually without infinite loop
 			getter.original(dbName, storeName, params, function (err, newDb) {
-				const key = Q.Cache.key(args);
+				var key = Q.Cache.key(args);
 				if (!err && getter.cache) {
-					const cached = getter.cache.get(key);
+					var cached = getter.cache.get(key);
 					if (cached) {
 						getter.cache.set(key, cached.cbpos, s, arguments);
 					}
@@ -11123,9 +11123,9 @@ Q.ServiceWorker = {
 		});
 		// Listen for cookie updates coming from the Service Worker
 		navigator.serviceWorker.addEventListener('message', event => {
-			const data = event.data || {};
+			var data = event.data || {};
 			if (data.type === 'Q.cookie' && data.cookies) {
-				for (const [k, v] of Object.entries(data.cookies)) {
+				for (var [k, v] of Object.entries(data.cookies)) {
 					// Update document.cookie so future page requests carry it
 					document.cookie = encodeURIComponent(k) + '=' + encodeURIComponent(v) + '; path=/';
 					console.log('[SW] Updated cookie from service worker:', k);
@@ -12913,6 +12913,7 @@ Q.Data = Q.Method.define({
 	compress: new Q.Method(),
 	decompress: new Q.Method(),
 	hkdf: new Q.Method(),
+	derive: new Q.Method(),
 	importKey: new Q.Method(),
 	combineSecrets: new Q.Method(),
 	encrypt: new Q.Method(),
@@ -12923,13 +12924,83 @@ Q.Data = Q.Method.define({
 	all: function (a, b) {
 		return a && b;
 	},
-	toBase64: function (bytes) {
-		return btoa(String.fromCharCode.apply(String, new Uint8Array(bytes)));
+	toUint8Array: function (bytes) {
+		if (bytes instanceof Uint8Array) {
+			return bytes;
+		}
+		if (bytes instanceof ArrayBuffer) {
+			return new Uint8Array(bytes);
+		}
+		if (
+			typeof Buffer !== 'undefined' &&
+			bytes instanceof Buffer
+		) {
+			return new Uint8Array(
+				bytes.buffer,
+				bytes.byteOffset,
+				bytes.byteLength
+			);
+		}
+		if (Array.isArray(bytes)) {
+			return new Uint8Array(bytes);
+		}
+		throw new Error("Unsupported byte input");
 	},
+	toHex: function (bytes) {
+		var u8 = Q.Data.toUint8Array(bytes);
+
+		var hex = '';
+		for (var i = 0; i < u8.length; i++) {
+			hex += u8[i].toString(16).padStart(2, '0');
+		}
+		return hex;
+	},
+	fromHex: function (hex) {
+		if (typeof hex !== 'string' || (hex.length % 2) !== 0) {
+			throw new Error("Invalid hex string");
+		}
+		// optional strict validation (recommended)
+		if (!/^[0-9a-fA-F]*$/.test(hex)) {
+			throw new Error("Invalid hex characters");
+		}
+		var len = hex.length / 2;
+		var bytes = new Uint8Array(len);
+		for (var i = 0; i < len; i++) {
+			bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
+		}
+		return bytes;
+	},
+	toBase64: function (bytes) {
+		var u8 = Q.Data.toUint8Array(bytes);
+		// Node.js fast path
+		if (typeof Buffer !== 'undefined') {
+			return Buffer.from(u8).toString('base64');
+		}
+		// Browser safe (chunked to avoid call stack overflow)
+		var binary = '';
+		var chunkSize = 0x8000;
+		for (var i = 0; i < u8.length; i += chunkSize) {
+			var chunk = u8.subarray(i, i + chunkSize);
+			binary += String.fromCharCode.apply(null, chunk);
+		}
+		return btoa(binary);
+	},
+
 	fromBase64: function (base64) {
-		return Uint8Array.from(atob(base64), function(m) {
-			return m.codePointAt(0)
-		});
+		if (typeof base64 !== 'string') {
+			throw new Error("Base64 must be string");
+		}
+		// Node.js fast path
+		if (typeof Buffer !== 'undefined') {
+			return new Uint8Array(Buffer.from(base64, 'base64'));
+		}
+		var binary = atob(base64);
+		var len = binary.length;
+		var bytes = new Uint8Array(len);
+		for (var i = 0; i < len; i++) {
+			bytes[i] = binary.charCodeAt(i);
+		}
+		return bytes;
 	},
 	blobFromDataURL: function (dataURL) {
 		var arr = dataURL.split(','), mime = arr[0].match(/:(.*?);/)[1],
@@ -12952,7 +13023,7 @@ Q.Data = Q.Method.define({
 		sessionId = sessionId.replace(/-/g, '');
 		var mixedStr = sessionId + ":" + index + ":" + seed;
 		var hash = 0x811c9dc5;
-		for (let i = 0; i < mixedStr.length; i++) {
+		for (var i = 0; i < mixedStr.length; i++) {
 			hash ^= mixedStr.charCodeAt(i);
 			hash = Math.imul(hash, 0x01000193); // Large prime multiplier
 			hash ^= (hash >>> 17);
@@ -18223,23 +18294,23 @@ Q.setTimeout = function (callback, delay) {
  * @return {Function} the function with before/after hooks applied
  */
 Q.hook = function (original, hookBefore, hookAfter) {
-	const isAsync = original.constructor.name === "AsyncFunction" ||
+	var isAsync = original.constructor.name === "AsyncFunction" ||
 		(hookBefore && hookBefore.constructor.name === "AsyncFunction") ||
 		(hookAfter && hookAfter.constructor.name === "AsyncFunction");
 
-	let hooked;
+	var hooked;
 
 	if (isAsync) {
 		hooked = async function _Q_hook_async(...args) {
 			if (hookBefore) await hookBefore.apply(this, args);
-			const result = await original.apply(this, args);
+			var result = await original.apply(this, args);
 			if (hookAfter) await hookAfter.apply(this, args);
 			return result;
 		};
 	} else {
 		hooked = function _Q_hook(...args) {
 			if (hookBefore) hookBefore.apply(this, args);
-			const result = original.apply(this, args);
+			var result = original.apply(this, args);
 			if (hookAfter) hookAfter.apply(this, args);
 			return result;
 		};

@@ -10,17 +10,17 @@ class Q_Data
 	 *
 	 * @method digest
 	 * @static
-	 * @param {string} data
-	 *   Raw binary string to hash.
-	 * @param {string} [algo="sha256"]
+	 * @param {string} algo
 	 *   Hash algorithm. Supported values depend on the PHP build,
 	 *   but typically include sha256, sha384, sha512, sha3-256.
+	 * @param {string} data
+	 *   Raw binary string to hash.
 	 * @return {string}
 	 *   Raw binary hash output.
 	 * @throws {Exception}
 	 *   If the algorithm is unsupported.
 	 */
-	public static function digest($data, $algo = 'sha256') {
+	public static function digest($algo, $data) {
 		$algo = strtolower($algo);
 
 		switch ($algo) {
@@ -89,6 +89,104 @@ class Q_Data
 	 */
 	public static function decompress($data) {
 		return gzuncompress($data);
+	}
+
+	/**
+	 * Derive cryptographic key material using HKDF (RFC 5869, SHA-256).
+	 *
+	 * This function is compatible with WebCrypto HKDF:
+	 * - Uses SHA-256
+	 * - Accepts arbitrary salt and info
+	 * - Produces deterministic output for same inputs
+	 *
+	 * @method hkdf
+	 * @static
+	 * @param {string} ikm
+	 *   Input key material (raw binary string).
+	 * @param {string} salt
+	 *   Salt value (raw binary string). Can be empty but should be random.
+	 * @param {string} [info=""]
+	 *   Optional context/application-specific information.
+	 * @param {number} [length=32]
+	 *   Length of output keying material in bytes.
+	 * @return {string}
+	 *   Derived key material (raw binary string of length bytes).
+	 * @throws {Exception}
+	 *   If inputs are not valid binary strings.
+	 */
+	public static function hkdf($ikm, $salt, $info = '', $length = 32)
+	{
+		if (!is_string($ikm)) {
+			throw new Exception("IKM must be binary string");
+		}
+		if (!is_string($salt)) {
+			throw new Exception("Salt must be binary string");
+		}
+		if (!is_string($info)) {
+			throw new Exception("Info must be string");
+		}
+
+		// PHP built-in HKDF (correct + constant-time)
+		return hash_hkdf(
+			'sha256',
+			$ikm,
+			$length,
+			$info,
+			$salt
+		);
+	}
+
+	/**
+	 * Deterministically derive key material using HKDF with domain separation.
+	 *
+	 * PURE FUNCTION:
+	 * - no randomness
+	 * - no storage
+	 * - no side effects
+	 *
+	 * Seed must be raw binary — callers are responsible for decoding
+	 * hex or base64 strings before calling derive().
+	 *
+	 * @method derive
+	 * @static
+	 *
+	 * @param {string} $seed
+	 *   Raw binary string. Must not be hex or base64 encoded —
+	 *   decode first if needed.
+	 * @param {string} $label
+	 *   Domain separation label (used as HKDF info). Must be non-empty UTF-8.
+	 * @param {array} [options]
+	 * @param {int}    [options['size']=32]    Output length in bytes.
+	 * @param {string} [options['context']=""] Context string used to derive salt
+	 *   via SHA-256(context). Empty string is valid and produces a fixed salt.
+	 *
+	 * @return {string} Derived key material (raw binary string).
+	 * @throws {Exception}
+	 */
+	public static function derive($seed, $label, $options = array())
+	{
+		$size    = isset($options['size'])    ? $options['size']    : 32;
+		$context = isset($options['context']) ? $options['context'] : '';
+
+		if (!is_string($seed) || $seed === '') {
+			throw new Exception(
+				"derive: seed must be a raw binary string. " .
+				"Decode hex or base64 strings before calling derive()."
+			);
+		}
+		if (!is_string($label) || $label === '') {
+			throw new Exception("derive: label must be a non-empty string");
+		}
+
+		// salt = SHA-256(context)
+		$salt = hash('sha256', $context, true);
+
+		return self::hkdf(
+			$seed,   // IKM — raw binary
+			$salt,   // salt = SHA-256(context)
+			$label,  // info = label
+			$size
+		);
 	}
 
 	/**
@@ -205,7 +303,9 @@ class Q_Data
 
 			$sig = $signatures[$i];
 			if (is_string($sig) && base64_encode(base64_decode($sig, true)) === $sig) {
-				$sig = base64_decode($sig);
+				$sig = base64_decode($sig, true);
+			} elseif (ctype_xdigit($sig) && strlen($sig) % 2 === 0) {
+				$sig = hex2bin($sig);
 			}
 
 			// Convert raw signature to DER before verifying
@@ -218,6 +318,104 @@ class Q_Data
 		}
 
 		return $results;
+	}
+
+	/**
+	 * Encrypt plaintext using AES-256-GCM.
+	 *
+	 * Produces output compatible with WebCrypto AES-GCM:
+	 * - 12-byte IV
+	 * - Separate authentication tag (16 bytes)
+	 * - Optional AAD support
+	 *
+	 * @method encrypt
+	 * @static
+	 * @param {string} key
+	 *   Encryption key (32-byte binary string for AES-256).
+	 * @param {string} plaintext
+	 *   Raw plaintext data to encrypt.
+	 * @param {string} [aad=null]
+	 *   Optional additional authenticated data (not encrypted).
+	 * @return {array}
+	 *   Associative array containing:
+	 *   - {string} iv Base64-encoded initialization vector (12 bytes)
+	 *   - {string} ciphertext Base64-encoded encrypted data
+	 *   - {string} tag Base64-encoded authentication tag (16 bytes)
+	 * @throws {Exception}
+	 *   If encryption fails or key length is invalid.
+	 */
+	public static function encrypt($key, $plaintext, $aad = null) {
+		if (strlen($key) !== 32) {
+			throw new Exception("Key must be 32 bytes (AES-256)");
+		}
+
+		$iv = random_bytes(12); // matches JS
+
+		$tag = '';
+		$ciphertext = openssl_encrypt(
+			$plaintext,
+			'aes-256-gcm',
+			$key,
+			OPENSSL_RAW_DATA,
+			$iv,
+			$tag,
+			$aad ?? ''
+		);
+
+		if ($ciphertext === false) {
+			throw new Exception("Encryption failed");
+		}
+
+		return [
+			'iv' => base64_encode($iv),
+			'ciphertext' => base64_encode($ciphertext),
+			'tag' => base64_encode($tag)
+		];
+	}
+
+	/**
+	 * Decrypt AES-256-GCM encrypted data.
+	 *
+	 * Verifies authentication tag before returning plaintext.
+	 * Compatible with WebCrypto AES-GCM when tag is separated.
+	 *
+	 * @method decrypt
+	 * @static
+	 * @param {string} key
+	 *   Decryption key (32-byte binary string).
+	 * @param {string} ivB64
+	 *   Base64-encoded initialization vector (12 bytes).
+	 * @param {string} ciphertextB64
+	 *   Base64-encoded encrypted data.
+	 * @param {string} tagB64
+	 *   Base64-encoded authentication tag (16 bytes).
+	 * @param {string} [aad=null]
+	 *   Optional additional authenticated data.
+	 * @return {string}
+	 *   Decrypted plaintext (raw binary string).
+	 * @throws {Exception}
+	 *   If authentication fails or decryption fails.
+	 */
+	public static function decrypt($key, $ivB64, $ciphertextB64, $tagB64, $aad = null) {
+		$iv = base64_decode($ivB64);
+		$ciphertext = base64_decode($ciphertextB64);
+		$tag = base64_decode($tagB64);
+
+		$plaintext = openssl_decrypt(
+			$ciphertext,
+			'aes-256-gcm',
+			$key,
+			OPENSSL_RAW_DATA,
+			$iv,
+			$tag,
+			$aad ?? ''
+		);
+
+		if ($plaintext === false) {
+			throw new Exception("Decryption failed or auth failed");
+		}
+
+		return $plaintext;
 	}
 
 	/**

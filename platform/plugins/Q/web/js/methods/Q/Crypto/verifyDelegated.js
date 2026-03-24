@@ -15,164 +15,199 @@ Q.exports(function (Q) {
 	 * - Parent legitimacy beyond this step
 	 * - Expiration or revocation policy
 	 *
+	 * Secret hash algorithm matches the signing format:
+	 * - EIP712 → keccak256(derivedSecret)
+	 * - ES256  → SHA-256(derivedSecret)
+	 * This must match delegate.js exactly.
+	 *
 	 * @static
 	 * @method verifyDelegated
 	 *
-	 * @param {Object} options
-	 * @param {String} [options.format='qcrypto']
-	 * @param {Object} options.statement Delegation statement.
-	 * @param {String|Uint8Array} options.signature Signature bytes.
-	 * @param {Uint8Array} options.derivedSecret Derived child secret.
-	 * @param {Uint8Array} [options.parentPublicKey] Expected parent key (qcrypto).
-	 * @param {String} [options.parentAddress] Expected parent address (eip712).
-	 * @param {Object} [options.recovered] Optional recovered signer output.
+	 * @param {Object}            options
+	 * @param {String}            [options.format="ES256"] "ES256" or "EIP712".
+	 * @param {Object}            options.statement        Delegation statement.
+	 * @param {String|Uint8Array} options.signature        Signature bytes.
+	 * @param {Uint8Array}        options.derivedSecret    Derived child secret.
+	 * @param {Uint8Array}        [options.parentPublicKey] Expected parent key (ES256).
+	 * @param {Object}            [options.domain]          EIP-712 domain (EIP712 only).
+	 * @param {Object}            [options.recovered]       Optional recovered signer output.
 	 *
 	 * @return {Q.Promise<Boolean>}
 	 */
 	return function Q_Crypto_verifyDelegated(options) {
 
-		return new Q.Promise(async function (resolve) {
+		return new Q.Promise(function (resolve, reject) {
 
-			if (!options) {
-				throw new Error("options required");
-			}
+			try {
 
-			const format = options.format || "qcrypto";
-			const statement = options.statement;
-			const derivedSecret = options.derivedSecret;
-
-			// -------------------------------------------------
-			// Validate inputs
-			// -------------------------------------------------
-			if (!statement || typeof statement !== "object") {
-				throw new Error("statement required");
-			}
-			if (!(derivedSecret instanceof Uint8Array)) {
-				throw new Error("derivedSecret must be Uint8Array");
-			}
-			if (typeof statement.parent !== "string") {
-				throw new Error("statement.parent required");
-			}
-			if (typeof statement.label !== "string") {
-				throw new Error("statement.label required");
-			}
-			if (typeof statement.issuedTime !== "number") {
-				throw new Error("statement.issuedTime required");
-			}
-			if (typeof statement.secretHash !== "string") {
-				throw new Error("statement.secretHash required");
-			}
-			if (
-				"context" in statement &&
-				typeof statement.context !== "string"
-			) {
-				throw new Error("statement.context must be string when present");
-			}
-
-			// Normalize optional context
-			const context = statement.context || "";
-
-			// -------------------------------------------------
-			// Verify secret binding
-			// -------------------------------------------------
-			const actualSecretHash = Q.Data.toHex(
-				await Q.Data.digest("SHA-256", derivedSecret)
-			);
-
-			if (actualSecretHash !== statement.secretHash) {
-				resolve(false);
-				return;
-			}
-
-			// -------------------------------------------------
-			// Protocol-fixed delegation schema
-			// -------------------------------------------------
-			const types = {
-				Delegation: [
-					{
-						name: "parent",
-						type: format === "eip712" ? "address" : "bytes32"
-					},
-					{ name: "label", type: "string" },
-					{ name: "issuedTime", type: "uint64" },
-					{ name: "context", type: "string" },
-					{ name: "secretHash", type: "bytes32" }
-				]
-			};
-
-			// -------------------------------------------------
-			// Verify signature and parent identity
-			// -------------------------------------------------
-			let verified;
-
-			if (format === "eip712") {
-
-				verified = await Q.Crypto.verify({
-					format: "eip712",
-					domain: options.domain || {},
-					types,
-					primaryType: "Delegation",
-					message: {
-						...statement,
-						context
-					},
-					signature: options.signature,
-					recovered: options.recovered
-				});
-
-				if (verified !== true) {
-					resolve(false);
-					return;
+				if (!options) {
+					throw new Error("options required");
 				}
 
-				const recoveredAddress = options.recovered?.address;
-				if (
-					!recoveredAddress ||
-					recoveredAddress.toLowerCase() !== statement.parent.toLowerCase()
-				) {
-					resolve(false);
-					return;
+				const format        = options.format || "ES256";
+				const statement     = options.statement;
+				const derivedSecret = options.derivedSecret;
+
+				// -------------------------------------------------
+				// Validate inputs
+				// -------------------------------------------------
+				if (!statement || typeof statement !== "object") {
+					throw new Error("statement required");
+				}
+				if (!(derivedSecret instanceof Uint8Array)) {
+					throw new Error("derivedSecret must be Uint8Array");
+				}
+				if (typeof statement.parent !== "string") {
+					throw new Error("statement.parent required");
+				}
+				if (typeof statement.label !== "string") {
+					throw new Error("statement.label required");
+				}
+				if (typeof statement.issuedTime !== "number") {
+					throw new Error("statement.issuedTime required");
+				}
+				if (typeof statement.secretHash !== "string") {
+					throw new Error("statement.secretHash required");
+				}
+				if ("context" in statement && typeof statement.context !== "string") {
+					throw new Error("statement.context must be string when present");
 				}
 
-			} else {
+				const context = statement.context || "";
 
-				if (!(options.parentPublicKey instanceof Uint8Array)) {
-					throw new Error("parentPublicKey required for qcrypto");
-				}
+				// -------------------------------------------------
+				// Verify secret binding
+				// Algorithm matches delegate.js: keccak256 for EIP712, SHA-256 for ES256
+				// -------------------------------------------------
+				const secretHashPromise = format === "EIP712"
+					? import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
+						.then(function ({ keccak_256 }) {
+							return Q.Data.toHex(keccak_256(derivedSecret));
+						})
+					: Q.Data.digest("SHA-256", derivedSecret)
+						.then(function (h) {
+							return Q.Data.toHex(h);
+						});
 
-				const expectedParent = Q.Data.toHex(
-					await Q.Data.digest("SHA-256", options.parentPublicKey)
-				);
+				secretHashPromise.then(function (actualSecretHashHex) {
 
-				if (expectedParent !== statement.parent) {
-					resolve(false);
-					return;
-				}
+					if (actualSecretHashHex !== statement.secretHash) {
+						resolve(false);
+						return;
+					}
 
-				verified = await Q.Crypto.verify({
-					format: "qcrypto",
-					domain: options.domain || {},
-					types,
-					primaryType: "Delegation",
-					message: {
-						...statement,
-						context
-					},
-					signature: options.signature,
-					publicKey: options.parentPublicKey
-				});
+					// -------------------------------------------------
+					// Schema — must match delegate.js types exactly
+					// -------------------------------------------------
+					const types = {
+						EIP712Domain: [
+							{ name: "name",    type: "string"  },
+							{ name: "version", type: "string"  },
+							{ name: "salt",    type: "bytes32" }
+						],
+						Delegation: [
+							{
+								name: "parent",
+								type: format === "EIP712" ? "address" : "bytes32"
+							},
+							{ name: "label",      type: "string"  },
+							{ name: "issuedTime", type: "uint64"  },
+							{ name: "context",    type: "string"  },
+							{ name: "secretHash", type: "bytes32" }
+						]
+					};
 
-				if (verified !== true) {
-					resolve(false);
-					return;
-				}
+					// -------------------------------------------------
+					// Normalize signature
+					// -------------------------------------------------
+					let signature = options.signature;
+					if (typeof signature === "string") {
+						signature = Q.Data.fromBase64(signature);
+					}
 
-				if (options.recovered && typeof options.recovered === "object") {
-					options.recovered.publicKey = options.parentPublicKey;
-				}
+					// -------------------------------------------------
+					// EIP712 path
+					// -------------------------------------------------
+					if (format === "EIP712") {
+
+						return Q.Crypto.verify({
+							format:      "EIP712",
+							domain:      options.domain || {},
+							types:       types,
+							primaryType: "Delegation",
+							message:     Q.extend({}, statement, { context: context }),
+							signature:   signature,
+							recovered:   options.recovered
+						}).then(function (verified) {
+
+							if (!verified) {
+								resolve(false);
+								return;
+							}
+
+							const recoveredAddress =
+								options.recovered && options.recovered.address;
+
+							if (
+								!recoveredAddress ||
+								recoveredAddress.toLowerCase() !==
+								statement.parent.toLowerCase()
+							) {
+								resolve(false);
+								return;
+							}
+
+							resolve(true);
+						});
+					}
+
+					// -------------------------------------------------
+					// ES256 path
+					// -------------------------------------------------
+					if (!(options.parentPublicKey instanceof Uint8Array)) {
+						throw new Error("parentPublicKey required for ES256");
+					}
+
+					const pubBytes = Q.Data.toUint8Array(options.parentPublicKey);
+
+					return Q.Data.digest("SHA-256", pubBytes)
+					.then(function (digest) {
+
+						const expectedParent = Q.Data.toHex(digest);
+
+						if (expectedParent !== statement.parent) {
+							resolve(false);
+							return;
+						}
+
+						return Q.Crypto.verify({
+							format:      "ES256",
+							domain:      options.domain || {},
+							types:       types,
+							primaryType: "Delegation",
+							message:     Q.extend({}, statement, { context: context }),
+							signature:   signature,
+							publicKey:   pubBytes
+						}).then(function (verified) {
+
+							if (!verified) {
+								resolve(false);
+								return;
+							}
+
+							if (options.recovered && typeof options.recovered === "object") {
+								options.recovered.publicKey = pubBytes;
+							}
+
+							resolve(true);
+						});
+					});
+
+				}).catch(reject);
+
+			} catch (e) {
+				reject(e);
 			}
-
-			resolve(true);
 		});
 	};
 

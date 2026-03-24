@@ -13,16 +13,14 @@ Q.exports(function (Q) {
      * @param {String} algorithm 
      * @param {String} payload 
      * @param {Function} callback receives (err, result)
-     * @return {Q.Promise}
+     * @return {Q.Promise} Returns a Uint8Array
      */
     return function Q_Data_digest(algorithm, payload, callback) {
         var encoded = new TextEncoder().encode(payload);
+
         return crypto.subtle.digest(algorithm, encoded)
         .then(function (buffer) {
-            var result = Array.from(new Uint8Array(buffer))
-            .map(function (b) {
-                return b.toString(16).padStart(2, '0');
-            }).join('');
+            var result = new Uint8Array(buffer);
             callback && callback(null, result);
             return result;
         });

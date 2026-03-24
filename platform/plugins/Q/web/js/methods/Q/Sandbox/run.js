@@ -340,7 +340,8 @@ Q.exports(function (Q) {
 						};
 
 						Q.Data.digest("SHA-256", JSON.stringify(execution))
-						.then(function (hash) {
+						.then(function (bytes) {
+							var hash = Q.Data.toHex(bytes);
 							cleanup();
 							if (msg.ok) {
 								resolve({
