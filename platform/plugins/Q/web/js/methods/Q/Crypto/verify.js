@@ -41,118 +41,117 @@ Q.exports(function (Q) {
 					throw new Error("primaryType required for eip712 verification");
 				}
 
-				let recoveredAddress;
+				try {
+					// Always use our encoder for the digest —
+					// single source of truth, byte-identical to PHP Q_Crypto_EIP712
+					const [{ hashTypedData }, { keccak_256 }] = await Promise.all([
+						import(Q.url("{{Q}}/src/js/crypto/eip712.js")),
+						import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
+					]);
 
-				// Prefer ethers if available (ecosystem parity)
-				if (
-					globalThis.ethers &&
-					typeof globalThis.ethers.verifyTypedData === "function"
-				) {
-					try {
-						recoveredAddress = globalThis.ethers.verifyTypedData(
-							options.domain || {},
-							options.types,
-							options.message,
-							options.signature
-						);
-					} catch (e) {
-						resolve(false);
-						return;
-					}
-
-				} else {
-
-					// Spec-correct fallback
-					try {
-						const [{ hashTypedData }, { keccak_256 }] = await Promise.all([
-							import(Q.url("{{Q}}/src/js/crypto/eip712.js")),
-							import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
-						]);
-
-						const digest = hashTypedData(
-							options.domain || {},
-							options.primaryType,
-							options.message,
-							options.types
-						);
-
-						const secp = await import(
-							Q.url("{{Q}}/src/js/crypto/secp256k1.js")
-						);
-
-						let sigBytes = options.signature;
-
-						if (typeof sigBytes === "string") {
-							sigBytes = Q.Data.fromHex(sigBytes);
-						}
-
-						if (!(sigBytes instanceof Uint8Array)) {
-							resolve(false);
-							return;
-						}
-
-						// Accept 65-byte RSV → drop v
-						if (sigBytes.length === 65) {
-							sigBytes = sigBytes.slice(0, 64);
-						}
-
-						if (sigBytes.length !== 64) {
-							resolve(false);
-							return;
-						}
-
-						const sig = secp.secp256k1.Signature.fromCompact(sigBytes);
-
-						// Enforce low-s (EIP-2)
-						if (sig.s > secp.secp256k1.CURVE.n / 2n) {
-							resolve(false);
-							return;
-						}
-
-						const pub = sig
-							.recoverPublicKey(digest)
-							.toRawBytes(false); // uncompressed
-
-						if (!secp.secp256k1.verify(sig, digest, pub)) {
-							resolve(false);
-							return;
-						}
-
-						// Address = last 20 bytes of keccak(pub[1:])
-						const addrBytes = keccak_256(pub.slice(1)).slice(-20);
-						recoveredAddress =
-							"0x" +
-							[...addrBytes].map(b =>
-								b.toString(16).padStart(2, "0")
-							).join("");
-
-					} catch (e) {
-						resolve(false);
-						return;
-					}
-				}
-
-				if (options.recovered && typeof options.recovered === "object") {
-					options.recovered.address = recoveredAddress;
-				}
-
-				if (options.address) {
-					resolve(
-						recoveredAddress.toLowerCase() ===
-						options.address.toLowerCase()
+					const digest = hashTypedData(
+						options.domain || {},
+						options.primaryType,
+						options.message,
+						options.types
 					);
-					return;
+
+					const secp = await import(
+						Q.url("{{Q}}/src/js/crypto/secp256k1.js")
+					);
+
+					let sigBytes = options.signature;
+
+					if (typeof sigBytes === "string") {
+						sigBytes = Q.Data.fromHex(sigBytes);
+					}
+
+					if (!(sigBytes instanceof Uint8Array)) {
+						resolve(false);
+						return;
+					}
+
+					// Accept 65-byte r||s||v → extract recovery id, drop v
+					let recovery;
+					if (sigBytes.length === 65) {
+						const v = sigBytes[64];
+						recovery = (v === 27 || v === 28) ? v - 27 : v;
+						sigBytes = sigBytes.slice(0, 64);
+					}
+
+					if (sigBytes.length !== 64) {
+						resolve(false);
+						return;
+					}
+
+					const sig = secp.secp256k1.Signature.fromCompact(sigBytes);
+
+					// Enforce low-s (EIP-2)
+					if (sig.s > secp.secp256k1.CURVE.n / 2n) {
+						resolve(false);
+						return;
+					}
+
+					// Use stored recovery id if available, otherwise try both
+					const recoveries = (recovery === 0 || recovery === 1)
+						? [recovery]
+						: [0, 1];
+
+					let pub = null;
+					for (const r of recoveries) {
+						try {
+							pub = sig.addRecoveryBit(r)
+								.recoverPublicKey(digest)
+								.toRawBytes(false); // uncompressed
+							break;
+						} catch (e) {
+							// try next
+						}
+					}
+
+					if (!pub) {
+						resolve(false);
+						return;
+					}
+
+					if (!secp.secp256k1.verify(sig, digest, pub)) {
+						resolve(false);
+						return;
+					}
+
+					// Address = last 20 bytes of keccak256(pub[1:])
+					const addrBytes = keccak_256(pub.slice(1)).slice(-20);
+					const recoveredAddress = "0x" + [...addrBytes]
+						.map(b => b.toString(16).padStart(2, "0"))
+						.join("");
+
+					if (options.recovered && typeof options.recovered === "object") {
+						options.recovered.address = recoveredAddress;
+					}
+
+					if (options.address) {
+						resolve(
+							recoveredAddress.toLowerCase() ===
+							options.address.toLowerCase()
+						);
+						return;
+					}
+
+					resolve(true);
+
+				} catch (e) {
+					resolve(false);
 				}
 
-				resolve(true);
 				return;
 			}
 
 			/* =================================================
-			 * es256 (P-256 + SHA-256)
+			 * ES256 (P-256 + SHA-256)
 			 * =================================================
 			 *
-			 * es256 signatures are DER-encoded ECDSA (WebCrypto compatible)
+			 * Signatures are DER-encoded ECDSA (WebCrypto compatible).
+			 * subtle.verify hashes internally, so pass raw canonical bytes.
 			 */
 			if (format === "ES256") {
 
@@ -164,19 +163,17 @@ Q.exports(function (Q) {
 				}
 
 				const payload = {
-					domain: options.domain || {},
+					domain:      options.domain || {},
 					primaryType: options.primaryType,
-					types: options.types,
-					message: options.message
+					types:       options.types,
+					message:     options.message
 				};
 
-				// Deep canonicalization (must match sign.js)
+				// Canonical JSON — must match sign.js and PHP Q_Crypto::sign() exactly
 				const canonical = Q.serialize(payload);
 				const data = new TextEncoder().encode(canonical);
 
 				try {
-					const digestBytes = await Q.Data.digest("SHA-256", data);
-
 					const key = await crypto.subtle.importKey(
 						"raw",
 						options.publicKey,
@@ -189,8 +186,8 @@ Q.exports(function (Q) {
 						const ok = await crypto.subtle.verify(
 							{ name: "ECDSA", hash: "SHA-256" },
 							key,
-							options.signature, // DER-encoded ECDSA
-							digestBytes
+							options.signature,
+							data  // raw canonical bytes — subtle hashes once internally
 						);
 						resolve(ok);
 					} catch (e) {

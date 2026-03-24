@@ -16,7 +16,9 @@ Q.exports(function (Q) {
      * @return {Q.Promise} Returns a Uint8Array
      */
     return function Q_Data_digest(algorithm, payload, callback) {
-        var encoded = new TextEncoder().encode(payload);
+        var encoded = (payload instanceof Uint8Array || payload instanceof ArrayBuffer)
+            ? payload
+            : new TextEncoder().encode(payload);
 
         return crypto.subtle.digest(algorithm, encoded)
         .then(function (buffer) {

@@ -133,7 +133,7 @@ function encodeValue(type, value, types) {
 	}
 
 	// bytes<N>
-	const bytesMatch = type.match(/^bytes([1-9]|[12][0-9]|3[01])$/);
+	const bytesMatch = type.match(/^bytes([1-9]|[12][0-9]|3[012])$/);
 	if (bytesMatch) {
 		const n = parseInt(bytesMatch[1], 10);
 		const b = toBytes(value);

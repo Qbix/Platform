@@ -324,34 +324,50 @@ class Q_Data
 	 * Encrypt plaintext using AES-256-GCM.
 	 *
 	 * Produces output compatible with WebCrypto AES-GCM:
-	 * - 12-byte IV
+	 * - 12-byte IV (random or caller-supplied)
 	 * - Separate authentication tag (16 bytes)
 	 * - Optional AAD support
 	 *
 	 * @method encrypt
 	 * @static
-	 * @param {string} key
-	 *   Encryption key (32-byte binary string for AES-256).
-	 * @param {string} plaintext
+	 * @param {string} $key
+	 *   Encryption key (32-byte raw binary string for AES-256).
+	 * @param {string} $plaintext
 	 *   Raw plaintext data to encrypt.
-	 * @param {string} [aad=null]
-	 *   Optional additional authenticated data (not encrypted).
+	 * @param {array} [$options=[]]
+	 * @param {string} [$options['iv']=null]
+	 *   Optional raw binary IV (12 bytes). If omitted, a random IV is generated.
+	 *   Pass a derived IV (e.g. from Q_Data::derive) for deterministic /
+	 *   convergent encryption, such as Safecloud chunk encryption where
+	 *   the same content should always produce the same ciphertext and CID.
+	 *   WARNING: never reuse the same (key, iv) pair for different plaintexts.
+	 * @param {string} [$options['additional']=null]
+	 *   Optional additional authenticated data (AAD). Authenticated but not
+	 *   encrypted. Must match exactly on decrypt, otherwise decryption fails.
 	 * @return {array}
-	 *   Associative array containing:
-	 *   - {string} iv Base64-encoded initialization vector (12 bytes)
+	 *   Associative array:
+	 *   - {string} iv         Base64-encoded IV (12 bytes)
 	 *   - {string} ciphertext Base64-encoded encrypted data
-	 *   - {string} tag Base64-encoded authentication tag (16 bytes)
+	 *   - {string} tag        Base64-encoded authentication tag (16 bytes)
 	 * @throws {Exception}
 	 *   If encryption fails or key length is invalid.
 	 */
-	public static function encrypt($key, $plaintext, $aad = null) {
+	public static function encrypt($key, $plaintext, $options = array()) {
 		if (strlen($key) !== 32) {
 			throw new Exception("Key must be 32 bytes (AES-256)");
 		}
 
-		$iv = random_bytes(12); // matches JS
+		$iv = isset($options['iv'])
+			? $options['iv']
+			: random_bytes(12);
 
-		$tag = '';
+		if (strlen($iv) !== 12) {
+			throw new Exception("IV must be 12 bytes");
+		}
+
+		$aad = isset($options['additional']) ? $options['additional'] : '';
+
+		$tag        = '';
 		$ciphertext = openssl_encrypt(
 			$plaintext,
 			'aes-256-gcm',
@@ -359,47 +375,50 @@ class Q_Data
 			OPENSSL_RAW_DATA,
 			$iv,
 			$tag,
-			$aad ?? ''
+			$aad
 		);
 
 		if ($ciphertext === false) {
 			throw new Exception("Encryption failed");
 		}
 
-		return [
-			'iv' => base64_encode($iv),
+		return array(
+			'iv'         => base64_encode($iv),
 			'ciphertext' => base64_encode($ciphertext),
-			'tag' => base64_encode($tag)
-		];
+			'tag'        => base64_encode($tag)
+		);
 	}
 
 	/**
 	 * Decrypt AES-256-GCM encrypted data.
 	 *
-	 * Verifies authentication tag before returning plaintext.
-	 * Compatible with WebCrypto AES-GCM when tag is separated.
+	 * Verifies the authentication tag before returning plaintext.
+	 * Compatible with WebCrypto AES-GCM.
 	 *
 	 * @method decrypt
 	 * @static
-	 * @param {string} key
-	 *   Decryption key (32-byte binary string).
-	 * @param {string} ivB64
-	 *   Base64-encoded initialization vector (12 bytes).
-	 * @param {string} ciphertextB64
-	 *   Base64-encoded encrypted data.
-	 * @param {string} tagB64
+	 * @param {string} $key
+	 *   Decryption key (32-byte raw binary string).
+	 * @param {string} $ivB64
+	 *   Base64-encoded IV (12 bytes). Stored alongside the ciphertext.
+	 * @param {string} $ciphertextB64
+	 *   Base64-encoded encrypted data (without tag).
+	 * @param {string} $tagB64
 	 *   Base64-encoded authentication tag (16 bytes).
-	 * @param {string} [aad=null]
-	 *   Optional additional authenticated data.
+	 * @param {array} [$options=[]]
+	 * @param {string} [$options['additional']=null]
+	 *   Optional additional authenticated data (AAD).
+	 *   Must match exactly what was passed to encrypt(), otherwise fails.
 	 * @return {string}
 	 *   Decrypted plaintext (raw binary string).
 	 * @throws {Exception}
-	 *   If authentication fails or decryption fails.
+	 *   If authentication or decryption fails.
 	 */
-	public static function decrypt($key, $ivB64, $ciphertextB64, $tagB64, $aad = null) {
-		$iv = base64_decode($ivB64);
+	public static function decrypt($key, $ivB64, $ciphertextB64, $tagB64, $options = array()) {
+		$iv         = base64_decode($ivB64);
 		$ciphertext = base64_decode($ciphertextB64);
-		$tag = base64_decode($tagB64);
+		$tag        = base64_decode($tagB64);
+		$aad        = isset($options['additional']) ? $options['additional'] : '';
 
 		$plaintext = openssl_decrypt(
 			$ciphertext,
@@ -408,11 +427,11 @@ class Q_Data
 			OPENSSL_RAW_DATA,
 			$iv,
 			$tag,
-			$aad ?? ''
+			$aad
 		);
 
 		if ($plaintext === false) {
-			throw new Exception("Decryption failed or auth failed");
+			throw new Exception("Decryption failed or authentication failed");
 		}
 
 		return $plaintext;
