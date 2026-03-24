@@ -4872,6 +4872,224 @@ Q.Exception = function (message, fields) {
 
 Q.Exception.prototype = Error.prototype;
 
+
+/**
+ * For defining method stubs that will be replaced with methods on demand.
+ * Assign this in place of any asynchronous method
+ * that would have a callback and/or return a Promise.
+ * Then call Q.Method.define() on the object containing these.
+ * @class Q.Method
+ * @constructor
+ * @param {Object} properties pass an object with any properties to assign to the
+ *  method function, such as { options: { a: "b" , c: "d" }}
+ * @param {Object} [options] More information about the method
+ * @param {boolean} [options.isGetter] set to true to indicate that the method will be wrapped with Q.getter()
+ * @param {boolean} [options.customPath] set to a custom path to load the method from, instead of the default
+ */
+Q.Method = function (properties, options) {
+	Q.extend(this, properties);
+	this.__options = options || {};
+};
+
+Q.Method.stub = new Q.Method(); // for backwards compatibility
+
+/**
+ * Loads the implementation for method k on object o from url.
+ * Two changes from the original:
+ *
+ * 1. The value returned by exported.apply() is wrapped in Promise.resolve(),
+ *    so method files may return either a function directly (sync, as before)
+ *    or a Promise that resolves to a function (async setup before returning).
+ *
+ * 2. Q_Method_load_executed is set immediately (before the Promise settles)
+ *    so that concurrent calls to the same method while the file is loading
+ *    do not re-execute the factory. The assignment of o[k] is deferred until
+ *    the Promise resolves.
+ */
+Q.Method.load = function (o, k, url, closure) {
+	var original = o[k];
+	return new Promise(function (resolve, reject) {
+		Q.require(url, function (exported) {
+			if (exported) {
+				if (o.__loaded) {
+					o = o.__loaded; // in case o was replaced
+				} else if (o.__shim && o.__shim.__loaded) {
+					o = o.__shim.__loaded; // in case o[k] was replaced
+				}
+				var args = closure ? closure() : [];
+				if (!exported.Q_Method_load_executed) {
+					// Mark immediately so concurrent shimmed calls don't re-run
+					exported.Q_Method_load_executed = true;
+					// Wrap in Promise.resolve so method files may return a Promise
+					Promise.resolve(exported.apply(o, args)).then(function (m) {
+						if (typeof m === 'function') {
+							o[k] = m;
+						}
+						_finish();
+					}).catch(reject);
+					return; // _finish called asynchronously above
+				}
+			}
+			_finish();
+
+			function _finish() {
+				var v = o[k];
+				if (v === original) {
+					return reject("Q.Method.define: Must override method '" + k + "'");
+				}
+				for (var property in original) {
+					if (!(property in v)) {
+						v[property] = original[property];
+					}
+				}
+				original.__loaded = v;
+				resolve(v);
+				Q.Method.onLoad.handle(o, k, o[k], closure);
+			}
+		}, true);
+	});
+};
+
+Q.Method.onLoad = new Q.Event();
+
+/**
+ * Call this on any object that contains new Q.Method()
+ * in place of some asynchronous methods. It will set up code to load
+ * implementations of these methods on demand, from files found at URLs
+ * of the form {{prefix}}/{{methodName}}.js . In those files, you can
+ * write code such as the following, using constant objects:
+ * Q.exports(function (Q, _) { 
+ *   return function myCoolMethod(options, callback) {
+ *     return new Promise(...);
+ *   }
+ * });
+ * Or, for async setup before returning the method:
+ * Q.exports(function (Q, _) {
+ *   return someAsyncSetup().then(function () {
+ *     return function myCoolMethod(options, callback) { ... };
+ *   });
+ * });
+ * When the method is first called, it loads the implementation, and
+ * returns a promise that resolves to whatever the implementation returns.
+ * Subsequent calls to the method would simply invoke the implementation.
+ * @param {Object} o The object which contains some asynchronous methods
+ * @param {String} prefix The part of the URL before "/{{methodName}}.js".
+ *  It is passed through Q.url() so it can look like "{{Users}}/js/Users/Web3"
+ * @param {Function} [closure] Optional. Returns array of constant objects to
+ *  pass as arguments to each method implementation file after Q.exports().
+ * @param {Object} [options] Optional options object.
+ * @param {String} [options.require] Filename without .js, relative to prefix,
+ *  e.g. "_internal". On the first method call, this file is loaded via
+ *  Q.require, its Q.exports return value is appended to the closure array,
+ *  and the result is cached — loaded at most once per define() call.
+ *  Method files receive it as the last argument after whatever closure() returns.
+ * @return {Object} the object sent in the first parameter
+ */
+Q.Method.define = function (o, prefix, closure, options) {
+	if (!prefix) {
+		prefix = Q.currentScriptPath() + '/' + Q.Method.define.options.siblingFolder;
+	}
+
+	// _sharedResult: null = not started, Promise = loading, Array = done (cached exports)
+	var _sharedResult = null;
+
+	/**
+	 * Returns a Promise resolving to the full args array for a method file:
+	 * closure() items (if any) followed by the options.require export (if any).
+	 * @private
+	 */
+	function _resolveArgs() {
+		var base = closure ? closure() : [];
+
+		if (!options || !options.require) {
+			return Promise.resolve(base);
+		}
+
+		// Already loaded — splice directly, no Promise overhead
+		if (Array.isArray(_sharedResult)) {
+			return Promise.resolve(base.concat(_sharedResult));
+		}
+
+		// Already loading — reuse the in-flight Promise
+		if (_sharedResult && typeof _sharedResult.then === 'function') {
+			return _sharedResult.then(function (shared) {
+				return base.concat(shared);
+			});
+		}
+
+		// First call — start the load
+		var requireUrl = Q.url(prefix + '/' + options.require + '.js');
+		_sharedResult = new Promise(function (resolve) {
+			Q.require(requireUrl, function (exported) {
+				// exported is whatever the file passed to Q.exports —
+				// may be a plain object, a function, or a Promise.
+				// We wrap in Promise.resolve so _internal.js may also
+				// do async setup if needed.
+				Promise.resolve(
+					(typeof exported === 'function')
+						? exported()
+						: exported
+				).then(function (result) {
+					var shared = (result !== undefined && result !== null)
+						? [result]
+						: [];
+					_sharedResult = shared; // replace Promise with plain Array
+					resolve(shared);
+				});
+			}, true);
+		});
+
+		return _sharedResult.then(function (shared) {
+			return base.concat(shared);
+		});
+	}
+
+	/**
+	 * Build a shim for one method key k.
+	 * Extracted so force/forget can share the same logic without repetition.
+	 * @private
+	 */
+	function _makeShim(method, k, callName) {
+		return function _Q_Method_shim() {
+			var url = Q.url(
+				(method.__options && method.__options.customPath)
+					? method.__options.customPath
+					: (prefix + '/' + k + '.js')
+			);
+			var t = this, a = arguments;
+			return _resolveArgs().then(function (args) {
+				var augmented = function () { return args; };
+				return Q.Method.load(o, k, url, augmented);
+			}).then(function (f) {
+				var fn = callName ? f[callName] : f;
+				return fn.apply(t, a);
+			});
+		};
+	}
+
+	Q.each(o, function (k) {
+		if (!o.hasOwnProperty(k) || !(o[k] instanceof Q.Method)) {
+			return;
+		}
+
+		var method = o[k];
+
+		o[k] = method.__shim = _makeShim(method, k, null);
+
+		Q.extend(o[k], method);
+
+		if (method.__options.isGetter) {
+			o[k].force  = _makeShim(method, k, 'force');
+			o[k].forget = _makeShim(method, k, 'forget');
+		}
+
+		if (method.__options.cache) {
+			o[k].cache = method.__options.cache;
+		}
+	});
+	return o;
+};
+
 /**
  * The root mixin added to all tools.
  * @class Q.Tool
@@ -5204,7 +5422,7 @@ Q.Tool.clear = function _Q_Tool_clear(elem, removeCached, removeElementAfterLast
  * @param {Object} [ctor.placeholder] what to render before the tool is loaded and rendered instead
  * @param {String} [ctor.placeholder.html] literal HTML to insert
  * @param {String} [ctor.placeholder.template] the name of a template to insert
- * @param {Object} [defaultOptions] An optional hash of default options for the tool
+ * @param {Object} [defaultOptions] An optional dictionary of default options and their values for the tool
  * @param {Array} [stateKeys] An optional array of key names to copy from options to state
  * @param {Object} [methods] An optional hash of method functions to assign to the prototype
  * @param {Boolean} [overwrite] Pass true here to overwrite the tool definition even if a constructor function was already loaded
@@ -5284,6 +5502,10 @@ Q.Tool.define = function (name, /* require, */ ctor, defaultOptions, stateKeys, 
 			return;
 		}
 
+		if (Q.Tool.define.components && typeof ctor === 'function') {
+			Q.Tool.define.component(name, ctor);
+		}
+
 		Q.extend(ctor.prototype, 10, methods);
 		Q.onInit.addOnce(function () {
 			var waitFor = [];
@@ -5340,6 +5562,12 @@ Q.Tool.define.pattern = function (regexp, defaults, tools) {
 	}
 	return defined;
 };
+
+Q.Tool.define.component = new Q.Method();
+Q.Method.define(Q.Tool.define, "{{Q}}/js/methods/Q/Tool/define", function() {
+    return [Q];
+});
+Q.Tool.define.components = false;
 
 Q.Tool.beingActivated = undefined;
 
@@ -6873,147 +7101,6 @@ Q.Links = {
 };
 
 Q.Links.whatsapp = Q.Links.whatsApp;
-
-/**
- * For defining method stubs that will be replaced with methods on demand.
- * Assign this in place of any asynchronous method
- * that would have a callback and/or return a Promise.
- * Then call Q.Method.define() on the object containing these.
- * @class Q.Method
- * @constructor
- * @param {Object} properties pass an object with any properties to assign to the
- *  method function, such as { options: { a: "b" , c: "d" }}
- * @param {Object} [options] More information about the method
- * @param {boolean} [options.isGetter] set to true to indicate that the method will be wrapped with Q.getter()
- * @param {boolean} [options.customPath] set to a custom path to load the method from, instead of the default
- */
-Q.Method = function (properties, options) {
-	Q.extend(this, properties);
-	this.__options = options || {};
-};
-
-Q.Method.stub = new Q.Method(); // for backwards compatibility
-
-Q.Method.load = function (o, k, url, closure) {
-	var original = o[k];
-	return new Promise(function (resolve, reject) {
-		Q.require(url, function (exported) {
-			if (exported) {
-				if (o.__loaded) {
-					o = o.__loaded; // in case o was replaced
-				} else if (o.__shim && o.__shim.__loaded) {
-					o = o.__shim.__loaded; // in case o[k] was replaced
-				}
-				var args = closure ? closure() : [];
-				if (!exported.Q_Method_load_executed) {
-					var m = exported.apply(o, args);
-					if (typeof m === 'function') {
-						o[k] = m;
-					}
-					exported.Q_Method_load_executed = true;
-				}
-			}
-			var v = o[k];
-			if (v === original) {
-				return reject("Q.Method.define: Must override method '" + k + "'");
-			}
-			for (var property in original) {
-				if (!(property in v)) {
-					v[property] = original[property];
-				}
-			}
-			original.__loaded = v;
-			resolve(v);
-			Q.Method.onLoad.handle(o, k, o[k], closure);
-		}, true);
-	});
-};
-
-Q.Method.onLoad = new Q.Event();
-
-/**
- * Call this on any object that contains new Q.Method()
- * in place of some asynchronous methods. It will set up code to load
- * implementations of these methods on demand, from files found at URLs
- * of the form {{prefix}}/{{methodName}}.js . In those files, you can
- * write code such as the following, using constant objects:
- * Q.exports(function (Users, _private) { 
- *   return function myCoolMethod(options, callback) {
- *     return new Promise(...);
- *   }
- * });
- * When the method is first called, it loads the implementation, and
- * returns a promise that resolves to whatever the implementation returns.
- * Subsequent calls to the method would simply invoke the implementation.
- * @param {Object} o The object which contains some asynchronous methods
- * @param {String} prefix The part of the URL before "/{{methodName}}.js".
- *  It is passed through Q.url() so it can look like "{{Users}}/js/Users/Web3"
- * @param {Function} closure Optional, this function could reference some
- *  constants in a closure, and return array of these constants, to be used
- *  inside the method implementation in a separate file. The closure constants
- *  can be objects, whose contents are dynamic, but the constants themselves
- *  should never change between invocations of the method. 
- * @return {Object} the object sent in the first parameter
- */
-Q.Method.define = function (o, prefix, closure) {
-	if (!prefix) {
-		prefix = Q.currentScriptPath() + '/' + Q.Method.define.options.siblingFolder;
-	}
-	Q.each(o, function (k) {
-		if (!o.hasOwnProperty(k) || !(o[k] instanceof Q.Method)) {
-			return;
-		}
-
-		var method = o[k];
-
-		o[k] = method.__shim = function _Q_Method_shim() {
-			var url = Q.url(
-				(method.__options && method.__options.customPath)
-					? method.__options.customPath
-					: (prefix + '/' + k + '.js')
-			);
-			var t = this, a = arguments;
-			return Q.Method.load(o, k, url, closure)
-				.then(function (f) {
-					return f.apply(t, a);
-				});
-		};
-
-		Q.extend(o[k], method);
-
-		if (method.__options.isGetter) {
-			o[k].force = function _Q_Method_force_shim() {
-				var url = Q.url(
-					(method.__options && method.__options.customPath)
-						? method.__options.customPath
-						: (prefix + '/' + k + '.js')
-				);
-				var t = this, a = arguments;
-				return Q.Method.load(o, k, url, closure)
-					.then(function (f) {
-						return f.force.apply(t, a);
-					});
-			};
-			o[k].forget = function _Q_Method_forget_shim() {
-				var url = Q.url(
-					(method.__options && method.__options.customPath)
-						? method.__options.customPath
-						: (prefix + '/' + k + '.js')
-				);
-				var t = this, a = arguments;
-				return Q.Method.load(o, k, url, closure)
-					.then(function (f) {
-						return f.forget.apply(t, a);
-					});
-			};
-		}
-
-		if (method.__options.cache) {
-			o[k].cache = method.__options.cache;
-		}
-	});
-	return o;
-};
 
 /**
  * A Q.Session object represents a session, and implements things like an "expiring" dialog
