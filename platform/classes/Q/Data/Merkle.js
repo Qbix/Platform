@@ -35,7 +35,7 @@ function _hashLevel(nodes) {
     for (var i = 0; i < nodes.length; i += 2) {
         var left  = nodes[i];
         var right = (i + 1 < nodes.length) ? nodes[i + 1] : left;
-        out.push(_sha256(_concat(left, right)));
+        out.push(_sha256(_concat(new Uint8Array([0x01]), _concat(left, right))));
     }
     return out;
 }
@@ -60,7 +60,7 @@ function _leafBytes(leaf) {
 Merkle.build = function (leaves, callback) {
     try {
         if (!leaves || !leaves.length) { throw new Error('Q.Data.Merkle.build: no leaves'); }
-        var hashes = leaves.map(function (leaf) { return _sha256(_leafBytes(leaf)); });
+        var hashes = leaves.map(function (leaf) { return _sha256(_concat(new Uint8Array([0x00]), _leafBytes(leaf))); });
         var hex    = Data.toHex(_reduce(hashes));
         if (callback) { callback(null, hex); }
         return Promise.resolve(hex);
@@ -82,7 +82,7 @@ Merkle.proof = function (leaves, index, callback) {
         if (index < 0 || index >= leaves.length) {
             throw new Error('Q.Data.Merkle.proof: index out of range');
         }
-        var hashes = leaves.map(function (leaf) { return _sha256(_leafBytes(leaf)); });
+        var hashes = leaves.map(function (leaf) { return _sha256(_concat(new Uint8Array([0x00]), _leafBytes(leaf))); });
         var steps  = [];
         var idx    = index;
         var nodes  = hashes.slice();
@@ -118,14 +118,14 @@ Merkle.proof = function (leaves, index, callback) {
  */
 Merkle.verify = function (leaf, proof, rootHex, callback) {
     try {
-        var current = _sha256(_leafBytes(leaf));
+        var current = _sha256(_concat(new Uint8Array([0x00]), _leafBytes(leaf)));
         for (var i = 0; i < proof.length; i++) {
             var step    = proof[i];
             var sibling = Data.fromHex(step.hex);
             var pair    = step.side === 'left'
                 ? _concat(sibling, current)
                 : _concat(current, sibling);
-            current = _sha256(pair);
+            current = _sha256(_concat(new Uint8Array([0x01]), pair));
         }
         var ok = Data.toHex(current) === rootHex;
         if (callback) { callback(null, ok); }

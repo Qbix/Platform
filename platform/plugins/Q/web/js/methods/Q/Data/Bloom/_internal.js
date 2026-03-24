@@ -43,6 +43,8 @@ Q.exports(function (Q) {
             var view = function (d) {
                 return ((d[0] << 24) | (d[1] << 16) | (d[2] << 8) | d[3]) >>> 0;
             };
+            // Only the first 4 bytes of each digest are used for h1/h2.
+            // This gives 32-bit values, bounding useful m to ~4 billion bits — sufficient in practice.
             var h1 = view(digests[0]);
             var h2 = view(digests[1]);
             var positions = [];

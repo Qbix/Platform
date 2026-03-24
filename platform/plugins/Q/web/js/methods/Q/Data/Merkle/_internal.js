@@ -45,7 +45,7 @@ Q.exports(function (Q) {
             for (var i = 0; i < nodes.length; i += 2) {
                 var left  = nodes[i];
                 var right = (i + 1 < nodes.length) ? nodes[i + 1] : left;
-                pairs.push(_.sha256(_.concat(left, right)));
+                pairs.push(_.sha256(_.concat(new Uint8Array([0x01]), _.concat(left, right))));
             }
             return Promise.all(pairs);
         },

@@ -13,15 +13,14 @@ Q.exports(function (Q, _) {
     return Q.promisify(function (leaf, proof, rootHex, callback) {
         var enc   = new TextEncoder();
         var bytes = (typeof leaf === 'string') ? enc.encode(leaf) : leaf;
-
-        _.sha256(bytes).then(function (current) {
+        _.sha256(_.concat(new Uint8Array([0x00]), bytes)).then(function (current) {
             return proof.reduce(function (chain, step) {
                 return chain.then(function (cur) {
                     var sibling = Q.Data.fromHex(step.hex);
                     var pair    = (step.side === 'left')
                         ? _.concat(sibling, cur)
                         : _.concat(cur, sibling);
-                    return _.sha256(pair);
+                    return _.sha256(_.concat(new Uint8Array([0x01]), pair));
                 });
             }, Promise.resolve(current));
         }).then(function (computedRoot) {

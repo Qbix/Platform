@@ -19,7 +19,7 @@ Q.exports(function (Q, _) {
 
         Promise.all(leaves.map(function (leaf) {
             var bytes = (typeof leaf === 'string') ? enc.encode(leaf) : leaf;
-            return _.sha256(bytes);
+            return _.sha256(_.concat(new Uint8Array([0x00]), bytes));
         })).then(function (hashes) {
             var steps = [];
             var idx   = index;
