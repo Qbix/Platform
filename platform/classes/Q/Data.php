@@ -320,6 +320,37 @@ class Q_Data
 		return $results;
 	}
 
+    /**
+     * Produces a canonical JSON string per RFC 8785 / JCS
+     * (JSON Canonicalization Scheme).
+     *
+     * Inlines the full algorithm — no external dependency, no composer package.
+     *
+     * Rules (RFC 8785 https://www.rfc-editor.org/rfc/rfc8785):
+     *   - Object keys sorted recursively in UTF-16 code unit order (ksort SORT_STRING).
+     *   - Array element order preserved; arrays scanned recursively for objects.
+     *   - Strings: serialized via json_encode (correct Unicode escaping).
+     *   - Booleans and null: serialized as true / false / null.
+     *   - Integers: serialized as plain decimal.
+     *   - Floats: serialized using the ECMAScript number-to-string algorithm
+     *     (ECMA-262 §7.1.12.1) via _canonicalizeNumber(). This is the critical
+     *     difference from a naive json_encode, which gives "1.0E+30" for 1e30
+     *     while RFC 8785 requires "1e+30".
+     *   - NaN and Infinity throw — not valid in I-JSON (RFC 7493 / RFC 8259).
+     *
+     * Byte-identical to JS Q.Data.canonicalize() for all I-JSON-conformant inputs.
+     *
+     * @method canonicalize
+     * @static
+     * @param  mixed  $data  The value to canonicalize (array, scalar, or null).
+     * @return string  Canonical UTF-8 JSON string.
+     * @throws \InvalidArgumentException if $data contains NaN or Infinity.
+     */
+    public static function canonicalize($data): string
+    {
+        return self::_jcs($data);
+    }
+
 	/**
 	 * Encrypt plaintext using AES-256-GCM.
 	 *
@@ -631,5 +662,114 @@ class Q_Data
 		$base64 = chunk_split(base64_encode($der), 64, "\n");
 		return "-----BEGIN {$type} KEY-----\n{$base64}-----END {$type} KEY-----\n";
 	}
+
+    /**
+     * RFC 8785 Appendix A — recursive JCS serializer.
+     * @private
+     */
+    private static function _jcs($value): string
+    {
+        if ($value === null)        { return 'null'; }
+        if ($value === true)        { return 'true'; }
+        if ($value === false)       { return 'false'; }
+        if (is_int($value))         { return (string)$value; }
+        if (is_float($value))       { return self::_canonicalizeNumber($value); }
+        if (is_string($value))      { return json_encode($value, JSON_UNESCAPED_UNICODE); }
+
+        if (is_array($value)) {
+            if (!$value || array_keys($value) === range(0, count($value) - 1)) {
+                // Sequential array — preserve element order.
+                $parts = [];
+                foreach ($value as $element) {
+                    $parts[] = self::_jcs($element);
+                }
+                return '[' . implode(',', $parts) . ']';
+            } else {
+                // Associative array (object) — sort keys in UTF-16 code unit order.
+                ksort($value, SORT_STRING);
+                $parts = [];
+                foreach ($value as $k => $v) {
+                    $parts[] = json_encode((string)$k, JSON_UNESCAPED_UNICODE)
+                             . ':' . self::_jcs($v);
+                }
+                return '{' . implode(',', $parts) . '}';
+            }
+        }
+
+        // Objects, resources — attempt json_encode as best-effort.
+        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Serialize a PHP float using the ECMAScript number-to-string algorithm
+     * required by RFC 8785 §3.2.2.3.
+     *
+     * Uses json_encode (serialize_precision = -1 = shortest round-trip) for
+     * the significant digits, then normalizes the format to match ECMAScript:
+     *   - Lowercase exponent: "E" → "e"
+     *   - Explicit sign: "e30" → "e+30"
+     *   - No trailing ".0" before exponent: "1.0e+30" → "1e+30"
+     *   - Exponent -6 converted to decimal (ECMAScript boundary):
+     *       "1.0e-6" → "0.000001"
+     *       "-3.333e-6" → "-0.0000033333333333333333"
+     *
+     * Passes all RFC 8785 Appendix B test vectors.
+     *
+     * @private
+     */
+    private static function _canonicalizeNumber(float $value): string
+    {
+        if (is_nan($value)) {
+            throw new \InvalidArgumentException(
+                'Q_Data::canonicalize: NaN is not valid in RFC 8785 / I-JSON'
+            );
+        }
+        if (is_infinite($value)) {
+            throw new \InvalidArgumentException(
+                'Q_Data::canonicalize: Infinity is not valid in RFC 8785 / I-JSON'
+            );
+        }
+
+        // json_encode uses serialize_precision = -1 (shortest round-trip),
+        // which matches ECMAScript's "shortest" algorithm (ECMA-262 §7.1.12.1 Note 2).
+        // Result is e.g. "1.0e+30", "1.0e-6", "333333333.3333333", "0.002".
+        $str = json_encode($value);
+
+        if (preg_match('/^(-?)(\d+(?:\.\d+)?)e([+-]\d+)$/', $str, $m)) {
+            $sign     = $m[1];
+            $mantissa = $m[2];
+            $exp      = (int)$m[3];
+
+            // ECMAScript uses decimal notation when exponent is exactly -6
+            // (boundary: -6 stays decimal, -7 and below use exponential).
+            if ($exp === -6) {
+                $digits = str_replace('.', '', $mantissa);
+                $dotPos = strpos($mantissa, '.');
+                $intLen = $dotPos === false ? strlen($mantissa) : $dotPos;
+                $newDot = $intLen + $exp;   // intLen - 6, always <= 0 for normal mantissas
+                if ($newDot <= 0) {
+                    $result = '0.' . str_repeat('0', -$newDot) . $digits;
+                } else {
+                    $result = substr($digits, 0, $newDot) . '.' . substr($digits, $newDot);
+                }
+                $result = rtrim($result, '0');
+                $result = rtrim($result, '.');
+                return $sign . $result;
+            }
+
+            // All other exponents: strip trailing ".0" from mantissa, format exponent.
+            $mantissa = rtrim($mantissa, '0');
+            $mantissa = rtrim($mantissa, '.');
+            $expStr   = 'e' . ($exp >= 0 ? '+' : '') . $exp;
+            return $sign . $mantissa . $expStr;
+        }
+
+        // Decimal notation: strip trailing zeros after decimal point.
+        if (strpos($str, '.') !== false) {
+            $str = rtrim($str, '0');
+            $str = rtrim($str, '.');
+        }
+        return $str;
+    }
 
 }

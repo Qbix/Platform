@@ -12987,6 +12987,7 @@ Q.Data = Q.Method.define({
 	sign: new Q.Method(),
 	verify: new Q.Method(),
 	generateKey: new Q.Method(),
+	canonicalize: new Q.Method(),
 	all: function (a, b) {
 		return a && b;
 	},
@@ -13115,6 +13116,34 @@ Q.Crypto = Q.Method.define({
 	verifyDelegated: new Q.Method(),
 	internalKeypair: new Q.Method(),
 }, "{{Q}}/js/methods/Q/Crypto", function() {
+	return [Q];
+});
+
+/**
+ * OpenClaiming Protocol (OCP) — core ES256 claims.
+ * @class Q.Crypto.OpenClaim
+ */
+Q.Crypto.OpenClaim = Q.Method.define({
+    canonicalize: new Q.Method(),
+    sign: new Q.Method(),
+    verify: new Q.Method(),
+    resolve: new Q.Method(),
+}, "{{Q}}/js/methods/Q/Crypto/OpenClaim", function() {
+    return [Q];
+});
+
+Q.Crypto.OpenClaim._keyCache = {};
+Q.Crypto.OpenClaim._urlCache = {};
+
+/**
+ * OpenClaiming Protocol — EIP-712 Payment and Authorization extensions.
+ * @class Q.Crypto.OpenClaim.EVM
+ */
+Q.Crypto.OpenClaim.EVM = Q.Method.define({
+	hashTypedData: new Q.Method(),
+	sign: new Q.Method(),
+	verify: new Q.Method(),
+}, "{{Q}}/js/methods/Q/Crypto/OpenClaim/EVM", function() {
 	return [Q];
 });
 
