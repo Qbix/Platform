@@ -1970,9 +1970,6 @@ abstract class Db_Query extends Db_Expression
 				throw new Exception("The LIMIT clause does not belong in this context.");
 		}
 
-		if (! empty($this->clauses['LIMIT']))
-			throw new Exception("The LIMIT clause has already been specified.");
-
 		$this->clauses['LIMIT'] = "$limit";
 		if (isset($offset)) {
 			$this->clauses['LIMIT'] .= " OFFSET $offset";
