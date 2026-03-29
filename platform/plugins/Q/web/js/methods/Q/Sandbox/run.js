@@ -176,6 +176,10 @@ Q.exports(function (Q) {
 										return (c==='x'?r:(r&0x3|0x8)).toString(16);
 									});
 								};
+
+								if (crypto.subtle) {
+									crypto.subtle = undefined;
+								}
 							}
 
 							self.fetch = undefined;

@@ -171,6 +171,10 @@ Q.exports(function (Q) {
 								});
 							};
 
+							if (crypto.subtle) {
+								crypto.subtle = undefined;
+							}
+
 						}
 
 						global.fetch = undefined;
@@ -205,6 +209,7 @@ Q.exports(function (Q) {
 						'const WebSocket = undefined;\\n' +
 						'const EventSource = undefined;\\n' +
 						'const importScripts = undefined;\\n' +
+						'const crypto = ' + (deterministic ? 'undefined' : '(global.crypto || undefined)') + ';\\n' +
 						'const indexedDB = ${allowDB ? 'global.indexedDB' : 'undefined'};\\n' +
 						'const IDBFactory = undefined;\\n' +
 						'const IDBDatabase = undefined;\\n' +
