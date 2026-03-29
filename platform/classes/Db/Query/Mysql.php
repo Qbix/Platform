@@ -1630,9 +1630,6 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 				throw new Exception("The LIMIT clause does not belong in this context.");
 		}
 
-		if (! empty($this->clauses['LIMIT']))
-			throw new Exception("The LIMIT clause has already been specified.");
-
 		$this->clauses['LIMIT'] = "$limit";
 		if (isset($offset)) {
 			$this->clauses['LIMIT'] .= " OFFSET $offset";
