@@ -111,20 +111,23 @@ Q.exports(function (Q) {
         }
 
         /**
-         * Automagic inference when no schema type is declared.
-         * Order: "true"/"false" -> Boolean, integer, float, JSON, String.
+         * Attribute value parsing when no schema type is declared.
+         *
+         * Rules:
+         *   1. Bare attribute (handled by caller) → true
+         *   2. If valid JSON → use JSON.parse result (number, object, array, true/false/null, or string)
+         *   3. Otherwise → treat as raw string
+         *
+         * Notes:
+         *   - Users can force string values like "123" or "true" by quoting them: foo='"123"'
+         *   - This replaces heuristic inference (bool/int/float detection) with a deterministic JSON-first model
          */
         function _infer(str) {
-            if (str === 'true')  return true;
-            if (str === 'false') return false;
-            if (str === 'null')  return null;
-            if (str === '')      return true;
-            if (/^-?\d+$/.test(str)) return parseInt(str, 10);
-            if (/^-?\d*\.\d+$/.test(str)) return parseFloat(str);
-            if (str[0] === '{' || str[0] === '[') {
-                try { return JSON.parse(str); } catch(e) {}
+            try {
+                return JSON.parse(str);
+            } catch (e) {
+                return str;
             }
-            return str;
         }
 
         /**
