@@ -3,27 +3,22 @@ Q.exports(function (Q) {
 	/**
 	 * Registers a Custom Element (Web Component) for a Q tool.
 	 *
-	 * This provides a declarative HTML interface for Q.Tool instances.
-	 * Attributes are compiled once into the canonical `data-*` format,
-	 * then Q.activate() runs the normal Q.Tool lifecycle.
+	 * Model:
+	 *   - Attributes are compiled once into data-* (initialization)
+	 *   - Then removed (clean DOM)
+	 *   - Q.Tool runs normally
+	 *   - Later attribute changes are treated as incremental updates
 	 *
-	 * Attribute rules:
-	 *   - Attributes are parsed as JSON when possible
-	 *   - Otherwise treated as strings
-	 *   - Bare attributes → true
-	 *   - Hyphenated names → nested object paths
-	 *   - Non-hyphen names → matched (case-insensitive) to tool option keys
-	 *
-	 * No schema layer — semantics handled by Q.Tool + Q.extend
+	 * Notes:
+	 *   - Attributes are case-insensitive in HTML; keys are normalized via ctor.options
+	 *   - Hyphenated attributes map to nested paths (e.g. publisher-id → publisher.id)
+	 *   - Non-hyphen attributes map to top-level keys (case-normalized)
 	 *
 	 * @class Q.Tool
 	 * @method define.component
 	 * @static
 	 * @param {String} name
-	 *   The Q.Tool name (e.g. "Streams/chat")
 	 * @param {Function} [ctor]
-	 *   The tool constructor (used to infer option keys)
-	 * @return {void}
 	 */
 	return function Q_Tool_define_component(name, ctor) {
 		if (typeof customElements === 'undefined') {
@@ -36,13 +31,6 @@ Q.exports(function (Q) {
 			return;
 		}
 
-		/**
-		 * Attempt to parse JSON, fallback to string
-		 * @method _parse
-		 * @private
-		 * @param {String} str
-		 * @return {mixed}
-		 */
 		function _parse(str) {
 			try {
 				return JSON.parse(str);
@@ -51,16 +39,6 @@ Q.exports(function (Q) {
 			}
 		}
 
-		/**
-		 * Normalize a key against tool defaults (case-insensitive)
-		 * Recovers camelCase from lowercased HTML attributes
-		 *
-		 * @method _normalizeKey
-		 * @private
-		 * @param {String} key
-		 * @param {Object} defaults
-		 * @return {String}
-		 */
 		function _normalizeKey(key, defaults) {
 			if (!defaults) return key;
 
@@ -75,59 +53,29 @@ Q.exports(function (Q) {
 			return key;
 		}
 
-		/**
-		 * Resolve attribute into path + value
-		 *
-		 * Rules:
-		 *   - hyphen → nested path
-		 *   - no hyphen → match tool option key if possible
-		 *
-		 * @method _resolveAttr
-		 * @private
-		 * @param {String} attrName
-		 * @param {String|null} attrValue
-		 * @param {Object} defaults
-		 * @return {Object} { path, value }
-		 */
 		function _resolveAttr(attrName, attrValue, defaults) {
 			var lower = attrName.toLowerCase();
 			var parts = lower.split('-');
 			var path;
 
 			if (parts.length > 1) {
-				// nested
 				path = parts;
 			} else {
-				// flat → normalize casing
 				path = [_normalizeKey(attrName, defaults)];
 			}
 
-			var converted;
-			if (attrValue === null) {
-				converted = true;
-			} else {
-				converted = _parse(attrValue);
-			}
+			var value = (attrValue === null)
+				? true
+				: _parse(attrValue);
 
-			return { path: path, value: converted };
+			return { path: path, value: value };
 		}
 
-		/**
-		 * Convert element attributes into options object
-		 *
-		 * @method _attrsToOptions
-		 * @private
-		 * @param {HTMLElement} element
-		 * @return {Object}
-		 */
-		function _attrsToOptions(element) {
+		function _attrsToOptions(element, defaults) {
 			var options = {};
 			var skip = { id: 1, 'class': 1, style: 1, slot: 1 };
 			var ownDataAttr = 'data-' + tagName;
 			var attrs = element.attributes;
-
-			// infer defaults from ctor
-			var defaults = ctor && ctor.options;
 
 			for (var i = 0; i < attrs.length; i++) {
 				var attr = attrs[i];
@@ -135,33 +83,31 @@ Q.exports(function (Q) {
 
 				if (skip[aName]) continue;
 
-				// data-* base JSON
+				// merge existing canonical data-* if present
 				if (aName === ownDataAttr) {
 					try {
 						var blob = JSON.parse(attr.value);
 						if (Q.isPlainObject(blob)) {
 							Q.extend(options, blob);
 						}
-					} catch(e) {}
+					} catch (e) {}
 					continue;
 				}
 
 				if (aName.slice(0, 5) === 'data-') continue;
 
-				var resolved = _resolveAttr(aName, attr.value === '' ? null : attr.value, defaults);
+				var resolved = _resolveAttr(
+					aName,
+					attr.value === '' ? null : attr.value,
+					defaults
+				);
+
 				Q.setObject(resolved.path, resolved.value, options);
 			}
 
 			return options;
 		}
 
-		/**
-		 * Remove original (non-data-*) attributes after compilation
-		 *
-		 * @method _cleanupAttributes
-		 * @private
-		 * @param {HTMLElement} element
-		 */
 		function _cleanupAttributes(element) {
 			var ownDataAttr = 'data-' + tagName;
 			var attrs = element.attributes;
@@ -186,84 +132,93 @@ Q.exports(function (Q) {
 
 		var ntt = name.split('/').join('_');
 
-		/**
-		 * Custom element wrapper for Q.Tool
-		 *
-		 * @class ToolElement
-		 * @extends HTMLElement
-		 */
 		class ToolElement extends HTMLElement {
 
-			/**
-			 * Called when element is inserted into DOM
-			 *
-			 * Compiles attributes → data-* → activates tool
-			 *
-			 * @method connectedCallback
-			 */
 			connectedCallback() {
-				this.classList.add('Q_tool', ntt + '_tool');
+				var element = this;
 
-				var options = _attrsToOptions(this);
+				element.classList.add('Q_tool', ntt + '_tool');
+
+				var defaults = (ctor && ctor.options) || {};
+
+				// compile attributes → canonical data-*
+				var options = _attrsToOptions(element, defaults);
+
 				if (!Q.isEmpty(options)) {
-					this.setAttribute(
+					element._qUpdating = true;
+					element.setAttribute(
 						'data-' + tagName,
 						JSON.stringify(options)
 					);
+					element._qUpdating = false;
 				}
 
-				_cleanupAttributes(this);
+				// remove original attributes (compile-time only)
+				element._qUpdating = true;
+				_cleanupAttributes(element);
+				element._qUpdating = false;
 
-				Q.activate(this);
+				// activate Q.Tool
+				Q.activate(element);
+
+				// observe runtime attribute changes (incremental updates)
+				var observer = new MutationObserver(function (mutations) {
+					if (element._qUpdating) return;
+
+					var tool = Q.Tool.from(element, name);
+					if (!tool) return;
+
+					for (var i = 0; i < mutations.length; i++) {
+						var m = mutations[i];
+						if (m.type !== 'attributes') continue;
+
+						var attrName = m.attributeName;
+
+						// ignore canonical + system attrs
+						if (
+							attrName === ('data-' + tagName) ||
+							attrName === 'id' ||
+							attrName === 'class' ||
+							attrName === 'style' ||
+							attrName === 'slot' ||
+							attrName.slice(0, 5) === 'data-'
+						) continue;
+
+						var val = element.getAttribute(attrName);
+
+						var resolved = _resolveAttr(
+							attrName,
+							val === '' ? null : val,
+							defaults
+						);
+
+						var update = {};
+						Q.setObject(resolved.path, resolved.value, update);
+
+						tool.setState(update);
+					}
+				});
+
+				observer.observe(element, { attributes: true });
+
+				element._qObserver = observer;
 			}
 
-			/**
-			 * Called when element is removed from DOM
-			 *
-			 * @method disconnectedCallback
-			 */
 			disconnectedCallback() {
 				if (this.getAttribute('data-Q-retain') !== null) return;
+
+				if (this._qObserver) {
+					this._qObserver.disconnect();
+					delete this._qObserver;
+				}
+
 				Q.Tool.remove(this);
-			}
-
-			/**
-			 * React to attribute changes after activation
-			 *
-			 * @method attributeChangedCallback
-			 * @param {String} attrName
-			 * @param {String} oldVal
-			 * @param {String} newVal
-			 */
-			attributeChangedCallback(attrName, oldVal, newVal) {
-				if (oldVal === newVal) return;
-
-				var tool = Q.Tool.from(this, name);
-				if (!tool) return;
-
-				var defaults = ctor && ctor.options;
-
-				var resolved = _resolveAttr(attrName, newVal === '' ? null : newVal, defaults);
-				var update = {};
-				Q.setObject(resolved.path, resolved.value, update);
-
-				tool.setState(update);
-			}
-
-			/**
-			 * Observe all attributes (dynamic updates)
-			 *
-			 * @property observedAttributes
-			 * @static
-			 */
-			static get observedAttributes() {
-				return [];
 			}
 		}
 
 		try {
 			customElements.define(tagName, ToolElement);
-		} catch(e) {
+		} catch (e) {
 			console.warn('Q.Tool: could not register <' + tagName + '>:', e);
 		}
 	};
