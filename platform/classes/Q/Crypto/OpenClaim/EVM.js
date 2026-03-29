@@ -7,33 +7,24 @@
  *   Browser: Q.Crypto.OpenClaim.EVM (Q/js/methods/Q/Crypto/OpenClaim/EVM/)
  *   PHP:     Q_Crypto_OpenClaim_EVM
  *
- * Delegates all crypto to Q.Crypto.sign / Q.Crypto.verify (EIP712 format)
- * since the EIP-712 digest is identical to what Q.Crypto already computes.
- * Zero duplication of secp256k1/keccak logic.
+ * Delegates all crypto to Q.Crypto.sign / Q.Crypto.verify (EIP712 format).
  *
- * Supported extensions:
- *   Payment       — payer, token, recipients, max, line, nbf, exp, chainId, contract
- *   Authorization — authority, subject, actors, roles, actions, constraints, contexts, nbf, exp
+ * recipientsHash encoding:
+ *   Matches Solidity paymentsHashRecipients() = keccak256(abi.encode(address[])).
+ *   abi.encode of a dynamic array = 32-byte offset + 32-byte length + 32-byte elements.
+ *   This is NOT abi.encodePacked (no offset/length) — the contract uses abi.encode.
  *
- * Both use the same EIP-712 typed-data approach: sub-arrays are hashed to bytes32
- * via ABI-encoding, exactly byte-identical to the on-chain ecrecover verification.
- *
- * Dependencies:
- *   Q.Crypto        — sign, verify (EIP712 format) — already has keccak + secp256k1
- *   Q.Data          — toBase64, fromBase64
- *   crypto-js       — already in package.json (keccak256 sub-hashes)
+ * chainId:
+ *   CAIP-2 strings like 'eip155:56' are stripped to integer 56 for the EIP-712 domain.
+ *   The Solidity contract uses block.chainid (uint256 integer).
  *
  * @class Q.Crypto.OpenClaim.EVM
  * @static
  */
 
-var Q    = require('Q');
-var Data = require('../Data');    // Q.Data — same as Q.Crypto.Data
+var Q = require('Q');
 
-// ── keccak256 via crypto-js (already in package.json) ────────────────────────
-// CryptoJS.SHA3 outputLength:256 IS keccak-256 (not SHA3-256).
-// Byte-identical to PHP \Crypto\Keccak::hash and noble keccak_256.
-
+// ── keccak256 via crypto-js ────────────────────────────────────────────────────
 function _keccak256(buf) {
     var CryptoJS = require('crypto-js');
     var b  = Buffer.isBuffer(buf) ? buf : Buffer.from(buf);
@@ -41,8 +32,7 @@ function _keccak256(buf) {
     return Buffer.from(CryptoJS.SHA3(wa, { outputLength: 256 }).toString(), 'hex');
 }
 
-// ── Type definitions ──────────────────────────────────────────────────────────
-// Byte-identical to JS PAYMENT_TYPES / AUTHORIZATION_TYPES and PHP counterparts.
+// ── Type definitions ───────────────────────────────────────────────────────────
 
 var PAYMENT_TYPES = {
     EIP712Domain: [
@@ -62,28 +52,42 @@ var PAYMENT_TYPES = {
     ]
 };
 
-var AUTHORIZATION_TYPES = {
+
+var ACTIONS_TYPES = {
     EIP712Domain: [
         { name: 'name',              type: 'string'  },
         { name: 'version',           type: 'string'  },
         { name: 'chainId',           type: 'uint256' },
         { name: 'verifyingContract', type: 'address' }
     ],
-    Authorization: [
+    Action: [
         { name: 'authority',       type: 'address' },
         { name: 'subject',         type: 'address' },
-        { name: 'actorsHash',      type: 'bytes32' },
-        { name: 'rolesHash',       type: 'bytes32' },
-        { name: 'actionsHash',     type: 'bytes32' },
-        { name: 'constraintsHash', type: 'bytes32' },
-        { name: 'contextsHash',    type: 'bytes32' },
+        { name: 'contractAddress', type: 'address' },
+        { name: 'method',          type: 'bytes4'  },
+        { name: 'paramsHash',      type: 'bytes32' },
+        { name: 'minimum',         type: 'uint256' },
+        { name: 'fraction',        type: 'uint256' },
+        { name: 'delay',           type: 'uint256' },
         { name: 'nbf',             type: 'uint256' },
         { name: 'exp',             type: 'uint256' }
     ]
 };
+var MESSAGES_TYPES = {
+    EIP712Domain: [
+        { name: 'name',              type: 'string'  },
+        { name: 'version',           type: 'string'  },
+        { name: 'chainId',           type: 'uint256' },
+        { name: 'verifyingContract', type: 'address' }
+    ],
+    MessageAssociation: [
+        { name: 'account',      type: 'address' },
+        { name: 'endpointType', type: 'bytes32' },
+        { name: 'commitment',   type: 'bytes32' }
+    ]
+};
 
-// ── ABI sub-hash helpers ──────────────────────────────────────────────────────
-// Byte-identical to Q_Crypto_OpenClaim_EVM PHP and browser hashTypedData.js
+// ── ABI sub-hash helpers ───────────────────────────────────────────────────────
 
 function _padLeft32(bytes) {
     var out = Buffer.alloc(32, 0);
@@ -93,49 +97,43 @@ function _padLeft32(bytes) {
 }
 
 function _encodeAddress(addr) {
-    var hex = String(addr).replace(/^0x/i, '').toLowerCase().padStart(40, '0');
+    // Strip OCP URI prefix if present: "evm:56:address:0xABC" → "0xABC"
+    var s = String(addr).replace(/^evm:\d+:address:/i, '');
+    var hex = s.replace(/^0x/i, '').toLowerCase().padStart(40, '0');
     return _padLeft32(Buffer.from(hex, 'hex'));
 }
 
+/**
+ * Hash an address array matching Solidity paymentsHashRecipients():
+ *   keccak256(abi.encode(address[]))
+ *
+ * abi.encode of a dynamic array prepends:
+ *   - 32-byte offset (= 0x20, always, for a single top-level dynamic param)
+ *   - 32-byte element count
+ * followed by 32-byte-padded elements.
+ *
+ * This is NOT abi.encodePacked. The contract's paymentsHashRecipients()
+ * uses abi.encode, so we must match it exactly.
+ */
 function _hashAddresses(addrs) {
-    if (!addrs.length) { return _keccak256(Buffer.alloc(0)); }
-    return _keccak256(Buffer.concat(addrs.map(_encodeAddress)));
+    var offset = Buffer.alloc(32, 0);
+    offset[31] = 0x20; // pointer to array data = 32 bytes ahead
+
+    var length = Buffer.alloc(32, 0);
+    var n = addrs.length;
+    for (var i = 0; i < 32; i++) { length[31 - i] = n & 0xff; n >>= 8; }
+
+    var elements = addrs.length
+        ? Buffer.concat(addrs.map(_encodeAddress))
+        : Buffer.alloc(0);
+
+    return _keccak256(Buffer.concat([offset, length, elements]));
 }
 
-function _hashStrings(strings) {
-    if (!strings.length) { return _keccak256(Buffer.alloc(0)); }
-    var hashes = strings.map(function (s) { return _keccak256(Buffer.from(String(s), 'utf8')); });
-    return _keccak256(Buffer.concat(hashes));
-}
 
-function _hashConstraints(constraints) {
-    if (!constraints.length) { return _keccak256(Buffer.alloc(0)); }
-    var th = _keccak256(Buffer.from('Constraint(string key,string op,string value)', 'utf8'));
-    var hashes = constraints.map(function (c) {
-        return _keccak256(Buffer.concat([
-            th,
-            _keccak256(Buffer.from(c.key   || '', 'utf8')),
-            _keccak256(Buffer.from(c.op    || '', 'utf8')),
-            _keccak256(Buffer.from(c.value || '', 'utf8'))
-        ]));
-    });
-    return _keccak256(Buffer.concat(hashes));
-}
 
-function _hashContexts(contexts) {
-    if (!contexts.length) { return _keccak256(Buffer.alloc(0)); }
-    var th = _keccak256(Buffer.from('Context(string type,string value)', 'utf8'));
-    var hashes = contexts.map(function (ctx) {
-        return _keccak256(Buffer.concat([
-            th,
-            _keccak256(Buffer.from(ctx.type  || ctx.fmt || '', 'utf8')),
-            _keccak256(Buffer.from(ctx.value || '',           'utf8'))
-        ]));
-    });
-    return _keccak256(Buffer.concat(hashes));
-}
 
-// ── Utility ───────────────────────────────────────────────────────────────────
+// ── Utility ────────────────────────────────────────────────────────────────────
 
 function _arr(v)    { return v == null ? [] : Array.isArray(v) ? v : [v]; }
 function _lower(v)  { return String(v).toLowerCase(); }
@@ -144,6 +142,21 @@ function _read(claim, key, fallback) {
     if (claim[key]                    != null) { return claim[key]; }
     if (claim.stm && claim.stm[key]   != null) { return claim.stm[key]; }
     return fallback !== undefined ? fallback : null;
+}
+
+/**
+ * Convert a CAIP-2 chain ID ('eip155:56') or plain string ('56') to integer.
+ * The EIP-712 domain requires chainId as uint256 (integer), matching block.chainid.
+ */
+function _caip2ToChainId(v) {
+    if (typeof v === 'number') { return v; }
+    if (typeof v === 'string') {
+        if (v.indexOf('eip155:') === 0) { return parseInt(v.slice(7), 10); }
+        var m = v.match(/^evm:(\d+):/);
+        if (m) { return parseInt(m[1], 10); }
+        return parseInt(v, 10);
+    }
+    return v; // BigInt or other — pass through to EIP-712 encoder
 }
 
 function _toArray(v) { return v == null ? [] : Array.isArray(v) ? v : [v]; }
@@ -164,35 +177,39 @@ function _buildSortedState(keys, sigs) {
 }
 
 function _normalizeSigToBuffer(sig) {
-    if (Buffer.isBuffer(sig))    { return sig; }
+    if (Buffer.isBuffer(sig))      { return sig; }
     if (sig instanceof Uint8Array) { return Buffer.from(sig); }
     if (typeof sig === 'string') {
-        // hex (with or without 0x)
         var hex = sig.replace(/^0x/i, '');
         if (/^[0-9a-fA-F]{130}$/.test(hex)) { return Buffer.from(hex, 'hex'); }
-        // base64
         var bin = Buffer.from(sig, 'base64');
         if (bin.length === 65) { return bin; }
     }
     return null;
 }
 
-// ── Payload builder ───────────────────────────────────────────────────────────
+// ── Payload builder ────────────────────────────────────────────────────────────
 
 function _buildPayload(claim) {
-    var payer     = _read(claim, 'payer');
-    var token     = _read(claim, 'token');
-    var line      = _read(claim, 'line');
-    var authority = _read(claim, 'authority');
-    var subject   = _read(claim, 'subject');
+    var payer           = _read(claim, 'payer');
+    var token           = _read(claim, 'token');
+    var line            = _read(claim, 'line');
+    var authority       = _read(claim, 'authority');
+    var subject         = _read(claim, 'subject');
+    var contractAddress = _read(claim, 'contractAddress') || _read(claim, 'contract');
+    var account         = _read(claim, 'account');
+    var endpointType    = _read(claim, 'endpointType');
 
     if (payer != null && token != null && line != null) {
         return _paymentPayload(claim);
     }
-    if (authority && subject) {
-        return _authorizationPayload(claim);
+    if (authority != null && subject != null && contractAddress != null) {
+        return _actionsPayload(claim);
     }
-    throw new Error('Q.Crypto.OpenClaim.EVM: cannot detect claim extension (Payment or Authorization)');
+    if (account != null && endpointType != null) {
+        return _messagesPayload(claim);
+    }
+    throw new Error('Q.Crypto.OpenClaim.EVM: cannot detect extension (payments, actions, or messages)');
 }
 
 function _paymentPayload(claim) {
@@ -202,15 +219,14 @@ function _paymentPayload(claim) {
         domain: {
             name:              'OpenClaiming.payments',
             version:           '1',
-            chainId:           claim.chainId,
-            verifyingContract: claim.contract
+            chainId:           _caip2ToChainId(_read(claim, 'chainId')),
+            verifyingContract: _read(claim, 'contract')
         },
         types: PAYMENT_TYPES,
         value: {
             payer:          _lower(_read(claim, 'payer', '')),
             token:          _lower(_read(claim, 'token', '')),
             recipientsHash: _hashAddresses(recipients),
-            // uint256: keep as BigInt for Q.Crypto EIP-712 encoder
             max:  BigInt(_read(claim, 'max',  0) || 0),
             line: BigInt(_read(claim, 'line', 0) || 0),
             nbf:  BigInt(_read(claim, 'nbf',  0) || 0),
@@ -219,68 +235,71 @@ function _paymentPayload(claim) {
     };
 }
 
-function _authorizationPayload(claim) {
-    var actors      = _arr(_read(claim, 'actors',      []));
-    var roles       = _arr(_read(claim, 'roles',       []));
-    var actions     = _arr(_read(claim, 'actions',     []));
-    var constraints = _arr(_read(claim, 'constraints', []));
-    var contexts    = _arr(_read(claim, 'contexts',    []));
+function _actionsPayload(claim) {
+    var contractAddress = _read(claim, 'contractAddress') || _read(claim, 'contract');
+    var methodHex = String(_read(claim, 'method') || '').replace(/^0x/i, '').padEnd(8, '0').slice(0, 8);
+    var methodBuf = Buffer.from(methodHex, 'hex'); // 4 bytes
+
+    var paramsHash = _read(claim, 'paramsHash');
+    if (!paramsHash) {
+        var params = _read(claim, 'params') || '';
+        var paramBuf = typeof params === 'string'
+            ? Buffer.from(params.replace(/^0x/i, ''), 'hex')
+            : Buffer.from(params);
+        paramsHash = _keccak256(paramBuf);
+    }
+
     return {
-        primaryType: 'Authorization',
+        primaryType: 'Action',
         domain: {
-            name:              'OpenClaiming.authorizations',
+            name:              'OpenClaiming.actions',
             version:           '1',
-            chainId:           claim.chainId,
-            verifyingContract: claim.contract
+            chainId:           _caip2ToChainId(_read(claim, 'chainId')),
+            verifyingContract: _read(claim, 'contract')
         },
-        types: AUTHORIZATION_TYPES,
+        types: ACTIONS_TYPES,
         value: {
             authority:       _lower(_read(claim, 'authority', '')),
             subject:         _lower(_read(claim, 'subject',   '')),
-            actorsHash:      _hashAddresses(actors),
-            rolesHash:       _hashStrings(roles),
-            actionsHash:     _hashStrings(actions),
-            constraintsHash: _hashConstraints(constraints),
-            contextsHash:    _hashContexts(contexts),
-            nbf: BigInt(_read(claim, 'nbf', 0) || 0),
-            exp: BigInt(_read(claim, 'exp', 0) || 0)
+            contractAddress: _lower(String(contractAddress || '').replace(/^evm:\d+:address:/i, '')),
+            method:          methodBuf,
+            paramsHash:      paramsHash,
+            minimum:         BigInt(_read(claim, 'minimum', 0) || 0),
+            fraction:        BigInt(_read(claim, 'fraction', 0) || 0),
+            delay:           BigInt(_read(claim, 'delay',   0) || 0),
+            nbf:             BigInt(_read(claim, 'nbf',     0) || 0),
+            exp:             BigInt(_read(claim, 'exp',     0) || 0)
         }
     };
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EVM namespace — attached to Q.Crypto.OpenClaim
-// ─────────────────────────────────────────────────────────────────────────────
+function _messagesPayload(claim) {
+    return {
+        primaryType: 'MessageAssociation',
+        domain: {
+            name:              'OpenClaiming.messages',
+            version:           '1',
+            chainId:           _caip2ToChainId(_read(claim, 'chainId')),
+            verifyingContract: _read(claim, 'contract')
+        },
+        types: MESSAGES_TYPES,
+        value: {
+            account:      _lower(_read(claim, 'account', '')),
+            endpointType: _read(claim, 'endpointType'),
+            commitment:   _read(claim, 'commitment')
+        }
+    };
+}
+
+// ── EVM namespace ──────────────────────────────────────────────────────────────
 
 var EVM = Q.Crypto.OpenClaim.EVM = {};
 
-/**
- * Compute the EIP-712 typed-data digest for an OpenClaim EVM claim.
- * Returns the full payload so callers can pass it directly to Q.Crypto.sign/verify.
- *
- * Byte-identical to:
- *   Browser: Q.Crypto.OpenClaim.EVM.hashTypedData(claim)
- *   PHP:     Q_Crypto_OpenClaim_EVM::hashTypedData($claim)
- *
- * @method hashTypedData
- * @param  {Object}   claim
- * @param  {Function} [callback]
- * @return {Promise<{ digest: Buffer, payload: Object }>}
- */
 EVM.hashTypedData = function (claim, callback) {
     var p = new Promise(function (resolve, reject) {
         try {
             var payload = _buildPayload(claim);
-            // Q.Crypto has an inline _hashTypedData that is byte-identical to PHP.
-            // We invoke it via Q.Crypto.sign with a dummy secret and read back the digest,
-            // OR we can replicate the same inline computation here using crypto-js.
-            // Better: use Q.Crypto's internal EIP712 digest directly.
-            // Q.Crypto exposes this via sign() which returns { digest }.
-            // For hashTypedData we just need the digest — derive a temp keypair-free hash
-            // by calling the same inline _hashTypedData that Q.Crypto.js uses internally.
-            // Since Q.Crypto.js does not expose _hashTypedData publicly, we replicate
-            // the same 20-line inline function here (same keccak + ABI encoding).
-            var digest = _hashTypedData(
+            var digest  = _hashTypedData(
                 payload.domain,
                 payload.primaryType,
                 payload.value,
@@ -295,20 +314,6 @@ EVM.hashTypedData = function (claim, callback) {
     return p;
 };
 
-/**
- * Sign an OpenClaim EVM claim from a secret.
- * Delegates entirely to Q.Crypto.sign (EIP712 format).
- *
- * The derived Ethereum address is stored as data:key/eip712,<address> in key[].
- * The 65-byte r||s||v signature is base64-encoded and stored in sig[].
- *
- * @method sign
- * @param  {Object}            claim
- * @param  {Buffer|Uint8Array} secret      Raw binary secret (32 bytes)
- * @param  {Object}            [existing]  { keys, signatures } for multisig
- * @param  {Function}          [callback]
- * @return {Promise<Object>}   Claim with key[] and sig[] populated
- */
 EVM.sign = function (claim, secret, existing, callback) {
     if (typeof existing === 'function') { callback = existing; existing = {}; }
     existing = existing || {};
@@ -334,7 +339,6 @@ EVM.sign = function (claim, secret, existing, callback) {
             var state = _buildSortedState(keys, sigs);
             var idx   = state.keys.indexOf(signerKey);
 
-            // Store as base64 for OCP wire format
             state.signatures[idx] = Buffer.from(proof.signature).toString('base64');
 
             return Object.assign({}, claim, {
@@ -348,18 +352,6 @@ EVM.sign = function (claim, secret, existing, callback) {
     return p;
 };
 
-/**
- * Verify an OpenClaim EVM signature against an expected Ethereum address.
- * Delegates entirely to Q.Crypto.verify (EIP712 format).
- *
- * @method verify
- * @param  {Object}            claim
- * @param  {String|Buffer}     signature        65-byte r||s||v (base64, hex, or Buffer)
- * @param  {String}            [expectedAddress] "0x..." Ethereum address
- * @param  {Object}            [recovered]       If object, .address is written here
- * @param  {Function}          [callback]
- * @return {Promise<Boolean>}
- */
 EVM.verify = function (claim, signature, expectedAddress, recovered, callback) {
     if (typeof expectedAddress === 'function') { callback = expectedAddress; expectedAddress = null; recovered = null; }
     if (typeof recovered === 'function')       { callback = recovered; recovered = null; }
@@ -393,8 +385,7 @@ EVM.verify = function (claim, signature, expectedAddress, recovered, callback) {
     return p;
 };
 
-// ── Inline EIP-712 digest — same algorithm as Q.Crypto.js _hashTypedData ─────
-// Replicated here so hashTypedData() works without needing a dummy sign() call.
+// ── Inline EIP-712 digest ──────────────────────────────────────────────────────
 // Byte-identical to PHP Q_Crypto_EIP712::hashTypedData and Q.Crypto.js inline.
 
 function _hashTypedData(domain, primaryType, message, types) {
@@ -410,8 +401,6 @@ function _hashTypedData(domain, primaryType, message, types) {
         return type + '(' + fields + ')' + deps.map(_typeString).join('');
     }
 
-    // typeHash is computed per-struct inside _hashStruct (not fixed to primaryType)
-    // so that nested struct types are hashed correctly.
     function _encodeValue(type, value) {
         if (type === 'string') { return _keccak256(Buffer.from(value, 'utf8')); }
         if (type === 'bytes') {
@@ -453,7 +442,6 @@ function _hashTypedData(domain, primaryType, message, types) {
     }
 
     function _hashStruct(type, value) {
-        // Per-type hash — correct for nested struct types
         var th    = _keccak256(Buffer.from(_typeString(type), 'utf8'));
         var parts = [th];
         (types[type] || []).forEach(function (f) { parts.push(_encodeValue(f.type, value[f.name])); });

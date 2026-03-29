@@ -346,7 +346,7 @@ class Q_Data
      * @return string  Canonical UTF-8 JSON string.
      * @throws \InvalidArgumentException if $data contains NaN or Infinity.
      */
-    public static function canonicalize($data): string
+    public static function canonicalize($data)
     {
         return self::_jcs($data);
     }

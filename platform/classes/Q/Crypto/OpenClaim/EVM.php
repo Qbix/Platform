@@ -5,16 +5,14 @@
  *
  * Q-framework implementation. Parity counterpart of Q.Crypto.OpenClaim.EVM (JS).
  *
- * Delegates all crypto to Q_Crypto::sign() / Q_Crypto::verify() (EIP712 format)
- * since the EIP-712 digest is identical to what Q_Crypto already computes
- * via Q_Crypto_EIP712::hashTypedData().
+ * recipientsHash encoding:
+ *   Matches Solidity paymentsHashRecipients() = keccak256(abi.encode(address[])).
+ *   abi.encode of a dynamic array = 32-byte offset + 32-byte length + 32-byte elements.
+ *   This is NOT abi.encodePacked — the contract uses abi.encode.
  *
- * Depends on:
- *   Q_Crypto            — sign, verify, internalKeypair
- *   Q_Crypto_EIP712     — hashTypedData (already used by Q_Crypto)
- *   Crypto\Keccak       — keccak256 for sub-hashes
- *
- * No web3.php, no kornrunner/keccak, no ethers — only Q deps.
+ * chainId:
+ *   CAIP-2 strings like 'eip155:56' are stripped to integer 56 for the EIP-712 domain.
+ *   The Solidity contract uses block.chainid (uint256 integer).
  *
  * @class Q_Crypto_OpenClaim_EVM
  * @static
@@ -22,7 +20,6 @@
 class Q_Crypto_OpenClaim_EVM
 {
     // ─── Type definitions ─────────────────────────────────────────────────────
-    // Byte-identical to the JS PAYMENT_TYPES / AUTHORIZATION_TYPES constants.
 
     public static array $PAYMENT_TYPES = [
         'EIP712Domain' => [
@@ -42,23 +39,39 @@ class Q_Crypto_OpenClaim_EVM
         ],
     ];
 
-    public static array $AUTHORIZATION_TYPES = [
+
+    public static array $ACTIONS_TYPES = [
         'EIP712Domain' => [
             ['name' => 'name',              'type' => 'string'],
             ['name' => 'version',           'type' => 'string'],
             ['name' => 'chainId',           'type' => 'uint256'],
             ['name' => 'verifyingContract', 'type' => 'address'],
         ],
-        'Authorization' => [
+        'Action' => [
             ['name' => 'authority',       'type' => 'address'],
             ['name' => 'subject',         'type' => 'address'],
-            ['name' => 'actorsHash',      'type' => 'bytes32'],
-            ['name' => 'rolesHash',       'type' => 'bytes32'],
-            ['name' => 'actionsHash',     'type' => 'bytes32'],
-            ['name' => 'constraintsHash', 'type' => 'bytes32'],
-            ['name' => 'contextsHash',    'type' => 'bytes32'],
+            ['name' => 'contractAddress', 'type' => 'address'],
+            ['name' => 'method',          'type' => 'bytes4'],
+            ['name' => 'paramsHash',      'type' => 'bytes32'],
+            ['name' => 'minimum',         'type' => 'uint256'],
+            ['name' => 'fraction',        'type' => 'uint256'],
+            ['name' => 'delay',           'type' => 'uint256'],
             ['name' => 'nbf',             'type' => 'uint256'],
             ['name' => 'exp',             'type' => 'uint256'],
+        ],
+    ];
+
+    public static array $MESSAGES_TYPES = [
+        'EIP712Domain' => [
+            ['name' => 'name',              'type' => 'string'],
+            ['name' => 'version',           'type' => 'string'],
+            ['name' => 'chainId',           'type' => 'uint256'],
+            ['name' => 'verifyingContract', 'type' => 'address'],
+        ],
+        'MessageAssociation' => [
+            ['name' => 'account',      'type' => 'address'],
+            ['name' => 'endpointType', 'type' => 'bytes32'],
+            ['name' => 'commitment',   'type' => 'bytes32'],
         ],
     ];
 
@@ -67,21 +80,10 @@ class Q_Crypto_OpenClaim_EVM
     /**
      * Compute the EIP-712 typed-data digest for an OpenClaim EVM claim.
      *
-     * Builds the full Payment or Authorization typed payload (including all
-     * sub-hashes: recipientsHash, actorsHash, etc.) then delegates to
-     * Q_Crypto_EIP712::hashTypedData() for the final digest.
-     *
-     * Returns raw 32 bytes. Byte-identical to:
-     *   JS: Q.Crypto.OpenClaim.EVM.hashTypedData(claim).digest
-     *   Standalone: Q_OpenClaim_EVM::hashTypedData($claim)
-     *
-     * Also returns the full payload array for callers that need to pass
-     * domain/primaryType/types/value directly to Q_Crypto::sign/verify.
-     *
      * @method hashTypedData
      * @static
      * @param  array $claim
-     * @return array { 'digest' => string(32), 'payload' => array }
+     * @return array { 'digest' => string(32 raw bytes), 'payload' => array }
      */
     public static function hashTypedData(array $claim): array
     {
@@ -102,12 +104,6 @@ class Q_Crypto_OpenClaim_EVM
     /**
      * Sign an OpenClaim EVM claim from a secret.
      *
-     * Builds the typed payload, then delegates to Q_Crypto::sign() (EIP712 format).
-     * Q_Crypto::sign handles keypair derivation, EIP-712 digest, and signing.
-     *
-     * The derived Ethereum address is stored as data:key/eip712,<address> in key[].
-     * The 65-byte r||s||v signature is base64-encoded and stored in sig[].
-     *
      * @method sign
      * @static
      * @param  array  $claim
@@ -120,7 +116,6 @@ class Q_Crypto_OpenClaim_EVM
         $result  = self::hashTypedData($claim);
         $payload = $result['payload'];
 
-        // Q_Crypto::sign handles: keypair derivation, EIP-712 digest, signing
         $proof = Q_Crypto::sign([
             'secret'      => $secret,
             'format'      => 'EIP712',
@@ -140,7 +135,6 @@ class Q_Crypto_OpenClaim_EVM
         $state = self::_buildSortedState($keys, $sigs);
         $idx   = array_search($signerKey, $state['keys'], true);
 
-        // Store as base64 for OCP wire format
         $state['signatures'][$idx] = base64_encode($proof['signature']);
 
         return array_merge($claim, [
@@ -154,16 +148,10 @@ class Q_Crypto_OpenClaim_EVM
     /**
      * Verify an OpenClaim EVM signature against an expected Ethereum address.
      *
-     * Builds the typed payload, then delegates entirely to Q_Crypto::verify()
-     * (EIP712 format) — the single source of truth for secp256k1 recovery.
-     *
-     * Q_Crypto::verify uses eip712.js / Q_Crypto_EIP712 for the digest and
-     * Q_ECC::recoverPublicKey for the recovery — both byte-identical to JS.
-     *
      * @method verify
      * @static
      * @param  array   $claim
-     * @param  string  $signature        65-byte r||s||v (base64 or hex or binary)
+     * @param  string  $signature        65-byte r||s||v (base64, hex, or raw binary)
      * @param  string  $expectedAddress  "0x..." Ethereum address
      * @param  array   &$recovered       Optional: ['address'=>'0x...'] written here
      * @return bool
@@ -177,12 +165,8 @@ class Q_Crypto_OpenClaim_EVM
         try {
             $result  = self::hashTypedData($claim);
             $payload = $result['payload'];
+            $sigBin  = self::_normalizeSigToBinary($signature);
 
-            // Normalize signature to binary
-            $sigBin = self::_normalizeSigToBinary($signature);
-
-            // Q_Crypto::verify writes recovered signer info into $recovered
-            // by passing it as a reference in the options array.
             $options = [
                 'format'      => 'EIP712',
                 'domain'      => $payload['domain'],
@@ -195,7 +179,6 @@ class Q_Crypto_OpenClaim_EVM
             ];
 
             return Q_Crypto::verify($options);
-
         } catch (\Exception $e) {
             return false;
         }
@@ -205,19 +188,25 @@ class Q_Crypto_OpenClaim_EVM
 
     private static function _buildPayload(array $claim): array
     {
-        $payer     = self::_read($claim, 'payer');
-        $token     = self::_read($claim, 'token');
-        $line      = self::_read($claim, 'line');
-        $authority = self::_read($claim, 'authority');
-        $subject   = self::_read($claim, 'subject');
+        $payer           = self::_read($claim, 'payer');
+        $token           = self::_read($claim, 'token');
+        $line            = self::_read($claim, 'line');
+        $authority       = self::_read($claim, 'authority');
+        $subject         = self::_read($claim, 'subject');
+        $contractAddress = self::_read($claim, 'contractAddress') ?? self::_read($claim, 'contract');
+        $account         = self::_read($claim, 'account');
+        $endpointType    = self::_read($claim, 'endpointType');
 
         if ($payer !== null && $token !== null && $line !== null) {
             return self::_paymentPayload($claim);
         }
-        if ($authority && $subject) {
-            return self::_authorizationPayload($claim);
+        if ($authority !== null && $subject !== null && $contractAddress !== null) {
+            return self::_actionsPayload($claim);
         }
-        throw new \Exception('Q_Crypto_OpenClaim_EVM: cannot detect claim extension');
+        if ($account !== null && $endpointType !== null) {
+            return self::_messagesPayload($claim);
+        }
+        throw new \Exception('Q_Crypto_OpenClaim_EVM: cannot detect extension (payments, actions, or messages)');
     }
 
     private static function _paymentPayload(array $claim): array
@@ -228,15 +217,14 @@ class Q_Crypto_OpenClaim_EVM
             'domain' => [
                 'name'              => 'OpenClaiming.payments',
                 'version'           => '1',
-                'chainId'           => $claim['chainId'],
-                'verifyingContract' => $claim['contract'],
+                'chainId'           => self::_caip2ToChainId(self::_read($claim, 'chainId')),
+                'verifyingContract' => self::_read($claim, 'contract'),
             ],
             'types' => self::$PAYMENT_TYPES,
             'value' => [
                 'payer'          => strtolower((string)self::_read($claim, 'payer', '')),
                 'token'          => strtolower((string)self::_read($claim, 'token', '')),
                 'recipientsHash' => self::_hashAddresses($recipients),
-                // uint256 fields: keep as string to avoid PHP int overflow on large amounts
                 'max'            => (string)(self::_read($claim, 'max',  0) ?? 0),
                 'line'           => (string)(self::_read($claim, 'line', 0) ?? 0),
                 'nbf'            => (string)(self::_read($claim, 'nbf',  0) ?? 0),
@@ -245,39 +233,66 @@ class Q_Crypto_OpenClaim_EVM
         ];
     }
 
-    private static function _authorizationPayload(array $claim): array
+    private static function _actionsPayload(array $claim): array
     {
-        $actors      = self::_arr(self::_read($claim, 'actors',      []));
-        $roles       = self::_arr(self::_read($claim, 'roles',       []));
-        $actions     = self::_arr(self::_read($claim, 'actions',     []));
-        $constraints = self::_arr(self::_read($claim, 'constraints', []));
-        $contexts    = self::_arr(self::_read($claim, 'contexts',    []));
+        $contractAddress = self::_read($claim, 'contractAddress') ?? self::_read($claim, 'contract');
+        $methodHex = str_pad(
+            preg_replace('/^0x/i', '', (string)(self::_read($claim, 'method') ?? '')),
+            8, '0'
+        );
+        $methodBuf = hex2bin(substr($methodHex, 0, 8)); // 4 bytes
+
+        $paramsHash = self::_read($claim, 'paramsHash');
+        if ($paramsHash === null) {
+            $params = (string)(self::_read($claim, 'params') ?? '');
+            $paramBuf = hex2bin(ltrim(preg_replace('/^0x/i', '', $params), '0') ?: '');
+            $paramsHash = self::keccak256($paramBuf);
+        }
+
         return [
-            'primaryType' => 'Authorization',
+            'primaryType' => 'Action',
             'domain' => [
-                'name'              => 'OpenClaiming.authorizations',
+                'name'              => 'OpenClaiming.actions',
                 'version'           => '1',
-                'chainId'           => $claim['chainId'],
-                'verifyingContract' => $claim['contract'],
+                'chainId'           => self::_caip2ToChainId(self::_read($claim, 'chainId')),
+                'verifyingContract' => self::_read($claim, 'contract'),
             ],
-            'types' => self::$AUTHORIZATION_TYPES,
+            'types' => self::$ACTIONS_TYPES,
             'value' => [
                 'authority'       => strtolower((string)self::_read($claim, 'authority', '')),
-                'subject'         => strtolower((string)self::_read($claim, 'subject',   '')),
-                'actorsHash'      => self::_hashAddresses($actors),
-                'rolesHash'       => self::_hashStringArray($roles),
-                'actionsHash'     => self::_hashStringArray($actions),
-                'constraintsHash' => self::_hashConstraints($constraints),
-                'contextsHash'    => self::_hashContexts($contexts),
-                // uint256 fields: keep as string to avoid PHP int overflow
-                'nbf'             => (string)(self::_read($claim, 'nbf', 0) ?? 0),
-                'exp'             => (string)(self::_read($claim, 'exp', 0) ?? 0),
+                'subject'         => strtolower((string)self::_read($claim, 'subject', '')),
+                'contractAddress' => strtolower(preg_replace('/^evm:\d+:address:/i', '', (string)($contractAddress ?? ''))),
+                'method'          => $methodBuf,
+                'paramsHash'      => $paramsHash,
+                'minimum'         => (string)(self::_read($claim, 'minimum', 0) ?? 0),
+                'fraction'        => (string)(self::_read($claim, 'fraction', 0) ?? 0),
+                'delay'           => (string)(self::_read($claim, 'delay',   0) ?? 0),
+                'nbf'             => (string)(self::_read($claim, 'nbf',     0) ?? 0),
+                'exp'             => (string)(self::_read($claim, 'exp',     0) ?? 0),
+            ],
+        ];
+    }
+
+    private static function _messagesPayload(array $claim): array
+    {
+        return [
+            'primaryType' => 'MessageAssociation',
+            'domain' => [
+                'name'              => 'OpenClaiming.messages',
+                'version'           => '1',
+                'chainId'           => self::_caip2ToChainId(self::_read($claim, 'chainId')),
+                'verifyingContract' => self::_read($claim, 'contract'),
+            ],
+            'types' => self::$MESSAGES_TYPES,
+            'value' => [
+                'account'      => strtolower((string)self::_read($claim, 'account', '')),
+                'endpointType' => self::_read($claim, 'endpointType'),
+                'commitment'   => self::_read($claim, 'commitment'),
             ],
         ];
     }
 
     // ─── ABI sub-hash helpers ─────────────────────────────────────────────────
-    // Byte-identical to Q_OpenClaim_EVM hash helpers and JS counterparts.
 
     private static function keccak256(string $data): string
     {
@@ -292,51 +307,35 @@ class Q_Crypto_OpenClaim_EVM
 
     private static function _encodeAddress(string $addr): string
     {
-        $hex = str_pad(strtolower(str_replace('0x', '', $addr)), 40, '0', STR_PAD_LEFT);
+        // Strip OCP URI prefix: "evm:56:address:0xABC" → "0xABC"
+        $addr = preg_replace('/^evm:\d+:address:/i', '', $addr);
+        $hex  = str_pad(strtolower(str_replace('0x', '', $addr)), 40, '0', STR_PAD_LEFT);
         return self::_padLeft32(hex2bin($hex));
     }
 
+    /**
+     * Hash an address array matching Solidity paymentsHashRecipients():
+     *   keccak256(abi.encode(address[]))
+     *
+     * abi.encode of a dynamic array = 32-byte offset (0x20) + 32-byte length + elements.
+     */
     private static function _hashAddresses(array $addrs): string
     {
-        if (!$addrs) return self::keccak256('');
-        return self::keccak256(implode('', array_map([self::class, '_encodeAddress'], $addrs)));
+        // 32-byte offset pointing to the array data (always 0x20 for single dynamic param)
+        $offset = str_pad("\x20", 32, "\x00", STR_PAD_LEFT);
+
+        // 32-byte length (big-endian uint256)
+        $n      = count($addrs);
+        $length = str_pad(pack('N', $n), 32, "\x00", STR_PAD_LEFT);
+
+        // 32-byte-padded addresses
+        $elements = implode('', array_map([self::class, '_encodeAddress'], $addrs));
+
+        return self::keccak256($offset . $length . $elements);
     }
 
-    private static function _hashStringArray(array $strings): string
-    {
-        if (!$strings) return self::keccak256('');
-        $hashes = array_map(function ($s) { return self::keccak256((string)$s); }, $strings);
-        return self::keccak256(implode('', $hashes));
-    }
 
-    private static function _hashConstraints(array $constraints): string
-    {
-        if (!$constraints) return self::keccak256('');
-        $th = self::keccak256('Constraint(string key,string op,string value)');
-        $hashes = array_map(function ($c) use ($th) {
-            return self::keccak256(
-                $th .
-                self::keccak256($c['key']   ?? '') .
-                self::keccak256($c['op']    ?? '') .
-                self::keccak256($c['value'] ?? '')
-            );
-        }, $constraints);
-        return self::keccak256(implode('', $hashes));
-    }
 
-    private static function _hashContexts(array $contexts): string
-    {
-        if (!$contexts) return self::keccak256('');
-        $th = self::keccak256('Context(string type,string value)');
-        $hashes = array_map(function ($ctx) use ($th) {
-            return self::keccak256(
-                $th .
-                self::keccak256($ctx['type']  ?? $ctx['fmt'] ?? '') .
-                self::keccak256($ctx['value'] ?? '')
-            );
-        }, $contexts);
-        return self::keccak256(implode('', $hashes));
-    }
 
     // ─── Utility ──────────────────────────────────────────────────────────────
 
@@ -378,20 +377,29 @@ class Q_Crypto_OpenClaim_EVM
         ];
     }
 
+    /**
+     * Convert CAIP-2 chain ID ('eip155:56') or plain string to integer.
+     * EIP-712 domain requires chainId as uint256, matching block.chainid.
+     */
+    private static function _caip2ToChainId($v): int
+    {
+        if (is_int($v)) { return $v; }
+        $s = (string)$v;
+        if (str_starts_with($s, 'eip155:')) { return (int)substr($s, 7); }
+        if (preg_match('/^evm:(\d+):/', $s, $m)) { return (int)$m[1]; }
+        return (int)$s;
+    }
+
     private static function _normalizeSigToBinary(string $sig): string
     {
-        // hex with 0x prefix
         if (str_starts_with($sig, '0x') || str_starts_with($sig, '0X')) {
             return hex2bin(substr($sig, 2));
         }
-        // hex without prefix (130 chars = 65 bytes)
         if (strlen($sig) === 130 && ctype_xdigit($sig)) {
             return hex2bin($sig);
         }
-        // base64
         $bin = base64_decode($sig, true);
         if ($bin !== false && strlen($bin) === 65) return $bin;
-        // assume raw binary
         return $sig;
     }
 }

@@ -25,16 +25,10 @@ Q.exports(function (Q) {
 
 		existing = existing || {};
 
-		// Get the typed payload (domain, primaryType, types, value)
 		return Q.Crypto.OpenClaim.EVM.hashTypedData(claim).then(function (result) {
 
 			var payload = result.payload;
 
-			// Q.Crypto.sign handles everything:
-			//   - derives secp256k1 keypair from secret (keccak derivation)
-			//   - computes EIP-712 digest via eip712.js
-			//   - produces 65-byte r||s||v signature
-			//   - returns { signature, address, publicKey, ... }
 			return Q.Crypto.sign({
 				secret:      secret,
 				format:      "EIP712",
@@ -44,7 +38,6 @@ Q.exports(function (Q) {
 				message:     payload.value
 			}).then(function (proof) {
 
-				// Key URI uses the derived Ethereum address
 				var signerKey = "data:key/eip712," + proof.address;
 
 				var keys = _toArray(existing.keys != null ? existing.keys : claim.key);
@@ -57,7 +50,6 @@ Q.exports(function (Q) {
 				var state = _buildSortedState(keys, sigs);
 				var idx   = state.keys.indexOf(signerKey);
 
-				// Store as base64 for OCP wire format
 				state.signatures[idx] = Q.Data.toBase64(proof.signature);
 
 				return Object.assign({}, claim, {
@@ -67,8 +59,6 @@ Q.exports(function (Q) {
 			});
 		});
 	};
-
-	// ── Helpers ───────────────────────────────────────────────────────────────
 
 	function _toArray(v) {
 		return v == null ? [] : Array.isArray(v) ? v : [v];

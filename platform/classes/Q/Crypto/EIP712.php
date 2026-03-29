@@ -51,7 +51,7 @@ class Q_Crypto_EIP712
         string $primaryType,
         array  $message,
         array  $types
-    ): string {
+    ) {
         if (empty($types) || !is_array($types)) {
             throw new Exception('Q_Crypto_EIP712: types required');
         }
@@ -89,7 +89,7 @@ class Q_Crypto_EIP712
         string $primaryType,
         array  $message,
         array  $types
-    ): string {
+    ) {
         return '0x' . bin2hex(self::hashTypedData($domain, $primaryType, $message, $types));
     }
 

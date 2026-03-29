@@ -3,27 +3,28 @@ Q.exports(function (Q) {
 	/**
 	 * Compute the EIP-712 typed-data digest for an OpenClaim EVM claim.
 	 *
-	 * Builds the full Payment or Authorization payload (including all sub-hashes
-	 * such as recipientsHash, actorsHash, etc.) then returns the 32-byte EIP-712
-	 * digest via Q_Crypto_EIP712 / eip712.js.
+	 * Supported extensions:
+	 *   payments — Payment struct (payer, token, recipientsHash, max, line, nbf, exp)
+	 *   actions  — Action struct (authority, subject, contractAddress, method,
+	 *                             paramsHash, minimum, fraction, delay, nbf, exp)
+	 *   messages — MessageAssociation struct (account, endpointType, commitment)
 	 *
-	 * The result is byte-identical to:
-	 *   PHP: Q_OpenClaim_EVM::hashTypedData($claim)
-	 *   Standalone JS: Q.OpenClaim.EVM.hashTypedData(claim)
+	 * Detection order:
+	 *   payments  — payer + token + line present
+	 *   actions   — authority + subject + contractAddress present
+	 *   messages  — account + endpointType present
 	 *
-	 * Also exposes the built payload as proof.payload so callers can pass
-	 * domain / primaryType / types / value directly to Q.Crypto.sign / Q.Crypto.verify.
+	 * Byte-identical to:
+	 *   PHP: Q_Crypto_OpenClaim_EVM::hashTypedData($claim)
+	 *   Node: Q.Crypto.OpenClaim.EVM.hashTypedData(claim)
 	 *
 	 * @static
 	 * @method hashTypedData  (Q.Crypto.OpenClaim.EVM.hashTypedData)
-	 *
-	 * @param  {Object} claim  OCP EVM claim (Payment or Authorization fields)
-	 * @return {Q.Promise<Object>}  { digest: Uint8Array(32), payload: Object }
-	 *   payload = { domain, primaryType, types, value }
+	 * @param  {Object} claim
+	 * @return {Q.Promise<{ digest: Uint8Array(32), payload: Object }>}
 	 */
 	return function Q_Crypto_OpenClaim_EVM_hashTypedData(claim) {
 
-		// Load sha3 for keccak256 — same module as eip712.js uses
 		return Q.Promise.resolve(
 			import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
 		).then(function (sha3) {
@@ -36,8 +37,6 @@ Q.exports(function (Q) {
 
 			var payload = _buildPayload(claim, keccak);
 
-			// Compute EIP-712 digest via eip712.js
-			// This is the same module Q.Crypto.sign/verify use for EIP712 format
 			return Q.Promise.resolve(
 				import(Q.url("{{Q}}/src/js/crypto/eip712.js"))
 			).then(function (eip712) {
@@ -55,15 +54,16 @@ Q.exports(function (Q) {
 	};
 
 	// ── Type definitions ──────────────────────────────────────────────────────
-	// Identical to Q_OpenClaim_EVM::$PAYMENT_TYPES / $AUTHORIZATION_TYPES in PHP.
+
+	var DOMAIN_FIELDS = [
+		{ name: "name",              type: "string"  },
+		{ name: "version",           type: "string"  },
+		{ name: "chainId",           type: "uint256" },
+		{ name: "verifyingContract", type: "address" }
+	];
 
 	var PAYMENT_TYPES = {
-		EIP712Domain: [
-			{ name: "name",              type: "string"  },
-			{ name: "version",           type: "string"  },
-			{ name: "chainId",           type: "uint256" },
-			{ name: "verifyingContract", type: "address" }
-		],
+		EIP712Domain: DOMAIN_FIELDS,
 		Payment: [
 			{ name: "payer",          type: "address" },
 			{ name: "token",          type: "address" },
@@ -75,42 +75,53 @@ Q.exports(function (Q) {
 		]
 	};
 
-	var AUTHORIZATION_TYPES = {
-		EIP712Domain: [
-			{ name: "name",              type: "string"  },
-			{ name: "version",           type: "string"  },
-			{ name: "chainId",           type: "uint256" },
-			{ name: "verifyingContract", type: "address" }
-		],
-		Authorization: [
-			{ name: "authority",       type: "address" },
-			{ name: "subject",         type: "address" },
-			{ name: "actorsHash",      type: "bytes32" },
-			{ name: "rolesHash",       type: "bytes32" },
-			{ name: "actionsHash",     type: "bytes32" },
-			{ name: "constraintsHash", type: "bytes32" },
-			{ name: "contextsHash",    type: "bytes32" },
-			{ name: "nbf",             type: "uint256" },
-			{ name: "exp",             type: "uint256" }
+	var ACTIONS_TYPES = {
+		EIP712Domain: DOMAIN_FIELDS,
+		Action: [
+			{ name: "authority",        type: "address" },
+			{ name: "subject",          type: "address" },
+			{ name: "contractAddress",  type: "address" },
+			{ name: "method",           type: "bytes4"  },
+			{ name: "paramsHash",       type: "bytes32" },
+			{ name: "minimum",          type: "uint256" },
+			{ name: "fraction",         type: "uint256" },
+			{ name: "delay",            type: "uint256" },
+			{ name: "nbf",              type: "uint256" },
+			{ name: "exp",              type: "uint256" }
+		]
+	};
+
+	var MESSAGES_TYPES = {
+		EIP712Domain: DOMAIN_FIELDS,
+		MessageAssociation: [
+			{ name: "account",      type: "address" },
+			{ name: "endpointType", type: "bytes32" },
+			{ name: "commitment",   type: "bytes32" }
 		]
 	};
 
 	// ── Payload builder ───────────────────────────────────────────────────────
 
 	function _buildPayload(claim, keccak) {
-		var payer     = _read(claim, "payer");
-		var token     = _read(claim, "token");
-		var line      = _read(claim, "line");
-		var authority = _read(claim, "authority");
-		var subject   = _read(claim, "subject");
+		var payer           = _read(claim, "payer");
+		var token           = _read(claim, "token");
+		var line            = _read(claim, "line");
+		var authority       = _read(claim, "authority");
+		var subject         = _read(claim, "subject");
+		var contractAddress = _read(claim, "contractAddress") || _read(claim, "contract");
+		var account         = _read(claim, "account");
+		var endpointType    = _read(claim, "endpointType");
 
-		if (payer && token != null && line != null) {
+		if (payer != null && token != null && line != null) {
 			return _paymentPayload(claim, keccak);
 		}
-		if (authority && subject) {
-			return _authorizationPayload(claim, keccak);
+		if (authority != null && subject != null && contractAddress != null) {
+			return _actionsPayload(claim, keccak);
 		}
-		throw new Error("Q.Crypto.OpenClaim.EVM.hashTypedData: cannot detect claim extension");
+		if (account != null && endpointType != null) {
+			return _messagesPayload(claim);
+		}
+		throw new Error("Q.Crypto.OpenClaim.EVM.hashTypedData: cannot detect extension (payments, actions, or messages)");
 	}
 
 	function _paymentPayload(claim, keccak) {
@@ -120,7 +131,7 @@ Q.exports(function (Q) {
 			domain: {
 				name:              "OpenClaiming.payments",
 				version:           "1",
-				chainId:           claim.chainId,
+				chainId:           _caip2ToChainId(claim.chainId),
 				verifyingContract: claim.contract
 			},
 			types: PAYMENT_TYPES,
@@ -136,37 +147,68 @@ Q.exports(function (Q) {
 		};
 	}
 
-	function _authorizationPayload(claim, keccak) {
-		var actors      = _arr(_read(claim, "actors",      []));
-		var roles       = _arr(_read(claim, "roles",       []));
-		var actions     = _arr(_read(claim, "actions",     []));
-		var constraints = _arr(_read(claim, "constraints", []));
-		var contexts    = _arr(_read(claim, "contexts",    []));
+	function _actionsPayload(claim, keccak) {
+		// stm.contract in OCP wire format → contractAddress in EIP-712 struct
+		var contractAddress = _read(claim, "contractAddress") || _read(claim, "contract");
+		// method: hex string "a9059cbb" → bytes4 Uint8Array(4)
+		var methodHex = String(_read(claim, "method") || "").replace(/^0x/i, "").padEnd(8, "0").slice(0, 8);
+		var methodBytes = new Uint8Array(4);
+		for (var i = 0; i < 4; i++) {
+			methodBytes[i] = parseInt(methodHex.slice(i * 2, i * 2 + 2), 16);
+		}
+		// paramsHash: if already bytes32 (hex string) pass through;
+		// if raw params bytes/hex provided, hash them
+		var paramsHash = _read(claim, "paramsHash");
+		if (!paramsHash) {
+			var params = _read(claim, "params") || "";
+			var paramBytes = typeof params === "string"
+				? _hexToBytes(params.replace(/^0x/i, ""))
+				: new Uint8Array(params);
+			paramsHash = keccak(paramBytes);
+		}
 		return {
-			primaryType: "Authorization",
+			primaryType: "Action",
 			domain: {
-				name:              "OpenClaiming.authorizations",
+				name:              "OpenClaiming.actions",
 				version:           "1",
-				chainId:           claim.chainId,
+				chainId:           _caip2ToChainId(claim.chainId),
 				verifyingContract: claim.contract
 			},
-			types: AUTHORIZATION_TYPES,
+			types: ACTIONS_TYPES,
 			value: {
 				authority:       _lower(_read(claim, "authority", "")),
 				subject:         _lower(_read(claim, "subject",   "")),
-				actorsHash:      _hashAddresses(keccak, actors),
-				rolesHash:       _hashStrings(keccak, roles),
-				actionsHash:     _hashStrings(keccak, actions),
-				constraintsHash: _hashConstraints(keccak, constraints),
-				contextsHash:    _hashContexts(keccak, contexts),
-				nbf:             BigInt(_read(claim, "nbf", 0) || 0),
-				exp:             BigInt(_read(claim, "exp", 0) || 0)
+				contractAddress: _lower(String(contractAddress || "").replace(/^evm:\d+:address:/i, "")),
+				method:          methodBytes,
+				paramsHash:      paramsHash,
+				minimum:         BigInt(_read(claim, "minimum", 0) || 0),
+				fraction:        BigInt(_read(claim, "fraction", 0) || 0),
+				delay:           BigInt(_read(claim, "delay",   0) || 0),
+				nbf:             BigInt(_read(claim, "nbf",     0) || 0),
+				exp:             BigInt(_read(claim, "exp",     0) || 0)
+			}
+		};
+	}
+
+	function _messagesPayload(claim) {
+		return {
+			primaryType: "MessageAssociation",
+			domain: {
+				name:              "OpenClaiming.messages",
+				version:           "1",
+				chainId:           _caip2ToChainId(claim.chainId),
+				verifyingContract: claim.contract
+			},
+			types: MESSAGES_TYPES,
+			value: {
+				account:      _lower(_read(claim, "account", "")),
+				endpointType: _read(claim, "endpointType"),
+				commitment:   _read(claim, "commitment")
 			}
 		};
 	}
 
 	// ── ABI sub-hash helpers ──────────────────────────────────────────────────
-	// Byte-identical to Q_OpenClaim_EVM hash helpers in PHP.
 
 	var te = new TextEncoder();
 
@@ -187,48 +229,41 @@ Q.exports(function (Q) {
 	}
 
 	function _encodeAddress(addr) {
-		var hex = String(addr).replace(/^0x/i, "").toLowerCase().padStart(40, "0");
+		// Strip OCP URI prefix if present: "evm:56:address:0xABC" → "0xABC"
+		var s = String(addr).replace(/^evm:\d+:address:/i, "");
+		var hex = s.replace(/^0x/i, "").toLowerCase().padStart(40, "0");
 		var b = new Uint8Array(20);
 		for (var i = 0; i < 20; i++) { b[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16); }
 		return _padLeft32(b);
 	}
 
+	function _hexToBytes(hex) {
+		if (hex.length % 2) { hex = "0" + hex; }
+		var out = new Uint8Array(hex.length / 2);
+		for (var i = 0; i < out.length; i++) {
+			out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+		}
+		return out;
+	}
+
+	/**
+	 * Hash an address array matching Solidity paymentsHashRecipients():
+	 *   keccak256(abi.encode(address[]))
+	 * = offset(32) + length(32) + padded elements(32 each)
+	 */
 	function _hashAddresses(keccak, addrs) {
-		if (!addrs.length) { return keccak(new Uint8Array(0)); }
-		return keccak(_concat.apply(null, addrs.map(_encodeAddress)));
-	}
+		var offset = new Uint8Array(32);
+		offset[31] = 0x20;
 
-	function _hashStrings(keccak, strings) {
-		if (!strings.length) { return keccak(new Uint8Array(0)); }
-		var hashes = strings.map(function (s) { return keccak(te.encode(String(s))); });
-		return keccak(_concat.apply(null, hashes));
-	}
+		var length = new Uint8Array(32);
+		var n = addrs.length;
+		for (var i = 0; i < 32; i++) { length[31 - i] = n & 0xff; n >>= 8; }
 
-	function _hashConstraints(keccak, constraints) {
-		if (!constraints.length) { return keccak(new Uint8Array(0)); }
-		var th = keccak(te.encode("Constraint(string key,string op,string value)"));
-		var hashes = constraints.map(function (c) {
-			return keccak(_concat(
-				th,
-				keccak(te.encode(c.key   || "")),
-				keccak(te.encode(c.op    || "")),
-				keccak(te.encode(c.value || ""))
-			));
-		});
-		return keccak(_concat.apply(null, hashes));
-	}
+		var elements = addrs.length
+			? _concat.apply(null, addrs.map(_encodeAddress))
+			: new Uint8Array(0);
 
-	function _hashContexts(keccak, contexts) {
-		if (!contexts.length) { return keccak(new Uint8Array(0)); }
-		var th = keccak(te.encode("Context(string type,string value)"));
-		var hashes = contexts.map(function (ctx) {
-			return keccak(_concat(
-				th,
-				keccak(te.encode(ctx.type  || ctx.fmt || "")),
-				keccak(te.encode(ctx.value || ""))
-			));
-		});
-		return keccak(_concat.apply(null, hashes));
+		return keccak(_concat(offset, length, elements));
 	}
 
 	// ── Utility ───────────────────────────────────────────────────────────────
@@ -240,6 +275,22 @@ Q.exports(function (Q) {
 		if (claim[key] != null)                  { return claim[key]; }
 		if (claim.stm && claim.stm[key] != null) { return claim.stm[key]; }
 		return fallback !== undefined ? fallback : null;
+	}
+
+	/**
+	 * Convert CAIP-2 chain ID ('eip155:56') or OCP chain ID ('evm:56:...')
+	 * or plain string/number to integer for the EIP-712 domain chainId.
+	 */
+	function _caip2ToChainId(v) {
+		if (typeof v === "number") { return v; }
+		if (typeof v === "string") {
+			if (v.indexOf("eip155:") === 0) { return parseInt(v.slice(7), 10); }
+			// OCP URI format: "evm:56:address:0x..." → extract chain id
+			var m = v.match(/^evm:(\d+):/);
+			if (m) { return parseInt(m[1], 10); }
+			return parseInt(v, 10);
+		}
+		return v;
 	}
 
 });
