@@ -10,6 +10,7 @@
  * Note that the elements must have a stable, nonzero width height set in the CSS even
  * if they are empty, otherwise they might not be lazy-loaded, and they might
  * thrash back and forth if removed.
+ * Set Q_no_lazyload on any element that you want Q/lazyload to skip over.
  * @class Q lazyload
  * @constructor
  * @param {Object} [options] Override various options for this tool
