@@ -135,6 +135,9 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			imgs[index] = $img;
 			Q.handle(state.onLoad, $this, [$img, imgs, state]);
 			Q.handle(callback, this, [index, imgs]);
+			$img.on(Q.Pointer.click, function () {
+				Q.handle(state.onInvoke, $this, [$img, index, imgs]);
+			});
 		}
 
 		$img.on('load error', function () {
@@ -324,7 +327,8 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	transitionToFirst: false,
 	loop: true,
 	onLoad: null,
-	onTransition: null
+	onTransition: null,
+	onInvoke: null
 },
 
 {
