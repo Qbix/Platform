@@ -2991,7 +2991,7 @@ Q.RegExp = {
      * @return {RegExp}
      */
 	letters: function () {
-		return RegExp(/^\p{L}/,'u');
+		return /^\p{L}/u;
 	}
 };
 
@@ -4896,20 +4896,23 @@ Q.Method.load = function (o, k, url, closure) {
 					o = o.__shim.__loaded; // in case o[k] was replaced
 				}
 				var args = closure ? closure() : [];
-				if (!exported.Q_Method_load_executed) {
-					// Mark immediately so concurrent shimmed calls don't re-run
-					exported.Q_Method_load_executed = true;
+				if (exported.Q_Method_load_executed) {
+					_finish();
+				} else {
 					// Wrap in Promise.resolve so method files may return a Promise
 					Promise.resolve(exported.apply(o, args)).then(function (m) {
 						if (typeof m === 'function') {
 							o[k] = m;
 						}
+						// Mark immediately so concurrent shimmed calls don't re-run
+						exported.Q_Method_load_executed = true;
 						_finish();
 					}).catch(reject);
 					return; // _finish called asynchronously above
 				}
+			} else {
+				_finish();
 			}
-			_finish();
 
 			function _finish() {
 				var v = o[k];
@@ -5541,12 +5544,6 @@ Q.Tool.define.pattern = function (regexp, defaults, tools) {
 	}
 	return defined;
 };
-
-Q.Tool.define.component = new Q.Method();
-Q.Method.define(Q.Tool.define, "{{Q}}/js/methods/Q/Tool/define", function() {
-    return [Q];
-});
-Q.Tool.define.components = false;
 
 Q.Tool.beingActivated = undefined;
 
@@ -7968,7 +7965,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 			var hasUpgraded = dbs.some(db => (db.version || 0) > 1);
 			if (!hasUpgraded && !Q.IndexedDB.onEmptyDatabases.occurred) {
 				if (false === Q.handle(Q.IndexedDB.onEmptyDatabases, Q.IndexedDB)) {
-					callback && callback(new Error("Q.IndexedDB.open: aborted due to empty databases"));
+					Q.handle(callback, null, new Error("Q.IndexedDB.open: aborted due to empty databases"));
 					return;
 				}
 			}
@@ -7991,7 +7988,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 		};
 
 		req.onerror = function (e) {
-			callback && callback(e.target.error || new Error("IndexedDB open error"));
+			Q.handle(callback, null, e.target.error || new Error("IndexedDB open error"));
 		};
 
 		req.onsuccess = function () {
@@ -8030,7 +8027,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 
 			if (storeNeedsRecreate) {
 				if (triedCreatingStore || tryCreatingStore) {
-					callback && callback(new Error("Store creation failed after upgrade"), db);
+                    Q.handle(callback, null, new Error("Store creation failed after upgrade"), db);
 					return;
 				}
 				tryCreatingStore = true;
@@ -8043,7 +8040,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 				return;
 			}
 
-			callback && callback(null, db);
+			Q.handle(callback, null, null, db);
 		};
 	}
 }, {
@@ -12961,6 +12958,13 @@ Q.sanitize = new Q.Method();
 Q.globalMemoryWalk = new Q.Method();
 Q.registerWebComponent = new Q.Method();
 Q.Method.define(Q, "{{Q}}/js/methods/Q", function () { return [Q]; });
+
+Q.Tool.define.component = new Q.Method();
+Q.Method.define(Q.Tool.define, "{{Q}}/js/methods/Q/Tool/define", function() {
+	return [Q];
+});
+Q.Tool.define.components = false;
+
 
 /**
  * Sandboxed code execution utilities
