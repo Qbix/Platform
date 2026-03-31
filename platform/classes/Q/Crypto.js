@@ -698,3 +698,5 @@ Crypto.verifyDelegated = function (options, callback) {
         return Promise.reject(e);
     }
 };
+
+Crypto.HmacSHA1 = require('crypto-js').HmacSHA1;
