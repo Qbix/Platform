@@ -6,8 +6,98 @@ Q.exports(function (Q) {
 	 */
 
 	/**
+	 * Builds a preamble that explodes flat "ns.method" methodNames into
+	 * ergonomic namespace objects available inside the sandbox, e.g.:
+	 *   methods["streams.get"]  =>  Streams.get(...)
+	 *   methods["crypto.openClaim.sign"]  =>  Crypto.openClaim.sign(...)
+	 *
+	 * Three-level names (e.g. "crypto.openClaim.sign") are nested one level
+	 * deep on the top-level namespace object so tool authors can write
+	 * Crypto.openClaim.sign(...) naturally.
+	 *
+	 * The preamble is injected into the sandbox but NOT included in the
+	 * execution hash — it is deterministically derived from methodNames
+	 * which is already part of the hashed execution record.
+	 *
+	 * @method buildPreamble
+	 * @param {Array} methodNames Flat list of method keys e.g. ["streams.get", ...]
+	 * @return {String} JS source to prepend to user code
+	 */
+	function buildPreamble(methodNames) {
+		// top  : { "streams": { "get": "streams.get", "create": "streams.create" } }
+		// three: { "crypto":  { "openClaim": { "sign": "crypto.openClaim.sign" } } }
+		var top = {};
+
+		methodNames.forEach(function (name) {
+			var parts = name.split(".");
+			if (parts.length < 2) return; // bare name — no namespace sugar needed
+
+			var ns = parts[0];
+			if (!top[ns]) top[ns] = {};
+
+			if (parts.length === 2) {
+				// e.g. "streams.get"  ->  top.streams.get = "streams.get"
+				top[ns][parts[1]] = name;
+			} else {
+				// e.g. "crypto.openClaim.sign"
+				// ->  top.crypto.openClaim = top.crypto.openClaim || {}
+				// ->  top.crypto.openClaim.sign = "crypto.openClaim.sign"
+				var sub = parts[1];
+				var leaf = parts.slice(2).join(".");
+				if (typeof top[ns][sub] !== "object" || top[ns][sub] === null) {
+					top[ns][sub] = {};
+				}
+				top[ns][sub][leaf] = name;
+			}
+		});
+
+		var lines = [];
+
+		Object.keys(top).forEach(function (ns) {
+			// Capitalise first letter: "streams" -> "Streams"
+			var varName = ns.charAt(0).toUpperCase() + ns.slice(1);
+			var nsObj = top[ns];
+			var topProps = [];
+
+			Object.keys(nsObj).forEach(function (key) {
+				var val = nsObj[key];
+
+				if (typeof val === "string") {
+					// Simple two-level: Streams.get = function(){ return methods["streams.get"](...) }
+					topProps.push(
+						'  ' + JSON.stringify(key) + ': function() { return methods[' + JSON.stringify(val) + '].apply(null, arguments); }'
+					);
+				} else {
+					// Three-level: Crypto.openClaim = { sign: function(){ ... }, verify: function(){ ... } }
+					var subProps = [];
+					Object.keys(val).forEach(function (leaf) {
+						var fullName = val[leaf];
+						subProps.push(
+							'    ' + JSON.stringify(leaf) + ': function() { return methods[' + JSON.stringify(fullName) + '].apply(null, arguments); }'
+						);
+					});
+					topProps.push(
+						'  ' + JSON.stringify(key) + ': {\n' + subProps.join(',\n') + '\n  }'
+					);
+				}
+			});
+
+			lines.push('var ' + varName + ' = {');
+			lines.push(topProps.join(',\n'));
+			lines.push('};');
+		});
+
+		return lines.join('\n');
+	}
+
+	/**
 	 * Runs code safely inside a sandboxed Web Worker.
 	 * If `options.name` is provided, a persistent worker is reused.
+	 *
+	 * Inside the sandbox, flat method names like "streams.get" and
+	 * "crypto.openClaim.sign" are automatically available as ergonomic
+	 * namespace objects: Streams.get(...), Crypto.openClaim.sign(...) etc.
+	 * The raw `methods` object is also available for dynamic dispatch.
 	 *
 	 * @static
 	 * @method run
@@ -18,9 +108,10 @@ Q.exports(function (Q) {
 	 * @param {String} [options.name] Reuse a persistent sandbox worker under this name
 	 * @param {Number} [options.timeout=2000] Timeout in milliseconds before aborting execution
 	 * @param {Boolean} [options.db=false] Whether to expose indexedDB inside sandbox
-	 * @param {Boolean|Object} [options.deterministic=false] Set to true or object to make the code run deterministically
+	 * @param {Boolean|Object} [options.deterministic=false] Deterministic execution mode
 	 * @param {Number} [options.deterministic.seed=1] Seed for deterministic RNG
-	 * @return {Q.Promise} Resolves with result or rejects on error
+	 * @param {Object} [options.input=null] Input passed as first argument to the sandboxed function
+	 * @return {Q.Promise} Resolves with { result, hash } or rejects on error
 	 */
 	return function Q_Sandbox_run(code, context, methods, options) {
 		context = context || {};
@@ -39,10 +130,9 @@ Q.exports(function (Q) {
 		}
 
 		SandboxRunner.prototype.createWorker = function () {
-			const allowDB = !!this.defaults.db;
-			const indexedDBExpr = allowDB ? 'indexedDB' : 'undefined';
+			var allowDB = !!this.defaults.db;
 
-			const script = `
+			var script = `
 				// --- Hard-disable network & import capabilities ---
 				self.fetch = undefined;
 				self.XMLHttpRequest = undefined;
@@ -50,46 +140,44 @@ Q.exports(function (Q) {
 				self.EventSource = undefined;
 				self.importScripts = undefined;
 
-				// --- Safe stubs instead of deleting env ---
 				try {
 					Object.defineProperty(self, "navigator", {
 						value: { userAgent: "sandbox", language: "en-US" },
 						configurable: false
 					});
-				} catch {}
+				} catch (e) {}
 
 				self.location = undefined;
 				self.caches = undefined;
 
-				// Optional DB
 				if (!${allowDB}) {
 					self.indexedDB = undefined;
 				}
 
 				// --- Block prototype mutation entry points (Safari-safe) ---
 				try {
-					Object.defineProperty(Object.prototype, "__defineSetter__", { value: undefined });
-					Object.defineProperty(Object.prototype, "__defineGetter__", { value: undefined });
-					Object.defineProperty(Object.prototype, "__lookupGetter__", { value: undefined });
-					Object.defineProperty(Object.prototype, "__lookupSetter__", { value: undefined });
-				} catch {}
+					Object.defineProperty(Object.prototype, "__defineSetter__",  { value: undefined });
+					Object.defineProperty(Object.prototype, "__defineGetter__",  { value: undefined });
+					Object.defineProperty(Object.prototype, "__lookupGetter__",  { value: undefined });
+					Object.defineProperty(Object.prototype, "__lookupSetter__",  { value: undefined });
+				} catch (e) {}
 
-				let rpcCounter = 0;
-				const pending = {};
+				var rpcCounter = 0;
+				var pending = {};
 
 				function call(method, args) {
-					return new Promise((resolve, reject) => {
-						const id = ++rpcCounter;
-						pending[id] = { resolve, reject };
-						self.postMessage({ type: "rpc", id, method, args });
+					return new Promise(function (resolve, reject) {
+						var id = ++rpcCounter;
+						pending[id] = { resolve: resolve, reject: reject };
+						self.postMessage({ type: "rpc", id: id, method: method, args: args });
 					});
 				}
 
 				self.onmessage = async function (e) {
-					const msg = e.data;
+					var msg = e.data;
 
 					if (msg && msg.type === "rpcResult") {
-						const p = pending[msg.id];
+						var p = pending[msg.id];
 						if (!p) return;
 						delete pending[msg.id];
 						msg.ok ? p.resolve(msg.result) : p.reject(msg.error);
@@ -97,21 +185,25 @@ Q.exports(function (Q) {
 					}
 
 					try {
-						const { code, context, methodNames, deterministic } = msg;
+						var code          = msg.code;
+						var context       = msg.context;
+						var methodNames   = msg.methodNames;
+						var deterministic = msg.deterministic;
+						var input         = msg.input;
+						var preamble      = msg.preamble;
 
-						let __seed = 1;
+						var __seed = 1;
 						if (deterministic && typeof deterministic === "object" && deterministic.seed !== undefined) {
 							__seed = deterministic.seed >>> 0;
 						}
 
-						const __timers = [];
-						let __timerGuard = 1000;
+						var __timers = [];
+						var __timerGuard = 1000;
 
-						// --- Deterministic runtime injected only if requested ---
 						if (deterministic) {
-							let __randSeed = (__seed >>> 0) || 1;
+							var __randSeed = (__seed >>> 0) || 1;
 
-							function __rand(){
+							function __rand() {
 								__randSeed = (__randSeed * 1664525 + 1013904223) >>> 0;
 								return __randSeed / 4294967296;
 							}
@@ -129,54 +221,52 @@ Q.exports(function (Q) {
 								configurable: false
 							});
 
-							const __start = 0;
+							var __start = 0;
 
-							Date.now = function(){ return __start };
+							Date.now = function () { return __start; };
 
 							if (typeof performance !== "undefined") {
-								performance.now = function(){ return 0 };
+								performance.now = function () { return 0; };
 							}
 
-							const __RealDate = Date;
+							var __RealDate = Date;
 
-							function DeterministicDate(...args) {
+							function DeterministicDate() {
 								if (!(this instanceof DeterministicDate)) {
 									return new __RealDate(__start).toString();
 								}
-								if (args.length === 0) {
+								if (arguments.length === 0) {
 									return new __RealDate(__start);
 								}
-								return new __RealDate(...args);
+								var args = Array.prototype.slice.call(arguments);
+								return new (Function.prototype.bind.apply(__RealDate, [null].concat(args)));
 							}
 
-							DeterministicDate.UTC = __RealDate.UTC;
-							DeterministicDate.parse = __RealDate.parse;
-							DeterministicDate.prototype = __RealDate.prototype;
+							DeterministicDate.UTC       = __RealDate.UTC;
+							DeterministicDate.parse      = __RealDate.parse;
+							DeterministicDate.prototype  = __RealDate.prototype;
 							DeterministicDate.prototype.constructor = DeterministicDate;
 
 							Date = DeterministicDate;
 
-							setTimeout = function(fn){ __timers.push(fn); return __timers.length };
-							setInterval = function(fn){ __timers.push(fn); return __timers.length };
-
-							clearTimeout = function(){};
-							clearInterval = function(){};
+							setTimeout  = function (fn) { __timers.push(fn); return __timers.length; };
+							setInterval = function (fn) { __timers.push(fn); return __timers.length; };
+							clearTimeout  = function () {};
+							clearInterval = function () {};
 
 							if (typeof crypto !== "undefined") {
-								crypto.getRandomValues = function(arr){
-									for (let i=0;i<arr.length;i++){
-										arr[i] = Math.floor(__rand()*256);
+								crypto.getRandomValues = function (arr) {
+									for (var i = 0; i < arr.length; i++) {
+										arr[i] = Math.floor(__rand() * 256);
 									}
 									return arr;
 								};
-
-								crypto.randomUUID = function(){
-									return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
-										const r = Math.floor(__rand()*16);
-										return (c==='x'?r:(r&0x3|0x8)).toString(16);
+								crypto.randomUUID = function () {
+									return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+										var r = Math.floor(__rand() * 16);
+										return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
 									});
 								};
-
 								if (crypto.subtle) {
 									crypto.subtle = undefined;
 								}
@@ -188,50 +278,62 @@ Q.exports(function (Q) {
 							self.EventSource = undefined;
 							self.navigator = undefined;
 
-							try {
-								Object.freeze(Math);
-								Object.freeze(Date);
-							} catch {}
+							try { Object.freeze(Math); } catch (e) {}
+							try { Object.freeze(Date); } catch (e) {}
 						}
 
-						const methods = {};
-						for (const name of methodNames) {
-							methods[name] = (...args) => call(name, args);
+						// Build flat methods stubs
+						var methods = {};
+						for (var i = 0; i < methodNames.length; i++) {
+							methods[methodNames[i]] = (function (name) {
+								return function () { return call(name, Array.prototype.slice.call(arguments)); };
+							})(methodNames[i]);
 						}
 
-						const keys = Object.keys(context || {}).concat("methods");
-						const values = Object.values(context || {}).concat(methods);
+						var __env = Object.assign({}, context || {}, { methods: methods });
+						var __envKeys = Object.keys(__env);
 
-						const AsyncFunction =
-							Object.getPrototypeOf(async function () {}).constructor;
+						var AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
-						const fn = new AsyncFunction(
-							...keys,
-							'"use strict";\\n' +
-							'const fetch = undefined;\\n' +
-							'const XMLHttpRequest = undefined;\\n' +
-							'const WebSocket = undefined;\\n' +
-							'const EventSource = undefined;\\n' +
-							'const importScripts = undefined;\\n' +
-							'const indexedDB = ${allowDB ? 'self.indexedDB' : 'undefined'};\\n' +
-							'const IDBFactory = undefined;\\n' +
-							'const IDBDatabase = undefined;\\n' +
-							'const IDBObjectStore = undefined;\\n' +
-							'const __user = async function(){\\n' +
-							code + '\\n' +
-							'};\\n' +
-							'return __user();'
-						);
+						// preamble declares ergonomic namespace vars (Streams, Crypto, etc.)
+						// and is prepended BEFORE user code but AFTER env destructuring.
+						// It is NOT part of the execution hash.
+						var userSource = [
+							'"use strict";',
+							'var {' + __envKeys.join(', ') + '} = __env;',
+							'var fetch = undefined;',
+							'var XMLHttpRequest = undefined;',
+							'var WebSocket = undefined;',
+							'var EventSource = undefined;',
+							'var importScripts = undefined;',
+							'var indexedDB = ' + (${allowDB} ? 'self.indexedDB' : 'undefined') + ';',
+							'var IDBFactory = undefined;',
+							'var IDBDatabase = undefined;',
+							'var IDBObjectStore = undefined;',
+							preamble,
+							'var __user = async function (input) {',
+							code,
+							'};',
+							'return __user(__input);'
+						].join('\n');
 
-						const result = await fn(...values);
+						var fn = new AsyncFunction('__env', '__input', userSource);
 
-						// run deterministic timers
-						while (__timers.length && __timerGuard--) {
-							try { __timers.shift()(); } catch {}
-						}
-						__timers.length = 0;
-
-						self.postMessage({ type: "done", ok: true, result });
+						fn(__env, input === undefined ? null : input)
+						.then(function (result) {
+							while (__timers.length && __timerGuard--) {
+								try { __timers.shift()(); } catch (e) {}
+							}
+							__timers.length = 0;
+							self.postMessage({ type: "done", ok: true, result: result });
+						})
+						.catch(function (err) {
+							self.postMessage({
+								type: "done",
+								ok: false,
+								error: String(err && err.message || err)
+							});
+						});
 
 					} catch (err) {
 						self.postMessage({
@@ -243,7 +345,7 @@ Q.exports(function (Q) {
 				};
 			`;
 
-			const blob = new Blob([script], { type: "application/javascript" });
+			var blob = new Blob([script], { type: "application/javascript" });
 			this.url = URL.createObjectURL(blob);
 			this.worker = new Worker(this.url);
 			return this.worker;
@@ -251,40 +353,52 @@ Q.exports(function (Q) {
 
 		SandboxRunner.prototype.run = function (code, ctx, methods, opts) {
 			opts = opts || {};
-			const worker = this.worker || this.createWorker();
-			const timeoutMs = opts.timeout || this.defaults.timeout;
+			var worker = this.worker || this.createWorker();
+			var timeoutMs = opts.timeout || this.defaults.timeout;
 
-			let safeCtx;
+			var safeCtx;
 			try {
 				safeCtx = JSON.parse(JSON.stringify(ctx));
-			} catch {
+			} catch (e) {
 				safeCtx = {};
 			}
 
-			const methodNames = Object.keys(methods);
+			var safeInput;
+			try {
+				safeInput = JSON.parse(JSON.stringify(
+					opts.input === undefined ? null : opts.input
+				));
+			} catch (e) {
+				safeInput = null;
+			}
+
+			var methodNames = Object.keys(methods);
+
+			// Build the preamble on the host side from methodNames.
+			// Sent to the worker alongside the code but kept out of the
+			// execution hash (it is fully derived from methodNames).
+			var preamble = buildPreamble(methodNames);
 
 			return new Q.Promise(function (resolve, reject) {
-				let timer;
+				var timer;
+				var runner = this;
 
-				const runner = this;
-				const cleanup = () => {
+				var cleanup = function () {
 					clearTimeout(timer);
 					if (!opts.name) {
-						try {
-							URL.revokeObjectURL(runner.url);
-							worker.terminate();
-						} catch {}
+						try { URL.revokeObjectURL(runner.url); } catch (e) {}
+						try { worker.terminate(); } catch (e) {}
 					}
 				};
 
-				const rpcLog = [];
-				let finished = false;
+				var rpcLog = [];
+				var finished = false;
 
 				worker.onmessage = function (e) {
-					const msg = e.data;
+					var msg = e.data;
 
 					if (msg && msg.type === "rpc") {
-						const fn = methods[msg.method];
+						var fn = methods[msg.method];
 						if (!fn) {
 							worker.postMessage({
 								type: "rpcResult",
@@ -296,33 +410,15 @@ Q.exports(function (Q) {
 						}
 
 						Promise.resolve()
-							.then(() => fn(...msg.args))
-							.then(result => {
-								rpcLog.push({
-									method: msg.method,
-									args: msg.args,
-									result
-								});
-								worker.postMessage({
-									type: "rpcResult",
-									id: msg.id,
-									ok: true,
-									result
-								});
+							.then(function () { return fn.apply(null, msg.args); })
+							.then(function (result) {
+								rpcLog.push({ method: msg.method, args: msg.args, result: result });
+								worker.postMessage({ type: "rpcResult", id: msg.id, ok: true, result: result });
 							})
-							.catch(err => {
-								rpcLog.push({
-									method: msg.method,
-									args: msg.args,
-									error: String(err && err.message || err)
-								});
-
-								worker.postMessage({
-									type: "rpcResult",
-									id: msg.id,
-									ok: false,
-									error: String(err && err.message || err)
-								});
+							.catch(function (err) {
+								var errStr = String(err && err.message || err);
+								rpcLog.push({ method: msg.method, args: msg.args, error: errStr });
+								worker.postMessage({ type: "rpcResult", id: msg.id, ok: false, error: errStr });
 							});
 						return;
 					}
@@ -330,17 +426,20 @@ Q.exports(function (Q) {
 					if (msg && msg.type === "done") {
 						if (finished) return;
 						finished = true;
-						
-						const execution = {
-							code,
+
+						// Execution hash covers original code + context + input + seed + rpc log + outcome.
+						// Preamble is intentionally excluded — it is derived from methodNames already present here.
+						var execution = {
+							code:    code,
 							context: safeCtx,
+							input:   safeInput,
 							seed: (opts.deterministic && typeof opts.deterministic === "object")
 								? opts.deterministic.seed
 								: (opts.deterministic ? 1 : undefined),
-							rpc: rpcLog,
-							ok: !!msg.ok,
-							result: msg.ok ? msg.result : undefined,
-							error: msg.ok ? undefined : msg.error
+							rpc:    rpcLog,
+							ok:     !!msg.ok,
+							result: msg.ok  ? msg.result : undefined,
+							error:  !msg.ok ? msg.error  : undefined
 						};
 
 						Q.Data.digest("SHA-256", JSON.stringify(execution))
@@ -348,12 +447,9 @@ Q.exports(function (Q) {
 							var hash = Q.Data.toHex(bytes);
 							cleanup();
 							if (msg.ok) {
-								resolve({
-									result: msg.result,
-									hash
-								});
+								resolve({ result: msg.result, hash: hash });
 							} else {
-								const err = new Error(msg.error || "Sandbox error");
+								var err = new Error(msg.error || "Sandbox error");
 								err.hash = hash;
 								reject(err);
 							}
@@ -363,7 +459,7 @@ Q.exports(function (Q) {
 
 				worker.onerror = function (err) {
 					cleanup();
-					reject(err.message || String(err));
+					reject(new Error(err.message || String(err)));
 				};
 
 				timer = setTimeout(function () {
@@ -372,15 +468,17 @@ Q.exports(function (Q) {
 				}, timeoutMs);
 
 				worker.postMessage({
-					code,
-					context: safeCtx,
-					methodNames,
-					deterministic: opts.deterministic || false
+					code:          code,
+					context:       safeCtx,
+					methodNames:   methodNames,
+					preamble:      preamble,
+					deterministic: opts.deterministic || false,
+					input:         safeInput
 				});
 			}.bind(this));
 		};
 
-		let runner;
+		var runner;
 		if (options.name) {
 			runner = Q.Sandbox._runners[options.name];
 			if (!runner) {
