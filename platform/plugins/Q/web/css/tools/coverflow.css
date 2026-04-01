@@ -6,31 +6,37 @@
 
 @media (prefers-color-scheme: dark) {
 	.Q_coverflow_tool {
-		position: relative; /* can override this to be absolute or fixed */
+		position: relative;
 		background: black;
 		color: white;
 	}
 }
 
+/* ---------------- Caption ---------------- */
+
 .Q_coverflow_tool .Q_coverflow_caption {
 	position: absolute;
-    height: 30px;
-    line-height: 50px;
-    font-size: 40px;
-    width: 100%;
-    text-align: center;
-    bottom: 20px;
-    vertical-align: middle;
-    font-weight: bold;
+	height: 30px;
+	line-height: 50px;
+	font-size: 40px;
+	width: 100%;
+	text-align: center;
+	bottom: 20px;
+	vertical-align: middle;
+	font-weight: bold;
 	padding: 2px;
 }
+
 .Q_notMobile .Q_coverflow_tool .Q_coverflow_caption {
 	padding: 10px;
 }
+
 .Q_mobile .Q_coverflow_tool .Q_coverflow_caption {
 	bottom: 0px;
 	line-height: 20px;
 }
+
+/* ---------------- Reset ---------------- */
 
 .Q_coverflow_covers,
 .Q_coverflow_covers * {
@@ -38,6 +44,8 @@
 	padding: 0;
 	margin: 0;
 }
+
+/* ---------------- Sizing ---------------- */
 
 :root {
 	--Q-coverflow-cover-size: 12rem;
@@ -55,117 +63,156 @@
 	}
 }
 
+/* ---------------- Container ---------------- */
+
 .Q_coverflow_covers {
 	list-style: none;
-	overflow-x: scroll;
+	overflow-x: auto;
 	width: 100%;
 	white-space: nowrap;
 }
 
-/* only enable snapping when not dragging round*/
+/* RTL support */
+[dir="rtl"] .Q_coverflow_covers {
+	direction: rtl;
+}
+
+/* snapping */
 .Q_coverflow_tool.Q_coverflow_snapping .Q_coverflow_covers {
-    scroll-snap-type: x mandatory;
+	scroll-snap-type: inline mandatory;
 }
+
 .Q_coverflow_tool.Q_coverflow_snapping .Q_coverflow_covers > * {
-    scroll-snap-align: center;
+	scroll-snap-align: center;
 }
+
+/* ---------------- Items ---------------- */
 
 .Q_coverflow_covers > * {
 	display: inline-block;
-	/* width: var(--Q-coverflow-cover-size);
-	height: var(--Q-coverflow-cover-size); */
 }
 
-.Q_coverflow_covers>*>* {
+.Q_coverflow_covers > * > * {
 	display: block;
-	/*width: var(--Q-coverflow-cover-size);*/
 	height: var(--Q-coverflow-cover-size);
 
 	-webkit-box-reflect: below 0.1em
 		linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.25));
 }
 
+/* ---------------- Layout ---------------- */
+
 .Q_coverflow_covers {
 	--size: 6;
 	min-height: calc(var(--Q-coverflow-cover-size) * 2.5);
 	width: 100%;
 	margin: 0 auto;
-	padding: calc(var(--Q-coverflow-cover-size) / 3 * 2) 0;
+	padding-block: calc(var(--Q-coverflow-cover-size) / 3 * 2);
 	position: relative;
 	max-width: 90vw;
 }
 
-/* Because the total size is 6, with 1 cover in the middle, there’s space for 5 left … so 2.5 on each side */
-/* Didn’t work (on the right): `calc(50% - (var(--Q-coverflow-cover-size) / 2));` */
+/* center offset using logical properties */
 .Q_coverflow_covers li:first-of-type {
-	margin-left: calc(50% - (var(--Q-coverflow-cover-size) / 2));
+	margin-inline-start: calc(50% - (var(--Q-coverflow-cover-size) / 2));
 }
+
 .Q_coverflow_covers li:last-of-type {
-	margin-right: calc(50% - (var(--Q-coverflow-cover-size) / 2));
+	margin-inline-end: calc(50% - (var(--Q-coverflow-cover-size) / 2));
 }
 
-/* Animation bumps up the z-index, to make sure it’s on top */
+/* ---------------- Animations ---------------- */
+
 @keyframes Q-coverflow-adjust-z-index {
-    0% {
-        z-index: 1;
-    }
-    50% {
-        z-index: 100; /* When at the center, be on top */
-    }
-    100% {
-        z-index: 1;
-    }
+	0% {
+		z-index: 1;
+	}
+	50% {
+		z-index: 100;
+	}
+	100% {
+		z-index: 1;
+	}
 }
 
-/* Animation that rotates the cover */
+/* LTR animation */
 @keyframes Q-coverflow-rotate-cover {
-    0% {
-        transform: translateX(-100%) rotateY(-45deg);
-    }
-    35% {
-        transform: translateX(0) rotateY(-45deg);
-    }
-    50% {
-        transform: rotateY(0deg) translateZ(1em) scale(1.5);
-    }
-    65% {
-        transform: translateX(0) rotateY(45deg);
-    }
-    100% {
-        transform: translateX(100%) rotateY(45deg);
-    }
+	0% {
+		transform: translateX(-100%) rotateY(-45deg);
+	}
+	35% {
+		transform: translateX(0) rotateY(-45deg);
+	}
+	50% {
+		transform: rotateY(0deg) translateZ(1em) scale(1.5);
+	}
+	65% {
+		transform: translateX(0) rotateY(45deg);
+	}
+	100% {
+		transform: translateX(100%) rotateY(45deg);
+	}
 }
+
+/* RTL mirrored animation */
+@keyframes Q-coverflow-rotate-cover-rtl {
+	0% {
+		transform: translateX(100%) rotateY(45deg);
+	}
+	35% {
+		transform: translateX(0) rotateY(45deg);
+	}
+	50% {
+		transform: rotateY(0deg) translateZ(1em) scale(1.5);
+	}
+	65% {
+		transform: translateX(0) rotateY(-45deg);
+	}
+	100% {
+		transform: translateX(-100%) rotateY(-45deg);
+	}
+}
+
+/* ---------------- LI behavior ---------------- */
 
 .Q_coverflow_covers li {
-    /* Track this element as it intersects the scrollport */
-    view-timeline-name: --Q-coverflow-li-in-and-out-of-view;
-    view-timeline-axis: inline;
+	view-timeline-name: --Q-coverflow-li-in-and-out-of-view;
+	view-timeline-axis: inline;
 
-    /* Link an animation to the established view-timeline and have it run during the contain phase */
-    animation: linear Q-coverflow-adjust-z-index both;
-    animation-timeline: --Q-coverflow-li-in-and-out-of-view;
+	animation: linear Q-coverflow-adjust-z-index both;
+	animation-timeline: --Q-coverflow-li-in-and-out-of-view;
 
-    /* Make the 3D stuff work… */
-    perspective: 40em;
+	perspective: 40em;
 
-    position: relative;
-    z-index: 1;
-    will-change: z-index;
+	position: relative;
+	z-index: 1;
+	will-change: z-index;
 
-    user-select: none;
+	user-select: none;
 }
+
+/* ---------------- Images ---------------- */
 
 .Q_coverflow_covers * > img {
-    /* Link an animation to the established view-timeline (of the parent li) and have it run during the contain phase */
-    animation: 1s linear Q-coverflow-rotate-cover both;
-    animation-timeline: --Q-coverflow-li-in-and-out-of-view;
+	animation: 1s linear Q-coverflow-rotate-cover both;
+	animation-timeline: --Q-coverflow-li-in-and-out-of-view;
 
-    /* Prevent FOUC */
-    transform: translateX(-100%) rotateY(-45deg);
+	transform: translateX(-100%) rotateY(-45deg);
 
-    will-change: transform;
+	will-change: transform;
 }
 
+/* RTL override */
+[dir="rtl"] .Q_coverflow_covers * > img {
+	animation-name: Q-coverflow-rotate-cover-rtl;
+	transform: translateX(100%) rotateY(45deg);
+}
+
+/* ensure animation applied */
 .Q_coverflow_tool .Q_coverflow_covers > * > img {
-    animation-name: Q-coverflow-rotate-cover;
+	animation-name: Q-coverflow-rotate-cover;
+}
+
+[dir="rtl"] .Q_coverflow_tool .Q_coverflow_covers > * > img {
+	animation-name: Q-coverflow-rotate-cover-rtl;
 }
