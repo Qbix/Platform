@@ -66,7 +66,7 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		$(document)
 		.off('keydown.Q_sortable')
 		.on('keydown.Q_sortable', function (e) {
-			if (lifted && e.keyCode == 27) {
+			if (lifted && e.keyCode === 27) {
 				complete(true, true);
 				return false;
 			}
@@ -116,7 +116,171 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		state.dropHandler = dropHandler;
 	}
 
-	function dropHandler(event, target) {
+	function lift(event) {
+		if (tLift) clearTimeout(tLift);
+
+		var $item = $(this);
+
+		if (Q.Pointer.touchCount(event) !== 1) return;
+
+		Q.Pointer.cancelClick(true, event, {
+			comingFromSortable: true
+		});
+
+		var offset = $item.offset();
+		var x = Q.Pointer.getX(event);
+		var y = Q.Pointer.getY(event);
+
+		gx = x - offset.left;
+		gy = y - offset.top;
+
+		var $placeholder = $item.clone().css({
+			opacity: state.placeholderOpacity
+		}).insertAfter($item);
+
+		var $dragged = $item.clone().appendTo('body').css({
+			position: 'absolute',
+			left: x - gx,
+			top: y - gy,
+			zIndex: state.zIndex,
+			opacity: state.draggedOpacity,
+			pointerEvents: 'none'
+		});
+
+		$item.hide();
+		_hideActions();
+
+		$item.data('Q/sortable', {
+			$placeholder: $placeholder,
+			$dragged: $dragged
+		});
+
+		$body.data(dataLifted, $item);
+
+		lifted = true;
+
+		Q.handle(state.onLift, $this, [$item, {
+			event: event,
+			$dragged: $dragged,
+			$placeholder: $placeholder
+		}]);
+	}
+
+	function getTarget(x, y) {
+		var element = Q.Pointer.elementFromPoint(x, y);
+		var $target = null;
+		state.droppable = state.droppable || '*';
+		var $jq = (state.droppable === '*')
+			? $this.children(state.droppable)
+			: $(state.droppable, $this);
+		$jq.each(function () {
+			if (this.contains(element)) {
+				$target = $(this);
+				return false;
+			}
+		});
+		return $target;
+	}
+
+	function indicate($item, x, y) {
+		var $target = getTarget(x, y);
+		var data = $item.data('Q/sortable');
+		if (!data) {
+			return;
+		}
+		data.$dragged.css('pointerEvents', 'none');
+		var element = Q.Pointer.elementFromPoint(x, y);
+		var offset = $this.offset();
+		if ($(element).closest($this).length
+			|| ((x >= offset.left && x <= offset.left + $this.width()
+				&& y >= offset.top && y <= offset.top + $this.height()))) {
+			data.$dragged.css('pointerEvents', 'none');
+		} else {
+			data.$dragged.css('pointerEvents', 'auto');
+		}
+
+		var $placeholder = data.$placeholder;
+		if (!$target) {
+			if (state.requireDropTarget) {
+				$item.after($placeholder);
+			}
+			return;
+		}
+		if ($target.is($placeholder)) {
+			return;
+		}
+		var direction;
+		// var $n = $target.next(), $p = $target.prev();
+		// while ($n.length && !$n.is(':visible')) {
+		// 	$n = $n.next();
+		// }
+		// while ($p.length && !$p.is(':visible')) {
+		// 	$p = $p.prev();
+		// }
+		// var tw = $target.width(),
+		// 	th = $target.height(),
+		// 	toff = $target.offset(),
+		// 	nh = $n.height(),
+		// 	noff = $n.offset(),
+		// 	ph = $p.height(),
+		// 	poff = $p.offset();
+		// var condition = ((poff && poff.top + ph <= toff.top) || (noff && toff.top + th <= noff.top))
+		// 	? (y < toff.top + th/2)
+		// 	: (x < toff.left + tw/2);
+
+		var tr = $target[0].getBoundingClientRect();
+		var pr = $placeholder[0].getBoundingClientRect()
+		var isBefore = $target[0].isBefore($placeholder[0]);
+		var intersectVertically = (tr.bottom >= pr.top && pr.bottom >= tr.top);
+		// assume items are laid out in horizontal rows that wrap around
+		var mw = Math.min(pr.width, tr.width);
+		var mh = Math.min(pr.height, tr.height);
+		var buffer = state.buffer || 0;
+		var condition = isBefore ? (
+			intersectVertically
+				? x < tr.left + mw - buffer
+				: y < tr.top + mh - buffer
+		) : (
+			intersectVertically
+				? x > tr.right - mw + buffer
+				: y > tr.bottom - mh + buffer
+		);
+		var switched = false;
+		if (condition) {
+			if (isBefore) {
+				$placeholder.insertBefore($target);
+				direction = 'before';
+			} else {
+				$placeholder.insertAfter($target);
+				direction = 'after';
+			}
+			switched = data.$prevTarget;
+			data.$prevTarget = $target;
+		}
+		Q.handle(state.onIndicate, $this, [$item, {
+			$target: $target,
+			direction: direction,
+			$placeholder: $placeholder,
+			$dragged: data.$dragged,
+			$scrolling: $scrolling,
+			switched: switched
+		}]);
+	}
+
+	function _hideActions() { // Temporarily hide Q/actions if any
+		state.actionsContainer = $('.Q_actions_container');
+		state.actionsContainerVisibility = state.actionsContainer.css('visibility');
+		state.actionsContainer.css('visibility', 'hidden');
+	}
+
+	function _restoreActions() { // Restore Q/actions if any
+		if (!state.actionsContainer) return;
+		state.actionsContainer.css('visibility', state.actionsContainerVisibility);
+		delete state.actionsContainer;
+		delete state.actionsContainerVisibility;
+	}
+
+	function dropHandler(event) {
 		pressed = false;
 		$('body')[0].restoreSelections(true);
 		if (!lifted) return;
@@ -260,8 +424,8 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 	}
 
 	var move = Q.throttle(function ($item, x, y) {
-		var data;
-		if (data = $item.data('Q/sortable')) {
+		var data = $item.data('Q/sortable');
+		if (data) {
 			data.$dragged.css({
 				left: x - gx,
 				top: y - gy
