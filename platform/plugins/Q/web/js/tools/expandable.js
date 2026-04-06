@@ -18,6 +18,10 @@
  *  @param {Boolean} [options.autoCollapseSiblings=true] Whether, when expanding an expandable, its siblings should be automatically collapsed.
  *  @param {Boolean} [options.scrollContainer] Whether to scroll a parent container when necessary
  *   @param {Q.Event} [options.onRefresh] Event occurs when tool element has rendered with content
+ *   @param {Q.Event} [options.onExpand] Event occurs when content has been expanded
+ *   @param {Q.Event} [options.beforeExpand] Event occurs when content is about to be expanded
+ *   @param {Q.Event} [options.onCollapse] Event occurs when content has been collapsed
+ *   @param {Q.Event} [options.beforeCollapse] Event occurs when content is about to be collapsed
  * @return {Q.Tool}
  */
 Q.Tool.define('Q/expandable', function (options) {

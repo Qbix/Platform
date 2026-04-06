@@ -438,7 +438,7 @@ Q.exports(function (Q) {
 					cleanup();
 
 					if (msg.ok) {
-						resolve({ result: msg.result, hash: hash });
+						resolve({ result: msg.result, hash: hash, rpcLog: rpcLog });
 					} else {
 						var err = new Error(msg.error || "Sandbox error");
 						err.hash = hash;
