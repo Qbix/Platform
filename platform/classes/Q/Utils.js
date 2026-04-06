@@ -47,7 +47,7 @@ Utils.signature = function (data, secret) {
 Utils.sign = function (data, fieldKeys) {
 	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
 	if (!secret) {
-		return data
+		return data;
 	}
 	if (!fieldKeys || !fieldKeys.length) {
 		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
@@ -60,7 +60,7 @@ Utils.sign = function (data, fieldKeys) {
 		}
 		ref = ref[ fieldKeys[i] ];
 	}
-	ref [ fieldKeys[fieldKeys.length-1] ] = Utils.signature(data, secret);
+	ref[ fieldKeys[fieldKeys.length-1] ] = Utils.signature(data, secret);
 	return data;
 };
 
@@ -68,7 +68,7 @@ Utils.sign = function (data, fieldKeys) {
  * Validate some signed data.
  * @method validate
  * @param {object} data the signed data to validate
- * @param {array} fieldKeys Optionally specify the array key path for the isgnature field
+ * @param {array} fieldKeys Optionally specify the array key path for the signature field
  * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
  */
 Utils.validate = function(data, fieldKeys) {
@@ -88,13 +88,13 @@ Utils.validate = function(data, fieldKeys) {
 		}
 		ref = ref[ fieldKeys[i] ];
 	}
-	var sig = ref [ fieldKeys[fieldKeys.length-1] ];
-	delete ref [ fieldKeys[fieldKeys.length-1] ];
+	var sig = ref[ fieldKeys[fieldKeys.length-1] ];
+	delete ref[ fieldKeys[fieldKeys.length-1] ];
 	return (sig === Utils.signature(temp, secret));
 };
 
 /**
- * express server middleware validate signature of internal request
+ * express server middleware to validate signature of internal request
  * @method validateRequest
  * @static
  * @param {Object} req
@@ -179,8 +179,7 @@ function urlencode (str) {
 
 function http_build_query (formdata, numeric_prefix, arg_separator) {
 	// http://kevin.vanzonneveld.net
-	var value, key, tmp = [],
-		that = this;
+	var value, key, tmp = [];
 
 	var _http_build_query_helper = function (key, val, arg_separator) {
 		var k, tmp = [];
@@ -218,300 +217,359 @@ function http_build_query (formdata, numeric_prefix, arg_separator) {
 }
 
 /**
- * Issues an http request, and returns the response
+ * Issues an HTTP request and returns a Promise.
+ * If a callback is provided, it is called on completion and the Promise is also returned.
+ *
  * @method _request
  * @private
- * @param {string} method The http method to use
- * @param {string|array} uri The URL to request
- *  This can also be an array of [url, ip] to send the request
- *  to a particular IP, while retaining the hostname and request URI
- * @param {object|string} [data=''] The associative array of data to add to query
- * @param {object} [query=null] The associative array of data to post
- * @param {string} [user_agent='Mozilla/5.0'] The user-agent string to send. Defaults to Mozilla.
- * @param {object} [header={}] Optional associative array of headers to replace the entire header
- * @param [callback=null] {function} Callback receives error and result string as arguments
+ * @param {string} method  HTTP method ('GET', 'POST', etc.)
+ * @param {string|array} uri  URL, or [url, ip] to override the resolved IP
+ * @param {object|string} [data='']  POST body or query data
+ * @param {string} [userAgent]  User-Agent header value
+ * @param {object} [header]  Full header override
+ * @param {function} [callback]  Optional node-style callback(err, body)
+ * @return {Promise<string>}  Resolves with the response body string
  */
-
-function _request(method, uri, data /* '' */, query /* null */, user_agent /* Mosilla */, header /* auto */, callback ) {
-	var that = this;
+function _request(method, uri, data, userAgent, header, callback) {
 	var agent = 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9';
 	method = method.toLowerCase();
-	if (typeof data === "function") {
-		callback = data;
-		data = '';
-		query = null;
-		user_agent = agent;
-	} else if (typeof query === "function") {
-		callback = query;
-		query = null;
-		user_agent = agent;
-	} else if (typeof user_agent === "function") {
-		callback = user_agent;
-		user_agent = agent;
-	} else if (typeof header === "function") {
-		callback = header;
-		header = null;
-	}
 
-	if (!callback || typeof callback !== "function") return;
+	// Flexible argument shifting: (method, uri, [data], [userAgent], [header], [callback])
+	if (typeof data === "function") {
+		callback = data; data = ''; userAgent = agent;
+	} else if (typeof userAgent === "function") {
+		callback = userAgent; userAgent = agent;
+	} else if (typeof header === "function") {
+		callback = header; header = null;
+	}
 
 	var ip = null, url;
 	if (Q.typeOf(uri) === "array") {
 		url = uri[0];
-		if (!!uri[1]) ip = uri[1];
-	} else url = uri;
+		if (uri[1]) ip = uri[1];
+	} else {
+		url = uri;
+	}
+
 	var urlModule = require('url');
 	var parts = urlModule.parse(url);
 	var host = parts.host;
 	if (!ip) ip = host;
+
 	var request_uri = parts.pathname;
-	var port = parts.port ? ":"+parts.port : '';
-	var server = parts.protocol+"//"+ip+port+request_uri;
+	var port = parts.port ? ":" + parts.port : '';
+	var server = parts.protocol + "//" + ip + port + request_uri;
 
-	if (!header) header = {
-		'user-agent': user_agent,
-		'host': host
-	};
+	if (!header) header = { 'user-agent': userAgent || agent, 'host': host };
 
-	if (typeof data !== "string") data = http_build_query(data, '', '&');
+	if (typeof data !== "string") {
+		data = http_build_query(data, '', '&');
+	}
 
-	var request = {
+	var requestOpts = {
 		headers: header,
-		uri: server+"?"+data,
-		agentOptions: {
-			rejectUnauthorized: false
-		}
+		uri: server + "?" + data,
+		agentOptions: { rejectUnauthorized: false }
 	};
 
-	if (query) request.qs = query;
-
-	require('request')[method](request, function (err, res, body) {
-		if (err) callback.call(that, err);
-		else {
-			if (res.statusCode >= 400) callback.call(that, new Error(body));
-			else callback.call(that, null, body);
-		}
+	var p = new Promise(function(resolve, reject) {
+		require('request')[method](requestOpts, function(err, res, body) {
+			if (err) return reject(err);
+			if (res.statusCode >= 400) return reject(new Error(body));
+			resolve(body);
+		});
 	});
+
+	// Backward-compat: if a callback was supplied, wire it up
+	if (callback) {
+		p.then(function(body) { callback(null, body); })
+		 .catch(function(err) { callback(err); });
+	}
+
+	return p;
 }
 
 /**
- * Issues a POST request, and returns the response
+ * Issues a POST request and returns a Promise.
+ * Optionally accepts a node-style callback for backward compatibility.
+ *
  * @method post
- * @param{string|array}  url The URL to post to
- *  This can also be an array of [url, ip] to send the request
- *  to a particular IP, while retaining the hostname and request URI
- * @param {object|string} [data=''] The associative array of data or string to add to query
- * @param {array} [query=null] The associative array of data to post
- * @param {string} [user_agent='Mozilla/5.0'] The user-agent string to send. Defaults to Mozilla.
- * @param {object} [header={}] Optional associative array of headers to replace the entire header
- * @param [callback=null] {function} Callback receives error and result string as arguments
+ * @param {string|array} url
+ * @param {object|string} [data='']
+ * @param {string} [userAgent]
+ * @param {object} [header]
+ * @param {function} [callback]  Optional node-style callback(err, body)
+ * @return {Promise<string>}
  */
-Utils.post = function (url, data, query, user_agent, header, callback) {
-	_request('POST', url, data, query, user_agent, header, callback);
+Utils.post = function (url, data, userAgent, header, callback) {
+	return _request('POST', url, data, userAgent, header, callback);
 };
 
 /**
- * Issues a GET request, and returns the response
+ * Issues a GET request and returns a Promise.
+ * Optionally accepts a node-style callback for backward compatibility.
+ *
  * @method get
- * @param {string|array} url The URL to get from
- *  This can also be an array of [url, ip] to send the request
- *  to a particular IP, while retaining the hostname and request URI
- * @param {object|string} [data=''] The associative array of data or string to add to query
- * @param {string} [user_agent='Mozilla/5.0'] The user-agent string to send. Defaults to Mozilla.
- * @param {object} [header={}] Optional associative array of headers to replace the entire header
- * @param [callback=null] {function} Callback receives error and result string as arguments
+ * @param {string|array} url
+ * @param {object|string} [data='']
+ * @param {string} [userAgent]
+ * @param {object} [header]
+ * @param {function} [callback]  Optional node-style callback(err, body)
+ * @return {Promise<string>}
  */
-Utils.get = function (url, data, user_agent, header, callback) {
-	_request('GET', url, data, null, user_agent, header, callback);
+Utils.get = function (url, data, userAgent, header, callback) {
+	return _request('GET', url, data, userAgent, header, callback);
 };
 
 /**
- * Queries a server externally to the specified handler. Expects json array with
- * either ['slots']['data'] or ['error'] fields filled
+ * Queries a server externally to the specified handler.
+ * Returns a Promise resolving to the response data, and also calls callback if provided.
+ *
  * @method queryExternal
- * @param {string} handler the handler to call
- * @param {array} [data={}] Associative array of data of the message to send.
- * @param {string|array} [url=null] and url to query. Default to 'Q/web/appRootUrl' config value
- * @param {function} [callback=null] Callback receives error and result string as arguments
+ * @param {string} handler
+ * @param {object} [data={}]
+ * @param {string|array} [url=null]  Defaults to Q/web/appRootUrl
+ * @param {object} [headers=null]
+ * @param {function} [callback]  Optional node-style callback(err, data)
+ * @return {Promise<*>}
  */
-Utils.queryExternal = function(handler, data /* {} */, url /* null */, headers /* null */, callback)
-{
-	var that = this;
+Utils.queryExternal = function(handler, data, url, headers, callback) {
 	if (typeof data === "function") {
-		callback = data;
-		data = {};
-		url = null;
+		callback = data; data = {}; url = null;
 	} else if (typeof url === "function") {
-		callback = url;
-		url = null;
+		callback = url; url = null;
 	} else if (typeof headers === "function") {
-		callback = headers;
-		headers = null;
+		callback = headers; headers = null;
 	}
-
-	if (!callback || typeof callback !== "function") return;
 
 	if (typeof data !== "object") {
-		callback(new Error("Utils.queryExternal: data has wrong type. Expecting 'object'"));
+		var typeErr = new Error("Utils.queryExternal: data has wrong type. Expecting 'object'");
+		if (callback) { callback(typeErr); return Promise.reject(typeErr); }
+		return Promise.reject(typeErr);
 	}
 
-	var query = {}, sig = 'Q.'+Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
+	var query = {}, sig = 'Q.' + Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
 	query['Q_ajax'] = 'json';
 	query['Q_slotNames'] = 'data';
 	query[sig] = Utils.sign(Q.extend({}, data, query))[sig];
 
-	if (!url && !(url = Q.Config.get(['Q', 'web', 'appRootUrl'], false)))
-		callback(new Error("Root URL is not defined in Q.Utils.queryExternal"));
+	if (!url) url = Q.Config.get(['Q', 'web', 'appRootUrl'], false);
+	if (!url) {
+		var urlErr = new Error("Root URL is not defined in Q.Utils.queryExternal");
+		if (callback) { callback(urlErr); return Promise.reject(urlErr); }
+		return Promise.reject(urlErr);
+	}
 
-	var servers = [], tail = "/action.php/"+handler;
+	var servers, tail = "/action.php/" + handler;
 	if (Q.typeOf(url) === "array") {
-		servers.push(url[0]+tail);
+		servers = [url[0] + tail];
 		if (url.length > 1) servers.push(url[1]);
 	} else {
-		servers = url+tail;
+		servers = url + tail;
 	}
 
-	Utils.post(servers, data, query, null, headers, function (err, res) {
+	var p = Utils.post(servers, data, query, null, headers)
+	.then(function(res) {
 		var d;
-		if (err) callback.call(that, err);
-		else {
-			try {
-				d = JSON.parse(res);
-			} catch (e) {
-				callback(e);
-				return;
-			}
-			if (d.errors) {
-				if (d.errors[0]) callback(new Error(d.errors[0].message));
-				else callback(new Error("Unknown error reported by 'Utils.post()'"));
-			} else if (d.slots && d.slots.data) {
-				callback(null, d.slots.data);
-			} else {
-				callback(null, null); // no slot as set but no error either
-			}
+		try { d = JSON.parse(res); } catch(e) { throw e; }
+		if (d.errors) {
+			throw new Error(d.errors[0] ? d.errors[0].message : "Unknown error from Utils.post()");
 		}
+		return (d.slots && d.slots.data) ? d.slots.data : null;
 	});
+
+	if (callback) {
+		p.then(function(result) { callback(null, result); })
+		 .catch(function(err) { callback(err); });
+	}
+
+	return p;
 };
 
 /**
- * Sends a query to Node.js internal server and gets the response
- * This method shall make communications behind firewall
+ * Sends a query to Node.js internal server and returns a Promise.
+ * Optionally calls callback for backward compatibility.
+ *
  * @method queryInternal
- * @param {string} handler the handler to call
- * @param {array} [data={}] Associative array of data of the message to send.
- * @param [url=null] {string|array} and url to query. Default to 'Q/nodeInternal' config value
- * @param [callback=null] {function} Callback receives error and result string as arguments
+ * @param {string} handler
+ * @param {object} [data={}]
+ * @param {string|array} [url=null]  Defaults to Q/nodeInternal config
+ * @param {function} [callback]  Optional node-style callback(err, data)
+ * @return {Promise<*>}
  */
-Utils.queryInternal = function(handler, data /* {} */, url /* null */, callback)
-{
-	var that = this;
+Utils.queryInternal = function(handler, data, url, callback) {
 	if (typeof data === "function") {
-		callback = data;
-		data = {};
-		url = null;
+		callback = data; data = {}; url = null;
 	} else if (typeof url === "function") {
-		callback = url;
-		url = null;
+		callback = url; url = null;
 	}
 
-	if (!callback || typeof callback !== "function") return;
-
-	if (typeof data !== "object") callback(new Error("'data' has wrong type. Expecting 'object'"));
+	if (typeof data !== "object") {
+		var typeErr = new Error("'data' has wrong type. Expecting 'object'");
+		if (callback) { callback(typeErr); return Promise.reject(typeErr); }
+		return Promise.reject(typeErr);
+	}
 
 	if (!url) {
-		var nodeh = Q.Config.get(['Q', 'nodeInternal', 'host'], null),
-			nodep = Q.Config.get(['Q', 'nodeInternal', 'port'], null), node;
-		if (!(url = nodep && nodeh ? "http://"+nodeh+":"+nodep : false))
-			callback(new Error("nodeInternal server is not defined"));
+		var nodeh = Q.Config.get(['Q', 'nodeInternal', 'host'], null);
+		var nodep = Q.Config.get(['Q', 'nodeInternal', 'port'], null);
+		url = (nodep && nodeh) ? "http://" + nodeh + ":" + nodep : false;
+		if (!url) {
+			var urlErr = new Error("nodeInternal server is not defined");
+			if (callback) { callback(urlErr); return Promise.reject(urlErr); }
+			return Promise.reject(urlErr);
+		}
 	}
 
-	var server = [], tail = "/"+handler;
+	var server, tail = "/" + handler;
 	if (Q.typeOf(url) === "array") {
-		server.push(url[0]+tail);
+		server = [url[0] + tail];
 		if (url.length > 1) server.push(url[1]);
 	} else {
-		server = url+tail;
+		server = url + tail;
 	}
 
-	Utils.post(server, Utils.sign(data), function (err, res) {
+	var p = Utils.post(server, Utils.sign(data))
+	.then(function(res) {
 		var d;
-		if (err) callback.call(that, err);
-		else {
-			try {
-				d = JSON.parse(res);
-			} catch (e) {
-				callback.call(that, e);
-				return;
-			}
-			if (d.errors) callback.call(that, d.errors);
-			else callback.call(that, null, d.data);
+		try { d = JSON.parse(res); } catch(e) { throw e; }
+		if (d.errors) throw d.errors;
+		return d.data;
+	});
+
+	if (callback) {
+		p.then(function(result) { callback(null, result); })
+		 .catch(function(err) { callback(err); });
+	}
+
+	return p;
+};
+
+/**
+ * Sends an internal message to PHP and returns a Promise resolving to the response slots.
+ *
+ * All Safebox Node→PHP communication goes through this method. It:
+ *   - Signs the payload with the internal secret
+ *   - Encodes the logical HTTP method as Q_method in the POST body, so PHP handlers
+ *     can dispatch on it via Q::ifset($req, 'Q_method', Q_Request::method())
+ *   - Always sends an HTTP POST (the Q framework's transport is always POST)
+ *   - Returns a Promise resolving to the parsed slots object from the PHP response
+ *
+ * @method sendToPHP
+ * @static
+ * @param {String} path  Route path, e.g. "Safebox/task"
+ * @param {Object} data  Payload to sign and send
+ * @param {Object} [options={}]
+ * @param {String} [options.method='POST']  Logical method, encoded as Q_method in body
+ * @param {String} [options.userAgent='Node/Q.Utils'] Specify a custom user agent 
+ * @param {Array}  [options.fieldKeys] Key path for the signature field
+ * @return {Promise<Object>}  Resolves to response slots object
+ */
+Utils.sendToPHP = function(path, data, options) {
+	if (!path) throw new Q.Exception("Q.Utils.sendToPHP: path must be defined");
+	if (!data || typeof data !== 'object') throw new Q.Exception("Q.Utils.sendToPHP: data must be an object");
+
+	options = options || {};
+	var method  = (options.method || 'POST').toUpperCase();
+	var baseUrl = Q.Config.expect(['Q', 'web', 'appRootUrl']);
+	var url     = baseUrl + '/action.php/' + path;
+
+	// Encode the logical method in the body so PHP can dispatch on it
+	// without relying on the HTTP method (which is always POST from Node).
+	// PHP reads: $method = Q::ifset($req, 'Q_method', Q_Request::method());
+	var payload = Object.assign({}, data, { Q_method: method });
+	var signed  = Utils.sign(payload, options.fieldKeys);
+
+	return _request(method, url, signed, options.userAgent || 'Node/Q.Utils')
+	.then(function(body) {
+		var parsed;
+		try { parsed = JSON.parse(body); } catch(e) {
+			throw new Error('Q.Utils.sendToPHP: invalid JSON response from ' + path + ': ' + body);
 		}
+		if (parsed.errors && parsed.errors.length) {
+			var err = parsed.errors[0];
+			throw new Error(err && err.message ? err.message : JSON.stringify(err));
+		}
+		return parsed.slots || parsed;
 	});
 };
 
 /**
- * Sends internal message to Node.js
+ * Sends a fire-and-forget message to Node.js via the /Q/node endpoint.
+ * Data must include "Q/method" so Node can route it to the correct handler.
+ *
  * @method sendToNode
- * @param data {array} Associative array of data of the message to send.
- *  It should contain the key "Q/method" so Node can decide what to do with the message.
- * @param [url=null] {string|array} and url to query. Default to 'Q/nodeInternal' config value and path '/Q/node'
- * @throws {Q.Exception} if data is not object or does not contain 'Q/method' field
+ * @param {object} data  Must contain 'Q/method'
+ * @param {string|array} [url=null]  Defaults to Q/nodeInternal config + /Q/node
+ * @return {boolean}  true if the request was sent, false if no nodeInternal is configured
+ * @throws {Q.Exception} if data is not an object or missing Q/method
  */
-Utils.sendToNode = function (data, url /* null */) {
+Utils.sendToNode = function(data, url) {
 	if (typeof data !== 'object')
-		throw new Q.Exception("The message to send to node shall be an object");
+		throw new Q.Exception("The message to send to node must be an object");
 	if (!data['Q/method'])
-		throw new Q.Exception("'Q/method' is required in message for sendToNode");
+		throw new Q.Exception("'Q/method' is required in the message for sendToNode");
 
 	if (!url) {
-		var nodeh = Q.Config.get(['Q', 'nodeInternal', 'host'], null),
-			nodep = Q.Config.get(['Q', 'nodeInternal', 'port'], null);
-		if (!(url = nodep && nodeh ? "http://"+nodeh+":"+nodep+"/Q/node" : false)) return false;
+		var nodeh = Q.Config.get(['Q', 'nodeInternal', 'host'], null);
+		var nodep = Q.Config.get(['Q', 'nodeInternal', 'port'], null);
+		url = (nodep && nodeh) ? "http://" + nodeh + ":" + nodep + "/Q/node" : false;
+		if (!url) return false;
 	}
 
+	// Fire-and-forget: no callback, no Promise returned.
+	// The 'request' module handles the HTTP send in the background.
 	require('request').post({
 		headers: {
 			'User-Agent': 'Mozilla/5.0 (Windows; U; Windows NT 5.1; en-US; rv:1.8.1.9) Gecko/20071025 Firefox/2.0.0.9'
 		},
-		uri: url+"?"+http_build_query(Utils.sign(data))
+		uri: url + "?" + http_build_query(Utils.sign(data))
 	});
 	return true;
 };
 
 /**
- * Create folder for filename is it does not exists
- * Folder is created with 'world' access rights with 'Q/internal/umask' config value applied as umask
+ * Create folder for filename if it does not exist.
+ * Folder is created with Q/internal/umask config value applied as umask.
+ * Returns a Promise and optionally calls callback for backward compatibility.
+ *
  * @method preparePath
- * @param filename {string} The filename
- * @param callback {function} Receiver errors if any
+ * @param {string} filename
+ * @param {function} [callback]  Optional node-style callback(err)
+ * @return {Promise<void>}
  */
 Utils.preparePath = function(filename, callback) {
 	var dir = path.dirname(filename.replace('/', Q.DS));
-	if (!callback || typeof callback !== "function") return;
-	fs.stat(dir, function (err, stats) {
-		if (err && err.code !== 'ENOENT') callback(err);
-		else {
+
+	var p = new Promise(function(resolve, reject) {
+		fs.stat(dir, function(err, stats) {
+			if (err && err.code !== 'ENOENT') return reject(err);
 			if (err) {
-				// dir does not exists
-				Utils.preparePath(dir, function (err) {
-					if (err) callback(err);
-					else {
-						// created path up to dirname(dir)
-						var mask = process.umask(parseInt(Q.Config.get(['Q', 'internal', 'umask'], "0000"), 8));
-						fs.mkdir(dir, function (err) {
-							process.umask(mask);
-							callback(err);
-						});
-					}
-				});
+				// dir does not exist — create it recursively
+				Utils.preparePath(dir)
+				.then(function() {
+					var mask = process.umask(parseInt(Q.Config.get(['Q', 'internal', 'umask'], "0000"), 8));
+					fs.mkdir(dir, function(mkErr) {
+						process.umask(mask);
+						if (mkErr) reject(mkErr); else resolve();
+					});
+				})
+				.catch(reject);
 			} else {
-				// dir exists
-				if (stats.isDirectory()) callback();
-				else callback(new Error("'"+dir+"' is not a directory"));
+				if (stats.isDirectory()) resolve();
+				else reject(new Error("'" + dir + "' is not a directory"));
 			}
-		}
+		});
 	});
+
+	if (callback) {
+		p.then(function() { callback(null); }).catch(function(err) { callback(err); });
+	}
+
+	return p;
 };
+
+// ── Shard splitting (internal, unchanged) ────────────────────────────────────
 
 // wheather to write log and which log
 var _logging = false;
@@ -545,7 +603,7 @@ var _timeout = 0;
 var _fileTimeout = 500;
 // create new Db_Mysql object to leverage caching
 var _dbm = null;
-// the class construactor
+// the class constructor
 var _rowClass = null;
 // timestamp of select query
 var _timestamp = null;
@@ -566,7 +624,6 @@ function _clearTimeout(timeout) {
 }
 
 function _reset_split() {
-	// close split process and update config
 	_split_log("Resetting shard split handler and configuration. Please, wait for final confirmation");
 	_connection = _table = _dbTable = _class = _shard = _shards = _part = _parts = _where = _log_file = _dbm = _rowClass = _timestamp = null;
 	_logging = false; _phase = 0;
@@ -584,16 +641,14 @@ function _reset_split() {
 }
 
 function _split_log() {
-	// may be modified to write log to file
 	console.log.apply(this, arguments);
 }
 
 var _logServer = null;
 
 Utils.listen = function(callback) {
-	// Start internal server
 	var server = Q.listen();
-	server.attahed.express.post('/Db/Shards', function Shards_split_handler (req, res, next) {
+	server.attached.express.post('/Db/Shards', function Shards_split_handler (req, res, next) {
 		var parsed = req.body;
 		if (!parsed || !parsed['Q/method']) return next();
 		switch (parsed['Q/method']) {
@@ -613,15 +668,13 @@ Utils.listen = function(callback) {
 					_table = parsed.table;
 					_dbTable = parsed.dbTable;
 					_class = parsed['class'];
-					_shard = parsed.shard; // may be '' at initial split
+					_shard = parsed.shard;
 					_shards = JSON.parse(parsed.shards);
 					_part = parsed.part;
 					_parts = JSON.parse(parsed.parts);
 					_where = parsed.where;
-					_log = []; // array of log file handlers according to the phases
+					_log = [];
 					_dbm = new Db_Mysql(_connection);
-					// _timeout shall be at least php timeout plus config reload timeout
-					// to make sure all processes have new config
 					_timeout = 1000 * (Q.Config.get(['Q', 'internal', 'configServer', 'interval'], 60) + Q.Config.get(['Q', 'internal', 'phpTimeout'], 30));
 					try {
 						_rowClass = Q.require(_class.split('_').join('/'));
@@ -631,18 +684,16 @@ Utils.listen = function(callback) {
 						res.send({data: false});
 						break;
 					}
-					// let's check supplied data
-					if (!(_connection && _table && _dbTable && _shards && _class  && _part && _parts && _where)) {
+					if (!(_connection && _table && _dbTable && _shards && _class && _part && _parts && _where)) {
 						_split_log("Insufficient data supplied for shard split, aborting");
 						_reset_split();
 						res.send({data: false});
 						break;
 					} else res.send({data: true});
 					_logServer = [
-							"http://" + req.info.host+":"+req.info.port+"/Q/node",
-							server.address().address
-						];
-					// write 'upcoming.json'
+						"http://" + req.info.host + ":" + req.info.port + "/Q/node",
+						server.address().address
+					];
 					Q.Config.setOnServer(
 						Q.Config.get(['Q', 'internal', 'sharding', 'upcoming'], 'Db/config/upcoming.json'),
 						(new Q.Tree())
@@ -655,53 +706,34 @@ Utils.listen = function(callback) {
 								_split_log("Failed to write '%s'", Q.Config.get(['Q', 'internal', 'sharding', 'upcoming'], 'Db/config/upcoming.json'));
 								_reset_split();
 							} else {
-								// Now 'upcoming' file is ready and after config update we are ready to proceed
-								// give some time for createWriteStream to check file and then send true
-								_log_file = Q.Config.get(['Q', 'internal', 'sharding', 'logs'], 'files'+Q.DS+'Db'+Q.DS+'logs')+ // in 'files/DB/logs' dir
-										Q.DS+'split_'+_connection+'_'+_table+'_'+_shard; // with name 'split_CONNECTION_TABLE_SHARD', later add '_phase_PHASE.log'
-								Utils.preparePath(_log_file, function (err) {
-									if (err) {
-										_split_log("Failed to create directory for logs:", err.message);
-										_reset_split();
-									} else {
-										_log_file_start(1, function () { // on success
-											_split_log("Begin split process for class '"+_class+"', shard '"+_shard+"' ("+_part+")");
-											// wait for config update to start process
-											_setTimeout("activate upcoming config", _split, _timeout);
-										});
-									}
+								_log_file = Q.Config.get(['Q', 'internal', 'sharding', 'logs'], 'files'+Q.DS+'Db'+Q.DS+'logs') +
+										Q.DS+'split_'+_connection+'_'+_table+'_'+_shard;
+								Utils.preparePath(_log_file)
+								.then(function() {
+									_log_file_start(1, function () {
+										_split_log("Begin split process for class '"+_class+"', shard '"+_shard+"' ("+_part+")");
+										_setTimeout("activate upcoming config", _split, _timeout);
+									});
+								})
+								.catch(function(err) {
+									_split_log("Failed to create directory for logs:", err.message);
+									_reset_split();
 								});
 							}
 						}, true);
 				} else res.send({errors: "Split process for class '"+_class+"', shard '"+_shard+"' ("+_part+") is active"});
 				break;
 			case 'switch':
-				// now all log lines are processed,
-				// indexes contain full set of new indexes for _table
-				// _shards contain new shards
-				// we shall update new db config and clear temporary file (unblock writes)
-				// all processes will start writing to new shards
-				// this is done by query handler to be able to restart process
 				res.send({data: true});
 				var i, shardsFile = null,
 					baseName = Q.Config.get(['Q', 'internal', 'sharding', 'config'], 'Db/config/shards.json'),
 					configFiles = Q.Config.get(['Q', 'configFiles'], []),
 					extName = path.extname(baseName);
-				// baseName is the name of the file without extension
-				if ((i = baseName.lastIndexOf(extName)) >= 0)
-					baseName = baseName.substring(0, i);
-				if (!baseName.length) {
-					// who knows how creative user is...
-					baseName = 'Db/config/shards';
-					extName = '.json';
-				}
+				if ((i = baseName.lastIndexOf(extName)) >= 0) baseName = baseName.substring(0, i);
+				if (!baseName.length) { baseName = 'Db/config/shards'; extName = '.json'; }
 				for (i=0; i<configFiles.length; i++) {
-					if (configFiles[i].indexOf(baseName) === 0) {
-						shardsFile = configFiles[i];
-						break;
-					}
+					if (configFiles[i].indexOf(baseName) === 0) { shardsFile = configFiles[i]; break; }
 				}
-				// first create new file for shards config
 				var newShardsFile = baseName+(new Date()).toISOString().replace(/([\-:]|\.\d{3}z$)/gi, '')+extName;
 				if (shardsFile) {
 					Q.Config.getFromServer(shardsFile, function (err, data) {
@@ -716,24 +748,16 @@ Utils.listen = function(callback) {
 				} else _writeShardsConfig({});
 
 				function _writeShardsConfig(data) {
-					// calculate new indexes
-					// get content of previous connection.indexes and connection.shards
 					var local = new Q.Tree(data);
-					// clear indexes config related to currently split table
 					local.clear(['Db', 'connections', _connection, 'indexes', _table]);
 					var connection = Q.Config.get(['Db', 'connections', _connection], {});
 					var indexes = {};
 					if (!connection.indexes || !connection.indexes[_table] || !Object.keys(connection.indexes[_table]).length) {
-						// no sharding yet
 						indexes = _parts;
 					} else {
-						// sharding already started
 						var tmp = connection.indexes[_table].partition;
 						var fields = connection.indexes[_table].fields;
-						// tmp may be object or array
-						// if both are arrays keep array in the config
 						if (Q.typeOf(tmp) === 'array' && Q.typeOf(_parts.partition) === 'array') {
-							// remove first point from array to avoid listing shard twice
 							tmp = tmp.concat(_parts.partition.slice(1));
 							indexes = {partition: tmp.sort(tmp), fields: fields};
 						} else {
@@ -742,19 +766,14 @@ Utils.listen = function(callback) {
 								tmp.forEach(function(val) { o[val] = val; });
 								tmp = o;
 							}
-							// now both are objects
 							Q.extend(tmp, _parts.partition);
 							indexes = {partition: ksort(tmp), fields: fields};
 						}
 					}
-					// set up new indexes
 					local.set(['Db', 'connections', _connection, 'indexes', _table], indexes);
-					// extend shards with new shards config
 					connection = local.get(['Db', 'connections', _connection], {});
 					if (connection.shards) Q.extend(connection.shards, _shards);
 					else connection.shards = _shards;
-
-					// write new file with shards config
 					Q.Config.setOnServer(newShardsFile, local.getAll(), function (err) {
 						if (err) {
 							_split_log("Config file write error ("+newShardsFile+").", err.message);
@@ -762,136 +781,110 @@ Utils.listen = function(callback) {
 							_split_log("Update the config files manually and then delete file '%s'", Q.Config.get(["Q", "internal", "sharding", "upcoming"], 'Db/config/upcoming.json'));
 							_split_log("New shards:", _shards);
 							_split_log("New indexes:", _parts);
-
 						} else {
-							// remove old shards config and upcoming config
-							Q.Config.clearOnServer(
-								'Q/config/bootstrap.json',
-								['Q', 'configFiles',
-									[
-										shardsFile,
-										Q.Config.get([
-											'Q', 'internal', 'sharding', 'upcoming'
-										], 'Db/config/upcoming.json')
-									]
-								], function(err, tree) {
-									if (err) {
-										_split_log("Config file read error (Q/config/bootstrap.json).", err.message);
-										_split_log("NOTE: platform is not writing to shard '"+_shard+"'!!!");
-										_split_log("Update the config file manually and then delete file '%s'", Q.Config.get(["Q", "internal", "sharding", "upcoming"], 'Db/config/upcoming.json'));
-										_split_log("New shards:", _shards);
-										_split_log("New indexes:", _parts);
-									} else {
-										// add new shards config and save
-										tree = new Q.Tree(tree);
-										tree.merge({Q: {configFiles: [newShardsFile]}});
-										Q.Config.setOnServer(
-											'Q/config/bootstrap.json',
-											tree.getAll(),
-											function(err) {
-												if (err) {
-													_split_log("Config file write error (Q/config/bootstrap.json).", err.message);
-													_split_log("NOTE: platform is not writing to shard '"+_shard+"'!!!");
-													_split_log("Update the config file manually and then delete file '%s'", Q.Config.get(["Q", "internal", "sharding", "upcoming"], 'Db/config/upcoming.json'));
-													_split_log("New content for 'Q/config/bootstrap.json':", tree.getAll());
-												} else {
-													// config was written. Now let's update platform
-													_split_log("Finished split process for shard '%s' (%s) in %s", _shard, _part, Q.timeEnd("Db/Shards/split"));
-													_reset_split();
-												}
-											}, true); // setConfig 'Q/config/bootstrap.json'
-									}
-								}, true); // clearConfig 'Q/config/bootstrap.json'
+							Q.Config.clearOnServer('Q/config/bootstrap.json', ['Q', 'configFiles',
+								[shardsFile, Q.Config.get(['Q', 'internal', 'sharding', 'upcoming'], 'Db/config/upcoming.json')]
+							], function(err, tree) {
+								if (err) {
+									_split_log("Config file read error (Q/config/bootstrap.json).", err.message);
+									_split_log("NOTE: platform is not writing to shard '"+_shard+"'!!!");
+									_split_log("Update the config file manually and then delete file '%s'", Q.Config.get(["Q", "internal", "sharding", "upcoming"], 'Db/config/upcoming.json'));
+									_split_log("New shards:", _shards);
+									_split_log("New indexes:", _parts);
+								} else {
+									tree = new Q.Tree(tree);
+									tree.merge({Q: {configFiles: [newShardsFile]}});
+									Q.Config.setOnServer('Q/config/bootstrap.json', tree.getAll(), function(err) {
+										if (err) {
+											_split_log("Config file write error (Q/config/bootstrap.json).", err.message);
+											_split_log("NOTE: platform is not writing to shard '"+_shard+"'!!!");
+											_split_log("Update the config file manually and then delete file '%s'", Q.Config.get(["Q", "internal", "sharding", "upcoming"], 'Db/config/upcoming.json'));
+											_split_log("New content for 'Q/config/bootstrap.json':", tree.getAll());
+										} else {
+											_split_log("Finished split process for shard '%s' (%s) in %s", _shard, _part, Q.timeEnd("Db/Shards/split"));
+											_reset_split();
+										}
+									}, true);
+								}
+							}, true);
 						}
-					}, true); // setConfig newShardsFile
-				} // _writeShardsConfig
+					}, true);
+				}
 				break;
 			case 'log':
-				res.send({data: true}); // in case logging use queryInternal
+				res.send({data: true});
 				if (_logging) {
-					_log[_logging].write(
-						JSON.stringify({
-							shards: parsed.shards,
-							sql: parsed.sql,
-							timestamp: (new Date()).getTime()
-						})+'\n',
-						'utf-8');
+					_log[_logging].write(JSON.stringify({
+						shards: parsed.shards,
+						sql: parsed.sql,
+						timestamp: (new Date()).getTime()
+					})+'\n', 'utf-8');
 				}
 				break;
 			case 'reset':
-				if (!splitting) {
-					res.send({data: false});
-					break;
-				}
+				if (!splitting) { res.send({data: false}); break; }
+				// falls through to writeLog
 			case 'writeLog':
 				res.send({data: true});
 				function _block_error(err, config) {
-						_split_log("Error updating config.", err.message);
-						_split_log("Failed block shard '"+_shard+"'. Log file is been written.");
-						_split_log("Check and fix error, verify if file '"+config+"' exists and contains split information");
-						_split_log("then run 'split.php --log-process' to continue the process");
+					_split_log("Error updating config.", err.message);
+					_split_log("Failed block shard '"+_shard+"'. Log file is been written.");
+					_split_log("Check and fix error, verify if file '"+config+"' exists and contains split information");
+					_split_log("then run 'split.php --log-process' to continue the process");
 				}
 				if (_logging >= Q.Config.get(['Q', 'internal', 'sharding', 'iterations'], 1)) {
-					// lock table, write last log and switch to new config
-					// set up Db_Exception_Blocked response while writing log
 					Q.Config.setOnServer(
 						Q.Config.get('Q', 'internal', 'sharding', 'upcoming', 'Db/config/upcoming.json'),
 						(new Q.Tree()).set(['Db', 'upcoming', _connection, 'block'], true),
 						function (err) {
 							if (err) _block_error(err, config);
 							else {
-								// now we are ready to write last log
-								// need to wait for php timeout
 								_setTimeout("block writing to shard '"+_shard+"'", function(phase) {
 									phase = _logging;
 									_dump_log(phase, function () {
-										Utils.queryInternal('Db/Shards', {'Q/method': 'switch'}, function(err) {
-											if (err) {
-												_split_log("Failed to change config files.", err.message);
-												_split_log("Check and fix error, then run 'split.php --reconfigure' to continue the process");
-											}
-										}, _logServer);
+										Utils.queryInternal('Db/Shards', {'Q/method': 'switch'}, _logServer)
+										.catch(function(err) {
+											_split_log("Failed to change config files.", err.message);
+											_split_log("Check and fix error, then run 'split.php --reconfigure' to continue the process");
+										});
 									});
 								}, _timeout);
 							}
-						}); // Utils.setConfig
+						});
 				} else {
-					// make next log file and start writing it
-					// process file for current phase and start processing the next
 					_log_file_start(_logging + 1, function() {
 						_dump_log(_logging++, function () {
-							Utils.queryInternal('Db/Shards', {'Q/method': 'writeLog'}, function(err) {
-								if (err) {
-									_split_log("Failed to start writion log.", err.message);
-									_split_log("Check and fix error, then run 'split.php --log-process' to continue the process");
-								}
-							}, _logServer);
+							Utils.queryInternal('Db/Shards', {'Q/method': 'writeLog'}, _logServer)
+							.catch(function(err) {
+								_split_log("Failed to start writing log.", err.message);
+								_split_log("Check and fix error, then run 'split.php --log-process' to continue the process");
+							});
 						});
 					});
 				}
 				break;
 			default:
 				return next();
-		} // switch (parsed['Q/method'])
-	}); // server.attached.express.post query
+		}
+	});
 
 	server.attached.express.post('/Q/node', function Shards_split_logger(req, res, next) {
 		var parsed = req.body;
 		if (!parsed || !parsed['Q/method']) return next();
 		switch (parsed['Q/method']) {
-			case 'Db/Shards/log':	// loose logging with sendToNode
+			case 'Db/Shards/log':
 				if (_logging) {
 					_log[_logging].write(JSON.stringify({
 						shards: parsed.shards,
 						sql: parsed.sql,
-						timestamp: (new Date()).getTime()}
-					)+'\n', 'utf-8');
+						timestamp: (new Date()).getTime()
+					})+'\n', 'utf-8');
 				}
 				break;
 			default:
 				return next();
 		}
-	}); // server.attached.express.post sendToNode
+	});
 
 	if (server.address()) callback && callback();
 	else server.once('listening', function () {
@@ -899,7 +892,6 @@ Utils.listen = function(callback) {
 	});
 };
 
-// actually make the split
 function _split() {
 	if (Q.Config.get(['Db', 'upcoming', _connection, 'shard'], null) === null) {
 		_split_log("Splitting cancelled!");
@@ -911,10 +903,7 @@ function _split() {
 	var batches = {};
 	shards.forEach(function(shard) {
 		batches[shard] = Q.batcher(function(rows, params, callbacks) {
-			// insert ['row1', 'row2', ...] to 'shard'
-			if (!rows.length) {
-				return;
-			}
+			if (!rows.length) return;
 			_dbm.reallyConnect(function (client) {
 				var i, s = [];
 				function _escapeRow(row) {
@@ -934,80 +923,74 @@ function _split() {
 					});
 				}
 			}, shard, _shards[shard]);
-		}, {ms: 50, max: 100}); // explicit batch options
+		}, {ms: 50, max: 100});
 	});
 	_logging = 1;
 	var child = require('child_process').fork(
-			Q.CLASSES_DIR+'/Q/Utils/Split.js',
-			[Q.app.DIR, _class, _connection, _dbTable, _shard, _part, JSON.stringify(_parts), _where],
-			{cwd: Q.CLASSES_DIR, env: process.env}
-		).once('exit', function(code, signal) {
-			switch (code) {
-				case 0:
-					child = null;
-					return;
-				case 99:
-					break;
-				default:
-					if (signal) _split_log("Child process died unexpectedly on signal '%s'", signal);
-					else _split_log("Child process died unexpectedly with code %d", code);
-			}
-			_split_log("Split process for '"+_shard+"' ("+_part+") failed!");
-			child = batches = null;
-			_reset_split();
-		}) // on 'exit'
-		.on('message', function (message) {
-			var fail = false;
-			if (!message.type) throw new Error("Message type is not defined");
-			switch (message.type) {
-				case 'start':
-					Q.time("Db/Shards/copy");
-					total = message.count;
-					_timestamp = message.timestamp;
-					break;
-				case 'log':
-					_split_log.apply(this, message.content);
-					break;
-				case 'row':
-					batches[message.shard](message.row, function (err) {
-						count++;
-						if (err) {
-							if (fail) return;
-							fail = true;
-							child.removeAllListeners('message');
-							child.removeAllListeners('exit');
-							for (var shard in batches) batches[shard].cancel();
-							child.kill();
-							batches = null;
-							_split_log("Error processing rows of table '"+_dbTable+"'.", err.message);
-							_split_log("Split process for '"+_shard+"' ("+_part+") failed!");
-							_reset_split();
-						} else if (count === read) {
-							_split_log("Total "+count+" rows from shard '"+_shard
-								+"' ("+_part+") processed in "+Q.timeEnd("Db/Shards/copy"));
-							Utils.queryInternal('Db/Shards', {'Q/method': 'writeLog'}, function(err) {
-								if (err) {
-									_split_log("Failed to start writing log.", err.message);
-									_split_log("Check and fix error, then run 'split.php --log-process' to continue the process");
-								}
-							}, _logServer);
-						}
-					});
-					break;
-				case 'stop':
-					read = message.count;
-					if (read <= count) {
+		Q.CLASSES_DIR+'/Q/Utils/Split.js',
+		[Q.app.DIR, _class, _connection, _dbTable, _shard, _part, JSON.stringify(_parts), _where],
+		{cwd: Q.CLASSES_DIR, env: process.env}
+	).once('exit', function(code, signal) {
+		switch (code) {
+			case 0: child = null; return;
+			case 99: break;
+			default:
+				if (signal) _split_log("Child process died unexpectedly on signal '%s'", signal);
+				else _split_log("Child process died unexpectedly with code %d", code);
+		}
+		_split_log("Split process for '"+_shard+"' ("+_part+") failed!");
+		child = batches = null;
+		_reset_split();
+	}).on('message', function (message) {
+		var fail = false;
+		if (!message.type) throw new Error("Message type is not defined");
+		switch (message.type) {
+			case 'start':
+				Q.time("Db/Shards/copy");
+				total = message.count;
+				_timestamp = message.timestamp;
+				break;
+			case 'log':
+				_split_log.apply(this, message.content);
+				break;
+			case 'row':
+				batches[message.shard](message.row, function (err) {
+					count++;
+					if (err) {
+						if (fail) return;
+						fail = true;
+						child.removeAllListeners('message');
+						child.removeAllListeners('exit');
 						for (var shard in batches) batches[shard].cancel();
-						_split_log("All rows processed before read finished. Exiting.");
 						child.kill();
 						batches = null;
+						_split_log("Error processing rows of table '"+_dbTable+"'.", err.message);
+						_split_log("Split process for '"+_shard+"' ("+_part+") failed!");
 						_reset_split();
+					} else if (count === read) {
+						_split_log("Total "+count+" rows from shard '"+_shard+"' ("+_part+") processed in "+Q.timeEnd("Db/Shards/copy"));
+						Utils.queryInternal('Db/Shards', {'Q/method': 'writeLog'}, _logServer)
+						.catch(function(err) {
+							_split_log("Failed to start writing log.", err.message);
+							_split_log("Check and fix error, then run 'split.php --log-process' to continue the process");
+						});
 					}
-					break;
-				default:
-					throw new Error("Message of type '"+message.type+"' is not supported");
-			}
-		}); // on 'message'
+				});
+				break;
+			case 'stop':
+				read = message.count;
+				if (read <= count) {
+					for (var shard in batches) batches[shard].cancel();
+					_split_log("All rows processed before read finished. Exiting.");
+					child.kill();
+					batches = null;
+					_reset_split();
+				}
+				break;
+			default:
+				throw new Error("Message of type '"+message.type+"' is not supported");
+		}
+	});
 }
 
 function _log_file_start(phase, cb) {
@@ -1017,19 +1000,17 @@ function _log_file_start(phase, cb) {
 		cb && cb();
 	}, _fileTimeout);
 	_log[phase] = require('fs')
-		.createWriteStream(Q.app.DIR+Q.DS+_log_file+'_phase_'+phase+'.log') // relative to application dir
+		.createWriteStream(Q.app.DIR+Q.DS+_log_file+'_phase_'+phase+'.log')
 		.on('error', function(err) {
-			// if log file error occur at any moment we consider split process broken
-			// if log file cannot be created we shall clear timeouts to stop process
 			_split_log("Log file error ("+_log_file+", phase "+phase+").", err.message);
 			_clearTimeout(_t);
-			_reset_split(); // if log file cannot be written the whole process fails
+			_reset_split();
 		}).on('close', _log_pipe.fill(this.phase));
 	_log[phase].phase = phase;
 }
 
 var _buffer = '';
-function _dump_log (phase, onsuccess) {
+function _dump_log(phase, onsuccess) {
 	_log[phase].end('# end');
 	_split_log("Start processing log file '"+_log_file+"' phase "+phase);
 	var log = require('fs')
@@ -1043,15 +1024,13 @@ function _dump_log (phase, onsuccess) {
 			var lines = (_buffer + data).split("\n"), that = this, failed = false;
 			_buffer = lines.pop();
 			lines.forEach(function(line, obj) {
-			if (failed) return;
+				if (failed) return;
 				line = line.replace("\r", '');
-				// here line contains the line from log file
 				if (line[0] !== '#') {
 					try {
 						obj = JSON.parse(line);
 					} catch (e) {
-						// NOTE: this may leave some file handles open
-						_split_log("Error parsing log file'"+_log_file+"' phase "+phase, e);
+						_split_log("Error parsing log file '"+_log_file+"' phase "+phase, e);
 						_split_log("Split process for '"+_shard+"' ("+_part+") failed!");
 						that.removeAllListeners();
 						_reset_split();
@@ -1081,27 +1060,25 @@ function _dump_log (phase, onsuccess) {
 					}
 				}
 			});
-		}) // on data
-		.on('end', function () {
+		}).on('end', function () {
 			log = null;
 			_split_log("Log for phase "+phase+" has been processed");
 			onsuccess && onsuccess();
-		}); // on 'end'
+		});
 }
 
 /**
  * Used to split ids into one or more segments, in order to store millions
  * of files under a directory, without running into limits of various filesystems
  * on the number of files in a directory.
- * Consider using Amazon S3 or another service for uploading files in production.
  * @method splitId
  * @static
  * @param {string} id the id to split
- * @param {integer} [lengths=3] the lengths of each segment (the last one can be smaller)
- * @param {string} [delimiter=path.sep] the delimiter to put between segments
- * @param {string} [internalDelimiter='/'] the internal delimiter, if it is set then only the last part is split, and instances of internalDelimiter are replaced by delimiter
- * @param {string} [checkRegEx] The RegEx to check and throw an exception if id doesn't match. Pass null here to skip the RegEx check.
- * @return {string} the segments, delimited by the delimiter
+ * @param {integer} [lengths=3]
+ * @param {string} [delimiter=path.sep]
+ * @param {string} [internalDelimiter='/']
+ * @param {RegExp} [checkRegEx]
+ * @return {string}
  */
 Utils.splitId = function(id, lengths, delimiter, internalDelimiter, checkRegEx) {
 	if (checkRegEx === undefined) {
@@ -1109,126 +1086,58 @@ Utils.splitId = function(id, lengths, delimiter, internalDelimiter, checkRegEx) 
 	}
 	if (checkRegEx) {
 		if (!id || !id.match(checkRegEx)) {
-			throw new Q.Exception(
-				"Wrong value for {{id}}. Expected {{range}}",
-				{
-					field: 'id', 
-					id: id, 
-					range: checkRegEx
-				}
-			);
+			throw new Q.Exception("Wrong value for {{id}}. Expected {{range}}", {
+				field: 'id', id: id, range: checkRegEx
+			});
 		}
 	}
 	lengths = lengths || 3;
 	delimiter = delimiter || path.sep;
-	if (internalDelimiter === undefined) {
-		internalDelimiter = '/';
-	}
-	var prefix = '';
+	if (internalDelimiter === undefined) internalDelimiter = '/';
 	var parts = [];
 	if (internalDelimiter) {
 		parts = id.split(internalDelimiter);
 		id = parts.pop();
 	}
-	var prefix = parts.length > 0
-		? parts.join(delimiter) + delimiter
-		: '';
-	var segments = [];
-	var pos = 0;
-	var len = id.length;
-	while (pos < len) {
-		segments.push(id.slice(pos, pos += lengths));
-	}
+	var prefix = parts.length > 0 ? parts.join(delimiter) + delimiter : '';
+	var segments = [], pos = 0, len = id.length;
+	while (pos < len) { segments.push(id.slice(pos, pos += lengths)); }
 	return prefix + segments.join(delimiter);
 };
 
 /**
- * Deterministic CID (Content Identifier) for raw content
- *
- * Uses:
- *   CIDv1
- *   codec: raw (0x55)
- *   hash: sha2-256
- *
+ * Deterministic CIDv1 for raw content (sha2-256, raw codec, base32 encoded).
  * @method cid
  * @static
  * @param {String|Buffer} content
- * @return {String} CID string
+ * @return {String}
  */
-Utils.cid = function cid(content)
-{
-	if (content === undefined || content === null) {
-		throw new Error("Q.Utils.cid requires content");
-	}
-
-	if (!Buffer.isBuffer(content)) {
-		content = Buffer.from(String(content), "utf8");
-	}
-
-	const digest = crypto
-		.createHash("sha256")
-		.update(content)
-		.digest();
-
-	/*
-	multihash
-
-	sha2-256 code = 0x12
-	length = 32
-	*/
-
-	const multihash = Buffer.concat([
-		Buffer.from([0x12, 0x20]),
-		digest
-	]);
-
-	/*
-	CIDv1
-
-	<version><codec><multihash>
-
-	version = 1
-	codec = raw = 0x55
-	*/
-
-	const version = Buffer.from([0x01]);
-	const codec = Buffer.from([0x55]);
-
-	const cidBytes = Buffer.concat([
-		version,
-		codec,
-		multihash
-	]);
-
+Utils.cid = function cid(content) {
+	if (content === undefined || content === null) throw new Error("Q.Utils.cid requires content");
+	if (!Buffer.isBuffer(content)) content = Buffer.from(String(content), "utf8");
+	var digest = crypto.createHash("sha256").update(content).digest();
+	var multihash = Buffer.concat([Buffer.from([0x12, 0x20]), digest]);
+	var cidBytes = Buffer.concat([Buffer.from([0x01]), Buffer.from([0x55]), multihash]);
 	return Utils.base32(cidBytes);
 };
 
 /**
- * Base32 encoding (CID compatible)
+ * Base32 encoding (lowercase, CID compatible, no padding).
+ * @method base32
+ * @static
+ * @param {Buffer} buffer
+ * @return {String}  Prefixed with 'b'
  */
-Utils.base32 = function (buffer)
-{
-	const alphabet = "abcdefghijklmnopqrstuvwxyz234567";
-
-	let bits = 0;
-	let value = 0;
-	let output = "";
-
-	for (let i = 0; i < buffer.length; i++) {
+Utils.base32 = function(buffer) {
+	var alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+	var bits = 0, value = 0, output = "";
+	for (var i = 0; i < buffer.length; i++) {
 		value = (value << 8) | buffer[i];
 		bits += 8;
-
-		while (bits >= 5) {
-			output += alphabet[(value >>> (bits - 5)) & 31];
-			bits -= 5;
-		}
+		while (bits >= 5) { output += alphabet[(value >>> (bits - 5)) & 31]; bits -= 5; }
 	}
-
-	if (bits > 0) {
-		output += alphabet[(value << (5 - bits)) & 31];
-	}
-
+	if (bits > 0) output += alphabet[(value << (5 - bits)) & 31];
 	return "b" + output;
-}
+};
 
 module.exports = Utils;
