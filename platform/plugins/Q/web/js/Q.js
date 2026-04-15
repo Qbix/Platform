@@ -7967,7 +7967,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 			var hasUpgraded = dbs.some(db => (db.version || 0) > 1);
 			if (!hasUpgraded && !Q.IndexedDB.onEmptyDatabases.occurred) {
 				if (false === Q.handle(Q.IndexedDB.onEmptyDatabases, Q.IndexedDB)) {
-					Q.handle(callback, null, new Error("Q.IndexedDB.open: aborted due to empty databases"));
+					Q.handle(callback, null, [new Error("Q.IndexedDB.open: aborted due to empty databases")]);
 					return;
 				}
 			}
@@ -7990,7 +7990,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 		};
 
 		req.onerror = function (e) {
-			Q.handle(callback, null, e.target.error || new Error("IndexedDB open error"));
+			Q.handle(callback, null, [e.target.error || new Error("IndexedDB open error")]);
 		};
 
 		req.onsuccess = function () {
@@ -8029,7 +8029,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 
 			if (storeNeedsRecreate) {
 				if (triedCreatingStore || tryCreatingStore) {
-                    Q.handle(callback, null, new Error("Store creation failed after upgrade"), db);
+					Q.handle(callback, null, [new Error("Store creation failed after upgrade"), db]);
 					return;
 				}
 				tryCreatingStore = true;
@@ -8042,7 +8042,7 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 				return;
 			}
 
-			Q.handle(callback, null, null, db);
+			Q.handle(callback, null, [null, db]);
 		};
 	}
 }, {
