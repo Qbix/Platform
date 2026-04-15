@@ -4482,7 +4482,7 @@ Q.batcher.factory = function _Q_batcher_factory(collection, baseUrl, tail, slotN
 	var name = [baseUrl, tail, slotName, fieldName].join(delimiter);
 	if (f = Q.getObject(name, collection, delimiter)) {
 		return f;
-	} 
+	}
 	f = Q.batcher(function _Q_batcher_factory_function(subjects, args, callbacks) {
 		var o = Q.extend({
 			method: 'post',
@@ -4502,9 +4502,10 @@ Q.batcher.factory = function _Q_batcher_factory(collection, baseUrl, tail, slotN
 			}
 			var request = this;
 			if (!response.slots) {
-				Q.each(response.slots.batch, function (k) {
-					callbacks[k][0].call(this, "The slots field is missing", null, request);
+				Q.each(callbacks, function (k, cb) {
+					cb[0].call(response, "The slots field is missing", null, request);
 				});
+				return;
 			}
 			Q.each(response.slots.batch, function (k, result) {
 				if (result && result.errors) {
@@ -7893,6 +7894,7 @@ Q.Storage = (function () {
 		removeItem: function (k) { delete mem[k]; }
 	};
 })();
+
 
 /**
  * Functions related to IndexedDB, when it is available
