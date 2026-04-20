@@ -4248,7 +4248,7 @@ Pp.add = function _Q_pipe_add(requires, maxTimes, callback) {
  *   Or pass the name (string) or names (array) of the field(s) to ignore in subsequent pipe runs.
  * @return {Function} Returns a callback you can pass to other functions.
  */
-Pp.fill = function _Q_pipe_fill(field, ignore) {
+Pp.fill = function _Q_pipe_fill(field, ignore=false) {
 	if (ignore === true) {
 		this.ignore[this.i] = true;
 	} else if (typeof ignore === 'string') {
