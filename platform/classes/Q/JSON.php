@@ -98,7 +98,7 @@ class Q_JSON
 
 		return $result;
 	}
-
+	
 	private static function json_replace($m)
 	{
 		return str_repeat("\t", strlen($m[0]) / 4);

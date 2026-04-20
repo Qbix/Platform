@@ -659,6 +659,80 @@ Q.batcher.options = {
 	ms: 50
 };
 
+
+/**
+ * Used to create a basic batcher function, given only the url.
+ * @static
+ * @method batcher.factory
+ * @param {Object} collection An object to contain all the batcher functions
+ * @param {String} baseUrl The base url of the webservice built to support batch requests.
+ * @param {String} tail The rest of the url of the webservice built to support batch requests.
+ * @param {String} slotName The name of the slot to request. Defaults to "batch".
+ * @param {String} fieldName The name of the data field. Defaults to "batch".
+ * @param {Object} [options={}] Any additional options to pass to Q.req, as well as:
+ * @param {number} [options.max] Passed as option to Q.batcher
+ * @param {number} [options.ms] Passed as option to Q.batcher
+ * @param {Function} [options.preprocess] Optional function calculating a data structure to JSON stringify into the data field
+ * @return {Function} A function with any number of non-function arguments followed by
+ *  one function which is treated as a callback and passed (errors, content)
+ *  where content is whatever is returned in the slots.
+ */
+Q.batcher.factory = function _Q_batcher_factory(collection, baseUrl, tail, slotName, fieldName, options) {
+	if (!collection) {
+		collection = {};
+	}
+	if (slotName === undefined) {
+		slotName = 'batch';
+	}
+	if (fieldName === undefined) {
+		fieldName = 'batch';
+	}
+	if (tail && tail[0] !== '/') {
+		tail = '/' + tail;
+	}
+	var delimiter = "\t", f;
+	var name = [baseUrl, tail, slotName, fieldName].join(delimiter);
+	if (f = Q.getObject(name, collection, delimiter)) {
+		return f;
+	} 
+	f = Q.batcher(function _Q_batcher_factory_function(subjects, args, callbacks) {
+		var o = Q.extend({
+			method: 'post',
+			fields: {}
+		}, options);
+		var result = options && options.preprocess
+			? options.preprocess(args)
+			: {args: args};
+		o.fields[fieldName] = JSON.stringify(result);
+		return Q.req(baseUrl+tail, slotName, function (err, response) {
+			var error = err || response.errors;
+			if (error) {
+				Q.each(callbacks, function (k, cb) {
+					cb[0].call(response, error, response);
+				});
+				return;
+			}
+			var request = this;
+			if (!response.slots) {
+				Q.each(callbacks, function (k, cb) {
+					cb[0].call(response, "The slots field is missing", null, request);
+				});
+				return;
+			}
+			Q.each(response.slots.batch, function (k, result) {
+			Q.each(response.slots.batch, function (k, result) {
+				if (result && result.errors) {
+					callbacks[k][0].call(this, result.errors, null, request);
+				} else {
+					callbacks[k][0].call(this, null, (result && result.slots) || {}, request);
+				}
+			});
+		}, o);
+	}, options);
+	Q.setObject(name, f, collection, delimiter);
+	return f;
+};
+
 /**
  * Wraps a getter function to provide support for re-entrancy, cache and throttling.
  *  It caches based on all non-function arguments which were passed to the function.
@@ -2521,6 +2595,94 @@ Q.listen = function _Q_listen(options, callback) {
 		Q.emit('request', req, res);
 		next();
 	});
+
+	// Handle some methods
+
+	var _methodHandlers = {};
+
+	// IPC + dispatch middleware. Runs for all POSTs to /Q/node.
+	app.post('/Q/node', function Q_ipc_dispatch(req, res, next) {
+		var parsed = req.body;
+		if (!parsed || !parsed['Q/method'] || !req.internal || !req.validated) {
+			return next();
+		}
+
+		// Extract framework-level IPC fields from the signed payload.
+		var jobId   = parsed['Q.jobId']   || null;
+		var webhook = parsed['Q.webhook'] || null;
+		var echo    = parsed['Q.echo']    || null;
+
+		var doneCalled = false;
+		var ctx = {
+			jobId: jobId,
+			hasWebhook: !!webhook,
+			done: function (result) {
+				if (doneCalled) {
+					return Q.log('Q.ipc: done() called multiple times for ' + jobId);
+				}
+				doneCalled = true;
+				if (!webhook) return;
+				Q.Utils.sendToPHP(webhook, {
+					'Q.jobId': jobId,
+					'Q.echo':  echo,
+					result:    result
+				}).catch(function (err) {
+					Q.log('Q.ipc webhook post failed for ' + jobId + ': ' + err.message);
+				});
+			}
+		};
+
+		var method = parsed['Q/method'];
+		var handlers = _methodHandlers[method];
+		if (!handlers || !handlers.length) {
+			return next();
+		}
+
+		// Multiple handlers allowed per method; run them in registration order.
+		// Handlers can opt to send a response via res; if none does, fall through.
+		var responded = false;
+		var wrappedRes = Object.create(res);
+		wrappedRes.send = function () {
+			responded = true;
+			return res.send.apply(res, arguments);
+		};
+
+		try {
+			handlers.forEach(function (h) { h(parsed, req, wrappedRes, ctx); });
+		} catch (e) {
+			Q.log('Q.ipc handler error for ' + method + ': ' + e.message);
+		}
+
+		if (!responded) {
+			return next();
+		}
+	});
+
+	// Expose registration API on the returned server object.
+	server.addMethod = function (name, handler) {
+		if (typeof handler !== 'function') {
+			throw new Q.Error('server.addMethod: handler must be a function');
+		}
+		if (!_methodHandlers[name]) {
+			_methodHandlers[name] = [];
+		}
+		_methodHandlers[name].push(handler);
+		return server;
+	};
+	server.removeMethod = function (name, handler) {
+		if (!_methodHandlers[name]) return server;
+		if (!handler) {
+			delete _methodHandlers[name];
+		} else {
+			_methodHandlers[name] = _methodHandlers[name].filter(function (h) {
+				return h !== handler;
+			});
+		}
+		return server;
+	};
+	server.methods = function () {
+		return Object.keys(_methodHandlers);
+	};
 
 	// SOCKET HANDLING
 	if (isSocket) {

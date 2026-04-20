@@ -95,6 +95,26 @@ class Q_Request
 	}
 
 	/**
+	 * Check whether the current request came from this installation's Node.js process.
+	 * The Q/before/Q_objects hook sets SAFEBOX_NODE_REQUEST=true after verifying
+	 * loopback + User-Agent + HMAC-SHA1. This method reads that flag.
+	 * Falls back to loopback + UA check if the hook didn't run (misconfiguration).
+	 * @method isFromNode
+	 * @static
+	 * @return {boolean}
+	 */
+	static function isFromNode()
+	{
+		if (!empty($_SERVER['SAFEBOX_NODE_REQUEST'])) {
+			return true;
+		}
+		// Fallback: loopback + UA only (no HMAC — config error path)
+		$addr = Q::ifset($_SERVER, 'REMOTE_ADDR', '');
+		if ($addr !== '127.0.0.1' && $addr !== '::1') return false;
+		return Q::ifset($_SERVER, 'HTTP_USER_AGENT', '') === 'Node/Q.Utils';
+	}
+
+	/**
 	 * Converts the specified fields from underscores
 	 * @param {array} $fieldNames An array of field names
 	 * @param {array} [$source=$_REQUEST] The source array

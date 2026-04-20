@@ -19,141 +19,26 @@ var Db_Mysql = Q.require('Db/Mysql');
 var Utils = {};
 
 /**
- * Generate signature for an object
- * @method signature
- * @param {Object|String} data The data to sign
- * @param {String} [secret] A secret to use for signature. If null Q/internal/secret used
+ * Generate a local secret that is stable but hard to guess from outside.
+ * Mirrors Q_Utils::generateLocalSecret() in PHP.
+ * @method generateLocalSecret
+ * @private
  * @return {string}
- * @throws {Q.Exception} if secret is not defined
  */
-Utils.signature = function (data, secret) {
-	secret = secret || Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		throw new Q.Exception('Q.Utils.signature is expecting a secret');
-	}
-	if (typeof(data) !== 'string') {
-		data = http_build_query(ksort(data)).replace(/\+/g, '%20');
-	}
-	return Q.Crypto.HmacSHA1(data, secret).toString();
-};
-
-/**
- * Sign data by adding signature field
- * @method sign
- * @param {object} data The data to sign
- * @param {array} fieldKeys Optionally specify the array key path for the signature field
- * @return {object} The data object is mutated and returned
- */
-Utils.sign = function (data, fieldKeys) {
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		return data;
-	}
-	if (!fieldKeys || !fieldKeys.length) {
-		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
-		fieldKeys = ['Q.'+sf];
-	}
-	var ref = data;
-	for (var i=0, l=fieldKeys.length; i<l-1; ++i) {
-		if (!(fieldKeys[i] in ref)) {
-			ref[ fieldKeys[i] ] = {};
+function generateLocalSecret() {
+	var os = require('os');
+	var parts = [
+		os.hostname(),
+		os.type(),
+		__filename
+	];
+	try {
+		if (fs.existsSync('/etc/machine-id')) {
+			parts.push(fs.readFileSync('/etc/machine-id', 'utf8').trim());
 		}
-		ref = ref[ fieldKeys[i] ];
-	}
-	ref[ fieldKeys[fieldKeys.length-1] ] = Utils.signature(data, secret);
-	return data;
-};
-
-/**
- * Validate some signed data.
- * @method validate
- * @param {object} data the signed data to validate
- * @param {array} fieldKeys Optionally specify the array key path for the signature field
- * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
- */
-Utils.validate = function(data, fieldKeys) {
-	var temp = Q.copy(data, null, 100);
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		return true;
-	}
-	if (!fieldKeys || !fieldKeys.length) {
-		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
-		fieldKeys = ['Q.'+sf];
-	}
-	var ref = temp;
-	for (var i=0, l=fieldKeys.length; i<l-1; ++i) {
-		if (!(fieldKeys[i] in ref)) {
-			ref[ fieldKeys[i] ] = {};
-		}
-		ref = ref[ fieldKeys[i] ];
-	}
-	var sig = ref[ fieldKeys[fieldKeys.length-1] ];
-	delete ref[ fieldKeys[fieldKeys.length-1] ];
-	return (sig === Utils.signature(temp, secret));
-};
-
-/**
- * express server middleware to validate signature of internal request
- * @method validateRequest
- * @static
- * @param {Object} req
- * @param {Object} res
- * @param {Function} next
- */
-Utils.validateRequest = function (req, res, next) {
-	// merge in GET data
-	if (req.body) Q.extend(req.body, req.query);
-	else req.body = req.query;
-	// validate signature
-	if (Utils.validate(req.body)) {
-		next();
-	} else {
-		console.log(req.body);
-		console.log("Request validation failed");
-		res.send(JSON.stringify({errors: "Invalid signature"}), 403); // forbidden
-	}
-};
-
-/**
- * Validates a capability signed by our own server's secret key.
- * The capability must have "startTime", "endTime" in milliseconds since UNIX epoch,
- * and must also be signed with Q.Utils.sign() or equivalent implementation.
- * @method validateCapability
- * @static
- * @param {Object|null} capability if null, then returns false
- * @param {Array|String} permissions
- * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
- */
-Utils.validateCapability = function (capability, permissions) {
-	var now = Date.now() / 1000;
-	var cp = capability && capability.permissions || [];
-	if (!capability
-	|| !Utils.validate(capability)
-	|| Q.isEmpty(cp)
-	|| capability.startTime > now
-	|| capability.endTime < now) {
-		return false;
-	}
-	if (typeof permissions === 'string') {
-		permissions = [permissions];
-	}
-	var config = Q.Config.get(['Q', 'capability', 'permissions'], []);
-	var search = {};
-	cp.forEach(function (p) {
-		search[p] = true;
-		if (config[p]) {
-			// add also long-form permission name
-			search[config[p]] = true;
-		}
-	});
-	for (var i=0, l=permissions.length; i<l; ++i) {
-		if (!search[permissions[i]]) {
-			return false;
-		}
-	}
-	return true;
-};
+	} catch (e) {}
+	return crypto.createHash('sha256').update(parts.join("\t")).digest('hex');
+}
 
 function ksort(obj) {
 	var i, sorted = {}, keys = Object.keys(obj);
@@ -215,6 +100,145 @@ function http_build_query (formdata, numeric_prefix, arg_separator) {
 
 	return tmp.join(arg_separator);
 }
+
+/**
+ * Generate signature for an object
+ * @method signature
+ * @param {Object|String} data The data to sign
+ * @param {String} [secret] A secret to use for signature. If null Q/internal/secret used
+ * @return {string}
+ */
+Utils.signature = function (data, secret) {
+	secret = secret || Q.Config.get(['Q', 'internal', 'secret'], null);
+	if (!secret) {
+		secret = generateLocalSecret();
+	}
+	if (typeof(data) !== 'string') {
+		data = http_build_query(ksort(data)).replace(/\+/g, '%20');
+	}
+	return Q.Crypto.HmacSHA1(data, secret).toString();
+};
+
+/**
+ * Sign data by adding signature field
+ * @method sign
+ * @param {object} data The data to sign
+ * @param {array} fieldKeys Optionally specify the array key path for the signature field
+ * @return {object} The data object is mutated and returned
+ */
+Utils.sign = function (data, fieldKeys) {
+	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
+	if (!secret) {
+		secret = generateLocalSecret();
+	}
+	if (!fieldKeys || !fieldKeys.length) {
+		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
+		fieldKeys = ['Q.'+sf];
+	}
+	var ref = data;
+	for (var i=0, l=fieldKeys.length; i<l-1; ++i) {
+		if (!(fieldKeys[i] in ref)) {
+			ref[ fieldKeys[i] ] = {};
+		}
+		ref = ref[ fieldKeys[i] ];
+	}
+	var key = fieldKeys[fieldKeys.length-1];
+	// Remove existing signature before computing, matching PHP unset($ref[$ef]) behavior
+	delete ref[key];
+	ref[key] = Utils.signature(data, secret);
+	return data;
+};
+
+/**
+ * Validate some signed data.
+ * @method validate
+ * @param {object} data the signed data to validate
+ * @param {array} fieldKeys Optionally specify the array key path for the signature field
+ * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
+ */
+Utils.validate = function(data, fieldKeys) {
+	var temp = Q.copy(data, null, 100);
+	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
+	if (!secret) {
+		secret = generateLocalSecret();
+	}
+	if (!fieldKeys || !fieldKeys.length) {
+		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
+		fieldKeys = ['Q.'+sf];
+	}
+	var ref = temp;
+	for (var i=0, l=fieldKeys.length; i<l-1; ++i) {
+		if (!(fieldKeys[i] in ref)) {
+			ref[ fieldKeys[i] ] = {};
+		}
+		ref = ref[ fieldKeys[i] ];
+	}
+	var sig = ref[ fieldKeys[fieldKeys.length-1] ];
+	delete ref[ fieldKeys[fieldKeys.length-1] ];
+	return (sig === Utils.signature(temp, secret));
+};
+
+/**
+ * express server middleware to validate signature of internal request
+ * @method validateRequest
+ * @static
+ * @param {Object} req
+ * @param {Object} res
+ * @param {Function} next
+ */
+Utils.validateRequest = function (req, res, next) {
+	// merge in GET data
+	if (req.body) Q.extend(req.body, req.query);
+	else req.body = req.query;
+	// validate signature
+	if (Utils.validate(req.body)) {
+		next();
+	} else {
+		console.log(req.body);
+		console.log("Request validation failed");
+		res.send(JSON.stringify({errors: "Invalid signature"}), 403); // forbidden
+	}
+};
+
+/**
+ * Validates a capability signed by our own server's secret key.
+ * The capability must have "startTime", "endTime" in seconds since UNIX epoch,
+ * and must also be signed with Q.Utils.sign() or equivalent implementation.
+ * @method validateCapability
+ * @static
+ * @param {Object|null} capability if null, then returns false
+ * @param {Array|String} permissions
+ * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
+ */
+Utils.validateCapability = function (capability, permissions) {
+	var now = Date.now() / 1000; // seconds, matching PHP time()
+	var cp = capability && capability.permissions || [];
+	if (!capability
+	|| !Utils.validate(capability)
+	|| Q.isEmpty(cp)
+	|| capability.startTime > now
+	|| capability.endTime < now) {
+		return false;
+	}
+	if (typeof permissions === 'string') {
+		permissions = [permissions];
+	}
+	var config = Q.Config.get(['Q', 'capability', 'permissions'], []);
+	var search = {};
+	cp.forEach(function (p) {
+		search[p] = true;
+		if (config[p]) {
+			// add also long-form permission name
+			search[config[p]] = true;
+		}
+	});
+	for (var i=0, l=permissions.length; i<l; ++i) {
+		if (!search[permissions[i]]) {
+			return false;
+		}
+	}
+	return true;
+};
 
 /**
  * Issues an HTTP request and returns a Promise.
@@ -457,7 +481,7 @@ Utils.queryInternal = function(handler, data, url, callback) {
  *
  * @method sendToPHP
  * @static
- * @param {String} path  Route path, e.g. "Safebox/task"
+ * @param {String} path  Route path, e.g. "Safebox/task" or a URL that starts with "http://" or "https://"
  * @param {Object} data  Payload to sign and send
  * @param {Object} [options={}]
  * @param {String} [options.method='POST']  Logical method, encoded as Q_method in body
@@ -466,32 +490,36 @@ Utils.queryInternal = function(handler, data, url, callback) {
  * @return {Promise<Object>}  Resolves to response slots object
  */
 Utils.sendToPHP = function(path, data, options) {
-	if (!path) throw new Q.Exception("Q.Utils.sendToPHP: path must be defined");
-	if (!data || typeof data !== 'object') throw new Q.Exception("Q.Utils.sendToPHP: data must be an object");
+    if (!path) throw new Q.Exception("Q.Utils.sendToPHP: path must be defined");
+    if (!data || typeof data !== 'object') throw new Q.Exception("Q.Utils.sendToPHP: data must be an object");
 
-	options = options || {};
-	var method  = (options.method || 'POST').toUpperCase();
-	var baseUrl = Q.Config.expect(['Q', 'web', 'appRootUrl']);
-	var url     = baseUrl + '/action.php/' + path;
+    options = options || {};
+    var method  = (options.method || 'POST').toUpperCase();
+    
+    // Accept either a full URL or a path to be expanded against appRootUrl.
+    var url;
+    if (/^https?:\/\//i.test(path)) {
+        url = path;
+    } else {
+        var baseUrl = Q.Config.expect(['Q', 'web', 'appRootUrl']);
+        url = baseUrl + '/action.php/' + path;
+    }
 
-	// Encode the logical method in the body so PHP can dispatch on it
-	// without relying on the HTTP method (which is always POST from Node).
-	// PHP reads: $method = Q::ifset($req, 'Q_method', Q_Request::method());
-	var payload = Object.assign({}, data, { Q_method: method });
-	var signed  = Utils.sign(payload, options.fieldKeys);
+    var payload = Object.assign({}, data, { Q_method: method });
+    var signed  = Utils.sign(payload, options.fieldKeys);
 
-	return _request(method, url, signed, options.userAgent || 'Node/Q.Utils')
-	.then(function(body) {
-		var parsed;
-		try { parsed = JSON.parse(body); } catch(e) {
-			throw new Error('Q.Utils.sendToPHP: invalid JSON response from ' + path + ': ' + body);
-		}
-		if (parsed.errors && parsed.errors.length) {
-			var err = parsed.errors[0];
-			throw new Error(err && err.message ? err.message : JSON.stringify(err));
-		}
-		return parsed.slots || parsed;
-	});
+    return _request(method, url, signed, options.userAgent || 'Node/Q.Utils')
+    .then(function(body) {
+        var parsed;
+        try { parsed = JSON.parse(body); } catch(e) {
+            throw new Error('Q.Utils.sendToPHP: invalid JSON response from ' + path + ': ' + body);
+        }
+        if (parsed.errors && parsed.errors.length) {
+            var err = parsed.errors[0];
+            throw new Error(err && err.message ? err.message : JSON.stringify(err));
+        }
+        return parsed.slots || parsed;
+    });
 };
 
 /**

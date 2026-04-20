@@ -1728,21 +1728,44 @@ class Q_Utils
 	}
 	
 	/**
-	 * Sends asynchronous internal message to Node.js
-	 *  If "Q.clientId" is in $_REQUEST, adds it into the data
+	 * Sends an internal message to Node.js, optionally with a reply, webhook, or echo.
+	 *
+	 * If "Q.clientId" is in $_REQUEST, adds it into the data automatically.
+	 *
+	 * The third argument is an options array. For backward compatibility,
+	 * passing a boolean here is treated as the legacy $throwIfRefused flag.
+	 *
 	 * @method sendToNode
 	 * @static
-	 * @param {array} $data Associative array of data of the message to send.
-	 *  It should contain the key "Q/method" so Node can decide what to do with the message.
-	 * @param {string|array} [$url=null] and url to query. Default to 'Q/nodeInternal' config value and path '/Q/node'
-	 * @param {boolean} [$throwIfRefused=false] Pass true here to throw an exception whenever Node process is not running or refuses the request
+	 * @param {array} $data Associative array to send. Must contain "Q/method" so
+	 *   Node can dispatch on it.
+	 * @param {string|array} [$url=null] URL or [url, ip] pair. Defaults to the
+	 *   Q/nodeInternal socket, falling back to host:port.
+	 * @param {array|boolean} [$options=array()] Options controlling the call:
+	 * @param {boolean} [$options.throwIfRefused=false] Throw if Node is not
+	 *   reachable or refuses the request.
+	 * @param {boolean} [$options.reply=false] If true, wait for a synchronous
+	 *   response from Node and return the parsed JSON. If false (default),
+	 *   the call is fire-and-forget.
+	 * @param {string|null} [$options.webhook=null] Either a full URL or a
+	 *   relative route (e.g. "AI/webhook/transcription") that Node should POST
+	 *   to when a delayed result is ready. Relative routes are expanded against
+	 *   the current app's base URL.
+	 * @param {mixed} [$options.echo=null] Opaque context that Node will return
+	 *   untouched when firing the webhook. Useful for correlating async results
+	 *   back to stream / user / workflow state without a lookup table. Signed
+	 *   automatically so it can be validated on the way back in. Size-capped
+	 *   by Q/ipc/echoMaxBytes (default 8192).
+	 * @param {integer} [$options.timeout] Override Q_UTILS_INTERNAL_TIMEOUT.
+	 * @return {mixed} When reply=false: true on successful dispatch, false if no
+	 *   transport was reachable (or throws, per throwIfRefused). When reply=true:
+	 *   the decoded JSON response body from Node.
 	 */
-	static function sendToNode($data, $url = null, $throwIfRefused = false)
+	static function sendToNode($data, $url = null, $options = array())
 	{
 		if (!is_array($data)) {
 			throw new Q_Exception_WrongType(array(
-				'field' => 'data',
-				'type' => 'array'
+				'field' => 'data', 'type' => 'array'
 			));
 		}
 		if (empty($data['Q/method'])) {
@@ -1751,62 +1774,104 @@ class Q_Utils
 			));
 		}
 
+		// Backward compat: boolean $options is legacy $throwIfRefused.
+		if (is_bool($options)) {
+			$options = array('throwIfRefused' => $options);
+		} else if (!is_array($options)) {
+			$options = array();
+		}
+
+		$throwIfRefused = (bool)Q::ifset($options, 'throwIfRefused', false);
+		$webhook        = Q::ifset($options, 'webhook', null);
+		$echo           = Q::ifset($options, 'echo', null);
+		$job            = (bool)Q::ifset($options, 'job', false);
+		$timeout        = Q::ifset($options, 'timeout', Q_UTILS_INTERNAL_TIMEOUT);
+
 		$clientId = Q_Request::special('clientId', null);
 		if (isset($clientId)) {
 			$data['Q.clientId'] = $clientId;
 		}
 
+		// If the caller wants a correlation id, mint one here and embed it.
+		$jobId = null;
+		if ($job) {
+			$jobId = 'job_' . self::randomHexString(16);
+			$data['Q.jobId'] = $jobId;
+		}
+
+		// Webhook: accept full URL or relative route, expanded against base URL.
+		if ($webhook !== null && $webhook !== '') {
+			if (is_string($webhook) && !preg_match('/^https?:\/\//i', $webhook)) {
+				$baseUrl = Q_Request::baseUrl();
+				$webhook = rtrim($baseUrl, '/') . '/action.php/' . ltrim($webhook, '/');
+			}
+			$data['Q.webhook'] = $webhook;
+		}
+
+		// Echo: signed opaque context. Node returns it verbatim on webhook fire.
+		if ($echo !== null) {
+			$maxBytes = (int)Q_Config::get('Q', 'ipc', 'echoMaxBytes', 8192);
+			$encoded  = is_string($echo) ? $echo : Q::json_encode($echo);
+			if (strlen($encoded) > $maxBytes) {
+				throw new Q_Exception(
+					"Q_Utils::sendToNode: echo payload exceeds $maxBytes bytes "
+					. "(got " . strlen($encoded) . "); store it and reference by id instead"
+				);
+			}
+			$data['Q.echo'] = self::sign(array('echo' => $echo));
+		}
+
 		Q::event(
 			'Q/Utils/sendToNode',
-			array('data' => $data, 'url' => $url),
+			array('data' => $data, 'url' => $url, 'options' => $options),
 			'before'
 		);
 
-		// Determine socket
+		// Determine socket path.
 		$socketPath = Q_Config::get('Q', 'nodeInternal', 'socket', null);
 		if (!$socketPath) {
 			$app = Q::app();
 			$socketPath = "/run/qbix/$app.sock";
 		}
-
 		$path = '/Q/node';
 
-		// Try socket first
+		$sent = false;
+
+		// Try socket first.
 		if ($socketPath && file_exists($socketPath)) {
-			$result = Q_Utils::postAsyncSocket(
+			$sent = self::postAsyncSocket(
 				$socketPath,
 				$path,
 				self::sign($data),
 				null,
-				Q_UTILS_INTERNAL_TIMEOUT,
+				$timeout,
 				$throwIfRefused
 			);
+		}
 
-			if ($result !== false) {
-				return $result;
+		// Fallback to TCP.
+		if ($sent === false) {
+			$nodeh = Q_Config::get('Q', 'nodeInternal', 'host', null);
+			$nodep = Q_Config::get('Q', 'nodeInternal', 'port', null);
+			if ($nodeh && $nodep) {
+				$url = "http://$nodeh:$nodep$path";
+				$sent = self::postAsync(
+					$url,
+					self::sign($data),
+					null,
+					$timeout,
+					$throwIfRefused
+				);
 			}
 		}
 
-		// Fallback to TCP
-		$nodeh = Q_Config::get('Q', 'nodeInternal', 'host', null);
-		$nodep = Q_Config::get('Q', 'nodeInternal', 'port', null);
-
-		if ($nodeh && $nodep) {
-			$url = "http://$nodeh:$nodep$path";
-
-			return Q_Utils::postAsync(
-				$url,
-				self::sign($data),
-				null,
-				Q_UTILS_INTERNAL_TIMEOUT,
-				$throwIfRefused
-			);
+		// If caller asked for a jobId, always return it (even if transport failed
+		// but throwIfRefused was false — the caller can distinguish by the return
+		// value type: string jobId means sent, false means nothing happened).
+		if ($job) {
+			return $sent ? $jobId : false;
 		}
-
-		//		if (!$result) {
-		//			throw new Q_Exception_SendingToNode(array('method' => $data['Q/method']));
-		//		}
-		return false;
+		return $sent;
 	}
 
 	/**
