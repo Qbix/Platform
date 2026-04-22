@@ -24,7 +24,8 @@ Q.exports(function (Q) {
 	 *
 	 * The preamble is injected into the sandbox but NOT included in the
 	 * execution hash — it is deterministically derived from methodNames
-	 * which is already part of the hashed execution record.
+	 * which IS included in the hash (sorted) so the available method surface
+	 * is recorded authoritatively.
 	 *
 	 * @method buildPreamble
 	 * @param {Array} methodNames Flat list of method keys e.g. ["streams.get", ...]
@@ -94,6 +95,12 @@ Q.exports(function (Q) {
 			db: !!(defaults && defaults.db)
 		};
 		this.worker = null;
+		// FIX (Bug 10): track whether this worker has ever run in deterministic mode.
+		// Deterministic mode uses Object.defineProperty(Math, "random", {configurable:false})
+		// which cannot be undone. Reusing the worker for a non-deterministic run would
+		// silently return seeded random numbers. If true, run() must dispose the worker
+		// after use regardless of opts.name.
+		this._deterministicBurned = false;
 	}
 
 	SandboxRunner.prototype.createWorker = function () {
@@ -112,6 +119,24 @@ Q.exports(function (Q) {
 				Object.defineProperty(global, "__filename", { value: undefined, writable: false, configurable: false });
 				Object.defineProperty(global, "__dirname",  { value: undefined, writable: false, configurable: false });
 			} catch (e) {}
+
+			// FIX (Bug 16): fail-closed assertion. If any of the escape hatches is still
+			// reachable after the hardening block above, crash the worker before it ever
+			// accepts user code. A silent hardening failure would produce a sandbox that
+			// LOOKS secure but leaks require/process to every tool that runs in it.
+			if (typeof require   !== 'undefined' ||
+				typeof process   !== 'undefined' ||
+				typeof module    !== 'undefined' ||
+				typeof exports   !== 'undefined' ||
+				typeof __filename!== 'undefined' ||
+				typeof __dirname !== 'undefined') {
+				parentPort.postMessage({
+					type: "done", ok: false,
+					error: "Sandbox hardening failed — escape hatches still reachable"
+				});
+				// Intentionally do not register message handler — worker becomes inert.
+				return;
+			}
 
 			global.fetch = undefined;
 			global.XMLHttpRequest = undefined;
@@ -133,11 +158,29 @@ Q.exports(function (Q) {
 				global.indexedDB = undefined;
 			}
 
+			// FIX (Bug 17): original nulled __defineSetter__ etc. with only {value:undefined}.
+			// Without {writable:false, configurable:false}, user code can re-add them via
+			// another Object.defineProperty call. The hardening was cosmetic.
 			try {
-				Object.defineProperty(Object.prototype, "__defineSetter__",  { value: undefined });
-				Object.defineProperty(Object.prototype, "__defineGetter__",  { value: undefined });
-				Object.defineProperty(Object.prototype, "__lookupGetter__",  { value: undefined });
-				Object.defineProperty(Object.prototype, "__lookupSetter__",  { value: undefined });
+				Object.defineProperty(Object.prototype, "__defineSetter__",  { value: undefined, writable: false, configurable: false });
+				Object.defineProperty(Object.prototype, "__defineGetter__",  { value: undefined, writable: false, configurable: false });
+				Object.defineProperty(Object.prototype, "__lookupGetter__",  { value: undefined, writable: false, configurable: false });
+				Object.defineProperty(Object.prototype, "__lookupSetter__",  { value: undefined, writable: false, configurable: false });
+			} catch (e) {}
+
+			// FIX (Bug 7): freeze Object.prototype and Array.prototype so user code
+			// cannot pollute shared prototype chains. Prototype pollution inside the
+			// sandbox can't reach the host today (RPC uses JSON stringify/parse), but
+			// it poisons every object the tool itself creates and would become a host
+			// RCE vector instantly if anyone ever changes the RPC to pass raw objects.
+			// Defense-in-depth: freeze now, while we still can.
+			try {
+				Object.freeze(Object.prototype);
+				Object.freeze(Array.prototype);
+				Object.freeze(Function.prototype);
+				Object.freeze(String.prototype);
+				Object.freeze(Number.prototype);
+				Object.freeze(Boolean.prototype);
 			} catch (e) {}
 
 			var rpcCounter = 0;
@@ -170,6 +213,13 @@ Q.exports(function (Q) {
 					var input         = msg.input;
 					var preamble      = msg.preamble;
 
+					// FIX (Bug 11): seed 0 is now a legal, distinct seed. The original
+					// \`(__seed >>> 0) || 1\` coerced seed 0 back to 1, making seeds 0 and 1
+					// produce identical RNG streams. We keep the >>> 0 coercion for type
+					// safety but no longer force a minimum — a linear-congruential generator
+					// seeded at 0 is valid (it just starts with a specific first output).
+					// The only problematic seed for LCG is one that enters a fixed-point
+					// immediately; 0 does not with these constants.
 					var __seed = 1;
 					if (deterministic && typeof deterministic === "object" && deterministic.seed !== undefined) {
 						__seed = deterministic.seed >>> 0;
@@ -180,7 +230,7 @@ Q.exports(function (Q) {
 
 					if (deterministic) {
 
-						var __randSeed = (__seed >>> 0) || 1;
+						var __randSeed = __seed >>> 0;
 
 						function __rand() {
 							__randSeed = (__randSeed * 1664525 + 1013904223) >>> 0;
@@ -275,7 +325,7 @@ Q.exports(function (Q) {
 
 					// preamble declares ergonomic namespace vars (Streams, Crypto, etc.)
 					// injected AFTER env destructuring, BEFORE user code.
-					// NOT part of the execution hash.
+					// NOT part of the execution hash — methodNames (sorted) is hashed instead.
 					var bodyLines = [
 						'"use strict";',
 						'var {' + __envKeys.join(', ') + '} = __env;',
@@ -308,18 +358,31 @@ Q.exports(function (Q) {
 						parentPort.postMessage({ type: "done", ok: true, result: result });
 					})
 					.catch(function (err) {
+						// FIX (Bug 13): fix operator precedence pitfall. The original
+						// \`String(err && err.message || err)\` is \`String((err && err.message) || err)\`.
+						// If err is a thrown object with no .message, String() of the object runs
+						// (yields "[object Object]"), losing the actual error shape. Be explicit.
+						var errMsg;
+						if (err && typeof err.message === 'string') errMsg = err.message;
+						else if (err === undefined || err === null)  errMsg = String(err);
+						else try { errMsg = JSON.stringify(err); } catch (e2) { errMsg = String(err); }
 						parentPort.postMessage({
 							type: "done",
 							ok: false,
-							error: String(err && err.message || err)
+							error: errMsg
 						});
 					});
 
 				} catch (err) {
+					// FIX (Bug 13): same precedence fix here.
+					var errMsg;
+					if (err && typeof err.message === 'string') errMsg = err.message;
+					else if (err === undefined || err === null)  errMsg = String(err);
+					else try { errMsg = JSON.stringify(err); } catch (e2) { errMsg = String(err); }
 					parentPort.postMessage({
 						type: "done",
 						ok: false,
-						error: String(err && err.message || err)
+						error: errMsg
 					});
 				}
 
@@ -334,9 +397,16 @@ Q.exports(function (Q) {
 	SandboxRunner.prototype.run = function (code, ctx, methods, opts) {
 
 		opts = opts || {};
+		var self = this;
 
 		var worker = this.worker || (this.worker = this.createWorker());
-		var timeoutMs = opts.timeout || this.defaults.timeout;
+		// FIX (Bug 14): \`opts.timeout || default\` makes timeout=0 impossible to express.
+		// Treat undefined-or-null as "use default" but pass 0 through as-is. A caller
+		// that wants no timeout can set timeout to a very large number; 0 means "fail
+		// immediately" which is a legitimate (if rare) test case.
+		var timeoutMs = (opts.timeout !== undefined && opts.timeout !== null)
+			? opts.timeout
+			: this.defaults.timeout;
 
 		var safeCtx;
 		try {
@@ -358,27 +428,46 @@ Q.exports(function (Q) {
 
 		// Build preamble on host side from methodNames.
 		// Sent to worker alongside code but excluded from execution hash
-		// (fully derived from methodNames already present in the hash).
+		// (methodNames, sorted, is in the hash — which is what actually matters).
 		var preamble = buildPreamble(methodNames);
+
+		// FIX (Bug 10): if deterministic, mark the runner as burned so we never
+		// reuse this worker afterwards. Math.random is locked with configurable:false
+		// once deterministic mode runs; a subsequent non-deterministic run on the
+		// same worker would silently get seeded random numbers.
+		var isDeterministicRun = !!opts.deterministic;
+		if (isDeterministicRun) self._deterministicBurned = true;
 
 		return new Q.Promise(function (resolve, reject) {
 
 			var timer;
+			var finished = false;
+
+			// FIX (Bug 9): use per-run listener refs instead of removeAllListeners,
+			// so concurrent run()s on a named runner don't strip each other's handlers.
+			// Each run installs its own message+error listener and cleans up only its own.
+			var onMessage;
+			var onError;
 
 			var cleanup = function () {
 				clearTimeout(timer);
-				if (!opts.name) {
+				try { if (onMessage) worker.off('message', onMessage); } catch (e) {}
+				try { if (onError)   worker.off('error',   onError);   } catch (e) {}
+				// FIX (Bug 8): null out self.worker after terminate so the next run()
+				// doesn't try to reuse a dead worker. Also terminate if the worker was
+				// used for deterministic mode (Bug 10) regardless of opts.name.
+				// The opts.name path (named-runner pool) only keeps the worker alive
+				// for non-deterministic runs; deterministic mode burns the worker.
+				var shouldTerminate = !opts.name || self._deterministicBurned;
+				if (shouldTerminate) {
 					try { worker.terminate(); } catch (e) {}
+					self.worker = null;
 				}
 			};
 
 			var rpcLog = [];
-			var finished = false;
 
-			worker.removeAllListeners('message');
-			worker.removeAllListeners('error');
-
-			worker.on('message', function (msg) {
+			onMessage = function (msg) {
 
 				if (msg && msg.type === "rpc") {
 
@@ -401,7 +490,11 @@ Q.exports(function (Q) {
 							worker.postMessage({ type: "rpcResult", id: msg.id, ok: true, result: result });
 						})
 						.catch(function (err) {
-							var errStr = String(err && err.message || err);
+							// FIX (Bug 13): same operator-precedence fix on the host side.
+							var errStr;
+							if (err && typeof err.message === 'string') errStr = err.message;
+							else if (err === undefined || err === null)  errStr = String(err);
+							else try { errStr = JSON.stringify(err); } catch (e2) { errStr = String(err); }
 							rpcLog.push({ method: msg.method, args: msg.args, error: errStr });
 							worker.postMessage({ type: "rpcResult", id: msg.id, ok: false, error: errStr });
 						});
@@ -413,12 +506,22 @@ Q.exports(function (Q) {
 					if (finished) return;
 					finished = true;
 
-					// Execution hash covers original code + context + input + seed + rpc log + outcome.
-					// Preamble intentionally excluded — derived from methodNames already present here.
+					// FIX (Bug 12): include methodNames (sorted) in the hashed execution
+					// payload. The original hash did not record what method surface was
+					// available to the code, so identical user code running with different
+					// method sets produced identical hashes — breaking the audit guarantee.
+					// Sorting normalizes against accidental key-order differences across
+					// host-side methods-object constructions.
+					var sortedMethodNames = methodNames.slice().sort();
+
+					// Execution hash covers original code + context + input + seed +
+					// available methods + rpc log + outcome. Preamble intentionally
+					// excluded — it is pure derivation of sortedMethodNames.
 					var execution = {
-						code:    code,
-						context: safeCtx,
-						input:   safeInput,
+						code:         code,
+						context:      safeCtx,
+						input:        safeInput,
+						methodNames:  sortedMethodNames,
 						seed: (opts.deterministic && typeof opts.deterministic === "object")
 							? opts.deterministic.seed
 							: (opts.deterministic ? 1 : undefined),
@@ -446,14 +549,21 @@ Q.exports(function (Q) {
 					}
 				}
 
-			});
+			};
 
-			worker.on('error', function (err) {
+			onError = function (err) {
+				if (finished) return;
+				finished = true;
 				cleanup();
 				reject(new Error(err.message || String(err)));
-			});
+			};
+
+			worker.on('message', onMessage);
+			worker.on('error',   onError);
 
 			timer = setTimeout(function () {
+				if (finished) return;
+				finished = true;
 				cleanup();
 				reject(new Error("Worker timeout / infinite loop"));
 			}, timeoutMs);
@@ -483,6 +593,14 @@ Q.exports(function (Q) {
 
 		if (options.name) {
 			runner = Q.Sandbox._runners[options.name];
+			// FIX (Bug 10): if the cached runner was burned by deterministic mode
+			// (or the worker was terminated and nulled for any reason), drop the
+			// cache entry and create a fresh one. Reusing a burned runner would
+			// silently run on a worker with locked Math.random.
+			if (runner && (runner._deterministicBurned || !runner.worker)) {
+				delete Q.Sandbox._runners[options.name];
+				runner = null;
+			}
 			if (!runner) {
 				runner = new SandboxRunner(options);
 				Q.Sandbox._runners[options.name] = runner;
