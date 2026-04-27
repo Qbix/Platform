@@ -82,7 +82,7 @@ var Q = {
 					}
 				}
 				var cookieHeader = cookiePairs.join('; ');
-				if (cookieHeader && (frameType === 'nested' || frameType === 'unknown' || frameType === 'no-client')) {
+				if (cookieHeader && (frameType === 'nested' || frameType === 'unknown')) {
 					newHeaders.set('Cookie-JS', cookieHeader);
 				}
 

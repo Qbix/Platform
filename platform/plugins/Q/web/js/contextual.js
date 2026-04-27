@@ -818,6 +818,10 @@
 
 	};
 
+	Q.Dialogs.onPush.set(function () {
+		Q.Contextual.hide();
+	}, 'Q.Contextual');
+
 	// TODO: refactor all contextual options into this object
 	Q.Contextual.options = {
 		'height': '80%'

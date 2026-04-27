@@ -4,7 +4,7 @@
  * Q Tools
  * @module Q-tools
  */
-	
+
 Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 
 	var $this = $(this);
@@ -150,20 +150,35 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		$item.hide();
 		_hideActions();
 
+		// Store current position properties so complete() can restore them.
 		$item.data('Q/sortable', {
 			$placeholder: $placeholder,
-			$dragged: $dragged
+			$dragged: $dragged,
+			position: $item.css('position'),
+			zIndex:   $item.css('zIndex'),
+			left:     $item.css('left'),
+			top:      $item.css('top')
 		});
 
 		$body.data(dataLifted, $item);
 
 		lifted = true;
 
+		// Fire onLift with $placeholder, $dragged, and the original pointer event.
+		// Handlers such as Q/coverflow use this to freeze the ghost appearance and
+		// correct its position/grab-offset for 3D-transformed items.
 		Q.handle(state.onLift, $this, [$item, {
 			event: event,
 			$dragged: $dragged,
 			$placeholder: $placeholder
 		}]);
+
+		// After onLift: if a handler corrected gx/gy via _coverflowGxOverride,
+		// apply those values now so move() tracks from the right grab point.
+		if (state._coverflowGxOverride !== undefined) {
+			gx = state._coverflowGxOverride;
+			gy = state._coverflowGyOverride;
+		}
 	}
 
 	function getTarget(x, y) {
@@ -209,30 +224,12 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		if ($target.is($placeholder)) {
 			return;
 		}
-		var direction;
-		// var $n = $target.next(), $p = $target.prev();
-		// while ($n.length && !$n.is(':visible')) {
-		// 	$n = $n.next();
-		// }
-		// while ($p.length && !$p.is(':visible')) {
-		// 	$p = $p.prev();
-		// }
-		// var tw = $target.width(),
-		// 	th = $target.height(),
-		// 	toff = $target.offset(),
-		// 	nh = $n.height(),
-		// 	noff = $n.offset(),
-		// 	ph = $p.height(),
-		// 	poff = $p.offset();
-		// var condition = ((poff && poff.top + ph <= toff.top) || (noff && toff.top + th <= noff.top))
-		// 	? (y < toff.top + th/2)
-		// 	: (x < toff.left + tw/2);
 
+		var direction;
 		var tr = $target[0].getBoundingClientRect();
-		var pr = $placeholder[0].getBoundingClientRect()
+		var pr = $placeholder[0].getBoundingClientRect();
 		var isBefore = $target[0].isBefore($placeholder[0]);
 		var intersectVertically = (tr.bottom >= pr.top && pr.bottom >= tr.top);
-		// assume items are laid out in horizontal rows that wrap around
 		var mw = Math.min(pr.width, tr.width);
 		var mh = Math.min(pr.height, tr.height);
 		var buffer = state.buffer || 0;
@@ -245,35 +242,57 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 				? x > tr.right - mw + buffer
 				: y > tr.bottom - mh + buffer
 		);
-		var switched = false;
-		if (condition) {
-			if (isBefore) {
-				$placeholder.insertBefore($target);
-				direction = 'before';
-			} else {
-				$placeholder.insertAfter($target);
-				direction = 'after';
-			}
-			switched = data.$prevTarget;
-			data.$prevTarget = $target;
-		}
-		Q.handle(state.onIndicate, $this, [$item, {
+
+		// switched: true only when the target just changed (matches original behaviour).
+		// In the original this was set inside if(condition); here we compute it up-front
+		// so onIndicate receives it, but only when a swap is actually happening.
+		var switched = condition ? (data.$prevTarget || false) : false;
+
+		// Fire onIndicate before placement so handlers can return false to suppress
+		// the default and do their own placement (e.g. Q/coverflow centre threshold).
+		// direction and switched carry the same values they would have in the original
+		// post-placement call when condition is true; undefined/false when not.
+		var anticipatedDirection = condition
+			? (isBefore ? 'before' : 'after')
+			: undefined;
+		var suppressDefault = (Q.handle(state.onIndicate, $this, [$item, {
 			$target: $target,
-			direction: direction,
 			$placeholder: $placeholder,
 			$dragged: data.$dragged,
 			$scrolling: $scrolling,
-			switched: switched
-		}]);
+			direction: anticipatedDirection,
+			switched: switched,
+			x: x,
+			y: y,
+			isBefore: isBefore,
+			condition: condition
+		}]) === false);
+
+		// Perform placement unless a handler suppressed the default.
+		// In either case update prevTarget when a swap occurred (condition true),
+		// so the next call computes switched correctly.
+		if (condition) {
+			if (!suppressDefault) {
+				if (isBefore) {
+					$placeholder.insertBefore($target);
+					direction = 'before';
+				} else {
+					$placeholder.insertAfter($target);
+					direction = 'after';
+				}
+			}
+			// prevTarget advances whenever condition is true, regardless of who placed.
+			data.$prevTarget = $target;
+		}
 	}
 
-	function _hideActions() { // Temporarily hide Q/actions if any
+	function _hideActions() {
 		state.actionsContainer = $('.Q_actions_container');
 		state.actionsContainerVisibility = state.actionsContainer.css('visibility');
 		state.actionsContainer.css('visibility', 'hidden');
 	}
 
-	function _restoreActions() { // Restore Q/actions if any
+	function _restoreActions() {
 		if (!state.actionsContainer) return;
 		state.actionsContainer.css('visibility', state.actionsContainerVisibility);
 		delete state.actionsContainer;
@@ -286,10 +305,6 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		if (!lifted) return;
 		var $item = $body.data(dataLifted);
 		if(Q.isEmpty($item)) return;
-		var data = $item.data('Q/sortable');
-		if (data) {
-			data.$dragged[0].style.transition = state.prevStyleTransition;
-		}
 		moveHandler.xStart = moveHandler.yStart = null;
 		complete(!getTarget(Q.Pointer.getX(event), Q.Pointer.getY(event)) && state.requireDropTarget);
 	}
@@ -299,7 +314,7 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 
 		_restoreActions();
 		_restoreStyles();
-		
+
 		Q.Pointer.cancelClick(false, null, {
 			comingFromSortable: true
 		});
@@ -307,7 +322,7 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 			Q.Pointer.ended();
 		}
 		body.restoreSelections(true);
-		
+
 		var $item = $body.data(dataLifted);
 		if ($item) {
 			$item.off(Q.Pointer.move, moveHandler);
@@ -318,10 +333,10 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		if (tLift) clearTimeout(tLift);
 		if (tScroll) clearTimeout(tScroll);
 		if (scrollFrame) cancelAnimationFrame(scrollFrame);
-		
+
 		$body.removeData(dataLifted);
 		if (!$item) return;
-		
+
 		var data = $item.data('Q/sortable');
 		if (!data) return;
 
@@ -400,7 +415,7 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		my = y = Q.Pointer.getY(event);
 
 		if (Q.info.useTouchEvents && lifted) {
-			event.preventDefault(); // stop viewport scroll
+			event.preventDefault();
 		}
 
 		if (!Q.info.isTouchscreen && !lifted) {
@@ -434,7 +449,7 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		removeTextSelections();
 		indicate($item, x, y);
 	}, 25, true);
-	
+
 	var removeTextSelections = Q.throttle(function () {
 		var sel = window.getSelection ? window.getSelection() : document.selection;
 		if (sel) {
@@ -451,18 +466,53 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 		if (!lifted) return;
 
 		var dx = 0, dy = 0, isWindow = false;
-		var speed = state.scroll.speed;
 		var beyond = false;
 
 		$item.parents().each(function () {
 			var $t = $(this);
-			if ($t.css('overflow') === 'visible' && !$t.is('body')) return;
+			var isBody = $t.is('body');
+			var overflow = $t.css('overflow');
+			var overflowX = $t.css('overflow-x');
+			var overflowY = $t.css('overflow-y');
+			var scrollableX = overflowX === 'auto' || overflowX === 'scroll'
+				|| (isBody && overflow !== 'visible');
+			var scrollableY = overflowY === 'auto' || overflowY === 'scroll'
+				|| (isBody && overflow !== 'visible');
+			if (!scrollableX && !scrollableY && !isBody) return;
 
-			// … unchanged, just swap setInterval with rAF …
+			var rect = this.getBoundingClientRect();
+			var dist = state.scroll.distance;
+			var distW = isBody
+				? window.innerWidth  * state.scroll.distanceWindow
+				: rect.width  * dist;
+			var distH = isBody
+				? window.innerHeight * state.scroll.distanceWindow
+				: rect.height * dist;
+
+			if (scrollableX) {
+				if (x < rect.left + distW) {
+					dx = -state.scroll.speed;
+					beyond = (x < rect.left);
+				} else if (x > rect.right - distW) {
+					dx = state.scroll.speed;
+					beyond = (x > rect.right);
+				}
+			}
+			if (scrollableY) {
+				if (y < rect.top + distH) {
+					dy = -state.scroll.speed;
+					beyond = (y < rect.top);
+				} else if (y > rect.bottom - distH) {
+					dy = state.scroll.speed;
+					beyond = (y > rect.bottom);
+				}
+			}
+
 			if (dx || dy) {
 				$scrolling = $t;
-				osl = (osl === null) ? $scrolling[0].scrollLeft : osl;
-				ost = (ost === null) ? $scrolling[0].scrollTop : ost;
+				isWindow = isBody;
+				osl = (osl === null) ? this.scrollLeft : osl;
+				ost = (ost === null) ? this.scrollTop  : ost;
 				return false;
 			}
 		});
@@ -473,15 +523,17 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 			return;
 		}
 
-		var delay = Q.info.useTouchEvents ? state.scroll.delayTouchscreen : state.scroll.delay;
+		var delay = Q.info.useTouchEvents
+			? state.scroll.delayTouchscreen
+			: state.scroll.delay;
 		tScroll = setTimeout(function () {
 			function step() {
 				scrolling.accel = scrolling.accel || 0;
 				scrolling.accel += state.scroll.acceleration;
 				scrolling.accel = Math.min(scrolling.accel, 1);
 				var $s = isWindow ? $(document.body) : $scrolling;
-				if (dx) $s[0].scrollLeft += dx*scrolling.accel;
-				if (dy) $s[0].scrollTop += dy*scrolling.accel;
+				if (dx) $s[0].scrollLeft += dx * scrolling.accel;
+				if (dy) $s[0].scrollTop  += dy * scrolling.accel;
 				move($item, x, y);
 				scrollFrame = requestAnimationFrame(step);
 			}
@@ -491,50 +543,68 @@ Q.Tool.jQuery('Q/sortable', function _Q_sortable(options) {
 
 	function _setStyles(elem) {
 		if (!elem) return;
-		state.prevWebkitUserSelect = elem.style.webkitUserSelect;
+		state.prevWebkitUserSelect   = elem.style.webkitUserSelect;
 		state.prevWebkitTouchCallout = elem.style.webkitTouchCallout;
-		state.prevUserSelect = elem.style.userSelect;
-		state.prevTouchAction = elem.style.touchAction;
+		state.prevUserSelect         = elem.style.userSelect;
+		state.prevTouchAction        = elem.style.touchAction;
 		state.elem = elem;
-		elem.style.webkitUserSelect = 'none';
+		elem.style.webkitUserSelect   = 'none';
 		elem.style.webkitTouchCallout = 'none';
-		elem.style.userSelect = 'none';
-		elem.style.touchAction = 'none';
+		elem.style.userSelect         = 'none';
+		elem.style.touchAction        = 'none';
 	}
 
 	function _restoreStyles() {
 		if (!state.elem) return;
-		state.elem.style.webkitUserSelect = state.prevWebkitUserSelect;
+		state.elem.style.webkitUserSelect   = state.prevWebkitUserSelect;
 		state.elem.style.webkitTouchCallout = state.prevWebkitTouchCallout;
-		state.elem.style.userSelect = state.prevUserSelect;
-		state.elem.style.touchAction = state.prevTouchAction;
-		state.prevWebkitUserSelect = state.prevWebkitTouchCallout = state.prevUserSelect = state.prevTouchAction = state.elem = null;
+		state.elem.style.userSelect         = state.prevUserSelect;
+		state.elem.style.touchAction        = state.prevTouchAction;
+		state.prevWebkitUserSelect = state.prevWebkitTouchCallout =
+			state.prevUserSelect = state.prevTouchAction = state.elem = null;
 	}
-
-	// keep other helpers: indicate, getTarget, _hideActions, _restoreActions …
 
 },
 
-{	// default options:
+{
 	draggable: '*',
 	droppable: '*',
 	zIndex: 999999,
 	draggedOpacity: 0.8,
 	placeholderOpacity: 0.1,
 	buffer: 1,
-	lift: { delay: 300, delayTouchscreen: 300, threshhold: 10, zoom: 1.1, animate: 100 },
+	lift:   { delay: 300, delayTouchscreen: 300, threshhold: 10, zoom: 1.1, animate: 100 },
 	scroll: { delay: 300, delayTouchscreen: 300, threshhold: 0, distance: 0.15, distanceWindow: 0.1, speed: 30, acceleration: 0.1 },
-	drop: { duration: 300 },
+	drop:   { duration: 300 },
 	requireDropTarget: true,
-	onLift: new Q.Event(),
+	onLift:     new Q.Event(),
 	onIndicate: new Q.Event(),
 	beforeDrop: new Q.Event(),
-	onDrop: new Q.Event(/* same default handler as your original */),
-	onSuccess: new Q.Event()
+	onDrop:     new Q.Event(),
+	onSuccess:  new Q.Event()
 },
 {
 	remove: function () {
-		// same cleanup logic as your original
+		var $this = $(this);
+		var state = $this.state('Q/sortable');
+		if (state) {
+			if (state.onCancelClickEventKey) {
+				Q.Pointer.onCancelClick.remove(state.onCancelClickEventKey);
+			}
+		}
+		$this.off('.Q_sortable');
+		$(document).off('keydown.Q_sortable');
+		// Abort any in-progress drag cleanly
+		var liftedItem = $body.data(dataLifted);
+		if (liftedItem && $.contains($this[0], liftedItem[0])) {
+			$body.removeData(dataLifted);
+			var d = liftedItem.data('Q/sortable');
+			if (d) {
+				if (!d.$placeholder.retain) d.$placeholder.remove();
+				if (!d.$dragged.retain)     d.$dragged.remove();
+				liftedItem.show().removeData('Q/sortable');
+			}
+		}
 	}
 });
 

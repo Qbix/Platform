@@ -191,9 +191,10 @@
 	user-select: none;
 }
 
-/* ---------------- Images ---------------- */
+/* ---------------- Images and video ---------------- */
 
-.Q_coverflow_covers * > img {
+.Q_coverflow_covers * > img,
+.Q_coverflow_covers * > video {
 	animation: 1s linear Q-coverflow-rotate-cover both;
 	animation-timeline: --Q-coverflow-li-in-and-out-of-view;
 
@@ -203,16 +204,54 @@
 }
 
 /* RTL override */
-[dir="rtl"] .Q_coverflow_covers * > img {
+[dir="rtl"] .Q_coverflow_covers * > img,
+[dir="rtl"] .Q_coverflow_covers * > video {
 	animation-name: Q-coverflow-rotate-cover-rtl;
 	transform: translateX(100%) rotateY(45deg);
 }
 
 /* ensure animation applied */
-.Q_coverflow_tool .Q_coverflow_covers > * > img {
+.Q_coverflow_tool .Q_coverflow_covers > * > img,
+.Q_coverflow_tool .Q_coverflow_covers > * > video {
 	animation-name: Q-coverflow-rotate-cover;
 }
 
-[dir="rtl"] .Q_coverflow_tool .Q_coverflow_covers > * > img {
+[dir="rtl"] .Q_coverflow_tool .Q_coverflow_covers > * > img,
+[dir="rtl"] .Q_coverflow_tool .Q_coverflow_covers > * > video {
 	animation-name: Q-coverflow-rotate-cover-rtl;
+}
+
+/* ---------------- Sort placeholder (Q/sortable cooperation) ---------------- */
+/*
+ * When Q/sortable lifts a cover, it clones the li as a semi-transparent
+ * placeholder. The clone inherits the scroll-driven animation which
+ * immediately applies rotateY, making getBoundingClientRect width near-zero
+ * and breaking sortable's before/after threshold.
+ *
+ * coverflow's onLift hook (in sortableOptions()) adds this class to the
+ * placeholder. These rules suppress all animation and transform for that
+ * one element — all other covers keep their full 3D effect during the drag.
+ *
+ * The $dragged ghost's img also gets its CSS animation suppressed and its
+ * inline transform frozen at lift-moment value (in onLift, JS side), so the
+ * ghost looks exactly like the cover did when grabbed and moves rigidly.
+ */
+
+.Q_coverflow_covers .Q_coverflow_sorting_placeholder {
+	animation: none;
+	view-timeline-name: none;
+	perspective: none;
+	will-change: auto;
+	opacity: 0.25;
+	/* Natural size so sortable can measure it correctly */
+	width: var(--Q-coverflow-cover-size);
+	vertical-align: top;
+}
+
+.Q_coverflow_covers .Q_coverflow_sorting_placeholder > img,
+.Q_coverflow_covers .Q_coverflow_sorting_placeholder > video {
+	animation: none;
+	animation-timeline: none;
+	will-change: auto;
+	transform: none;
 }
