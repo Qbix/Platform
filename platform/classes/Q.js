@@ -720,7 +720,6 @@ Q.batcher.factory = function _Q_batcher_factory(collection, baseUrl, tail, slotN
 				return;
 			}
 			Q.each(response.slots.batch, function (k, result) {
-			Q.each(response.slots.batch, function (k, result) {
 				if (result && result.errors) {
 					callbacks[k][0].call(this, result.errors, null, request);
 				} else {
