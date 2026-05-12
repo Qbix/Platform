@@ -441,7 +441,6 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 			.appendTo('body');
 		}
 
-
 		function _onImgLoad() {
 			Q.addScript(EXIFjslib, function () {
 				EXIF.getData(img, function () {
@@ -734,11 +733,11 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 	           }
 	           py = (ey + sy) >> 1;
 	       }
-	       var ratio = (py / ih);
-	       return (ratio===0)?1:ratio;
-	   }
+			var ratio = (py / ih);
+			return (ratio===0)?1:ratio;
+		}
 
-	   function drawImageIOSFix(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
+		function drawImageIOSFix(ctx, img, sx, sy, sw, sh, dx, dy, dw, dh) {
 	       var vertSquashRatio = detectVerticalSquash(img);
 	    // Works only if whole image is displayed:
 	    // ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh / vertSquashRatio);
@@ -746,7 +745,12 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 	       ctx.drawImage(img, sx * vertSquashRatio, sy * vertSquashRatio, 
 	                          sw * vertSquashRatio, sh * vertSquashRatio, 
 	                          dx, dy, dw, dh );
-	   }
+		}
+
+		function _revert() {
+			var state = $this.state('Q/imagepicker');
+			$this.prop('src', state.oldSrc).stop().removeClass('Q_uploading');
+		}
 	},
 	/**
 	 * Just upload file to server, without any changes
