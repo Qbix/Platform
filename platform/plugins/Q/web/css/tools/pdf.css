@@ -4,6 +4,7 @@
     min-height: 250px;
     height: 100%;
     overflow: auto;
+    margin: auto;
 }
 .Q_column_slot .Q_pdf_tool:only-child {
     height: 100%;
