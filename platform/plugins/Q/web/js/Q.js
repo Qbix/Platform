@@ -1001,6 +1001,10 @@ Elp.cssDimensions = function () {
  */
 Elp.scrollingParent = function(skipIfNotOverflowed, direction, includeSelf) {
 	var p = this;
+	var that = this;
+	if (that.Q_scrollingParent) {
+		return that.Q_scrollingParent;
+	}
 	while (includeSelf ? 1 : (p = p.parentElement)) {
 		includeSelf = false;
 		if (typeof p.computedStyle !== 'function') {
@@ -1021,10 +1025,18 @@ Elp.scrollingParent = function(skipIfNotOverflowed, direction, includeSelf) {
 			(p === document.documentElement || overflow !== 'visible')
 		)) {
 			if (!skipIfNotOverflowed || p.clientHeight < p.scrollHeight) {
+				that.Q_scrollingParent = p;
+				setTimeout(function () {
+					delete that.Q_scrollingParent;
+				}, 1000);
 				return p;
 			}
 		}
 	}
+	that.Q_scrollingParent = p || null;
+	setTimeout(function () {
+		delete that.Q_scrollingParent;
+	}, 1000);
 	return p || null;
 };
 
@@ -13801,6 +13813,15 @@ Q.Socket.onConnect = Q.Event.factory(
 		}
 	}]
 );
+
+Q.Socket.listenForStyle    = new Q.Method();
+Q.Socket.listenForSound    = new Q.Method();
+Q.Socket.listenForScroll   = new Q.Method();
+Q.Socket.listenForRedirect = new Q.Method();
+
+Q.Method.define(Q.Socket, "{{Q}}/js/methods/Q/Socket", function() {
+	return [Q, root];
+});
 
 /**
  * Returns Q.Event which occurs on posted event coming from socket.io
