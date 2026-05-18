@@ -15640,7 +15640,7 @@ Q.Visual = Q.Pointer = {
 				_pointerIsDown = true;
 			} else if (e.type === 'pointerup') {
 				_pointerIsDown = false;
-			} else if (_pointerIsDown && (_scrollLeft !== p.scrollLeft || _scrollTop !== p.scrollTop)) {
+			} else if (_pointerIsDown && p && (_scrollLeft !== p.scrollLeft || _scrollTop !== p.scrollTop)) {
 				p = e.target.scrollingParent() || document.body;
 				div.removeClass('Q_touchlabel_show');
 				return;
