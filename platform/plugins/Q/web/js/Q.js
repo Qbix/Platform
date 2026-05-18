@@ -15630,14 +15630,18 @@ Q.Visual = Q.Pointer = {
 			}
 			div.removeClass('Q_touchlabel_show');
 		}, 'Q.Visual.activateTouchlabels');
-		var _scrollLeft, _scrollTop;
-		Q.addEventListener(element, 'pointerdown pointermove', function (e) {
-			var p = e.target.scrollingParent() || document.body;
+		var _scrollLeft, _scrollTop, _pointerIsDown;
+		Q.addEventListener(element, 'pointerdown pointerup pointermove', function (e) {
+			var p;
 			if (e.type === 'pointerdown') {
+				p = e.target.scrollingParent() || document.body;
 				_scrollLeft = p.scrollLeft;
 				_scrollTop = p.scrollTop;
-			} else if (_scrollLeft !== p.scrollLeft
-			        || _scrollTop !== p.scrollTop) {
+				_pointerIsDown = true;
+			} else if (e.type === 'pointerup') {
+				_pointerIsDown = false;
+			} else if (_pointerIsDown && (_scrollLeft !== p.scrollLeft || _scrollTop !== p.scrollTop)) {
+				p = e.target.scrollingParent() || document.body;
 				div.removeClass('Q_touchlabel_show');
 				return;
 			}
