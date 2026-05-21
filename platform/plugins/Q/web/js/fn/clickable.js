@@ -146,7 +146,7 @@ Q.Tool.jQuery('Q/clickable', function _Q_clickable(o) {
 		var bh = parseInt($this.css('border-top-width')) + parseInt($this.css('border-bottom-width'));
 		var csw = Math.ceil($this[0].offsetWidth + bw);
 		var csh = Math.ceil($this[0].offsetHeight + bh);
-		if (!csw || csh) {
+		if (!csw || !csh) {
 			return; // something is wrong with dimensions
 		}
 
