@@ -1862,7 +1862,6 @@ class Db_Row
 			$query = $db->update($table)
 				->set($fieldsToSave)
 				->where($where);
-			$inserting = false;
 		} else {
 			// Do an insert
 			//if (count($fieldsToSave) == 0)
@@ -1887,11 +1886,10 @@ class Db_Row
 				$query->onDuplicateKeyUpdate($onDuplicateKeyUpdate_fields);
 			}
 			$where = null;
-			$inserting = true;
 		}
 		$query->className = $this_class;
 
-		$inserted = ($query->type === Db_Query::TYPE_INSERT);
+		$inserting = ($query->type === Db_Query::TYPE_INSERT);
 
 		if (class_exists('Q')) {
 			/**
@@ -1906,7 +1904,7 @@ class Db_Row
 			$temp = Q::event("Db/Row/$this_class/saveExecute", array(
 				'row' => $this,
 				'query' => $query,
-				'inserted' => $inserted,
+				'inserted' => $inserting,
 				'modifiedFields' => $fieldsToSave,
 				'where' => $where
 			), 'before');
@@ -1952,7 +1950,7 @@ class Db_Row
 
 		$callback = array($this, "afterSaveExecute");
 		if (is_callable($callback)) {
-			call_user_func($callback, $result, $query, $fieldsToSave, $where, $inserted);
+			call_user_func($callback, $result, $query, $fieldsToSave, $where, $inserting);
 		}
 	
 		if (class_exists('Q')) {
@@ -1966,7 +1964,7 @@ class Db_Row
 			Q::event("Db/Row/$this_class/saveExecute", array(
 				'row' => $this,
 				'query' => $query,
-				'inserted' => $inserted,
+				'inserted' => $inserting,
 				'modifiedFields' => $fieldsToSave,
 				'result' => $result
 			), 'after');
