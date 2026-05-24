@@ -1,0 +1,1227 @@
+:root {
+    /* Card theme tokens — override these per presentation to change palette */
+    --Q-card-bg:          rgba(12, 12, 18, 0.88);
+    --Q-card-bg-solid:    #0d0d14;
+    --Q-card-border:      rgba(255,255,255,0.10);
+    --Q-card-text:        #e8e6e0;
+    --Q-card-muted:       rgba(232,230,224,0.55);
+    --Q-card-accent:      #e8c547;   /* amber — stat, glossary */
+    --Q-card-accent2:     #4fc3a1;   /* teal — positive, line chart */
+    --Q-card-accent3:     #e87547;   /* coral — comparison, alert */
+    --Q-card-accent4:     #7c9eff;   /* blue — profile, article */
+    --Q-card-serif:       'DM Serif Display', Georgia, serif;
+    --Q-card-sans:        'Instrument Sans', system-ui, -apple-system, sans-serif;
+    --Q-card-mono:        'DM Mono', 'Cascadia Code', ui-monospace, monospace;
+    --Q-card-radius:      12px;
+    --Q-card-shadow:      0 8px 48px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset;
+}
+
+/* Q/card/* — shared base styles for all card primitives */
+
+.Q_card {
+    font-family: var(--Q-card-sans);
+    color: var(--Q-card-text);
+    padding: clamp(20px, 4vw, 48px);
+    box-sizing: border-box;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: clamp(8px, 1.5vw, 16px);
+    /* Frosted glass appearance when layered over b-roll gallery */
+    background: var(--Q-card-bg);
+    backdrop-filter: blur(16px) saturate(1.4);
+    -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border: 1px solid var(--Q-card-border);
+    border-radius: var(--Q-card-radius);
+    box-shadow: var(--Q-card-shadow);
+}
+
+/* ── Glossary ── */
+.Q_card_glossary .Q_card_term {
+    font-size: clamp(2rem, 5vw, 4rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+.Q_card_glossary .Q_card_definition {
+    font-size: clamp(1rem, 2.5vw, 1.75rem);
+    line-height: 1.5;
+    opacity: 0.88;
+}
+.Q_card_glossary .Q_card_context {
+    font-size: clamp(0.85rem, 1.8vw, 1.2rem);
+    opacity: 0.6;
+    font-style: italic;
+    border-left: 3px solid var(--Q-card-accent);
+    padding-left: 12px;
+}
+
+/* ── Stat ── */
+.Q_card_stat .Q_card_value {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.Q_card_stat .Q_card_value_number {
+    font-size: clamp(3rem, 12vw, 9rem);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+}
+.Q_card_stat .Q_card_value_unit {
+    font-size: clamp(1.5rem, 4vw, 3rem);
+    font-weight: 600;
+    opacity: 0.7;
+}
+.Q_card_stat .Q_card_delta {
+    font-size: clamp(1rem, 2vw, 1.5rem);
+    font-weight: 600;
+    opacity: 0.8;
+}
+.Q_card_stat .Q_card_delta_positive { color: var(--Q-card-accent2); }
+.Q_card_stat .Q_card_delta_negative { color: var(--Q-card-accent3); }
+.Q_card_stat .Q_card_label {
+    font-size: clamp(0.9rem, 2vw, 1.4rem);
+    opacity: 0.65;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* ── Profile ── */
+.Q_card_profile .Q_card_profile_header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+.Q_card_profile .Q_card_profile_icon {
+    width: clamp(60px, 8vw, 100px);
+    height: clamp(60px, 8vw, 100px);
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid rgba(255,255,255,0.2);
+}
+.Q_card_profile .Q_card_profile_name {
+    font-size: clamp(1.5rem, 4vw, 3rem);
+    font-weight: 700;
+    line-height: 1.1;
+}
+.Q_card_profile .Q_card_profile_handle {
+    font-size: clamp(0.85rem, 1.8vw, 1.2rem);
+    opacity: 0.55;
+}
+.Q_card_profile .Q_card_profile_bio {
+    font-size: clamp(0.9rem, 2vw, 1.3rem);
+    line-height: 1.55;
+    opacity: 0.8;
+}
+.Q_card_profile .Q_card_profile_tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.Q_card_profile .Q_card_profile_tag {
+    font-size: 0.8rem;
+    background: rgba(124,58,237,0.3);
+    border: 1px solid rgba(124,58,237,0.5);
+    border-radius: 20px;
+    padding: 3px 12px;
+}
+
+/* ── Quote ── */
+.Q_card_quote .Q_card_quote_mark {
+    font-size: clamp(4rem, 10vw, 8rem);
+    line-height: 0.6;
+    opacity: 0.25;
+    font-family: var(--Q-card-serif);
+}
+.Q_card_quote .Q_card_quote_text {
+    font-size: clamp(1.2rem, 3vw, 2.2rem);
+    line-height: 1.5;
+    font-style: italic;
+    margin: 0;
+    opacity: 0.9;
+}
+.Q_card_quote .Q_card_quote_attribution {
+    display: flex;
+    gap: 12px;
+    opacity: 0.6;
+    font-size: clamp(0.8rem, 1.6vw, 1.1rem);
+}
+.Q_card_quote .Q_card_quote_speaker { font-weight: 600; }
+
+/* ── Article ── */
+.Q_card_article .Q_card_article_image {
+    width: 100%;
+    max-height: 40%;
+    object-fit: cover;
+    border-radius: 8px;
+}
+.Q_card_article .Q_card_article_meta {
+    display: flex;
+    gap: 16px;
+    font-size: 0.8rem;
+    opacity: 0.55;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.Q_card_article .Q_card_article_title {
+    font-size: clamp(1.2rem, 3vw, 2.2rem);
+    font-weight: 700;
+    line-height: 1.25;
+}
+.Q_card_article .Q_card_article_title a { color: inherit; text-decoration: none; }
+.Q_card_article .Q_card_article_claim {
+    font-size: clamp(0.9rem, 1.8vw, 1.25rem);
+    opacity: 0.75;
+    line-height: 1.5;
+    border-left: 3px solid var(--Q-card-accent);
+    padding-left: 12px;
+}
+
+/* ── Comparison ── */
+.Q_card_comparison .Q_card_comparison_header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+.Q_card_comparison .Q_card_comparison_col {
+    padding: 16px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.05);
+    transition: background 0.3s;
+}
+.Q_card_comparison .Q_card_comparison_col.Q_highlighted { background: rgba(124,58,237,0.25); }
+.Q_card_comparison .Q_card_comparison_col_label { font-size: 0.8rem; opacity: 0.55; text-transform: uppercase; letter-spacing: 0.08em; }
+.Q_card_comparison .Q_card_comparison_col_value { font-size: clamp(1.5rem, 4vw, 3rem); font-weight: 700; }
+.Q_card_comparison .Q_card_comparison_rows { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.Q_card_comparison .Q_card_comparison_row {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 0.5fr;
+    gap: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: clamp(0.8rem, 1.6vw, 1.1rem);
+    transition: background 0.3s;
+}
+.Q_card_comparison .Q_card_comparison_row.Q_highlighted { background: rgba(124,58,237,0.2); }
+.Q_card_comparison .Q_card_comparison_row_label { opacity: 0.7; }
+.Q_card_comparison .Q_card_comparison_row_delta { opacity: 0.6; font-size: 0.85em; }
+
+/* ── Shared source line ── */
+.Q_card_source {
+    font-family: var(--Q-card-mono); font-size: 0.75rem; opacity: 0.4; margin-top: auto; }
+.Q_card_source a { color: inherit; text-decoration: underline; opacity: 0.7; }
+
+/* ── Charts ── */
+.Q_chart { width: 100%; height: 100%; }
+.Q_chart_title { font-size: clamp(1rem, 2vw, 1.5rem); font-weight: 600; opacity: 0.8; margin-bottom: 16px; }
+
+/* Bar chart */
+.Q_chart_bar .Q_chart_bar_rows { display: flex; flex-direction: column; gap: 10px; }
+.Q_chart_bar .Q_chart_bar_row {
+    display: grid;
+    grid-template-columns: 180px 1fr 80px;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    transition: background 0.3s;
+}
+.Q_chart_bar .Q_chart_bar_row.Q_highlighted { background: rgba(124,58,237,0.18); }
+.Q_chart_bar .Q_chart_bar_label { font-size: clamp(0.75rem, 1.5vw, 1rem); opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.Q_chart_bar .Q_chart_bar_track { background: rgba(255,255,255,0.08); border-radius: 3px; height: 20px; overflow: hidden; }
+.Q_chart_bar .Q_chart_bar_fill { height: 100%; border-radius: 3px; width: 0; }
+.Q_chart_bar .Q_chart_bar_value { font-size: clamp(0.75rem, 1.5vw, 1rem); opacity: 0.7; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Line chart (D3 SVG) */
+.Q_chart_line text { fill: rgba(240,240,240,0.6); font-size: 11px; }
+.Q_chart_line .domain, .Q_chart_line .tick line { stroke: rgba(255,255,255,0.15); }
+.Q_chart_highlight_rule { pointer-events: none; }
+
+/* Gallery */
+.Media_presentation_gallery_screen { background: #000; }
+.Media_presentation_gallery_empty { background: #111; }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Media/presentation — card and chart transition themes
+   Applied via class on the Media/presentation container element.
+   Default transition: fade (applied when no explicit class set).
+   ═══════════════════════════════════════════════════════════════════════════
+
+   USAGE
+   ─────
+   In PHP when setting up the presentation stream, set an attribute:
+     $stream->setAttribute('transitionClass', 'Media_presentation_transition_rise');
+
+   Or set directly on the element:
+     $(tool.element).addClass('Media_presentation_transition_rise');
+
+   Or via socket (Q/style):
+     socket.emit('Q/style', {
+       elementId: 'my-presentation-tool-id',
+       rules: {},
+       css: '' // add class via js instead — Q/style targets rules, not classes
+     });
+     // Better: emit a custom event that adds the class directly.
+
+   AVAILABLE THEMES
+   ────────────────
+   Media_presentation_transition_fade    — opacity only (default, subtle)
+   Media_presentation_transition_rise    — fade up from below (recommended for cards)
+   Media_presentation_transition_drop    — fade down from above (good for alerts)
+   Media_presentation_transition_scale   — scale from 95% (editorial feel)
+   Media_presentation_transition_slide   — slides in from right, exits left
+   Media_presentation_transition_none    — instant, no animation
+
+   CUSTOMISING
+   ───────────
+   Override any variable on the container or a parent:
+     .my-context .Media_presentation_screen {
+       --Media-transition-duration: 600ms;
+       --Media-transition-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+       --Media-transition-distance: 40px;
+     }
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CSS custom properties ─────────────────────────────────────────────────── */
+
+.Media_presentation_screen,
+.Media_presentation_card_screen,
+.Media_presentation_chart_screen {
+    --Media-transition-duration:  400ms;
+    --Media-transition-ease:      cubic-bezier(0.22, 1, 0.36, 1);
+    --Media-transition-distance:  28px;
+    --Media-transition-scale-from: 0.96;
+}
+
+/* ── Enter: @starting-style (Chrome 117+, Safari 17.5+, Firefox 129+) ──────── */
+/* Graceful degradation: browsers without @starting-style support just show   */
+/* the element immediately — still better than nothing.                        */
+
+/* Default fade — applies to ALL screens unless overridden by a theme class */
+.Media_presentation_screen,
+.Media_presentation_card_screen,
+.Media_presentation_chart_screen {
+    transition:
+        opacity   var(--Media-transition-duration) var(--Media-transition-ease),
+        transform var(--Media-transition-duration) var(--Media-transition-ease);
+    opacity:   1;
+    transform: none;
+}
+
+@starting-style {
+    .Media_presentation_screen,
+    .Media_presentation_card_screen,
+    .Media_presentation_chart_screen {
+        opacity: 0;
+    }
+}
+
+/* ── Exit: .Media_presentation_leaving applied by JS before DOM removal ─────── */
+/* JS sets this class, waits for transitionend, then removes element.          */
+
+.Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_chart_screen.Media_presentation_leaving {
+    opacity:    0;
+    transition:
+        opacity   calc(var(--Media-transition-duration) * 0.7) var(--Media-transition-ease),
+        transform calc(var(--Media-transition-duration) * 0.7) var(--Media-transition-ease);
+}
+
+/* ── Theme: rise ────────────────────────────────────────────────────────────── */
+
+.Media_presentation_transition_rise .Media_presentation_screen,
+.Media_presentation_transition_rise .Media_presentation_card_screen,
+.Media_presentation_transition_rise .Media_presentation_chart_screen {
+    --Media-transition-duration: 480ms;
+    --Media-transition-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@starting-style {
+    .Media_presentation_transition_rise .Media_presentation_screen,
+    .Media_presentation_transition_rise .Media_presentation_card_screen,
+    .Media_presentation_transition_rise .Media_presentation_chart_screen {
+        opacity:   0;
+        transform: translateY(var(--Media-transition-distance));
+    }
+}
+
+.Media_presentation_transition_rise .Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_rise .Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_rise .Media_presentation_chart_screen.Media_presentation_leaving {
+    opacity:   0;
+    transform: translateY(calc(var(--Media-transition-distance) * -0.5));
+}
+
+/* ── Theme: drop ────────────────────────────────────────────────────────────── */
+
+@starting-style {
+    .Media_presentation_transition_drop .Media_presentation_screen,
+    .Media_presentation_transition_drop .Media_presentation_card_screen,
+    .Media_presentation_transition_drop .Media_presentation_chart_screen {
+        opacity:   0;
+        transform: translateY(calc(var(--Media-transition-distance) * -1));
+    }
+}
+
+.Media_presentation_transition_drop .Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_drop .Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_drop .Media_presentation_chart_screen.Media_presentation_leaving {
+    opacity:   0;
+    transform: translateY(var(--Media-transition-distance));
+}
+
+/* ── Theme: scale ───────────────────────────────────────────────────────────── */
+
+.Media_presentation_transition_scale .Media_presentation_screen,
+.Media_presentation_transition_scale .Media_presentation_card_screen,
+.Media_presentation_transition_scale .Media_presentation_chart_screen {
+    --Media-transition-ease: cubic-bezier(0.34, 1.56, 0.64, 1); /* spring-ish */
+    --Media-transition-duration: 500ms;
+}
+
+@starting-style {
+    .Media_presentation_transition_scale .Media_presentation_screen,
+    .Media_presentation_transition_scale .Media_presentation_card_screen,
+    .Media_presentation_transition_scale .Media_presentation_chart_screen {
+        opacity:   0;
+        transform: scale(var(--Media-transition-scale-from));
+    }
+}
+
+.Media_presentation_transition_scale .Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_scale .Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_scale .Media_presentation_chart_screen.Media_presentation_leaving {
+    opacity:   0;
+    transform: scale(calc(var(--Media-transition-scale-from) - 0.02));
+}
+
+/* ── Theme: slide ───────────────────────────────────────────────────────────── */
+
+.Media_presentation_transition_slide .Media_presentation_screen,
+.Media_presentation_transition_slide .Media_presentation_card_screen,
+.Media_presentation_transition_slide .Media_presentation_chart_screen {
+    --Media-transition-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --Media-transition-duration: 420ms;
+}
+
+@starting-style {
+    .Media_presentation_transition_slide .Media_presentation_screen,
+    .Media_presentation_transition_slide .Media_presentation_card_screen,
+    .Media_presentation_transition_slide .Media_presentation_chart_screen {
+        opacity:   0;
+        transform: translateX(var(--Media-transition-distance));
+    }
+}
+
+.Media_presentation_transition_slide .Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_slide .Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_slide .Media_presentation_chart_screen.Media_presentation_leaving {
+    opacity:   0;
+    transform: translateX(calc(var(--Media-transition-distance) * -1));
+}
+
+/* ── Theme: none ────────────────────────────────────────────────────────────── */
+
+.Media_presentation_transition_none .Media_presentation_screen,
+.Media_presentation_transition_none .Media_presentation_card_screen,
+.Media_presentation_transition_none .Media_presentation_chart_screen {
+    transition: none !important;
+}
+
+.Media_presentation_transition_none .Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_none .Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_none .Media_presentation_chart_screen.Media_presentation_leaving {
+    display: none !important;
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Within-card and within-chart element animations
+   ═══════════════════════════════════════════════════════════════════════════
+
+   These fire when the CARD or CHART itself appears — they are the internal
+   choreography of each visualization type.
+
+   Parent context classes:
+     .Media_presentation_transition_rise  (or any theme) on the container
+     .Media_presentation_chart_screen / .Media_presentation_card_screen on wrapper
+     .Q_chart_bar_row, .Q_chart_bar_fill, .Q_card_stat_value etc. on elements
+
+   You can override per-context:
+     .My_context .Q_chart_bar_row { --Media-bar-delay-base: 0ms; }
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Shared element-animation variables ──────────────────────────────────── */
+
+.Media_presentation_card_screen,
+.Media_presentation_chart_screen {
+    --Media-bar-delay-base:    60ms;   /* stagger between bar rows           */
+    --Media-bar-fill-dur:     600ms;   /* bar width grow duration            */
+    --Media-bar-fill-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --Media-item-fade-dur:    320ms;   /* row/item fade-in duration          */
+    --Media-item-fade-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --Media-value-count-dur: 800ms;   /* stat value count-up duration       */
+    --Media-line-draw-dur:   900ms;   /* SVG path stroke-dashoffset draw    */
+    --Media-highlight-dur:   220ms;   /* highlight flash duration           */
+}
+
+/* ── Bar chart: rows fade+rise in staggered ──────────────────────────────── */
+
+.Q_chart_bar_row {
+    opacity: 0;
+    transform: translateX(-8px);
+    animation: Media_bar_row_in var(--Media-item-fade-dur) var(--Media-item-fade-ease) forwards;
+}
+
+/* Stagger: nth-child selectors up to 12 bars */
+.Q_chart_bar_row:nth-child(1)  { animation-delay: calc(var(--Media-bar-delay-base) * 0); }
+.Q_chart_bar_row:nth-child(2)  { animation-delay: calc(var(--Media-bar-delay-base) * 1); }
+.Q_chart_bar_row:nth-child(3)  { animation-delay: calc(var(--Media-bar-delay-base) * 2); }
+.Q_chart_bar_row:nth-child(4)  { animation-delay: calc(var(--Media-bar-delay-base) * 3); }
+.Q_chart_bar_row:nth-child(5)  { animation-delay: calc(var(--Media-bar-delay-base) * 4); }
+.Q_chart_bar_row:nth-child(6)  { animation-delay: calc(var(--Media-bar-delay-base) * 5); }
+.Q_chart_bar_row:nth-child(7)  { animation-delay: calc(var(--Media-bar-delay-base) * 6); }
+.Q_chart_bar_row:nth-child(8)  { animation-delay: calc(var(--Media-bar-delay-base) * 7); }
+.Q_chart_bar_row:nth-child(9)  { animation-delay: calc(var(--Media-bar-delay-base) * 8); }
+.Q_chart_bar_row:nth-child(10) { animation-delay: calc(var(--Media-bar-delay-base) * 9); }
+.Q_chart_bar_row:nth-child(11) { animation-delay: calc(var(--Media-bar-delay-base) * 10); }
+.Q_chart_bar_row:nth-child(12) { animation-delay: calc(var(--Media-bar-delay-base) * 11); }
+
+@keyframes Media_bar_row_in {
+    to { opacity: 1; transform: none; }
+}
+
+/* Bar fill grows from 0 — JS already sets transition on the fill element,
+   but this ensures it has a visual start state even without JS running */
+.Q_chart_bar_fill {
+    /* JS sets width and transition; CSS just ensures 0 start */
+    min-width: 0;
+}
+
+/* ── Bar chart: highlight flash ──────────────────────────────────────────── */
+
+.Q_chart_bar_row.Q_highlighted {
+    animation: Media_bar_highlight_pulse var(--Media-highlight-dur)
+               cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes Media_bar_highlight_pulse {
+    0%   { background: transparent; }
+    40%  { background: rgba(232, 197, 71, 0.18); }
+    100% { background: rgba(232, 197, 71, 0.09); }
+}
+
+.Q_chart_bar_row.Q_highlighted .Q_chart_bar_fill {
+    filter: brightness(1.25);
+    transition: filter var(--Media-highlight-dur) ease;
+}
+
+/* ── Bar chart: value label count-up feel ────────────────────────────────── */
+/* The actual counting is done in JS; this just ensures the value label
+   fades in slightly after the bar fill completes */
+
+.Q_chart_bar_value {
+    opacity: 0;
+    animation: Media_value_fadein var(--Media-item-fade-dur) var(--Media-item-fade-ease) forwards;
+}
+
+.Q_chart_bar_row:nth-child(1)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 0  + var(--Media-bar-fill-dur) * 0.5); }
+.Q_chart_bar_row:nth-child(2)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 1  + var(--Media-bar-fill-dur) * 0.5); }
+.Q_chart_bar_row:nth-child(3)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 2  + var(--Media-bar-fill-dur) * 0.5); }
+.Q_chart_bar_row:nth-child(4)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 3  + var(--Media-bar-fill-dur) * 0.5); }
+.Q_chart_bar_row:nth-child(5)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 4  + var(--Media-bar-fill-dur) * 0.5); }
+.Q_chart_bar_row:nth-child(6)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 5  + var(--Media-bar-fill-dur) * 0.5); }
+.Q_chart_bar_row:nth-child(7)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 6  + var(--Media-bar-fill-dur) * 0.5); }
+.Q_chart_bar_row:nth-child(8)  .Q_chart_bar_value { animation-delay: calc(var(--Media-bar-delay-base) * 7  + var(--Media-bar-fill-dur) * 0.5); }
+
+@keyframes Media_value_fadein {
+    to { opacity: 1; }
+}
+
+/* ── Line chart: path draws in left-to-right ─────────────────────────────── */
+/* Works with D3 SVG paths. JS must set stroke-dasharray = stroke-dashoffset
+   = path.getTotalLength() then this animation drives dashoffset to 0.       */
+/* The presentation wrapper tool applies .Media_chart_line_animate on render. */
+
+.Media_chart_line_animate .Q_chart_line path.Q_chart_line_series {
+    stroke-dashoffset: var(--Media-line-path-length, 2000);
+    animation: Media_line_draw var(--Media-line-draw-dur)
+               cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Stagger multiple series */
+.Media_chart_line_animate .Q_chart_line path.Q_chart_line_series:nth-child(1) { animation-delay: 0ms; }
+.Media_chart_line_animate .Q_chart_line path.Q_chart_line_series:nth-child(2) { animation-delay: 120ms; }
+.Media_chart_line_animate .Q_chart_line path.Q_chart_line_series:nth-child(3) { animation-delay: 240ms; }
+
+@keyframes Media_line_draw {
+    to { stroke-dashoffset: 0; }
+}
+
+/* Dots fade in after line draws */
+.Media_chart_line_animate .Q_chart_line circle.Q_chart_line_dot {
+    opacity: 0;
+    animation: Media_value_fadein var(--Media-item-fade-dur) ease forwards;
+    animation-delay: calc(var(--Media-line-draw-dur) * 0.7);
+}
+
+/* ── Stat card: value pops ───────────────────────────────────────────────── */
+
+.Q_card_stat .Q_card_stat_value {
+    display: inline-block;
+    animation: Media_stat_pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes Media_stat_pop {
+    0%   { opacity: 0; transform: scale(0.82) translateY(6px); }
+    100% { opacity: 1; transform: none; }
+}
+
+.Q_card_stat .Q_card_stat_delta {
+    opacity: 0;
+    animation: Media_value_fadein 300ms ease 420ms forwards;
+}
+
+.Q_card_stat .Q_card_stat_label {
+    opacity: 0;
+    animation: Media_value_fadein 300ms ease 180ms forwards;
+}
+
+/* ── Glossary card: definition slides up ────────────────────────────────── */
+
+.Q_card_glossary .Q_card_glossary_term {
+    opacity: 0;
+    animation: Media_bar_row_in 380ms var(--Media-item-fade-ease) forwards;
+}
+
+.Q_card_glossary .Q_card_glossary_definition {
+    opacity: 0;
+    animation: Media_bar_row_in 380ms var(--Media-item-fade-ease) 120ms forwards;
+}
+
+.Q_card_glossary .Q_card_glossary_context {
+    opacity: 0;
+    animation: Media_value_fadein 300ms ease 280ms forwards;
+}
+
+/* ── Quote card: quote slides, attribution fades ────────────────────────── */
+
+.Q_card_quote .Q_card_quote_text {
+    opacity: 0;
+    transform: translateY(12px);
+    animation: Media_bar_row_in 480ms cubic-bezier(0.22, 1, 0.36, 1) 60ms forwards;
+}
+
+.Q_card_quote .Q_card_quote_speaker,
+.Q_card_quote .Q_card_quote_source {
+    opacity: 0;
+    animation: Media_value_fadein 320ms ease 380ms forwards;
+}
+
+/* ── Profile card: avatar scales in, text fades ─────────────────────────── */
+
+.Q_card_profile .Q_card_profile_avatar,
+.Q_card_profile .Users_avatar {
+    opacity: 0;
+    transform: scale(0.88);
+    animation: Media_stat_pop 440ms cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.Q_card_profile .Q_card_profile_name {
+    opacity: 0;
+    animation: Media_bar_row_in 360ms ease 160ms forwards;
+}
+
+.Q_card_profile .Q_card_profile_bio,
+.Q_card_profile .Q_card_profile_handle,
+.Q_card_profile .Q_card_profile_tags {
+    opacity: 0;
+    animation: Media_value_fadein 300ms ease 280ms forwards;
+}
+
+/* ── Comparison card: columns slide in from sides ───────────────────────── */
+
+.Q_card_comparison .Q_card_comparison_left {
+    opacity: 0;
+    transform: translateX(-16px);
+    animation: Media_bar_row_in 420ms var(--Media-item-fade-ease) forwards;
+}
+
+.Q_card_comparison .Q_card_comparison_right {
+    opacity: 0;
+    transform: translateX(16px);
+    animation: Media_bar_row_in 420ms var(--Media-item-fade-ease) 80ms forwards;
+}
+
+.Q_card_comparison .Q_card_comparison_row {
+    opacity: 0;
+    animation: Media_value_fadein 260ms ease forwards;
+}
+
+.Q_card_comparison .Q_card_comparison_row:nth-child(1) { animation-delay: 240ms; }
+.Q_card_comparison .Q_card_comparison_row:nth-child(2) { animation-delay: 300ms; }
+.Q_card_comparison .Q_card_comparison_row:nth-child(3) { animation-delay: 360ms; }
+.Q_card_comparison .Q_card_comparison_row:nth-child(4) { animation-delay: 420ms; }
+.Q_card_comparison .Q_card_comparison_row:nth-child(5) { animation-delay: 480ms; }
+
+/* ── Article card: image scales, text staggers ───────────────────────────── */
+
+.Q_card_article .Q_card_article_image {
+    opacity: 0;
+    transform: scale(1.04);
+    animation: Media_article_img_in 500ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes Media_article_img_in {
+    to { opacity: 1; transform: scale(1); }
+}
+
+.Q_card_article .Q_card_article_title {
+    opacity: 0;
+    animation: Media_bar_row_in 360ms ease 120ms forwards;
+}
+
+.Q_card_article .Q_card_article_keyclaim {
+    opacity: 0;
+    animation: Media_value_fadein 300ms ease 280ms forwards;
+}
+
+.Q_card_article .Q_card_article_publication,
+.Q_card_article .Q_card_article_date {
+    opacity: 0;
+    animation: Media_value_fadein 260ms ease 360ms forwards;
+}
+
+/* ── Exit animations: .Media_presentation_leaving + element classes ──────── */
+/* When the presentation wrapper is leaving, child elements reverse.         */
+/* The wrapper's own opacity transition handles most of it;                  */
+/* these add directionality for themed exits.                                */
+
+.Media_presentation_transition_rise .Media_presentation_chart_screen.Media_presentation_leaving .Q_chart_bar_row,
+.Media_presentation_transition_rise .Media_presentation_card_screen.Media_presentation_leaving  .Q_card_stat_value,
+.Media_presentation_transition_rise .Media_presentation_card_screen.Media_presentation_leaving  .Q_card_quote_text {
+    animation: none;
+    transition: opacity 200ms ease, transform 200ms ease;
+    opacity: 0;
+    transform: translateY(-8px);
+}
+
+/* ── Reduced motion: respect prefers-reduced-motion ─────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+    .Q_chart_bar_row,
+    .Q_chart_bar_value,
+    .Q_card_stat_value,
+    .Q_card_stat_delta,
+    .Q_card_stat_label,
+    .Q_card_glossary_term,
+    .Q_card_glossary_definition,
+    .Q_card_quote_text,
+    .Q_card_profile_avatar,
+    .Q_card_profile_name,
+    .Q_card_comparison_left,
+    .Q_card_comparison_right,
+    .Q_card_article_image,
+    .Q_card_article_title {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Responsive / participant view
+   ═══════════════════════════════════════════════════════════════════════════
+
+   TWO DISTINCT CONTEXTS
+   ─────────────────────
+   1. Screenshare audience — watching the host's desktop on Zoom/Meet.
+      They see the Intelligence Window at desktop resolution.
+      Cards should be cinematic: large type, wide, designed for a big screen.
+      These people never trigger this CSS — their viewport is their laptop.
+
+   2. Participant phone — scanned the QR code, following along on their
+      own device. Viewport is 375–430px wide. Cards must reflow and be
+      readable without pinch-zooming. Word-wrap freely, go single-column,
+      drop decorative elements that eat space.
+
+   The breakpoints below target participant phones only.
+   Safari 16+ / Chrome 107+ on iOS — no need to support older.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Participant mode marker ─────────────────────────────────────────────────
+   The presentation page sets data-mode="participant" on the tool element
+   when ?m=p is in the URL (QR scan path).
+   Use this to hide host-only UI regardless of viewport width.            */
+
+[data-mode="participant"] .Media_presentation_question_QR,
+[data-mode="participant"] .Media_presentation_question_scanQR {
+    display: none;
+}
+
+/* ── Responsive breakpoints ──────────────────────────────────────────────── */
+
+@media (max-width: 700px) {
+
+    /* ── Card/chart screens: stop centering, let content flow naturally ── */
+    .Media_presentation_card_screen,
+    .Media_presentation_chart_screen {
+        /* On desktop these are centered floating cards over b-roll.
+           On mobile, just fill the screen — no centering trick needed. */
+        max-width: 100%;
+        margin: 0;
+        top: auto;
+        transform: none;
+        border-radius: 0;
+        padding: 32px 20px 40px;
+        min-height: 100dvh;        /* fill the viewport */
+        justify-content: flex-start;
+        align-items: flex-start;
+        backdrop-filter: blur(8px); /* slightly less blur = faster on mobile GPU */
+    }
+
+    /* ── Typography: let clamp do the work, just floor the min ──────────── */
+
+    /* Term: big but not absurdly so at 375px */
+    .Q_card_glossary .Q_card_term {
+        font-size: clamp(1.75rem, 8vw, 3.5rem);
+        word-break: break-word;
+        hyphens: auto;
+    }
+    .Q_card_glossary .Q_card_definition {
+        font-size: clamp(1rem, 4vw, 1.5rem);
+        line-height: 1.55;
+    }
+    .Q_card_glossary .Q_card_context {
+        font-size: 0.95rem;
+    }
+
+    /* Stat: the number should dominate but not overflow */
+    .Q_card_stat .Q_card_value_number {
+        font-size: clamp(3.5rem, 20vw, 7rem);
+        letter-spacing: -0.03em;
+    }
+    .Q_card_stat .Q_card_label {
+        font-size: 1rem;
+        letter-spacing: 0.06em;
+    }
+
+    /* Profile: stack header vertically */
+    .Q_card_profile .Q_card_profile_header {
+        flex-direction: column;
+        gap: 16px;
+    }
+    .Q_card_profile .Q_card_profile_name {
+        font-size: clamp(1.5rem, 6vw, 2.5rem);
+        word-break: break-word;
+    }
+    .Q_card_profile .Q_card_profile_bio {
+        font-size: 1rem;
+        line-height: 1.6;
+    }
+    /* Tags: wrap freely */
+    .Q_card_profile .Q_card_profile_tags {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    /* Quote: reduce quote mark size, wrap text */
+    .Q_card_quote .Q_card_quote_mark {
+        font-size: clamp(3rem, 12vw, 6rem);
+    }
+    .Q_card_quote .Q_card_quote_text {
+        font-size: clamp(1.1rem, 4vw, 1.8rem);
+        word-break: break-word;
+        hyphens: auto;
+    }
+
+    /* Article: hide thumbnail on very narrow screens to save vertical space */
+    .Q_card_article .Q_card_article_image {
+        max-height: 30vw; /* proportional, not fixed height */
+    }
+    .Q_card_article .Q_card_article_title {
+        font-size: clamp(1.2rem, 5vw, 2rem);
+        word-break: break-word;
+        hyphens: auto;
+    }
+    .Q_card_article .Q_card_article_claim {
+        font-size: 0.95rem;
+    }
+
+    /* Comparison: go single column — side-by-side is illegible at 375px */
+    .Q_card_comparison .Q_card_comparison_header {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    /* Comparison rows: label + two values, drop delta */
+    .Q_card_comparison .Q_card_comparison_row {
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+    }
+    .Q_card_comparison .Q_card_comparison_row_label {
+        grid-column: 1 / -1; /* span full width */
+        font-weight: 600;
+        opacity: 0.8;
+    }
+    .Q_card_comparison .Q_card_comparison_row_delta {
+        display: none; /* too crowded */
+    }
+
+    /* ── Bar chart: narrow label column, wrap label text ─────────────────── */
+    .Q_chart_bar .Q_chart_bar_rows {
+        gap: 14px; /* more breathing room between rows */
+    }
+    .Q_chart_bar .Q_chart_bar_row {
+        grid-template-columns: 1fr;   /* stack: label on top, bar below */
+        gap: 4px;
+    }
+    .Q_chart_bar .Q_chart_bar_label {
+        font-size: 0.9rem;
+        white-space: normal;    /* allow wrap on mobile */
+        overflow: visible;
+        text-overflow: unset;
+    }
+    .Q_chart_bar .Q_chart_bar_track {
+        height: 16px;
+    }
+    .Q_chart_bar .Q_chart_bar_value {
+        text-align: left;
+        font-size: 0.85rem;
+    }
+
+    /* ── Gallery background: simpler on mobile ───────────────────────────── */
+    /* Keep kenburns running (JS handles it) but constrain the image          */
+    .Media_presentation_background .Q_gallery_tool img {
+        object-fit: cover;
+    }
+
+    /* ── Transitions on mobile: fade only, no translate/scale ───────────── */
+    /* Translate and scale transitions can cause compositing jank on          */
+    /* older mobile GPUs. Reduce to opacity only by zeroing distances.        */
+    .Media_presentation_transition_rise .Media_presentation_card_screen,
+    .Media_presentation_transition_rise .Media_presentation_chart_screen,
+    .Media_presentation_transition_drop .Media_presentation_card_screen,
+    .Media_presentation_transition_drop .Media_presentation_chart_screen,
+    .Media_presentation_transition_slide .Media_presentation_card_screen,
+    .Media_presentation_transition_slide .Media_presentation_chart_screen,
+    .Media_presentation_transition_scale .Media_presentation_card_screen,
+    .Media_presentation_transition_scale .Media_presentation_chart_screen {
+        --Media-transition-distance:   0px;
+        --Media-transition-scale-from: 1;
+        /* transform transitions now animate to/from identical values = no-op */
+    }
+
+} /* end @media (max-width: 700px) */
+
+/* ── Very narrow: extra density reduction ────────────────────────────────── */
+/* iPhone SE (375px), older Android */
+
+@media (max-width: 390px) {
+
+    .Media_presentation_card_screen,
+    .Media_presentation_chart_screen {
+        padding: 24px 16px 32px;
+    }
+
+    .Q_card_stat .Q_card_value_number {
+        font-size: clamp(3rem, 22vw, 5rem);
+    }
+
+    /* Source line: very small, push to bottom */
+    .Q_card_source {
+    font-family: var(--Q-card-mono);
+        font-size: 0.7rem;
+        margin-top: 20px;
+    }
+
+    /* Profile icon: smaller on tiny screens */
+    .Q_card_profile .Q_card_profile_icon {
+        width: 56px;
+        height: 56px;
+    }
+
+}
+
+/* ── Presentation integration ────────────────────────────────────────────── */
+/* When a card is inside the presentation card screen, it fills the area     */
+/* and the glass backdrop blurs the b-roll gallery behind it.                */
+
+.Media_presentation_card_screen,
+.Media_presentation_chart_screen {
+    /* The wrapper is transparent — the card's own glass bg handles visuals */
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: clamp(16px, 3vw, 40px);
+    box-sizing: border-box;
+}
+
+.Media_presentation_card_screen .Q_card,
+.Media_presentation_chart_screen .Q_chart {
+    max-width: min(900px, 100%);
+    width: 100%;
+}
+
+/* Source/attribution links */
+.Q_card a.Q_card_source_link,
+.Q_card a.Q_card_url {
+    color: var(--Q-card-accent4);
+    text-decoration: none;
+    border-bottom: 1px solid rgba(124,158,255,0.3);
+    transition: border-color 0.2s;
+}
+.Q_card a.Q_card_source_link:hover,
+.Q_card a.Q_card_url:hover {
+    border-bottom-color: var(--Q-card-accent4);
+}
+
+/* Stat: animated counter via CSS */
+.Q_card_stat .Q_card_value_number {
+    font-feature-settings: 'tnum';
+}
+
+/* Profile avatar */
+.Q_card_profile .Q_card_avatar {
+    width: clamp(60px, 10vw, 100px);
+    height: clamp(60px, 10vw, 100px);
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--Q-card-border);
+}
+
+/* Comparison: dividing line */
+.Q_card_comparison .Q_card_vs {
+    color: var(--Q-card-muted);
+    font-size: clamp(0.75rem, 1.5vw, 1rem);
+    font-family: var(--Q-card-mono);
+    letter-spacing: 0.1em;
+}
+
+/* Article: publication badge */
+.Q_card_article .Q_card_publication {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    background: rgba(255,255,255,0.08);
+    font-family: var(--Q-card-mono);
+    font-size: clamp(0.65rem, 1.2vw, 0.85rem);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--Q-card-muted);
+}
+
+/* ── Chart tokens ─────────────────────────────────────────────────────────── */
+:root {
+    --Q-chart-bar-fill:     var(--Q-card-accent);
+    --Q-chart-bar-hover:    #f0d060;
+    --Q-chart-line-stroke:  var(--Q-card-accent2);
+    --Q-chart-axis:         rgba(255,255,255,0.12);
+    --Q-chart-grid:         rgba(255,255,255,0.05);
+    --Q-chart-label:        rgba(232,230,224,0.5);
+    --Q-chart-tooltip-bg:   rgba(12,12,18,0.95);
+}
+
+/* ── Gallery caption overlay ─────────────────────────────────────────────── */
+/* Positioned absolutely inside .Media_presentation_gallery_screen           */
+/* Position set via Streams/gallery/caption ephemeral (top/left/bottom/right) */
+
+.Media_presentation_gallery_caption {
+    position: absolute;
+    z-index: 10;
+    max-width: 60%;
+    padding: 6px 14px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.52);
+    color: #fff;
+    font-family: var(--Q-card-sans);
+    font-size: clamp(0.8rem, 1.6vw, 1.1rem);
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    pointer-events: none;
+    /* Fade in */
+    animation: Media_caption_fadein 0.4s ease;
+}
+
+@keyframes Media_caption_fadein {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.Media_presentation_gallery_screen {
+    position: relative; /* captions position absolutely inside this */
+    overflow: hidden;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Audience reactions — floating emoji on the shared presentation screen
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Triggered by Media/livestream/reaction ephemeral.
+   Each reaction is a <img class="Media_presentation_reaction_float"> appended
+   to the presentation container, animated upward with random drift, then
+   removed from DOM after 2.6s.
+
+   Participant reaction buttons appear on ?m=p (phone) view via
+   .Media_presentation_participant_reactions strip at bottom of screen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Floating emoji ──────────────────────────────────────────────────────── */
+
+.Media_presentation_reaction_float {
+    position:    absolute;
+    bottom:      8%;
+    width:       52px;
+    height:      52px;
+    pointer-events: none;
+    z-index:     50;
+    user-select: none;
+    animation:   Media_reaction_float 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+}
+
+@keyframes Media_reaction_float {
+    0%   {
+        opacity:   0;
+        transform: translateY(0)      translateX(0)                         scale(0.5);
+    }
+    12%  {
+        opacity:   1;
+        transform: translateY(-20px)  translateX(0)                         scale(1.15);
+    }
+    85%  {
+        opacity:   1;
+        transform: translateY(-180px) translateX(var(--Media-reaction-drift, 0px)) scale(1);
+    }
+    100% {
+        opacity:   0;
+        transform: translateY(-220px) translateX(var(--Media-reaction-drift, 0px)) scale(0.85);
+    }
+}
+
+/* Multiple reactions in quick succession stagger nicely because each is
+   independently positioned and has its own drift variable. */
+
+/* ── Participant reaction button strip (?m=p view) ───────────────────────── */
+
+.Media_presentation_participant_reactions {
+    display:         flex;
+    justify-content: center;
+    align-items:     center;
+    gap:             8px;
+    padding:         10px 12px;
+    background:      rgba(12, 12, 18, 0.82);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top:      1px solid rgba(255,255,255,0.08);
+    flex-shrink:     0;
+    overflow-x:      auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.Media_presentation_participant_reactions::-webkit-scrollbar {
+    display: none;
+}
+
+.Media_presentation_reaction_btn {
+    display:         flex;
+    align-items:     center;
+    justify-content: center;
+    width:           44px;
+    height:          44px;
+    border-radius:   50%;
+    border:          1.5px solid rgba(255,255,255,0.12);
+    background:      rgba(255,255,255,0.07);
+    cursor:          pointer;
+    transition:      transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1),
+                     background 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+    flex-shrink:     0;
+}
+
+.Media_presentation_reaction_btn:active,
+.Media_presentation_reaction_btn.Media_reaction_sent {
+    transform:  scale(1.35);
+    background: rgba(255,255,255,0.18);
+    animation:  Media_reaction_btn_pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes Media_reaction_btn_pop {
+    0%   { transform: scale(1); }
+    50%  { transform: scale(1.4); }
+    100% { transform: scale(1); }
+}
+
+.Media_presentation_reaction_btn img {
+    width:  26px;
+    height: 26px;
+    pointer-events: none;
+    user-select:    none;
+}
+
+/* On very small screens, shrink the buttons a touch */
+@media (max-width: 360px) {
+    .Media_presentation_reaction_btn {
+        width:  38px;
+        height: 38px;
+    }
+    .Media_presentation_reaction_btn img {
+        width:  22px;
+        height: 22px;
+    }
+}
+
+/* ── Reaction count badge (optional, shown on shared screen) ─────────────── */
+/* Displayed when 3+ same reaction arrives within 2s — shows "×5" next to emoji */
+
+.Media_presentation_reaction_burst {
+    position:    absolute;
+    bottom:      8%;
+    pointer-events: none;
+    z-index:     51;
+    display:     flex;
+    align-items: center;
+    gap:         4px;
+    animation:   Media_reaction_burst_in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
+                 Media_reaction_burst_out 0.4s ease 1.8s forwards;
+}
+
+.Media_presentation_reaction_burst img {
+    width:  40px;
+    height: 40px;
+}
+
+.Media_presentation_reaction_burst_count {
+    font-family:  system-ui, sans-serif;
+    font-size:    1.6rem;
+    font-weight:  700;
+    color:        #fff;
+    text-shadow:  0 2px 8px rgba(0,0,0,0.6);
+    letter-spacing: -0.02em;
+}
+
+@keyframes Media_reaction_burst_in {
+    from { opacity: 0; transform: scale(0.6) translateY(20px); }
+    to   { opacity: 1; transform: scale(1)   translateY(0); }
+}
+
+@keyframes Media_reaction_burst_out {
+    to { opacity: 0; transform: translateY(-30px) scale(0.8); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .Media_presentation_reaction_float,
+    .Media_presentation_reaction_burst {
+        animation: none !important;
+        opacity: 0 !important;
+    }
+}
+

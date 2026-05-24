@@ -2355,6 +2355,35 @@ Q.dir = function _Q_dir(start, callback) {
 };
 
 /**
+ * Get a certain directory of an installed plugin.
+ * Returns null if the plugin is not installed or the type is not defined.
+ * Mirrors PHP: Q::pluginDir($plugin, $type)
+ *
+ * @method pluginDir
+ * @static
+ * @param {String} plugin  Plugin name, e.g. 'Media', 'Streams', 'AI'
+ * @param {String} type    Directory type: 'WEB', 'TEXT', 'CLASSES', 'FILES', 'SCRIPTS', 'CONFIG'
+ * @return {String|null}
+ */
+Q.pluginDir = function (plugin, type) {
+    var key = plugin.toUpperCase() + '_PLUGIN_' + type.toUpperCase() + '_DIR';
+    return process.env[key] || null;
+};
+
+/**
+ * Check whether a plugin is installed.
+ * Mirrors PHP: Q::pluginInstalled($plugin)
+ *
+ * @method pluginInstalled
+ * @static
+ * @param {String} plugin
+ * @return {Boolean}
+ */
+Q.pluginInstalled = function (plugin) {
+    return Q.pluginDir(plugin, 'WEB') !== null;
+};
+
+/**
  * Normalizes text by converting it to lower case, and
  * replacing all non-accepted characters with underscores.
  * @method normalize

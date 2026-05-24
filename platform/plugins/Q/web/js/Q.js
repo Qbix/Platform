@@ -16773,6 +16773,57 @@ Q.Intl = {
 };
 
 /**
+ * Q.Speech objects facilitate speech recognition
+ * @class Q.Speech
+ * @constructor
+ * @param {String} url the url of the audio to load
+ * @param {HTMLElement} container html element to insert audio to
+ * @param {object} attributes json object with attributes to apply to audio element
+ */
+/**
+ * @class Q.Speech
+ */
+Q.Speech = Q.Speech || {};
+Q.Speech.Recognition = Q.Speech.Recognition || {};
+
+// Shared events
+Q.Speech.Recognition.onStart       = new Q.Event();
+Q.Speech.Recognition.onEnd         = new Q.Event();
+Q.Speech.Recognition.onResult      = new Q.Event();
+Q.Speech.Recognition.onError       = new Q.Event();
+Q.Speech.Recognition.onSpeechStart = new Q.Event();
+Q.Speech.Recognition.onSpeechEnd   = new Q.Event();
+
+// Shared state
+Q.Speech.Recognition._supported   = null;   // null = not yet checked
+Q.Speech.Recognition._autoRestart = false;
+Q.Speech.Recognition._rec         = null;   // current SpeechRecognition instance
+Q.Speech.Recognition._impl        = null;   // server-side override (e.g. Deepgram)
+
+// Q.Methods — loaded lazily from js/methods/Q/Speech/Recognition/
+Q.Speech.Recognition.start       = new Q.Method();
+Q.Speech.Recognition.stop        = new Q.Method();
+Q.Speech.Recognition.abort       = new Q.Method();
+Q.Speech.Recognition.implement   = new Q.Method();
+Q.Speech.Recognition.unimplement = new Q.Method();
+
+Q.Method.define(Q.Speech.Recognition, "{{Q}}/js/methods/Q/Speech/Recognition", function () {
+    return [Q, root];
+});
+
+/**
+ * Stop any active recognition cleanly.
+ * Safe to call before Recognition methods have loaded.
+ * @method Q.Speech.stopRecognition
+ * @static
+ */
+Q.Speech.stopRecognition = function () {
+    if (typeof Q.Speech.Recognition.stop === 'function') {
+        Q.Speech.Recognition.stop();
+    }
+};
+
+/**
  * Q.Audio objects facilitate audio functionality on various browsers.
  * Please do not create them directly, but use the Q.Audio.load function.
  * @class Q.Audio
@@ -17380,7 +17431,17 @@ Q.Tool.define({
 	"Q/scanQR": {
 		js: ["{{Q}}/js/qrcode/html5-qrcode.min.js", "{{Q}}/js/qrcode/scanQR.js"],
 		css: "{{Q}}/js/qrcode/scanQR.css"
-	}
+	},
+	"Q/card/glossary":   { js: "{{Q}}/js/tools/card/glossary.js",   css: "{{Q}}/css/tools/cards.css" },
+	"Q/card/stat":       { js: "{{Q}}/js/tools/card/stat.js",       css: "{{Q}}/css/tools/cards.css" },
+	"Q/card/profile":    { js: "{{Q}}/js/tools/card/profile.js",    css: "{{Q}}/css/tools/cards.css" },
+	"Q/card/quote":      { js: "{{Q}}/js/tools/card/quote.js",      css: "{{Q}}/css/tools/cards.css" },
+	"Q/card/article":    { js: "{{Q}}/js/tools/card/article.js",    css: "{{Q}}/css/tools/cards.css" },
+	"Q/card/comparison": { js: "{{Q}}/js/tools/card/comparison.js", css: "{{Q}}/css/tools/cards.css" },
+	"Q/chart/bar":  { js: "{{Q}}/js/tools/chart/bar.js",  css: "{{Q}}/css/tools/cards.css" },
+	"Q/chart/line": { js: "{{Q}}/js/tools/chart/line.js", css: "{{Q}}/css/tools/cards.css" },
+	"Q/visualization/graph": "{{Q}}/js/tools/visualization/graph.js",
+	"Q/visualization/table": "{{Q}}/js/tools/visualization/table.js"
 });
 
 Q.Tool.jQuery({

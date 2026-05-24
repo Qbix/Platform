@@ -33,16 +33,21 @@ Q.exports(function (Q) {
             }
             if (!element) return;
 
-            function resolve(value, total) {
-                if (typeof value === 'string' && value.slice(-1) === '%') {
-                    return total * parseFloat(value) / 100;
+            function resolve(value, total, current) {
+                if (typeof value !== 'string') {
+                    return value != null ? parseFloat(value) : undefined;
                 }
-                return value != null ? parseFloat(value) : undefined;
+                var isRelative = (value.charAt(0) === '+' || value.charAt(0) === '-');
+                var pct = value.slice(-1) === '%';
+                var num = parseFloat(value); // parseFloat handles +/- prefix
+                if (isNaN(num)) return undefined;
+                var abs = pct ? (total * num / 100) : num;
+                return isRelative ? (current + abs) : abs;
             }
 
             var options = { behavior: payload.behavior || 'smooth' };
-            var top  = resolve(payload.top,  element.scrollHeight);
-            var left = resolve(payload.left, element.scrollWidth);
+            var top  = resolve(payload.top,  element.scrollHeight, element.scrollTop);
+            var left = resolve(payload.left, element.scrollWidth,  element.scrollLeft);
             if (top  != null) options.top  = top;
             if (left != null) options.left = left;
 

@@ -2124,20 +2124,38 @@ class Q
 
 	/**
 	 * Call this function to get a certain directory of a plugin.
+	 * Returns null (not an exception) if the plugin is not installed,
+	 * so callers can treat plugins as optional dependencies cleanly.
+	 *
 	 * @method pluginDir
 	 * @static
-	 * @param {string} $plugin can be "Users", "Streams", etc.
-	 * @param {string} $type can be "WEB", "SCRIPTS", etc.
-	 * @return {string} the full directory path
+	 * @param {string} $plugin  Plugin name, e.g. "Media", "Streams", "Users"
+	 * @param {string} $type    Directory type, e.g. "WEB", "FILES", "SCRIPTS", "CLASSES"
+	 * @return {string|null}    Full directory path, or null if not defined
 	 */
 	static function pluginDir($plugin, $type)
 	{
-		$cn = strtoupper($plugin) . '_PLUGIN_' . $type . '_DIR';
+		$cn = strtoupper($plugin) . '_PLUGIN_' . strtoupper($type) . '_DIR';
 		if (!defined($cn)) {
 			return null;
 		}
 		return constant($cn);
 	}
+
+	/**
+	 * Check whether a plugin is installed.
+	 * Equivalent to checking if pluginDir() returns non-null for 'WEB'.
+	 *
+	 * @method pluginInstalled
+	 * @static
+	 * @param {string} $plugin  Plugin name
+	 * @return {boolean}
+	 */
+	static function pluginInstalled($plugin)
+	{
+		return self::pluginDir($plugin, 'WEB') !== null;
+	}
+
 
 	/**
 	 * @method do_dump
