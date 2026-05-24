@@ -267,6 +267,191 @@ class Q_Image
 		return @file_get_contents($webformatUrl);
 	}
 	
+/**
+	 * Get images from Pexels search or curated collection.
+	 * The Authorization key is kept server-side and never sent to clients.
+	 * Use $options['curated'] = true to hit /v1/curated (no query needed).
+	 * @method pexels
+	 * @static
+	 * @param {string} $keywords Search query (ignored when $options['curated'] is true)
+	 * @param {array} [$options=array()] Additional options
+	 * @param {integer} [$options.per_page=10] Results per page (max 80)
+	 * @param {integer} [$options.page=1] Page number for pagination
+	 * @param {string} [$options.orientation='landscape'] landscape, portrait, or square
+	 * @param {string} [$options.size] Filter by size: large, medium, or small
+	 * @param {string} [$options.color] Filter by color name (red, orange, yellow, green,
+	 *   turquoise, blue, violet, pink, brown, black, gray, white) or hex e.g. "#ff0000"
+	 * @param {string} [$options.locale] Response locale e.g. "en-US", "pt-BR"
+	 * @param {string} [$options.src_size='landscape'] Which src crop to surface as the
+	 *   primary image URL in $returnFirstImage and in normalizeImages():
+	 *   original, large2x, large, medium, small, portrait, landscape, tiny
+	 * @param {boolean} [$options.curated=false] Use the curated endpoint (/v1/curated)
+	 *   instead of search. Keywords are ignored. Returns editorially selected photos.
+	 * @param {boolean} [$returnFirstImage=false] If true, downloads and returns the
+	 *   raw bytes of the first result's primary src URL.
+	 * @return {array|string|null} Decoded Pexels response array, raw image bytes
+	 *   (when $returnFirstImage is true), or null on failure.
+	 * @throws Q_Exception_MissingConfig
+	 */
+	static function pexels($keywords, $options = array(), $returnFirstImage = false)
+	{
+		$key = Q_Config::expect('Q', 'images', 'pexels', 'key');
+
+		$defaults = array(
+			'per_page'    => 10,
+			'page'        => 1,
+			'orientation' => 'landscape',
+			'src_size'    => 'landscape',
+			'curated'     => false,
+		);
+		$options = array_merge($defaults, $options);
+
+		// Pull out non-API options before building the query string
+		$curated  = (bool)$options['curated'];
+		$srcSize  = $options['src_size'];
+		unset($options['curated'], $options['src_size']);
+
+		$context = stream_context_create(array(
+			'http' => array(
+				'header'  => "Authorization: {$key}\r\nUser-Agent: Qbix/1.0\r\n",
+				'timeout' => 10,
+			)
+		));
+
+		if ($curated) {
+			// Curated endpoint: only per_page and page are accepted
+			$apiOptions = array(
+				'per_page' => $options['per_page'],
+				'page'     => $options['page'],
+			);
+			$url = 'https://api.pexels.com/v1/curated?' . http_build_query($apiOptions, '', '&');
+		} else {
+			$keywords = urlencode(mb_strtolower($keywords, 'UTF-8'));
+			// Remove src_size-related keys that aren't valid Pexels query params
+			$apiOptions = $options;
+			unset($apiOptions['src_size']);
+			$url = 'https://api.pexels.com/v1/search?query=' . $keywords
+			     . '&' . http_build_query($apiOptions, '', '&');
+		}
+
+		$json = @file_get_contents($url, false, $context);
+		if ($json === false) {
+			return null;
+		}
+		$data = Q::json_decode($json, true);
+		if (empty($data)) {
+			return null;
+		}
+
+		// Tag which src size was requested so normalizeImages() picks the right URL
+		$data['_src_size'] = $srcSize;
+
+		if (!$returnFirstImage) {
+			return $data;
+		}
+
+		$photo = !empty($data['photos'][0]) ? $data['photos'][0] : null;
+		if (!$photo) {
+			return null;
+		}
+
+		// Prefer requested src_size, fall back through the hierarchy
+		$fallbacks = array($srcSize, 'landscape', 'large', 'original');
+		$imageUrl = null;
+		foreach ($fallbacks as $size) {
+			if (!empty($photo['src'][$size])) {
+				$imageUrl = $photo['src'][$size];
+				break;
+			}
+		}
+		return $imageUrl ? @file_get_contents($imageUrl) : null;
+	}
+
+	/**
+	 * Normalize raw provider response into a uniform image array for gallery clients.
+	 *
+	 * Output shape per item:
+	 *   src          {string}  Primary image URL (ready to use as <img src>)
+	 *   caption      {string}  "Photographer / Provider" — required attribution
+	 *   color        {string}  Dominant hex color e.g. "#1a2b3c", or empty string
+	 *   width        {integer} Image width in pixels
+	 *   height       {integer} Image height in pixels
+	 *   alt          {string}  Descriptive text (Pexels alt, Pixabay tags)
+	 *   pageUrl      {string}  Attribution page URL on the provider site
+	 *   photographer {string}  Photographer display name
+	 *   provider     {string}  "pexels" or "pixabay"
+	 *
+	 * @method normalizeImages
+	 * @static
+	 * @param {array} $data Raw response from Q_Image::pexels() or Q_Image::pixabay()
+	 * @param {string} $provider "pexels" or "pixabay"
+	 * @return {array} Array of normalized image objects, empty array on failure
+	 */
+	static function normalize($data, $provider)
+	{
+		$out = array();
+
+		if ($provider === 'pexels') {
+			if (empty($data['photos']) || !is_array($data['photos'])) {
+				return $out;
+			}
+			$srcSize   = !empty($data['_src_size']) ? $data['_src_size'] : 'landscape';
+			$fallbacks = array($srcSize, 'landscape', 'large', 'original');
+
+			foreach ($data['photos'] as $photo) {
+				$src = '';
+				foreach ($fallbacks as $size) {
+					if (!empty($photo['src'][$size])) {
+						$src = $photo['src'][$size];
+						break;
+					}
+				}
+				if (!$src) continue;
+
+				$photographer = !empty($photo['photographer']) ? $photo['photographer'] : '';
+				$out[] = array(
+					'src'          => $src,
+					'caption'      => $photographer ? $photographer . ' / Pexels' : 'Pexels',
+					'color'        => !empty($photo['avg_color'])     ? $photo['avg_color']     : '',
+					'width'        => !empty($photo['width'])         ? (int)$photo['width']    : 0,
+					'height'       => !empty($photo['height'])        ? (int)$photo['height']   : 0,
+					'alt'          => !empty($photo['alt'])           ? $photo['alt']           : '',
+					'pageUrl'      => !empty($photo['url'])           ? $photo['url']           : '',
+					'photographer' => $photographer,
+					'provider'     => 'pexels',
+				);
+			}
+
+		} elseif ($provider === 'pixabay') {
+			if (empty($data['hits']) || !is_array($data['hits'])) {
+				return $out;
+			}
+
+			foreach ($data['hits'] as $hit) {
+				// Prefer largeImageURL for quality, fall back to webformatURL
+				$src = !empty($hit['largeImageURL'])
+					? $hit['largeImageURL']
+					: (!empty($hit['webformatURL']) ? $hit['webformatURL'] : '');
+				if (!$src) continue;
+
+				$photographer = !empty($hit['user']) ? $hit['user'] : '';
+				$out[] = array(
+					'src'          => $src,
+					'caption'      => $photographer ? $photographer . ' / Pixabay' : 'Pixabay',
+					'color'        => '',   // Pixabay does not return avg_color
+					'width'        => !empty($hit['imageWidth'])  ? (int)$hit['imageWidth']  : 0,
+					'height'       => !empty($hit['imageHeight']) ? (int)$hit['imageHeight'] : 0,
+					'alt'          => !empty($hit['tags'])        ? $hit['tags']             : '',
+					'pageUrl'      => !empty($hit['pageURL'])     ? $hit['pageURL']          : '',
+					'photographer' => $photographer,
+					'provider'     => 'pixabay',
+				);
+			}
+		}
+
+		return $out;
+	}
+
 	/**
 	 * Get an image from facebook search
 	 * @param {string} $keywords Specify some string to search people on facebook
@@ -399,6 +584,17 @@ class Q_Image
 		return empty($results) ? null : @file_get_contents(reset($results));
 	}
 
+	/**
+	 * Determines whether image URLs served from the given base URL should have
+	 * a basename (e.g. "40.png") appended to form the final image path.
+	 * Returns true only for URLs that originate from this server or one of the
+	 * explicitly configured base URLs, so that external CDN URLs are always
+	 * returned as-is without a basename suffix.
+	 * @method shouldUseBasenames
+	 * @static
+	 * @param {string} $themedUrl The fully resolved, themed URL to test
+	 * @return {boolean} True if a basename should be appended, false otherwise
+	 */
 	static function shouldUseBasenames($themedUrl)
 	{
 		$baseUrl = Q_Request::baseUrl();
