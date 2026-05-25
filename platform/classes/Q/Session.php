@@ -1381,10 +1381,6 @@ class Q_Session
 	 */
 	static function isInternal()
 	{
-		if (php_sapi_name() === 'cli') {
-			return true;
-		}
-		
 		$sessionId = Q_Session::id();
 		return ($prefix = Q_Config::get(
 			'Q', 'session', 'id', 'prefixes', 'internal', 'sessionId_internal_'
