@@ -578,7 +578,7 @@ class Q_Utils
 	 * @return int
 	 * @throws TypeError
 	*/
-	public static function chrToInt($chr)
+	static function chrToInt($chr)
 	{
 		/* Type checks: */
 		if (!is_string($chr)) {
@@ -599,7 +599,7 @@ class Q_Utils
 	 * @param string $str
 	 * @return int
 	*/
-	public static function strlen($str)
+	static function strlen($str)
 	{
 		return (int) (
 			self::isMbStringOverride()
@@ -667,7 +667,7 @@ class Q_Utils
 	 *
 	 * @return bool
 	*/
-	public static function hashEquals($a, $b)
+	static function hashEquals($a, $b)
 	{
 		if (is_callable('hash_equals')) {
 			// PHP 5.6
@@ -1340,7 +1340,7 @@ class Q_Utils
 	 * 
 	 * **NOTE:** *The function waits for it, which might take a while! But you can call startBatch()*
 	 */
-	public static function request(
+	static function request(
 		$method,
 		$uri,
 		$data = null,
@@ -2189,8 +2189,8 @@ class Q_Utils
 	 * Create a symlink
 	 * @method symlink
 	 * @static
-	 * @param {string} $target
-	 * @param {string} $link
+	 * @param {string} $target Filename of the target to which the symlink points
+	 * @param {string} $link Filename of where to store the link
 	 * @param {boolean} [$skipIfExists=false]
 	 * @return {boolean} true if link was created, false if it already exists
 	 * @throws Q_Exception if link could not be created
@@ -2237,6 +2237,33 @@ class Q_Utils
 		if (!file_exists($link)) {
 			throw new Q_Exception("Link $link to target $target was not created");
 		}
+	}
+
+	/**
+	 * Moves a file to a timestamped snapshot directory and replaces the
+	 * original path with a symlink, preserving the apparent location while
+	 * making the content immutable at the snapshot path.
+	 *
+	 * @method snapshot
+	 * @static
+	 * @param {string} $filename  Full path to the file to snapshot
+	 * @param {array}  [$options]
+	 * @param {string} [$options.directory]  Snapshot store root. Defaults to
+	 *   Q/snapshots/directory config, then APP_FILES_DIR/Q/snapshots.
+	 * @return {boolean} Whether the snapshot and symlink were both created
+	 */
+	static function snapshot($filename, $options = array())
+	{
+		$directory = APP_FILES_DIR . DS . Q::ifset($options, 'directory', Q_Config::get(
+			'Q', 'snapshots', 'directory', 'Q' . DS . 'snapshots'
+		));
+		$path = $directory . DS . time();
+		if (!@mkdir($path, 0777, true)) {
+			return false;
+		}
+		$dest = $path . DS . basename($filename);
+		return rename($filename, $dest)
+			&& (bool) Q_Utils::symlink($dest, $filename);
 	}
 
 	/**
@@ -2700,7 +2727,7 @@ class Q_Utils
 	 * @param {string} $input
 	 * @return {bool}
 	 */
-	public static function isBase64($input)
+	static function isBase64($input)
 	{
 		if (!is_string($input)) {
 			return false;
@@ -2735,7 +2762,7 @@ class Q_Utils
 	 * @param {string} $input
 	 * @return {string|false}
 	 */
-	public static function toRawBinary($input)
+	static function toRawBinary($input)
 	{
 		if (!is_string($input) || $input === '') {
 			return false;
@@ -2765,7 +2792,7 @@ class Q_Utils
 	 * @param {string} $input Raw binary, base64, or data URI
 	 * @return {string|false} Base64-encoded data
 	 */
-	public static function toBase64($input)
+	static function toBase64($input)
 	{
 		$raw = self::toRawBinary($input);
 		if ($raw === false) {
