@@ -16,7 +16,7 @@
  * @param {Number} [options.animateMs=600]
  * @param {String} [options.source]
  * @param {String} [options.url]
- * @param {Q.Event} [options.onRender]
+ * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/chart/bar", function () {
     var tool = this;
@@ -37,7 +37,7 @@ Q.Tool.define("Q/chart/bar", function () {
 },
 {
     items: [], title: '', unit: '', animate: true, animateMs: 600,
-    source: '', url: '', onRender: new Q.Event()
+    source: '', url: '', onRefresh: new Q.Event()
 },
 {
     refresh: function () {
@@ -106,7 +106,7 @@ Q.Tool.define("Q/chart/bar", function () {
             });
         }
 
-        Q.handle(s.onRender, tool);
+        Q.handle(s.onRefresh, tool);
     },
 
     /** Called by presentation layer on Streams/highlight ephemeral */

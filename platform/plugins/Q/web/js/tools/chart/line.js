@@ -19,7 +19,7 @@
  * @param {Number} [options.animateMs=1000]
  * @param {String} [options.source]
  * @param {String} [options.url]
- * @param {Q.Event} [options.onRender]
+ * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/chart/line", function () {
     var tool = this;
@@ -41,7 +41,7 @@ Q.Tool.define("Q/chart/line", function () {
 {
     series: [], title: '', xLabel: '', yLabel: '', unit: '',
     animate: true, animateMs: 1000, source: '', url: '',
-    onRender: new Q.Event()
+    onRefresh: new Q.Event()
 },
 {
     refresh: function () {
@@ -117,7 +117,7 @@ Q.Tool.define("Q/chart/line", function () {
             var wrapper = svgNode.closest('.Media_presentation_chart_screen, .Q_chart_line');
             if (wrapper) wrapper.classList.add('Media_chart_line_animate');
         }
-        Q.handle(s.onRender, tool);
+        Q.handle(s.onRefresh, tool);
     },
 
     highlight: function (elementId) {

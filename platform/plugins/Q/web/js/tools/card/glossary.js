@@ -14,12 +14,12 @@
  * @param {String} [options.context]    One-sentence usage in context
  * @param {String} [options.source]     Source name
  * @param {String} [options.url]        Source URL
- * @param {Q.Event} [options.onRender]
+ * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/card/glossary", function () { this.refresh(); },
 {
     term: '', definition: '', context: '', source: '', url: '',
-    onRender: new Q.Event()
+    onRefresh: new Q.Event()
 },
 {
     refresh: function () {
@@ -31,7 +31,7 @@ Q.Tool.define("Q/card/glossary", function () { this.refresh(); },
         }, function (err, html) {
             if (err) return;
             tool.element.innerHTML = html;
-            Q.handle(s.onRender, tool);
+            Q.handle(s.onRefresh, tool);
         });
     }
 });

@@ -29,7 +29,7 @@
  * @param {String} [options.source]
  * @param {String} [options.url]
  * @param {Number} [options.revealIndex=2]  Initial reveal depth (0-2)
- * @param {Q.Event} [options.onRender]
+ * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/card/profile", function () {
     var tool = this;
@@ -46,7 +46,7 @@ Q.Tool.define("Q/card/profile", function () {
     source:      '',
     url:         '',
     revealIndex: 2,
-    onRender:    new Q.Event()
+    onRefresh:    new Q.Event()
 },
 {
     refresh: function () {
@@ -74,7 +74,7 @@ Q.Tool.define("Q/card/profile", function () {
                 Q.activate(tool.element);
             }
             tool.reveal(s.revealIndex);
-            Q.handle(s.onRender, tool);
+            Q.handle(s.onRefresh, tool);
         });
     },
 

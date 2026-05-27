@@ -14,12 +14,12 @@
  * @param {String} [options.url]
  * @param {String} [options.imageUrl]
  * @param {String} [options.date]
- * @param {Q.Event} [options.onRender]
+ * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/card/article", function () { this.refresh(); },
 {
     title: '', publication: '', keyClaim: '', url: '', imageUrl: '', date: '',
-    onRender: new Q.Event()
+    onRefresh: new Q.Event()
 },
 {
     refresh: function () {
@@ -32,7 +32,7 @@ Q.Tool.define("Q/card/article", function () { this.refresh(); },
         }, function (err, html) {
             if (err) return;
             tool.element.innerHTML = html;
-            Q.handle(s.onRender, tool);
+            Q.handle(s.onRefresh, tool);
         });
     }
 });

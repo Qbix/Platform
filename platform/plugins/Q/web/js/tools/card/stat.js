@@ -17,13 +17,13 @@
  * @param {String} [options.url]
  * @param {Boolean} [options.animate=true]
  * @param {Number}  [options.animateMs=800]
- * @param {Q.Event} [options.onRender]
+ * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/card/stat", function () { this.refresh(); },
 {
     value: '', unit: '', label: '', delta: '', deltaPositive: null,
     source: '', url: '', animate: true, animateMs: 800,
-    onRender: new Q.Event()
+    onRefresh: new Q.Event()
 },
 {
     refresh: function () {
@@ -56,7 +56,7 @@ Q.Tool.define("Q/card/stat", function () { this.refresh(); },
                 }
                 requestAnimationFrame(step);
             }
-            Q.handle(s.onRender, tool);
+            Q.handle(s.onRefresh, tool);
         });
     }
 });

@@ -12,10 +12,10 @@
  * @param {String} [options.speaker]
  * @param {String} [options.source]
  * @param {String} [options.url]
- * @param {Q.Event} [options.onRender]
+ * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/card/quote", function () { this.refresh(); },
-{ quote: '', speaker: '', source: '', url: '', onRender: new Q.Event() },
+{ quote: '', speaker: '', source: '', url: '', onRefresh: new Q.Event() },
 {
     refresh: function () {
         var tool = this, s = tool.state;
@@ -25,7 +25,7 @@ Q.Tool.define("Q/card/quote", function () { this.refresh(); },
         }, function (err, html) {
             if (err) return;
             tool.element.innerHTML = html;
-            Q.handle(s.onRender, tool);
+            Q.handle(s.onRefresh, tool);
         });
     }
 });
