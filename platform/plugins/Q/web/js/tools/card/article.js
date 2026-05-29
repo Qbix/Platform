@@ -16,7 +16,9 @@
  * @param {String} [options.date]
  * @param {Q.Event} [options.onRefresh]
  */
-Q.Tool.define("Q/card/article", function () { this.refresh(); },
+Q.Tool.define("Q/card/article", function () {
+    this.refresh();
+},
 {
     title: '', publication: '', keyClaim: '', url: '', imageUrl: '', date: '',
     onRefresh: new Q.Event()

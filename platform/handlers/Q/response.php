@@ -207,7 +207,7 @@ EOT;
 
 	static $added_Q_init = false;
 	
-	if (Q_Request::isFrame()) {
+	if (Q_Request::isEmbed()) {
 		// $headers = headers_list();
 		// $setCookieJS = array();
 		// foreach ($headers as $header) {

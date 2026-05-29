@@ -32,6 +32,10 @@
 		"routes": {
 			
 		},
+		"embed": {
+			"tools": [],
+			"hosts": []
+		},
 		"filename": {
 			"extensions": ["txt", "xml", "png", "jpeg", "gif", "jpg", "pdf", "js", "ogg", "mp3", "css", "cur"]
 		},

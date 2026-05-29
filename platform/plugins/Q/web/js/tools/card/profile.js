@@ -32,8 +32,7 @@
  * @param {Q.Event} [options.onRefresh]
  */
 Q.Tool.define("Q/card/profile", function () {
-    var tool = this;
-    tool.refresh();
+    this.refresh();
 },
 {
     userId:      null,

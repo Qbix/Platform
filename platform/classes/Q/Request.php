@@ -580,26 +580,26 @@ class Q_Request
 	/**
 	 * Use this to determine whether or not the request is being made
 	 * to fill a frame or iframe.
-	 * @method isFrame
+	 * @method isEmbed
 	 * @static
-	 * @return {string} The contents of `Q.frame` if it is present.
+	 * @return {string} The contents of `Q.embed` if it is present.
 	 */
-	static function isFrame()
+	static function isEmbed()
 	{
 		static $result;
 		if (isset($result)) {
 			return $result;
 		}
 		/**
-		 * @event Q/request/isFrame {before}
+		 * @event Q/request/isEmbed {before}
 		 * @return {string}
 		 */
-		$result = Q::event('Q/request/isFrame', array(), 'before');
+		$result = Q::event('Q/request/isEmbed', array(), 'before');
 		if (isset($result)) {
 			return $result;
 		}
-		$result = (Q::$controller === 'Q_FrameController')
-			|| Q_Request::special('frame', false);
+		$result = (Q::$controller === 'Q_EmbedController')
+			|| Q_Request::special('embed', false);
 		return $result;
 	}
 	
@@ -683,7 +683,7 @@ class Q_Request
 	 */
 	static function shouldUseCookieJS()
 	{
-		return Q_Request::isFrame() or self::cookieJS();
+		return Q_Request::isEmbed() or self::cookieJS();
 	}
 
 	/**
@@ -1146,24 +1146,57 @@ class Q_Request
 
 
 	/**
-	 * Parses the cookie headers and returns an array of values.
+	 * Parses the cookie headers and returns cookie values.
+	 *
+	 * Default: returns a single string value (the last occurrence in the header,
+	 * matching $_COOKIE semantics), or null if the cookie isn't present.
+	 *
+	 * With $all=true: returns an array of all values (the same cookie name can
+	 * appear multiple times in the Cookie header).
+	 *
+	 * With $name=null: returns all cookies as an associative array. The value
+	 * shape depends on $all: scalar (last occurrence) when false, array of all
+	 * occurrences when true.
+	 *
 	 * @method getCookies
 	 * @static
-	 * @param {string} [$name] The name of the cookie
-	 * @return {array} An array of string values. Note that the same cookie can be named multiple times in the Cookie header!
+	 * @param {string} [$name=null] The name of the cookie. If null, returns all cookies.
+	 * @param {boolean} [$all=false] If true, return all occurrences of the cookie
+	 *  as an array, instead of just the last one.
+	 * @return {string|array|null} See description above.
 	 */
-	static function getCookie($name)
+	static function getCookies($name = null, $all = false)
 	{
-		$result = array();
-		$cookie = $_SERVER['HTTP_COOKIE'];
+		$cookie = isset($_SERVER['HTTP_COOKIE']) ? $_SERVER['HTTP_COOKIE'] : '';
+		$collected = array();
 		foreach (explode(';', $cookie) as $segment) {
-			foreach (explode('=', $segment) as $parts) {
-				$name = trim($parts[0]);
-				$value = trim($parts[1]);
-				$result[$name][] = $value;
+			$parts = explode('=', trim($segment), 2);
+			if (count($parts) !== 2) continue;
+			$cookieName = trim($parts[0]);
+			if ($cookieName === '') continue;
+			$value = urldecode(trim($parts[1]));
+			if (!isset($collected[$cookieName])) {
+				$collected[$cookieName] = array();
 			}
+			$collected[$cookieName][] = $value;
 		}
-		return $result;
+		if ($name === null) {
+			if ($all) {
+				return $collected;
+			}
+			$result = array();
+			foreach ($collected as $k => $values) {
+				$result[$k] = end($values);
+			}
+			return $result;
+		}
+		if (!isset($collected[$name])) {
+			return $all ? array() : null;
+		}
+		if ($all) {
+			return $collected[$name];
+		}
+		return end($collected[$name]);
 	}
 	
 	/**

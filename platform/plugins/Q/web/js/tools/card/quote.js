@@ -14,7 +14,9 @@
  * @param {String} [options.url]
  * @param {Q.Event} [options.onRefresh]
  */
-Q.Tool.define("Q/card/quote", function () { this.refresh(); },
+Q.Tool.define("Q/card/quote", function () {
+    this.refresh();
+},
 { quote: '', speaker: '', source: '', url: '', onRefresh: new Q.Event() },
 {
     refresh: function () {

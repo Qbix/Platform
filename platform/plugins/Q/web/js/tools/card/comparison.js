@@ -14,7 +14,9 @@
  * @param {Array}  [options.rows]   [{ label, left, right, delta? }, ...]
  * @param {Q.Event} [options.onRefresh]
  */
-Q.Tool.define("Q/card/comparison", function () { this.refresh(); },
+Q.Tool.define("Q/card/comparison", function () {
+    this.refresh();
+},
 {
     left: { label: '', value: '' }, right: { label: '', value: '' },
     rows: [], onRefresh: new Q.Event()

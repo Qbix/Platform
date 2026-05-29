@@ -16,7 +16,9 @@
  * @param {String} [options.url]        Source URL
  * @param {Q.Event} [options.onRefresh]
  */
-Q.Tool.define("Q/card/glossary", function () { this.refresh(); },
+Q.Tool.define("Q/card/glossary", function () {
+    this.refresh();
+},
 {
     term: '', definition: '', context: '', source: '', url: '',
     onRefresh: new Q.Event()

@@ -10028,6 +10028,9 @@ Q.request = function (url, slotNames, callback, options) {
 				if (xmlhttp.readyState == 4 && !xmlhttp.handled) {
 					xmlhttp.handled = true;
 					if (xmlhttp.status == 200) {
+						// Process Set-Cookie-JS before delivering response, so the jar
+						// is updated before any code reads cookies via Q.cookie().
+						_processSetCookieJSFromXHR(xmlhttp);
 						onSuccess.call(xmlhttp, xmlhttp.responseText);
 					} else {
 						log("Q.request xhr: " + xmlhttp.status + ' ' 
@@ -10048,6 +10051,7 @@ Q.request = function (url, slotNames, callback, options) {
 			request.xmlhttp = xmlhttp;
 			if (verb === 'GET') {
 				xmlhttp.open('GET', url + (content ? '&' + content : ''), !sync);
+				_attachCookieJSIfNoSW(xmlhttp);
 				xmlhttp.send();
 			} else {
 				xmlhttp.open(verb, url, !sync);
@@ -10057,8 +10061,7 @@ Q.request = function (url, slotNames, callback, options) {
 				} else if (!o.formdata) {
 					xmlhttp.setRequestHeader("Content-Type", 'application/x-www-form-urlencoded');
 				}
-				//xmlhttp.setRequestHeader("Content-length", content.length);
-				//xmlhttp.setRequestHeader("Connection", "close");
+				_attachCookieJSIfNoSW(xmlhttp);
 				xmlhttp.send(content);
 			}
 			return url;
@@ -10147,6 +10150,77 @@ Q.request.callbacks = []; // used by Q.request
 Q.request.once = Q.getter(Q.request, {
 	cache: Q.Cache.document('Q.request', 10)
 });
+
+function _attachCookieJSIfNoSW(xmlhttp) {
+	// If the Service Worker is controlling this page, it will attach
+	// Cookie-JS itself on the fetch interception. Skip to avoid double-attachment.
+	if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+		return;
+	}
+	try {
+		var raw = sessionStorage.getItem('Q.cookieJar');
+		if (!raw) return;
+		var jar = JSON.parse(raw);
+		var pairs = [];
+		for (var k in jar) {
+			if (!jar.hasOwnProperty(k)) continue;
+			var v = jar[k];
+			if (v !== null && v !== '') {
+				pairs.push(k + '=' + v);
+			}
+		}
+		if (pairs.length) {
+			try {
+				xmlhttp.setRequestHeader('Cookie-JS', pairs.join('; '));
+			} catch (e) {
+				// setRequestHeader can throw if called after send() or with
+				// forbidden header names; Cookie-JS is custom so this should
+				// only happen if the call order is wrong. Log and move on.
+				console.warn('Q.request: setRequestHeader Cookie-JS failed:', e);
+			}
+		}
+	} catch (e) {}
+}
+
+function _processSetCookieJSFromXHR(xmlhttp) {
+	// If the SW is controlling this page, it already handled Set-Cookie-JS
+	// on the fetch interception and broadcast the update; skip to avoid
+	// double-processing.
+	if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+		return;
+	}
+	var header;
+	try {
+		header = xmlhttp.getResponseHeader('Set-Cookie-JS');
+	} catch (e) {
+		return;
+	}
+	if (!header) return;
+	try {
+		var raw = sessionStorage.getItem('Q.cookieJar');
+		var jar = raw ? JSON.parse(raw) : {};
+		var changed = false;
+		var list = header.split(';');
+		for (var i = 0; i < list.length; i++) {
+			var kv = list[i].trim().split('=');
+			var key = kv[0];
+			var val = kv.length > 1 ? kv.slice(1).join('=') : '';
+			if (!key) continue;
+			if (val === '' || val === 'null') {
+				if (jar.hasOwnProperty(key)) {
+					delete jar[key];
+					changed = true;
+				}
+			} else if (jar[key] !== val) {
+				jar[key] = val;
+				changed = true;
+			}
+		}
+		if (changed) {
+			sessionStorage.setItem('Q.cookieJar', JSON.stringify(jar));
+		}
+	} catch (e) {}
+}
 
 /**
  * Try to find an error assuming typical error data structures for the arguments
@@ -11198,17 +11272,53 @@ Q.ServiceWorker = {
 				console.warn("Q.ServiceWorker.start error", error);
 			});
 		});
-		// Listen for cookie updates coming from the Service Worker
-		navigator.serviceWorker.addEventListener('message', event => {
+
+		var SS_KEY = 'Q.cookieJar';
+
+		// On page load: read sessionStorage and push cookies to the SW so the jar
+		// is populated before any fetches go out. This handles the case where the
+		// SW was killed by the browser between page loads.
+		function _rehydrateSWFromSessionStorage() {
+			if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+			try {
+				var stored = sessionStorage.getItem(SS_KEY);
+				if (!stored) return;
+				var cookies = JSON.parse(stored);
+				navigator.serviceWorker.controller.postMessage({
+					type: 'Q.cookie',
+					cookies: cookies
+				});
+			} catch (e) {
+				Q.warn('Q: could not rehydrate SW cookie jar from sessionStorage: ' + e);
+			}
+		}
+
+		// Listen for cookie updates coming from the Service Worker. The SW is the
+		// authoritative source; we mirror to sessionStorage so we can rehydrate it
+		// after SW respawns.
+		navigator.serviceWorker.addEventListener('message', function (event) {
 			var data = event.data || {};
 			if (data.type === 'Q.cookie' && data.cookies) {
-				for (var [k, v] of Object.entries(data.cookies)) {
-					// Update document.cookie so future page requests carry it
-					document.cookie = encodeURIComponent(k) + '=' + encodeURIComponent(v) + '; path=/';
-					console.log('[SW] Updated cookie from service worker:', k);
+				try {
+					sessionStorage.setItem(SS_KEY, JSON.stringify(data.cookies));
+				} catch (e) {
+					Q.warn('Q: could not write cookie jar to sessionStorage: ' + e);
+				}
+				// Optionally also write to document.cookie for first-party contexts
+				// where it works. In third-party ITP contexts these writes may fail
+				// silently, but sessionStorage is the durable layer.
+				for (var k in data.cookies) {
+					if (!data.cookies.hasOwnProperty(k)) continue;
+					try {
+						document.cookie = encodeURIComponent(k) + '=' +
+							encodeURIComponent(data.cookies[k]) + '; path=/';
+					} catch (e) {}
 				}
 			}
 		});
+
+		// Rehydrate on initial load
+		_rehydrateSWFromSessionStorage();
 	}
 }
 try {
@@ -11282,6 +11392,41 @@ function _startCachingWithServiceWorker() {
  *   Returns false if cookie operations are blocked (e.g. exception is thrown by the browser)
  */
 Q.cookie = function _Q_cookie(name, value, options) {
+	var JAR_KEY = 'Q.cookieJar';
+
+	function _readJar() {
+		try {
+			var raw = sessionStorage.getItem(JAR_KEY);
+			return raw ? JSON.parse(raw) : {};
+		} catch (e) {
+			return {};
+		}
+	}
+
+	function _writeJar(jar) {
+		try {
+			sessionStorage.setItem(JAR_KEY, JSON.stringify(jar));
+		} catch (e) {
+			console.warn('Q.cookie sessionStorage write failed:', e);
+		}
+	}
+
+	function _notifyServiceWorker(cookieName, val) {
+		try {
+			if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
+				return;
+			}
+			var msg = {
+				type: 'Q.cookie',
+				cookies: {}
+			};
+			msg.cookies[cookieName] = val;
+			navigator.serviceWorker.controller.postMessage(msg);
+		} catch (e) {
+			console.warn('Q.cookie SW notify failed:', e);
+		}
+	}
+
 	try {
 		var parts;
 		options = options || {};
@@ -11305,27 +11450,26 @@ Q.cookie = function _Q_cookie(name, value, options) {
 				Q.cookie(name, null, o);
 				domain = '';
 			}
-			function _notifyServiceWorker(val) {
-				try {
-					if (!navigator.serviceWorker || !navigator.serviceWorker.controller) {
-						return;
-					}
-					var msg = {
-						type: 'Q.cookie',
-						cookies: {}
-					};
-					msg.cookies[name] = val;
-					navigator.serviceWorker.controller.postMessage(msg);
-				} catch (e) {
-					console.warn('Q.cookie SW notify failed:', e);
-				}
-			}
+
 			if (value === null) {
+				// Delete from document.cookie
 				document.cookie = encodeURIComponent(name) +
 					'=;expires=Thu, 01-Jan-1970 00:00:01 GMT' + path + domain;
-				_notifyServiceWorker(''); // deletion
+				// Delete from durable jar (only if no explicit domain was passed in;
+				// the recursive .hostname-cleanup call above passes domain, and we
+				// want to leave the jar entry alone on that recursive pass since
+				// the jar is hostname-agnostic.)
+				if (!('domain' in options)) {
+					var jar = _readJar();
+					if (jar.hasOwnProperty(name)) {
+						delete jar[name];
+						_writeJar(jar);
+					}
+					_notifyServiceWorker(name, ''); // deletion
+				}
 				return null;
 			}
+
 			var expires = '';
 			if (options.expires) {
 				expires = new Date();
@@ -11335,10 +11479,26 @@ Q.cookie = function _Q_cookie(name, value, options) {
 			document.cookie = encodeURIComponent(name) + '=' +
 				encodeURIComponent(value) + expires + path + domain;
 
-			_notifyServiceWorker(String(value)); // update or add
+			// Write to durable jar (the authoritative source in ITP contexts).
+			// Only write on the "real" set call, not on the recursive .hostname
+			// cleanup pass, which is identified by an explicit domain option.
+			if (!('domain' in options)) {
+				var jar = _readJar();
+				jar[name] = String(value);
+				_writeJar(jar);
+				_notifyServiceWorker(name, String(value)); // update or add
+			}
 			return null;
 		}
-		// Otherwise, return the cookie value
+
+		// --- Getter ---
+		// Try the jar first; it's the authoritative source in ITP contexts
+		// where document.cookie may be empty or partitioned.
+		var jar = _readJar();
+		if (jar.hasOwnProperty(name)) {
+			return jar[name];
+		}
+		// Fall back to document.cookie for first-party contexts
 		var cookies = document.cookie.split(';');
 		var result;
 		for (var i = 0; i < cookies.length; ++i) {

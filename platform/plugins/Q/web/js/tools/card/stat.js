@@ -19,7 +19,9 @@
  * @param {Number}  [options.animateMs=800]
  * @param {Q.Event} [options.onRefresh]
  */
-Q.Tool.define("Q/card/stat", function () { this.refresh(); },
+Q.Tool.define("Q/card/stat", function () { 
+    this.refresh();
+},
 {
     value: '', unit: '', label: '', delta: '', deltaPositive: null,
     source: '', url: '', animate: true, animateMs: 800,

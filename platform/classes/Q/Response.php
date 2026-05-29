@@ -2376,12 +2376,22 @@ class Q_Response
 			'after', false
 		) and $cookieJS) {
 			$headers = headers_list();
+			$seen = array();
 			foreach ($headers as $header) {
-				if (Q::startsWith($header, 'Set-Cookie:')) {
-					$headerValue = ltrim(substr($header, 12));
-					header("Set-Cookie-JS: $headerValue", false);
+				if (stripos($header, 'Set-Cookie:') !== 0) {
+					continue;
 				}
+				$colonPos = strpos($header, ':');
+				$headerValue = ltrim(substr($header, $colonPos + 1));
+				// Dedupe in case sendCookieHeaders is called twice in one request
+				if (isset($seen[$headerValue])) {
+					continue;
+				}
+				$seen[$headerValue] = true;
+				header("Set-Cookie-JS: $headerValue", false);
 			}
+			// Expose to JS for CORS contexts; no-op same-origin
+			header('Access-Control-Expose-Headers: Set-Cookie-JS', false);
 		}
 		self::$cookies = array();
 		self::$cookiesToRemove = array();

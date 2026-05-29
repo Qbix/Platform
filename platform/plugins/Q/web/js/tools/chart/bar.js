@@ -28,7 +28,7 @@ Q.Tool.define("Q/chart/bar", function () {
             if (typeof d3 !== 'undefined') {
                 tool.refresh();
             } else {
-                Q.addScript('https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js', function () {
+                Q.addScript('{{Q}}/js/d3.min.js', function () {
                     tool.refresh();
                 });
             }
