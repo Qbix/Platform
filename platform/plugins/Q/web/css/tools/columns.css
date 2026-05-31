@@ -263,7 +263,9 @@ html.Q_mobile .Q_columns_column.Q_columns_hasControls .Q_controls_slot {
 	border-radius: 0;
 }
 
-.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column {
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column:not(
+	html[data-dashboard-position="top"].Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_0
+) {
 	transition: transform 300ms, border-radius 300ms, opacity 300ms;
 	border-top-left-radius: 10px;
 	border-top-right-radius: 10px;
@@ -294,7 +296,9 @@ html.Q_mobile .Q_columns_column.Q_columns_hasControls .Q_controls_slot {
 	transform: perspective(1800px) scaleX(1) scaleY(1) scaleZ(1) translateX(0px) translateY(65px) translateZ(2px) skewX(0deg) skewY(0deg) rotateX(1deg);
 }
 
-.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_columns_overlapped {
+.Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_column.Q_columns_overlapped:not(
+	html[data-dashboard-position="top"].Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_0
+) {
 	display: inline-block;
 	transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(-12px) translateZ(-15px) skewX(0deg) skewY(0deg);
 }
