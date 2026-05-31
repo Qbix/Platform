@@ -16830,6 +16830,9 @@ Q.prompt = function(message, callback, options) {
 					_done();
 				}
 			});
+			if (o.initialText) {
+				field[0].value = o.initialText;
+			}
 			setTimeout(function () {
 				field[0].select(); // give it a chance to appear
 			}, 0);
