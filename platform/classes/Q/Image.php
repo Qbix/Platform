@@ -631,6 +631,7 @@ class Q_Image
 	 * You can also override any of the parameters from the request by passing them in.
 	 *
 	 * @method postNewImage
+	 * @static
 	 *
 	 * @param {array} [$params] Parameters that can come from the request
 	 *   @param {array} [$params.icon] Group of image-related parameters
@@ -711,15 +712,7 @@ class Q_Image
 			if ($p['icon']['data'] === false) {
 				throw new Q_Exception("Failed to decode base64 image");
 			}
-
-			// original (optional)
-			if (!empty($p['icon']['original'])) {
-				$comma = strpos($p['icon']['original'], ',');
-				if ($comma !== false) {
-					$orig64 = substr($p['icon']['original'], $comma + 1);
-					$p['icon']['original'] = base64_decode(chunk_split($orig64));
-				}
-			}
+			// NOTE: "original" is normalized once, below, for both cases
 		}
 
 		// ---------------------------------------------------------------------
@@ -727,18 +720,59 @@ class Q_Image
 		// ---------------------------------------------------------------------
 		$timeLimit = Q_Config::get('Q', 'uploads', 'limits', 'time', 5*60*60);
 		set_time_limit($timeLimit);
+		
+		// Blob/FormData path sends crop as a JSON string; save() wants an array
+		if (isset($p['icon']['crop']) && is_string($p['icon']['crop'])) {
+			$decoded = json_decode($p['icon']['crop'], true);
+			if (is_array($decoded)) {
+				$p['icon']['crop'] = $decoded;
+			}
+		}
 
 		// ---------------------------------------------------------------------
 		// SAVE THE PROCESSED IMAGE
 		// ---------------------------------------------------------------------
 		$data = Q_Image::save($p['icon'] + array('save' => $p['save']));
 
-		// Save original image (if provided)
+		// ---------------------------------------------------------------------
+		// SAVE ORIGINAL IMAGE (if provided)
+		// ---------------------------------------------------------------------
 		if (!empty($p['icon']['original'])) {
-			if (!imagecreatefromstring($p['icon']['original'])) {
-				throw new Q_Exception("Image type not supported");
+			$original = $p['icon']['original'];
+
+			// Single place that turns a data URL into raw bytes, for both
+			// the blob path (data URL string) and the base64 path.
+			if (is_string($original) && strncmp($original, 'data:', 5) === 0) {
+				$comma = strpos($original, ',');
+				if ($comma !== false) {
+					$original = base64_decode(substr($original, $comma + 1));
+				}
 			}
-			file_put_contents($data['writePath'].'original.'.$data['ext'], $p['icon']['original']);
+
+			// Validate by header only — avoids decoding a full-resolution
+			// photo into memory just to discard it, and rejects non-raster
+			// payloads (e.g. SVG/HTML polyglots) before we store bytes.
+			$info = @getimagesizefromstring($original);
+			if ($info === false) {
+				throw new Q_Exception("Original image type not supported");
+			}
+
+			// Extension comes from the ORIGINAL's real type, not the
+			// processed image's. A JPEG original must not become original.png.
+			$ext = image_type_to_extension($info[2], false); // 'jpeg','png',...
+			if ($ext === 'jpeg') {
+				$ext = 'jpg'; // match the processed-file naming convention
+			}
+
+			file_put_contents(
+				$data['writePath'].'original.'.$ext,
+				$original
+			);
+
+			// Surface the real original filename so callers don't have to
+			// reconstruct it from $data['ext'].
+			$data['originalExt'] = $ext;
+			$data['original'] = 'original.'.$ext;
 		}
 
 		return $data;
@@ -807,7 +841,7 @@ class Q_Image
 	
 		// check if exif is available
 		if (self::isJPEG($imageData)) {
-			$exif = exif_read_data("data://image/jpeg;base64," . base64_encode($imageData));
+			$exif = @exif_read_data("data://image/jpeg;base64," . base64_encode($imageData));
 			// rotate original image if necessary (hopefully it's not too large).
 			if (!empty($exif['Orientation'])) {
 				switch ($exif['Orientation']) {
@@ -816,9 +850,11 @@ class Q_Image
 						break;
 					case 6:
 						$image = imagerotate($image, -90, 0);
+						$t = $iw; $iw = $ih; $ih = $t; // 90deg turn swaps dimensions
 						break;
 					case 8:
 						$image = imagerotate($image, 90, 0);
+						$t = $iw; $iw = $ih; $ih = $t;
 						break;
 				}
 			}
@@ -989,6 +1025,7 @@ class Q_Image
 	/**
 	 * Save animated thumbnail as file and set as stream icon
 	 * @method saveAnimatedThumbnail
+	 * @static
 	 * @param {string} $data Image data as string
 	 * @param {string} $dir Directory where where animated thumbnail is saved
 	 * @return {string} the absolute URL to the image
@@ -1106,7 +1143,7 @@ class Q_Image
 
 	static function isPNG(&$imageData)
 	{
-		return (bin2hex($imageData[0]) == '89' && $imageData[1] == 'P' && $imageData[2] == 'N' && $imageData[3] == 'G');
+		return (bin2hex($imageData[0]) == '89' && $imageData[1] == 'P' && $imageData[2] == 'N' && strlen($imageData) >= 4 && $imageData[3] == 'G');
 	}
 	
 	/*-----------------------------------------------------------------------------

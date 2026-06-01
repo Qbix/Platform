@@ -58,6 +58,7 @@ Q.onInit.add(function () {
  *   @param {Number} [options.crop.h] height value for cropping
  * @param {Boolean} [options.cropping=true] Whether to display an interface for selecting cropping images, before sending them to the server. If true, the cropping area overrides the crop option.
  * @param {String} [options.saveImageType="image/png"] Pass null here to match the type of file selected (as long as it's one of image/png, image/gif, image/jpeg or image/webp)
+ * @param {Number} [options.heicQuality=0.9] HEIC: JPEG quality (0..1) used when re-encoding a HEIC "original" to JPEG on iOS.
  * @param {Q.Event} [options.preprocess] preprocess is a function which is triggering before image upload.
  *  Its "this" object will be a jQuery of the imagepicker element
  *  The first parameter is a callback, which should be called with an optional
@@ -90,6 +91,11 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 	var extensions = state.extensions
 		|| ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'ico', 'tiff', 
 			'svg', 'ai', 'psp', 'pcd', 'pct', 'raw'];
+	// HEIC: the browser can only decode HEIC into an <img>/canvas on iOS, and
+	// the server's GD can't read it, so only offer HEIC selection on iOS.
+	if (Q.info.platform === 'ios' && extensions.indexOf('heic') < 0) {
+		extensions = extensions.concat(['heic', 'heif']);
+	}
 	var extensionList = '.' + extensions.join(', .');
 	var inputId = 'Q_imagepicker_input_' + (++counter);
 	state.input = $('<input type="file" accept="' + extensions + '" class="Q_imagepicker_file" />')
@@ -121,8 +127,21 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 		$this.addClass('Q_uploading');
 		var reader = new FileReader();
 		reader.onload = function(event) {
-			var mime = state.file.type;
-			if (mime.startsWith("image")) {
+			var file = state.file;
+			var mime = (file && file.type || '').toLowerCase();
+
+			// HEIC: HEIC only decodes in-browser on iOS. If one slips through
+			// elsewhere (drag/drop, mislabeled accept), reject it locally so
+			// the server's GD never receives an image it can't read.
+			if (_isHeic(file) && Q.info.platform !== 'ios') {
+				Q.alert(Q.text.Q.imagepicker.errorType);
+				$this.removeClass('Q_uploading');
+				return;
+			}
+
+			// HEIC: treat HEIC as an image even when its MIME is empty
+			// (common), so it reaches the canvas pick flow on iOS.
+			if (_isHeic(file) || mime.startsWith("image")) {
 				$this.plugin('Q/imagepicker', 'pick', this.result);
 			} else if (mime.startsWith("video")) {
 				$this.plugin('Q/imagepicker', 'doUpload', this.result);
@@ -201,6 +220,7 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 	url: Q.action("Q/image"),
 	cacheBust: 1000,
 	throbber: null,
+	heicQuality: 0.9, // HEIC: JPEG quality used when re-encoding originals
 	preprocess: null,
 	cameraCommands: Q.text.Q.imagepicker.cameraCommands,
 	onClick: new Q.Event(),
@@ -282,6 +302,30 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 				);
 			}
 			$this.removeClass('Q_uploading');
+		}
+
+		// HEIC: GD on the server can't read HEIC, so when "original" would be a
+		// HEIC source, re-encode it to JPEG using the already-decoded <img>
+		// (works on iOS, the only place HEIC originates). Other formats pass
+		// through unchanged.
+		function _originalForUpload(originalSrc) {
+			if (!_isHeic(state.file)) {
+				return originalSrc;
+			}
+			try {
+				var w = img.naturalWidth || img.width;
+				var h = img.naturalHeight || img.height;
+				if (!w || !h) {
+					return originalSrc;
+				}
+				var c = document.createElement('canvas');
+				c.width = w;
+				c.height = h;
+				c.getContext('2d').drawImage(img, 0, 0);
+				return c.toDataURL('image/jpeg', state.heicQuality || 0.9);
+			} catch (e) {
+				return originalSrc;
+			}
 		}
 	
 		function _calculateRequiredSize (saveSizeName, imageSize, rotated) {
@@ -599,6 +643,14 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 
 		var img = new Image;
 		img.onload = _onImgLoad;
+		// HEIC: if a source can't be decoded into an <img> (e.g. a HEIC that
+		// slipped past the iOS guard), don't hang in the Q_uploading state.
+		img.onerror = function () {
+			setTimeout(function () {
+				Q.alert(Q.text.Q.imagepicker.errorReadingFile);
+			}, 0);
+			_revert();
+		};
 		img.src = src;
 
 		function _doUpload(data, crop) {
@@ -629,7 +681,8 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 				}, state.moreFields);
 
 				if (state.sendOriginal) {
-					params.original = src;
+					// HEIC: send a server-readable (JPEG) original when needed
+					params.original = _originalForUpload(src);
 				}
 				if (state.save) {
 					params.save = state.save;
@@ -829,5 +882,20 @@ Q.Tool.jQuery('Q/imagepicker', function _Q_imagepicker(o) {
 });
 
 var counter = 0;
+
+// HEIC: detect HEIC/HEIF by MIME type or, since the MIME is frequently empty
+// for these files, by extension on the file name.
+function _isHeic(file) {
+	if (!file) {
+		return false;
+	}
+	var t = (file.type || '').toLowerCase();
+	if (t === 'image/heic' || t === 'image/heif'
+	 || t === 'image/heic-sequence' || t === 'image/heif-sequence') {
+		return true;
+	}
+	var name = (file.name || '').toLowerCase();
+	return /\.(heic|heif)$/.test(name);
+}
 
 })(Q, Q.jQuery, window, document);
