@@ -394,17 +394,27 @@ class Q_Utils
 	protected static function generateLocalSecret()
 	{
 		$parts = array(
-			gethostname(),        // Includes kernel version etc.
-			PHP_OS,               // OS name
-			APP_DIR,             // Path to this code on disk
+			gethostname(),
+			PHP_OS,
+			APP_DIR
 		);
-		$machineIdFile = '/etc/machine-id';
-		if (is_readable($machineIdFile)) {
-			$parts[] = trim(file_get_contents($machineIdFile));
+
+		if (self::isWindows()) {
+			$guid = trim((string) @shell_exec(
+				'reg query "HKLM\SOFTWARE\Microsoft\Cryptography" /v MachineGuid 2>NUL'
+			));
+
+			if (preg_match('/MachineGuid\s+REG_SZ\s+([^\r\n]+)/i', $guid, $matches)) {
+				$parts[] = trim($matches[1]);
+			}
+		} else {
+			$machineIdFile = '/etc/machine-id';
+			if (is_readable($machineIdFile)) {
+				$parts[] = trim(file_get_contents($machineIdFile));
+			}
 		}
-		// Create stable, local-only secret
-		$secret = hash('sha256', implode("\t", $parts));
-		return $secret;
+
+		return hash('sha256', implode("\t", $parts));
 	}
 
 	/**

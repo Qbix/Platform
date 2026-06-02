@@ -27,17 +27,40 @@ var Utils = {};
  */
 function generateLocalSecret() {
 	var os = require('os');
+	var child_process = require('child_process');
+
 	var parts = [
 		os.hostname(),
-		os.type(),
+		process.platform === 'win32' ? 'WINNT' : os.type(),,
 		Q.app.DIR
 	];
+
 	try {
-		if (fs.existsSync('/etc/machine-id')) {
-			parts.push(fs.readFileSync('/etc/machine-id', 'utf8').trim());
+		if (process.platform === 'win32') {
+			try {
+				var output = child_process.execSync(
+					'reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid',
+					{
+						encoding: 'utf8',
+						stdio: ['ignore', 'pipe', 'ignore']
+					}
+				);
+
+				var m = output.match(/MachineGuid\s+REG_SZ\s+([^\r\n]+)/i);
+				if (m) {
+					parts.push(m[1].trim());
+				}
+			} catch (e) {}
+		} else {
+			if (fs.existsSync('/etc/machine-id')) {
+				parts.push(fs.readFileSync('/etc/machine-id', 'utf8').trim());
+			}
 		}
 	} catch (e) {}
-	return crypto.createHash('sha256').update(parts.join("\t")).digest('hex');
+
+	return crypto.createHash('sha256')
+		.update(parts.join("\t"))
+		.digest('hex');
 }
 
 function ksort(obj) {
