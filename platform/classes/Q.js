@@ -2475,6 +2475,10 @@ Q.listen = function _Q_listen(options, callback) {
 	var host = options.host || internalHost;
 	var socketPath = options.socket || internalSocket;
 
+	options.port = port;
+	options.host = host;
+	options.socket = socketPath;
+
 	// Default socket based on app name if neither port nor socket specified
 	if (!socketPath && (!port || !host)) {
 		if (!Q.app || !Q.app.name) {
