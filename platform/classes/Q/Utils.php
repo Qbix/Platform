@@ -394,8 +394,7 @@ class Q_Utils
 	protected static function generateLocalSecret()
 	{
 		$parts = array(
-			gethostname(),
-			php_uname(),          // Includes kernel version etc.
+			gethostname(),        // Includes kernel version etc.
 			PHP_OS,               // OS name
 			__FILE__,             // Path to this code on disk
 		);
