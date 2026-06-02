@@ -31,7 +31,7 @@ function generateLocalSecret() {
 
 	var parts = [
 		os.hostname(),
-		process.platform === 'win32' ? 'WINNT' : os.type(),,
+		process.platform === 'win32' ? 'WINNT' : os.type(),
 		Q.app.DIR
 	];
 
