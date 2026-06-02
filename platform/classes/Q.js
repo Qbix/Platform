@@ -2475,10 +2475,6 @@ Q.listen = function _Q_listen(options, callback) {
 	var host = options.host || internalHost;
 	var socketPath = options.socket || internalSocket;
 
-	options.port = port;
-	options.host = host;
-	options.socket = socketPath;
-
 	// Default socket based on app name if neither port nor socket specified
 	if (!socketPath && (!port || !host)) {
 		if (!Q.app || !Q.app.name) {
@@ -2568,8 +2564,21 @@ Q.listen = function _Q_listen(options, callback) {
 	server.internal = isInternal;
 	server.internalString = server.internal ? ' (internal requests)' : '';
 
+	// Set host/port (and socketPath) on the server NOW, before any handlers are
+	// registered, so the registration logging below reports the real address
+	// instead of "undefined:undefined". For sockets we log socketPath instead.
+	if (isSocket) {
+		server.socketPath = socketPath;
+	} else {
+		server.host = host;
+		server.port = port;
+	}
+
 	var bodyParser = require('body-parser');
-	app.use(bodyParser());
+	// Use the individual parsers; bare bodyParser() and a missing `extended`
+	// option are both deprecated.
+	app.use(bodyParser.json());
+	app.use(bodyParser.urlencoded({ extended: true }));
 
 	var use = app.use;
 	app.use = function _app_use() {
@@ -2740,9 +2749,6 @@ Q.listen = function _Q_listen(options, callback) {
 		}
 		return server;
 	}
-
-	server.host = host;
-	server.port = port;
 
 	server.listen(port, host, function () {
 		console.log.Q('listening at ' + host + ':' + port + server.internalString);
