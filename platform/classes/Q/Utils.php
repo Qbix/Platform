@@ -396,7 +396,7 @@ class Q_Utils
 		$parts = array(
 			gethostname(),        // Includes kernel version etc.
 			PHP_OS,               // OS name
-			__FILE__,             // Path to this code on disk
+			APP_DIR,             // Path to this code on disk
 		);
 		$machineIdFile = '/etc/machine-id';
 		if (is_readable($machineIdFile)) {
