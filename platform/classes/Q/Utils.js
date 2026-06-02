@@ -30,7 +30,7 @@ function generateLocalSecret() {
 	var parts = [
 		os.hostname(),
 		os.type(),
-		__filename
+		Q.app.DIR
 	];
 	try {
 		if (fs.existsSync('/etc/machine-id')) {
