@@ -156,11 +156,10 @@ class Q_Bootstrap
 		 */
 		Q::event('Q/shutdown', @compact('error'), 'before');
 		Q_Cache::shutdownFunction();
-		if (is_callable(array('Db_Query_Mysql'))) {
+		if (is_callable(array('Db_Query_Mysql', 'shutdownFunction'))) {
 			Db_Query_Mysql::shutdownFunction();
 		}
-
-		if (Q_Session::id()) {
+		if (session_id()) {
 			session_write_close();
 		}
 	}
