@@ -10,6 +10,17 @@
 class Q_Request
 {
 	/**
+	 * Use this to get a field from the querystring (GET parameters)
+	 * @param {string} $field The name of the field to get
+	 * @param {mixed} [$default=null] The value to return if the field is not set
+	 * @return {mixed} The value of the field, or $default if not set
+	 */
+	static function get($field, $default = null)
+	{
+		return Q::ifset($_GET, $field, $default);
+	}
+
+	/**
 	 * Use this to determine whether or not the request is secure (HTTPS).
 	 * @method isSecure
 	 * @static
