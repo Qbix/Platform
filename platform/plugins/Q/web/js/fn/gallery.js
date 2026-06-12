@@ -1,69 +1,87 @@
 (function (Q, $, window, document, undefined) {
 
 /**
- * Drop-in replacement for Q/web/js/fn/gallery.js
- * INSTALL: copy over platform/plugins/Q/web/js/fn/gallery.js
- *
- * Companion lazy-loaded files (REQUIRED for video items, never loaded for
- * image-only galleries):
- *   platform/plugins/Q/web/js/Q/gallery/_internal.js
- *   platform/plugins/Q/web/js/Q/gallery/createRenderer.js
- *
- * WHAT CHANGED VS THE ORIGINAL
- * ----------------------------
- * 1. Images and videos now share ONE ordered timeline (state.items) with a
- *    single cursor, one preload window, one crossfade, one kenburns path.
- *    The old `images`/`videos` options still work: if `items` is absent it is
- *    synthesised as image-items-then-video-items, preserving prior behavior
- *    byte-for-byte for image-only galleries (default interval.type "" = no
- *    kenburns, crossfade transition, preload one ahead, loop, autoplay).
- *
- * 2. Each timeline entry is driven through a small renderer contract:
- *      ensure()        create DOM + start loading; returns a `ready` promise
- *      ready           resolves when the item is displayable
- *      prewarm()       buffer ahead (video: muted warmup; image: ensure)
- *      enter()/exit()  start / pause playback (no-op for images)
- *      setLevel(0..1)  crossfade OPACITY
- *      setAudioLevel(0..1) crossfade VOLUME (video only, when sound is on)
- *      kenburns(z)     apply the ken-burns transform at param z
- *      show()/hide()/destroy()
- *    Image renderers live here (cheap, always loaded). Video renderers are
- *    produced by Q.Gallery.video.createRenderer, loaded on demand via
- *    Q.Method.define the first time a video item is reached or prewarmed.
- *
- * 3. Audio: videos start muted (works on every browser incl. iOS). A gallery
- *    audio button toggles desired sound. Enabling sound happens inside the tap
- *    (a user gesture) so it can unlock; we detect whether audible playback was
- *    actually allowed by inspecting the play() promise, and if it was refused
- *    we keep the video muted and leave the button in a "tap to unmute" state.
- *    When sound is on and not blocked, transitions crossfade volume between the
- *    outgoing and incoming video, clamped so the two sum to maxVolume.
- *
- * 4. New option `player: true` renders a gallery-level play/pause button that
- *    orchestrates the whole timeline; per-video controls stay suppressed.
- *
- * New options (all optional, sensible defaults):
- *   items:        unified ordered list; each { type:'image'|'video', ... }
- *   player:       false  show a gallery-level play/pause button
- *   sound:        false  start with sound desired (still gesture-gated)
- *   maxVolume:    1      ceiling for the audio crossfade (0..1)
- *   preloadAhead: 1      how many upcoming items to warm
- *
- * The runtime-mutation API (addImage/removeImage/setCaption/removeCaption/
- * setTransition/setInterval) is preserved and now operates on the unified
- * timeline; addVideo/addItem are added for symmetry.
+ * @module Q
  */
 
-// ── lazy video-renderer factory, defined once ──────────────────────────────
-Q.Gallery = Q.Gallery || {};
-if (!Q.Gallery.video) {
-	Q.Gallery.video = { createRenderer: new Q.Method() };
-	Q.Method.define(
-		Q.Gallery.video,
-		"{{Q}}/js/Q/gallery",
-		function () { return [Q]; },
-		{ require: "_internal" }
-	);
+/**
+ * Plays an ordered timeline ("montage") of images and videos with crossfade
+ * transitions, optional Ken Burns panning, look-ahead preloading, and an
+ * optional play/pause control. Videos are rendered through the Q/video tool,
+ * so any backend Q/video supports (mp4, webm, ogg, youtube, vimeo, muse,
+ * twitch, odysee, ...) can appear in the timeline. Videos always start muted
+ * and expose an unmute control; where the browser permits audible playback the
+ * transitions crossfade volume between the outgoing and incoming clip.
+ *
+ * Image rendering is built in. Video support is loaded on demand the first time
+ * a video item is reached or preloaded, so image-only galleries stay lightweight.
+ *
+ * @class Q gallery
+ * @constructor
+ * @param {Object} [options]
+ *  @param {Array} [options.items] Ordered timeline. Each entry is an object
+ *    `{ type:'image'|'video', src, caption, style, interval, transition, ... }`.
+ *    If omitted, the timeline is built from `options.images` then
+ *    `options.videos`. A missing `type` is inferred from `src`.
+ *  @param {Array} [options.images=[]] Image entries (merged into `items`).
+ *  @param {Array} [options.videos=[]] Video entries (merged into `items`).
+ *  @param {Object} [options.transition] Crossfade settings (overridable per item)
+ *    @param {Number} [options.transition.duration=1000] Milliseconds
+ *    @param {String} [options.transition.ease="smooth"]
+ *    @param {String} [options.transition.type="crossfade"]
+ *  @param {Object} [options.interval] On-screen / Ken Burns settings (overridable per item)
+ *    @param {Number} [options.interval.duration=2000] Milliseconds an image stays
+ *      on screen. For a video, its own length is used unless this (or a clip
+ *      window) is set.
+ *    @param {String} [options.interval.ease="smooth"]
+ *    @param {String} [options.interval.type=""] `""` for none, `"kenburns"` to pan/zoom
+ *    @param {Object} [options.interval.from] `{left,top,width,height}` start frame (factors)
+ *    @param {Object} [options.interval.to] `{left,top,width,height}` end frame (factors)
+ *  @param {Boolean} [options.autoplay=true] Start playing immediately
+ *  @param {Boolean} [options.loop=true] Loop back to the first item after the last
+ *  @param {Boolean} [options.transitionToFirst=false] Animate into the first item
+ *  @param {Boolean} [options.player=false] Show a gallery-level play/pause button
+ *    that orchestrates the whole timeline; per-video controls stay suppressed
+ *  @param {Boolean} [options.sound=false] Begin with sound desired. Videos still
+ *    start muted; where the browser blocks audible playback an unmute control
+ *    appears and the user taps to enable sound
+ *  @param {Number} [options.maxVolume=1] Ceiling for the audio crossfade (0..1)
+ *  @param {Number} [options.preloadAhead=1] How many upcoming items to prepare
+ *  @param {Number} [options.videoFallbackMs=0] Advance after this many ms for a
+ *    video that reports no duration and never fires `onEnded`; leave 0 to let
+ *    true live streams run indefinitely
+ *  @param {Q.Event} [options.onLoad] Fires per item as it loads, with
+ *    `(element, mediaList, state)`
+ *  @param {Q.Event} [options.onTransition] Fires as each item becomes current,
+ *    with `(index, mediaList, state)`
+ *  @param {Q.Event} [options.onInvoke] Fires when an item is tapped/clicked, with
+ *    `(element, index, mediaList)`
+ *
+ * Per-item fields: any entry may carry its own `transition`, `interval`,
+ * `caption`, `style`, and, for videos, `start`/`clipStart`/`clipEnd`, `loop`,
+ * and `image` (poster). Insertion timing for {{#crossLink "Q gallery/addItem"}}{{/crossLink}}
+ * is controlled with `insertAfterCurrent` and `playAfterMs`.
+ *
+ * The gallery instance is available at `$(element).data('gallery')` and exposes
+ * the methods documented below.
+ */
+
+// Shared, page-level holder for the lazily-loaded video support. It carries no
+// per-instance state — it is only where the on-demand createRenderer method is
+// defined — so it lives in this module's scope rather than on a public
+// namespace, built once the first time any gallery on the page needs video.
+var videoSupport = null;
+function videoCreateRenderer(gallery, item, $container, index) {
+	if (!videoSupport) {
+		videoSupport = { createRenderer: new Q.Method() };
+		Q.Method.define(
+			videoSupport,
+			"{{Q}}/js/Q/gallery",
+			function () { return [Q]; },
+			{ require: "_internal" }
+		);
+	}
+	return videoSupport.createRenderer.call(gallery, item, $container, index);
 }
 
 // ── ken-burns geometry, shared by image (here) and video (createRenderer) ──
@@ -317,7 +335,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				display: 'none', overflow: 'hidden'
 			}).appendTo($this);
 			var p = Promise.resolve(
-				Q.Gallery.video.createRenderer.call(gallery, item, $container, index)
+				videoCreateRenderer(gallery, item, $container, index)
 			).then(function (renderer) {
 				// resolve into whatever slot this promise occupies NOW (splices
 				// may have shifted it since creation)
@@ -382,7 +400,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 
 	// ── the unified advance ───────────────────────────────────────────────
 	function advance(keepGoing) {
-		if (paused) return;
+		if (paused || !items.length) return;
 		clearTimeout(tm); tm = null;   // supersede any pending cycle timer
 		resumePending = null;          // a fresh advance invalidates a deferred one
 		previous = current;
@@ -569,13 +587,29 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	gallery = {
 		options: state,
 		onLoad: state.onLoad,
+
+		/**
+		 * Index of the item currently showing, or -1 before the first one.
+		 * @property currentIndex
+		 * @type Number
+		 */
 		get currentIndex() { return current; },
 
+		/**
+		 * Start, or restart, automatic playback through the timeline.
+		 * @method play
+		 */
 		play: function () {
 			paused = false; playing = true; everStarted = true;
 			advance(true);
 			updateChrome();
 		},
+		/**
+		 * Pause playback, freezing the current transition, animation and timer.
+		 * A video keeps its position so {{#crossLink "Q gallery/resume"}}{{/crossLink}}
+		 * continues where it left off.
+		 * @method pause
+		 */
 		pause: function () {
 			paused = true;
 			animTransition && animTransition.pause();
@@ -588,6 +622,10 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			var r = R[current]; if (r) r.exit();
 			updateChrome();
 		},
+		/**
+		 * Resume playback after {{#crossLink "Q gallery/pause"}}{{/crossLink}}.
+		 * @method resume
+		 */
 		resume: function () {
 			if (!paused) return;
 			paused = false; playing = true;
@@ -610,16 +648,27 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			}
 			updateChrome();
 		},
+		/**
+		 * Pause and reset the cursor to before the first item.
+		 * @method rewind
+		 */
 		rewind: function () {
 			this.pause();
 			current = previous = -1;
 			animTransition = animInterval = animPreviousInterval = null;
 		},
+		/**
+		 * Advance to the next item.
+		 * @method next
+		 * @param {Boolean} [keepGoing=false] Whether to keep auto-advancing afterwards
+		 */
 		next: function (keepGoing) { advance(keepGoing); },
 
-		// Pause and dispose every renderer, including child Q/video tools
-		// (videojs players, their intervals and metrics). Called on re-init
-		// and on tool removal so nothing leaks.
+		/**
+		 * Pause and dispose every renderer, including child Q/video tools, so
+		 * nothing leaks. Called automatically on re-initialisation and on tool removal.
+		 * @method destroy
+		 */
 		destroy: function () {
 			this.pause();
 			pendingGoNext = null;
@@ -629,7 +678,13 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			}
 		},
 
-		// ── runtime mutation API (operates on the unified timeline) ───────
+		/**
+		 * Insert an item into the timeline at runtime, without re-initialising.
+		 * @method addItem
+		 * @param {Object} item `{ type:'image'|'video', src, caption, ... }`. Timing:
+		 *   `insertAfterCurrent:true` plays it next; `playAfterMs:N` inserts it N
+		 *   milliseconds from now; with neither it is appended to the end.
+		 */
 		addItem: function (item) {
 			if (!item.type) item.type = 'image';
 			resumePending = null; // a structural change invalidates a deferred frame
@@ -659,10 +714,31 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				getRenderer(items.length - 1).then(function (r) { r.prewarm(); });
 			}
 		},
+		/**
+		 * Convenience for {{#crossLink "Q gallery/addItem"}}{{/crossLink}} with type 'image'.
+		 * @method addImage
+		 * @param {Object} image
+		 */
 		addImage: function (image) { this.addItem(Q.extend({ type: 'image' }, image)); },
+		/**
+		 * Convenience for {{#crossLink "Q gallery/addItem"}}{{/crossLink}} with type 'video'.
+		 * @method addVideo
+		 * @param {Object} video
+		 */
 		addVideo: function (video) { this.addItem(Q.extend({ type: 'video' }, video)); },
 
+		/**
+		 * Alias of {{#crossLink "Q gallery/removeItem"}}{{/crossLink}}.
+		 * @method removeImage
+		 * @param {Number} index
+		 */
 		removeImage: function (index) { this.removeItem(index); },
+		/**
+		 * Remove an item from the timeline. If it is the current item the gallery
+		 * advances to the next one.
+		 * @method removeItem
+		 * @param {Number} index
+		 */
 		removeItem: function (index) {
 			if (index < 0 || index >= items.length) return;
 			resumePending = null; // a structural change invalidates a deferred frame
@@ -680,6 +756,14 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			reindex();
 		},
 
+		/**
+		 * Set or replace an item's caption, updating the DOM in place.
+		 * @method setCaption
+		 * @param {Number} index
+		 * @param {String} html Caption HTML
+		 * @param {Object} [style] CSS for custom positioning
+		 * @param {Boolean} [centered=true] Center the caption when no style is given
+		 */
 		setCaption: function (index, html, style, centered) {
 			if (!items[index]) return;
 			items[index].caption = html;
@@ -687,6 +771,11 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			var r = R[index];
 			if (r && r.setCaption) r.setCaption(html, style, centered);
 		},
+		/**
+		 * Remove an item's caption.
+		 * @method removeCaption
+		 * @param {Number} index
+		 */
 		removeCaption: function (index) {
 			if (!items[index]) return;
 			delete items[index].caption; delete items[index].style;
@@ -694,7 +783,17 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			var r = R[index];
 			if (r && r.removeCaption) r.removeCaption();
 		},
+		/**
+		 * Update the crossfade settings; takes effect on the next transition.
+		 * @method setTransition
+		 * @param {Object} transition Partial `{ duration, ease, type }`
+		 */
 		setTransition: function (transition) { Q.extend(state.transition, transition); },
+		/**
+		 * Update the interval / Ken Burns settings; takes effect on the next interval.
+		 * @method setInterval
+		 * @param {Object} interval Partial `{ duration, ease, type, from, to }`
+		 */
 		setInterval: function (interval) { Q.extend(state.interval, true, 2, interval); },
 
 		// exposed for the video renderer (single source of truth for kenburns)
