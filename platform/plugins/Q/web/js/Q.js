@@ -10027,10 +10027,10 @@ Q.request = function (url, slotNames, callback, options) {
 			xmlhttp.onreadystatechange = function() {
 				if (xmlhttp.readyState == 4 && !xmlhttp.handled) {
 					xmlhttp.handled = true;
+					// Process Set-Cookie-JS before delivering response, so the jar
+					// is updated before any code reads cookies via Q.cookie().
+					_processSetCookieJSFromXHR(xmlhttp);
 					if (xmlhttp.status == 200) {
-						// Process Set-Cookie-JS before delivering response, so the jar
-						// is updated before any code reads cookies via Q.cookie().
-						_processSetCookieJSFromXHR(xmlhttp);
 						onSuccess.call(xmlhttp, xmlhttp.responseText);
 					} else {
 						log("Q.request xhr: " + xmlhttp.status + ' ' 
@@ -11299,10 +11299,12 @@ Q.ServiceWorker = {
 		navigator.serviceWorker.addEventListener('message', function (event) {
 			var data = event.data || {};
 			if (data.type === 'Q.cookie' && data.cookies) {
-				try {
-					sessionStorage.setItem(SS_KEY, JSON.stringify(data.cookies));
-				} catch (e) {
-					Q.warn('Q: could not write cookie jar to sessionStorage: ' + e);
+				if (window.self !== window.top) {
+					try {
+						sessionStorage.setItem(SS_KEY, JSON.stringify(data.cookies));
+					} catch (e) {
+						Q.warn('Q: could not write cookie jar to sessionStorage: ' + e);
+					}
 				}
 				// Optionally also write to document.cookie for first-party contexts
 				// where it works. In third-party ITP contexts these writes may fail
@@ -11459,7 +11461,7 @@ Q.cookie = function _Q_cookie(name, value, options) {
 				// the recursive .hostname-cleanup call above passes domain, and we
 				// want to leave the jar entry alone on that recursive pass since
 				// the jar is hostname-agnostic.)
-				if (!('domain' in options)) {
+				if (!('domain' in options) && (window.self !== window.top)) {
 					var jar = _readJar();
 					if (jar.hasOwnProperty(name)) {
 						delete jar[name];
@@ -11482,7 +11484,7 @@ Q.cookie = function _Q_cookie(name, value, options) {
 			// Write to durable jar (the authoritative source in ITP contexts).
 			// Only write on the "real" set call, not on the recursive .hostname
 			// cleanup pass, which is identified by an explicit domain option.
-			if (!('domain' in options)) {
+			if (!('domain' in options) && (window.self !== window.top)) {
 				var jar = _readJar();
 				jar[name] = String(value);
 				_writeJar(jar);
