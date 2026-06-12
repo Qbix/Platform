@@ -5,7 +5,7 @@
  * prewarmed. Produces a renderer that implements the same contract the inline
  * image renderer does, so the scheduler treats images and videos identically.
  *
- * Called as: Q.Gallery.video.createRenderer.call(gallery, item, $container, index)
+ * Invoked by fn/gallery.js as: createRenderer.call(gallery, item, $container, index)
  *   `this` is the gallery instance (exposes _kenburnsCss / _maxVolume / _soundOn / state)
  *   `Q`    is the framework (closure constant)
  *   `_`    is _internal.js exports (warmup / enableAudio / setVolume / mute)
