@@ -5046,6 +5046,9 @@ Q.Method.define = function (o, prefix, closure, options) {
 	 */
 	function _makeShim(method, k, callName) {
 		return function _Q_Method_shim() {
+			if (_Q_Method_shim.__loaded) {
+				return _Q_Method_shim.__loaded.apply(this, arguments);
+			}
 			var url = Q.url(
 				(method.__options && method.__options.customPath)
 					? method.__options.customPath
