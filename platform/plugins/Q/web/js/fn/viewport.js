@@ -17,6 +17,14 @@
  *   @param {Object} [options.initial.x] horizontal midpoint, from 0 to 1
  *   @param {Object} [options.initial.y] vertical midpoint, from 0 to 1
  *   @param {Object} [options.initial.scale] initial scale
+ *   @param {Object} [options.sensitivity] tunes how fast zooming responds
+ *   @param {Number} [options.sensitivity.pinch] exponent applied to the finger-distance ratio
+ *     during a pinch. 1 maps finger spread to scale 1:1 (the natural feel). Values below 1
+ *     make pinch-zoom slower/less sensitive; values above 1 make it faster.
+ *   @default 1
+ *   @param {Number} [options.sensitivity.wheel] multiplier on the mousewheel zoom step.
+ *     Values below 1 make wheel zoom slower; values above 1 make it faster.
+ *   @default 1
  *   @param {Q.Event} [options.onRelease] This event triggering after viewport creation
  *   @default Q.Event()
  *   @param {Q.Event} [options.onScale] Occurs when the user scales the content
@@ -105,123 +113,166 @@ function _Q_viewport(options) {
 			'height': oh+0.5+'px',
 		});
 	
-		var offset = stretcher.offset();	
-		var grab = null;
-		var cur = null;
-		var pos = {
-			left: parseFloat(stretcher.css('left')),
-			top: parseFloat(stretcher.css('top'))
-		};
-	
 		var s = (initial && initial.scale)
 			|| (state.minScale + state.maxScale) / 2
 			|| 1;
 		state.scale = Math.max(state.minScale, Math.min(state.maxScale, s));
 		var off = stretcher.offset();
-		scale(state.scale, off.left+ow/2, off.top+oh/2);
+		scale(state.scale, off.left + ow/2, off.top + oh/2);
 
 		state.$container = container;
 		state.$stretcher = stretcher;
-		pos = null;
-	
-		container.on('dragstart', function () {
-			return false;
-		}).on(Q.Pointer.start, function (e) {
-		
-			var f = useZoom ? state.scale : 1;
-			var touches = e.touches;
-			var touchDistance;
-			if (touches && touches.length > 1) {
-				var tx0 = Q.Pointer.getX(e, 0);
-				var ty0 = Q.Pointer.getY(e, 0);
-				var tx1 = Q.Pointer.getX(e, 1);
-				var ty1 = Q.Pointer.getY(e, 1);
-				touchDistance = Math.sqrt(
-					Math.pow(tx1 - tx0, 2) +
-					Math.pow(ty1 - ty0, 2)
-				);
-			}
-		
-			function _moveHandler (e) {
-				var offset, touches, scaling;
-				offset = stretcher.offset();
-				cur = {
-					x: Q.Pointer.getX(e),
-					y: Q.Pointer.getY(e)
-				};
-				if (Q.Pointer.isPressed(e)) {
-					Q.Pointer.cancelClick(true, e, null); // even on the slightest move
-				}
-				e.preventDefault();
-				if (!pos) {
-					return;
-				}
-				if (Q.info.isTouchscreen && (touches = e.touches)) {
-					if (touches.length > 1) {
-						var tx0 = Q.Pointer.getX(e, 0);
-						var ty0 = Q.Pointer.getY(e, 0);
-						var tx1 = Q.Pointer.getX(e, 1);
-						var ty1 = Q.Pointer.getY(e, 1);
-						var newDistance = Math.sqrt(
-							Math.pow(tx1 - tx0, 2) +
-							Math.pow(ty1 - ty0, 2)
-						);
-						if (touchDistance) {
-							var midX = (tx0 + tx1) / 2;
-							var midY = (ty0 + ty1) / 2;
-							var factor = state.scale * newDistance / touchDistance;
-							scale(factor, midX, midY);
-							scaling = true;
-						}
-						touchDistance = newDistance;
-					}
-				} else if (Q.Pointer.which(e) !== Q.Pointer.which.LEFT) {
-					return;
-				}
-				if (scaling) {
-					return;
-				}
-				var x = Q.Pointer.getX(e);
-				var y = Q.Pointer.getY(e);
-				var newPos = {
-					left: pos.left + (x - grab.x)/f,
-					top: pos.top + (y - grab.y)/f
-				};
-				fixPosition(newPos);
-				stretcher.css(newPos);
-				Q.handle(state.onMove, $this, [state.selection, state.scale]);
-				Q.handle(state.onUpdate, $this, [state.selection, state.scale]);
-			}
-		
-			function _endHandler (e) {
-				start = pos = null;
-				Q.removeEventListener(container[0], Q.Pointer.move, _moveHandler, {passive: false});
-				Q.removeEventListener(window, Q.Pointer.end, _ee);
-				Q.removeEventListener(window, Q.Pointer.cancel, _ec);
-				Q.removeEventListener(window, Q.Pointer.touchclick, _clickHandler);
-				e.preventDefault();
-			}
-		
-			function _clickHandler (e) {
-				Q.removeEventListener(window, Q.Pointer.touchclick, _clickHandler);
-				e.preventDefault();
-			}
-		
-			if (Q.Pointer.canceledClick) {
-				return;
-			}
-			grab = cur = {
+
+		// All gesture state lives in this single object, and the move/end listeners
+		// are bound exactly once per gesture. On a touchscreen Q.Pointer.start fires
+		// once per finger, so the previous code registered a second move handler when
+		// the second finger landed: one handler kept panning off the single-finger
+		// grab point (wrong zoom center) while the other scaled, and from the second
+		// frame both scaled (zooming roughly twice as fast). Tracking the finger count
+		// here and re-anchoring on every 1<->2 transition fixes both.
+		var gesture = {
+			active: false,    // are the move/end/cancel listeners currently bound
+			mode: null,       // 'pan' | 'pinch'
+			grab: null,       // {x, y} pointer baseline for panning (page coords)
+			pos: null,        // {left, top} stretcher css baseline for panning
+			pinchDistance: 0  // finger spacing baseline for the current pinch
+		};
+
+		function _touchCount(e) {
+			return (Q.info.isTouchscreen && e.touches) ? e.touches.length : 1;
+		}
+
+		function _distance(e) {
+			var tx0 = Q.Pointer.getX(e, 0), ty0 = Q.Pointer.getY(e, 0);
+			var tx1 = Q.Pointer.getX(e, 1), ty1 = Q.Pointer.getY(e, 1);
+			return Math.sqrt(
+				Math.pow(tx1 - tx0, 2) + Math.pow(ty1 - ty0, 2)
+			);
+		}
+
+		function _midpoint(e) {
+			return {
+				x: (Q.Pointer.getX(e, 0) + Q.Pointer.getX(e, 1)) / 2,
+				y: (Q.Pointer.getY(e, 0) + Q.Pointer.getY(e, 1)) / 2
+			};
+		}
+
+		function _beginPan(e) {
+			gesture.mode = 'pan';
+			gesture.grab = {
 				x: Q.Pointer.getX(e),
 				y: Q.Pointer.getY(e)
 			};
-			pos = {
+			gesture.pos = {
 				left: parseFloat(stretcher.css('left')),
 				top: parseFloat(stretcher.css('top'))
 			};
-			Q.addEventListener(container[0], Q.Pointer.move, _moveHandler, {passive: false});
-			var _ee = Q.addEventListener(window, Q.Pointer.end, _endHandler, {passive: false});
-			var _ec = Q.addEventListener(window, Q.Pointer.cancel, _endHandler, {passive: false});
-			// Q.addEventListener(window, Q.Pointer.touchclick, _clickHandler, {passive: false});
+		}
+
+		function _beginPinch(e) {
+			gesture.mode = 'pinch';
+			gesture.pinchDistance = _distance(e);
+		}
+
+		function _moveHandler(e) {
+			if (Q.Pointer.isPressed(e)) {
+				Q.Pointer.cancelClick(true, e, null); // even on the slightest move
+			}
+			e.preventDefault();
+
+			if (_touchCount(e) > 1) {
+				// pinch-zoom
+				if (gesture.mode !== 'pinch' || !gesture.pinchDistance) {
+					// just transitioned into a two-finger gesture: set the baseline
+					// this frame and don't scale yet, so there's no jump
+					_beginPinch(e);
+					return;
+				}
+				var mid = _midpoint(e);
+				var newDistance = _distance(e);
+				var factor = state.scale
+					* Math.pow(newDistance / gesture.pinchDistance, (state.sensitivity && state.sensitivity.pinch) || 1);
+				scale(factor, mid.x, mid.y);
+				gesture.pinchDistance = newDistance;
+				return;
+			}
+
+			// single-finger / mouse pan
+			if (gesture.mode !== 'pan' || !gesture.grab) {
+				// first move, or dropped back from a pinch to one finger:
+				// re-anchor so the content doesn't jump
+				_beginPan(e);
+				return;
+			}
+			if (!Q.info.isTouchscreen
+			&& Q.Pointer.which(e) !== Q.Pointer.which.LEFT) {
+				return;
+			}
+			var f = useZoom ? state.scale : 1;
+			var newPos = {
+				left: gesture.pos.left + (Q.Pointer.getX(e) - gesture.grab.x) / f,
+				top: gesture.pos.top + (Q.Pointer.getY(e) - gesture.grab.y) / f
+			};
+			fixPosition(newPos);
+			stretcher.css(newPos);
+			Q.handle(state.onMove, $this, [state.selection, state.scale]);
+			Q.handle(state.onUpdate, $this, [state.selection, state.scale]);
+		}
+
+		function _endHandler(e) {
+			var remaining = (Q.info.isTouchscreen && e.touches) ? e.touches.length : 0;
+			if (remaining >= 2) {
+				// a finger lifted but two or more remain: keep pinching, re-baselined
+				_beginPinch(e);
+				e.preventDefault();
+				return;
+			}
+			if (remaining === 1) {
+				// one finger left after a pinch: keep panning with it, re-anchored
+				_beginPan(e);
+				e.preventDefault();
+				return;
+			}
+			_teardown();
+			e.preventDefault();
+		}
+
+		function _cancelHandler(e) {
+			_teardown();
+			if (e && e.preventDefault) {
+				e.preventDefault();
+			}
+		}
+
+		function _teardown() {
+			gesture.active = false;
+			gesture.mode = null;
+			gesture.grab = gesture.pos = null;
+			gesture.pinchDistance = 0;
+			Q.removeEventListener(container[0], Q.Pointer.move, _moveHandler, {passive: false});
+			Q.removeEventListener(window, Q.Pointer.end, _endHandler, {passive: false});
+			Q.removeEventListener(window, Q.Pointer.cancel, _cancelHandler, {passive: false});
+		}
+
+		container.on('dragstart', function () {
+			return false;
+		}).on(Q.Pointer.start, function (e) {
+			if (Q.Pointer.canceledClick) {
+				return;
+			}
+			// (re)establish the right baseline for however many fingers are down now
+			if (_touchCount(e) > 1) {
+				_beginPinch(e);
+			} else {
+				_beginPan(e);
+			}
+			// bind the move/end/cancel listeners exactly once for the whole gesture
+			if (!gesture.active) {
+				gesture.active = true;
+				Q.addEventListener(container[0], Q.Pointer.move, _moveHandler, {passive: false});
+				Q.addEventListener(window, Q.Pointer.end, _endHandler, {passive: false});
+				Q.addEventListener(window, Q.Pointer.cancel, _cancelHandler, {passive: false});
+			}
 		});
 
 		// this is for ios devices only
@@ -237,7 +288,7 @@ function _Q_viewport(options) {
 			}
 			if (typeof e.deltaY === 'number' && !isNaN(e.deltaY)) {
 				scale(
-					state.scale - e.deltaY * 0.001,
+					state.scale - e.deltaY * 0.001 * ((state.sensitivity && state.sensitivity.wheel) || 1),
 					Q.Pointer.getX(e),
 					Q.Pointer.getY(e)
 				);
@@ -328,6 +379,10 @@ function _Q_viewport(options) {
 	maxScale: 2,
 	width: null,
 	height: null,
+	sensitivity: {
+		pinch: 1, // exponent on the finger-distance ratio; 1 = natural 1:1 feel
+		wheel: 1  // multiplier on the wheel zoom step; <1 = slower
+	},
 	onRelease: new Q.Event(),
 	onScale: new Q.Event(),
 	onMove: new Q.Event(),
