@@ -13898,19 +13898,38 @@ Q.Socket.reconnectAll = function _Q_Socket_reconnectAll() {
 };
 
 /**
+ * Destroy all sockets and recreate them using current Q.Socket.connect.options
+ * (including updated auth capability after login).
+ * @static
+ * @method recreateAll
+ */
+Q.Socket.recreateAll = function _Q_Socket_recreateAll() {
+	var pairs = [];
+	var ns, url;
+	for (ns in _qsockets) {
+		for (url in _qsockets[ns]) {
+			pairs.push([ns, url]);
+		}
+	}
+	Q.Socket.destroyAll();
+	for (var i = 0; i < pairs.length; ++i) {
+		_connectSocketNS(pairs[i][0], pairs[i][1]);
+	}
+};
+
+/**
  * Completely remove all sockets, and de-register events
  * @static
  * @method destroyAll
  */
 Q.Socket.destroyAll = function _Q_Socket_destroyAll() {
+	var cleanup = _ioCleanup;
+	_ioCleanup = [];
 	Q.Socket.disconnectAll();
-	setTimeout(function () {
-		for (var i=0; i<_ioCleanup.length; i++) {
-			_ioCleanup[i]();
-		}
-		_ioCleanup = [];
-		_qsockets = {};
-	}, 1000);
+	_qsockets = {};
+	for (var i = 0; i < cleanup.length; i++) {
+		cleanup[i]();
+	}
 };
 
 /**
