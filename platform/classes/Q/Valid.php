@@ -302,7 +302,7 @@ class Q_Valid
 	 $throwIfInvalid = false,
 	 $missingIsValid = false)
 	{
-		if (Q_Session::isInternal()) {
+		if (Q_Session::prefixSaysInternal()) {
 			// Internal sessions don't need nonces in requests,
 			// since they don't have to protect against CSRF
 			return true;

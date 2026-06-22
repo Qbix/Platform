@@ -1290,6 +1290,7 @@ class Q_Session
 		$id = $seed
 			? hash('sha256', $seed) // length 64
 			: Q_Utils::randomHexString(64);
+		$prefix = Q_Config::expect('Q', 'session', 'id', 'prefixes', $prefixType);
 		$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		if (isset($secret)) {
 			$id = substr($id, 0, 32);
@@ -1300,11 +1301,10 @@ class Q_Session
 				++$len;
 			}
 			$id = $time . substr($id, $len);
-			$sig = Q_Utils::signature($id, "$secret");
+			$sig = Q_Utils::signature($prefix . $id, "$secret");
 			$id .= substr($sig, 0, 32);
 		}
-		$prefix = Q_Config::expect('Q', 'session', 'id', 'prefixes', $prefixType);
-		return $prefix . Q_Utils::hexToBase64($id);
+		return Q_Utils::hexToBase64($id);
 	}
 	
 	/**
@@ -1360,11 +1360,11 @@ class Q_Session
 	/**
 	 * Returns whether the session is authenticated, based on the name
 	 * of the session cookie and Q/session/id/prefixes/authencated config
-	 * @method isAuthenticated
+	 * @method prefixSaysAuthenticated
 	 * @static
 	 * @return {boolean}
 	 */
-	static function isAuthenticated()
+	static function prefixSaysAuthenticated()
 	{
 		$sessionId = self::id();
 		return self::isInternal() or ($prefix = Q_Config::get(
@@ -1375,11 +1375,11 @@ class Q_Session
 	/**
 	 * Returns whether the session is internal, based on the name
 	 * of the session cookie and Q/session/id/prefixes/authencated config
-	 * @method isInternal
+	 * @method prefixSaysInternal
 	 * @static
 	 * @return {boolean}
 	 */
-	static function isInternal()
+	static function prefixSaysInternal()
 	{
 		$sessionId = Q_Session::id();
 		return ($prefix = Q_Config::get(

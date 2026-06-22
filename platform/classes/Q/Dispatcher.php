@@ -221,7 +221,7 @@ class Q_Dispatcher
 			$redirectKey = Q_Request::isAjax() ? 'json' : 'html';
 			if (empty($sessionId)) {
 				$redirectKey = 'landing';
-			} else if (Q_Session::isAuthenticated()) {
+			} else if (Q_Session::prefixSaysAuthenticated()) {
 				$redirectKey .= '.authenticated';
 			}
 			if ($redirectSuffix = Q_Config::get(

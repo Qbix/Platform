@@ -2041,7 +2041,7 @@ class Q_Response
 			return false;
 		}
 		if (Q_Request::isAjax()
-		and Q_Session::isAuthenticated()) {
+		and Q_Session::prefixSaysAuthenticated()) {
 			Q_Request::requireValidNonce(true); // SECURITY: prevent CSRF attacks
 		}
 		Q::event('Q/sessionExtras', array(), $hookType);
@@ -2335,9 +2335,9 @@ class Q_Response
 				? 'no-transform'
 				: '';
 		}
-		$isAuthenticated = Q_Session::isAuthenticated();
-		$publicPrivate = $isAuthenticated ? 'private, no-store, no-cache, must-revalidate, max-age=0' : 'public';
-		$noTransform = (Q_Response::$noTransform or $isAuthenticated) ? 'no-transform' : '';
+		$prefixSaysAuthenticated = Q_Session::prefixSaysAuthenticated();
+		$publicPrivate = $prefixSaysAuthenticated ? 'private, no-store, no-cache, must-revalidate, max-age=0' : 'public';
+		$noTransform = (Q_Response::$noTransform or $prefixSaysAuthenticated) ? 'no-transform' : '';
 		$directives = array($publicPrivate, $noTransform);
 		header("Cache-Control: " . implode(', ', $directives));
 		return $directives;
