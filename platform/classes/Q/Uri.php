@@ -142,10 +142,9 @@ class Q_Uri
 			return Q_Uri::fixUrl($source->Q_url);
 		}
 		
-		static $cache = array();
 		$cache_key = $noProxy ? $source . "\tnoProxy" : $source;
-		if (is_string($source) and isset($cache[$cache_key])) {
-			return Q_Uri::fixUrl($cache[$cache_key]);
+		if (is_string($source) and isset(self::$urlCache[$cache_key])) {
+			return Q_Uri::fixUrl(self::$urlCache[$cache_key]);
 		}
 		
 		if (is_string($source) and isset($source[0]) and $source[0] == '#') {
@@ -157,7 +156,7 @@ class Q_Uri
 			// $source is already a URL
 			$result = $noProxy ? $source : self::proxySource($source);
 			if (is_string($source)) {
-				$cache[$source] = $result;
+				self::$urlCache[$cache_key] = $result;
 			}
 			return Q_Uri::fixUrl($result);
 		}
@@ -180,7 +179,7 @@ class Q_Uri
 			if ($hash) {
 				$result = $hash;
 				if (is_string($source)) {
-					$cache[$source] = $result;
+					self::$urlCache[$cache_key] = $result;
 				}
 				return $result;
 			}
@@ -188,13 +187,13 @@ class Q_Uri
 		if ($noProxy) {
 			$result = $url;
 			if (is_string($source)) {
-				$cache[$source] = $result;
+				self::$urlCache[$cache_key] = $result;
 			}
 			return $result;
 		}
 		$result = self::proxySource($url);
 		if (is_string($source)) {
-			$cache[$source] = $result;
+			self::$urlCache[$cache_key] = $result;
 		}
 		return Q_Uri::fixUrl($result);
 	}
@@ -330,10 +329,15 @@ class Q_Uri
 	 * so that later plugins can override earlier ones.
 	 * The earlier plugins can use "routes@start" and "routes@end"
 	 * to declare the priority of their routes.
+	 * The merged result is memoized for the life of the process.
+	 * If the routes config changes at runtime, call Q_Uri::clearRouteCache().
 	 * @return {array} The array of $route => $info pairs.
 	 */
 	static function getRoutes()
 	{
+		if (isset(self::$routesCache)) {
+			return self::$routesCache;
+		}
 		$config = Q_Config::get('Q', array());
 		$routesStart = Q::reverseOrder(Q::ifset($config, 'routes@start', array()));
 		$routes = Q::reverseOrder(Q::ifset($config, 'routes', array()));
@@ -346,7 +350,25 @@ class Q_Uri
 				}
 			}
 		}
+		self::$routesCache = $result;
 		return $result;
+	}
+
+	/**
+	 * Clears all memoized routing state. Call this whenever the routes config,
+	 * plugin list, or anything that affects URL <-> URI mapping changes at runtime.
+	 * Resets the merged routes table, compiled patterns, URL interpolation memo,
+	 * the source->url cache, and the url->uri cache.
+	 * @method clearRouteCache
+	 * @static
+	 */
+	static function clearRouteCache()
+	{
+		self::$routesCache = null;
+		self::$compiledPatterns = array();
+		self::$interpolateCache = array();
+		self::$urlCache = array();
+		self::$routedCache = array();
 	}
 	
 	//
@@ -372,9 +394,8 @@ class Q_Uri
 		}
 		$url = Q_Uri::interpolateUrl($url);
 			
-		static $routed_cache = array();
-		if (isset($routed_cache[$url])) {
-			return $routed_cache[$url];
+		if (isset(self::$routedCache[$url])) {
+			return self::$routedCache[$url];
 		}
 
 		/**
@@ -385,7 +406,7 @@ class Q_Uri
 		 */
 		$uri = Q::event('Q/Uri/fromUrl', @compact('url'), 'before');
 		if (isset($uri)) {
-			$routed_cache[$url] = $uri;
+			self::$routedCache[$url] = $uri;
 			return $uri;
 		}
 		$routes = self::getRoutes();
@@ -494,7 +515,7 @@ class Q_Uri
 		if (isset($route)) {
 			$uri->route = $route;
 		}
-		$routed_cache[$url] = $uri;
+		self::$routedCache[$url] = $uri;
 		return $uri;
 	}
 
@@ -599,6 +620,82 @@ class Q_Uri
 	{
 		return $this->route;
 	}
+
+	/**
+	 * Compiles a route pattern into a reusable structure, so that the
+	 * per-segment string parsing (explode on '/', explode on '.',
+	 * variable-prefix detection, escaped-prefix replacement) is done once
+	 * per pattern instead of on every match attempt. The result is memoized
+	 * keyed by the (already interpolated) pattern string.
+	 * @method compilePattern
+	 * @static
+	 * @protected
+	 * @param {string} $pattern
+	 * @return {array} An array with keys:
+	 *  'valid' (bool, false if the pattern ends in [] but its last segment is not a variable),
+	 *  'segments' (array of segments, each an array of parts; a part is either
+	 *    array('var'=>false,'literal'=>...) or array('var'=>true,'field'=>...)),
+	 *  'count' (number of non-tail segments),
+	 *  'tailArray' (bool, whether the pattern ends in []),
+	 *  'tailField' (string|null, the field name capturing the tail).
+	 */
+	protected static function compilePattern($pattern)
+	{
+		if (isset(self::$compiledPatterns[$pattern])) {
+			return self::$compiledPatterns[$pattern];
+		}
+		// Raw explode (no truthy guard) so that matchRoute reproduces the
+		// original behavior for a falsy pattern (one empty segment).
+		// matchSegments special-cases falsy patterns before reaching here.
+		$route_segments = explode('/', $pattern);
+		$tailArray = false;
+		$tailField = null;
+		$valid = true;
+		if (substr($pattern, -2) === '[]') {
+			$tailArray = true;
+			$last_rs = end($route_segments);
+			if (!isset($last_rs[0]) or !in_array($last_rs[0], self::$variablePrefixes)) {
+				$valid = false;
+			} else {
+				$tailField = substr($last_rs, 1, -2);
+			}
+			$route_segments = array_slice($route_segments, 0, -1);
+		}
+		$segments = array();
+		foreach ($route_segments as $rs) {
+			$rs_parts = explode('.', $rs);
+			$parts = array();
+			foreach ($rs_parts as $part) {
+				if (!isset($part[0]) or !in_array($part[0], self::$variablePrefixes)) {
+					// literal value, with any escaped prefixes resolved up front
+					$parts[] = array(
+						'var' => false,
+						'literal' => str_replace(
+							self::$escapedVariablePrefixes,
+							self::$variablePrefixes,
+							$part
+						)
+					);
+				} else {
+					// $variable
+					$parts[] = array(
+						'var' => true,
+						'field' => substr($part, 1)
+					);
+				}
+			}
+			$segments[] = $parts;
+		}
+		$compiled = array(
+			'valid' => $valid,
+			'segments' => $segments,
+			'count' => count($segments),
+			'tailArray' => $tailArray,
+			'tailField' => $tailField
+		);
+		self::$compiledPatterns[$pattern] = $compiled;
+		return $compiled;
+	}
 	
 	/**
 	 * @method matchSegments
@@ -612,19 +709,19 @@ class Q_Uri
 	 */
 	protected static function matchSegments($pattern, $segments)
 	{
-		$route_segments = $pattern ? explode('/', $pattern) : array();
-		$tail_array = false;
-		if (substr($pattern, -2) === '[]') {
-			$tail_array = true;
-			$last_rs = end($route_segments);
-			if (!in_array($last_rs[0], self::$variablePrefixes)) {
-				return false;
-			}
-			$route_segments = array_slice($route_segments, 0, -1);
+		if (!$pattern) {
+			// Original treated a falsy pattern as zero route segments
+			// ($route_segments = $pattern ? explode(...) : array()), so it
+			// matches only when there are no URL segments.
+			return count($segments) === 0 ? array() : false;
 		}
-		$count = count($route_segments);
+		$compiled = self::compilePattern($pattern);
+		if (!$compiled['valid']) {
+			return false;
+		}
+		$count = $compiled['count'];
 		$segments_count = count($segments);
-		if ($tail_array) {
+		if ($compiled['tailArray']) {
 			if ($count >= $segments_count) {
 				return false; // rule does not match
 			}
@@ -635,9 +732,10 @@ class Q_Uri
 		}
 		// Segments matching test
 		$args = array();
+		$cs = $compiled['segments'];
+		$i = 0;
 		for ($i = 0; $i < $count; ++ $i) {
-			$rs = $route_segments[$i];
-			$rs_parts = explode('.', $rs);
+			$rs_parts = $cs[$i];
 			$rs_parts_count = count($rs_parts);
 			$segment = urldecode($segments[$i]);
 			$s_parts = explode('.', $segment, $rs_parts_count);
@@ -646,22 +744,22 @@ class Q_Uri
 				return false;
 			}
 			for ($j = 0; $j < $rs_parts_count; ++$j) {
-				if (!isset($rs_parts[$j][0]) or !in_array($rs_parts[$j][0], self::$variablePrefixes)) {
+				$p = $rs_parts[$j];
+				if (!$p['var']) {
 					// literal value
-					if ($s_parts[$j] !== str_replace(self::$escapedVariablePrefixes, self::$variablePrefixes, $rs_parts[$j])) {
+					if ($s_parts[$j] !== $p['literal']) {
 						return false;
 					}
 					continue;
 				}
 				// otherwise, $variable
-				$field_name = substr($rs_parts[$j], 1);
-				$args[$field_name] = $s_parts[$j];
+				$args[$p['field']] = $s_parts[$j];
 			}
 		}
 		
-		if (!empty($last_rs)) {
+		if ($compiled['tailArray']) {
 			// Put the rest of the segments into an array
-			$field_name = substr($last_rs, 1, -2);
+			$field_name = $compiled['tailField'];
 			$args[$field_name] = array();
 			while ($i < $segments_count) {
 				$args[$field_name][] = urldecode($segments[$i]);
@@ -688,31 +786,23 @@ class Q_Uri
 	 $controller = true)
 	{
 		// First, test if the URI satisfies the pattern
-		$rsegments = explode('/', $pattern);
-		if (substr($pattern, -2) === '[]') {
-			$last_rs = end($rsegments);
-			if (false === in_array($last_rs[0], self::$variablePrefixes)) {
-				return false;
-			}
-			$rsegments = array_slice($rsegments, 0, -1);
+		$compiled = self::compilePattern($pattern);
+		if (!$compiled['valid']) {
+			return false;
 		}
 		$segments = array();
 		$field_in_pattern = array();
 		$i = 0;
-		foreach ($rsegments as $rs) {			
-			$rs_parts = explode('.', $rs);
-			$rs_parts_count = count($rs_parts);
+		foreach ($compiled['segments'] as $rs_parts) {
 			$segment_parts = array();
-			for ($j = 0; $j < $rs_parts_count; ++$j) {
-				if (!isset($rs_parts[$j][0]) or (false === in_array($rs_parts[$j][0], self::$variablePrefixes))) {
+			foreach ($rs_parts as $p) {
+				if (!$p['var']) {
 					// literal value
-					$segment_parts[] = urlencode(
-						str_replace(self::$escapedVariablePrefixes, self::$variablePrefixes, $rs_parts[$j])
-					);
+					$segment_parts[] = urlencode($p['literal']);
 					continue;
 				}
 				// otherwise, $variable
-				$field_name = substr($rs_parts[$j], 1);
+				$field_name = $p['field'];
 				if (array_key_exists($field_name, $this->fields)) {
 					$value = $this->fields[$field_name];
 				} else if (isset($this->fields[$i])) {
@@ -731,8 +821,8 @@ class Q_Uri
 		}
 		
 		// If pattern ends in [], process the last route segment
-		if (!empty($last_rs)) {
-			$field_name = substr($last_rs, 1, -2);
+		if ($compiled['tailArray']) {
+			$field_name = $compiled['tailField'];
 			if (!array_key_exists($field_name, $this->fields)) {
 				return false;
 			}
@@ -937,6 +1027,15 @@ class Q_Uri
 		if (strpos($url, '{{') === false) {
 			return $url;
 		}
+		// Only memoize the common, request-stable case (no per-call additional
+		// substitutions and no full-url-for-plugins variant). The standard
+		// substitutions depend on app/baseUrl/plugin config, which do not change
+		// within a request; if they change at runtime, Q_Uri::clearRouteCache().
+		$memoize = (empty($additional) and empty($fullUrlForPlugins));
+		if ($memoize and isset(self::$interpolateCache[$url])) {
+			return self::$interpolateCache[$url];
+		}
+		$key = $url;
 		$app = Q::app();
 		$baseUrl = Q_Request::baseUrl();
 		$proxyBaseUrl = Q_Request::proxyBaseUrl();
@@ -955,6 +1054,9 @@ class Q_Uri
 		$url = Q::interpolate($url, $substitutions);
 		if ($additional) {
 			$url = Q::interpolate($url, $additional);
+		}
+		if ($memoize) {
+			self::$interpolateCache[$key] = $url;
 		}
 		return $url;
 	}
@@ -1295,6 +1397,46 @@ class Q_Uri
 	 * @type string
 	 */
 	protected static $cacheBaseUrl = null;
+	/**
+	 * Memoized merged routes table. Reset via Q_Uri::clearRouteCache().
+	 * @property $routesCache
+	 * @protected
+	 * @type array
+	 */
+	protected static $routesCache = null;
+	/**
+	 * Memoized compiled route patterns, keyed by pattern string.
+	 * Reset via Q_Uri::clearRouteCache().
+	 * @property $compiledPatterns
+	 * @protected
+	 * @type array
+	 */
+	protected static $compiledPatterns = array();
+	/**
+	 * Memoized url interpolation results for the request-stable default case.
+	 * Reset via Q_Uri::clearRouteCache().
+	 * @property $interpolateCache
+	 * @protected
+	 * @type array
+	 */
+	protected static $interpolateCache = array();
+	/**
+	 * Memoized source => url results for Q_Uri::url(). Keyed so that the
+	 * noProxy variant of a source is cached separately from the proxied one.
+	 * Reset via Q_Uri::clearRouteCache().
+	 * @property $urlCache
+	 * @protected
+	 * @type array
+	 */
+	protected static $urlCache = array();
+	/**
+	 * Memoized url => Q_Uri results for Q_Uri::fromUrl().
+	 * Reset via Q_Uri::clearRouteCache().
+	 * @property $routedCache
+	 * @protected
+	 * @type array
+	 */
+	protected static $routedCache = array();
 	/**
 	 * Information on modification times and hashes of web resources
 	 * @property $urls
