@@ -658,7 +658,7 @@ function _handlePosAndScroll(o)
 		
 		topMargin = o.topMargin || 0;
 		parentHeight = (!o.alignByParent || parent[0] === document.body)
-			? (Q.info.isMobile ? screen.height : $html.height())
+			? (Q.info.isMobile ? window.innerHeight : $html.height())
 			: parent.height();
 		if (typeof(topMargin) === 'string') // percentage
 			topMargin = Math.round(parseInt(topMargin) / 100 * parentHeight);
