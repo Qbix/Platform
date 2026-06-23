@@ -1321,10 +1321,21 @@ class Q_Session
 		$b = substr($result, 32, 32);
 		$b = $b ? $b : ''; // for older PHP
 		$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		$c = isset($secret)
-			? Q_Utils::hashEquals($b, substr(Q_Utils::signature($a, $secret), 0, 32))
-			: true;
-		return array($c, $a, $b);
+		if (!isset($secret)) {
+			return array(true, $a, $b);
+		}
+		$expectedSigs = array(
+			substr(Q_Utils::signature($a, $secret), 0, 32)
+		);
+		foreach (Q_Config::get('Q', 'session', 'id', 'prefixes', array()) as $prefix) {
+			$expectedSigs[] = substr(Q_Utils::signature($prefix . $a, $secret), 0, 32);
+		}
+		foreach ($expectedSigs as $expected) {
+			if (Q_Utils::hashEquals($b, $expected)) {
+				return array(true, $a, $b);
+			}
+		}
+		return array(false, $a, $b);
 	}
 
 	/**
