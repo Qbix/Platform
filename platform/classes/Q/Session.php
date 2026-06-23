@@ -1367,7 +1367,7 @@ class Q_Session
 	static function prefixSaysAuthenticated()
 	{
 		$sessionId = self::id();
-		return self::isInternal() or ($prefix = Q_Config::get(
+		return self::prefixSaysInternal() or ($prefix = Q_Config::get(
 			'Q', 'session', 'id', 'prefixes', 'authenticated', 'sessionId_authenticated_'
 		) and Q::startsWith($sessionId, $prefix));
 	}
