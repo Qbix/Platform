@@ -1519,6 +1519,181 @@ Q.typeOf.treatAsObject = Q.typeOf.treatAsObject = {
 	PluginArray: true
 };
 
+
+/**
+ * Used for handling callbacks, whether they come as functions,
+ * strings referring to functions (if evaluated), arrays or hashes.
+ * @static
+ * @method handle
+ * @param {Mixed} callables
+ *  The callables to call
+ *  Can be a function, array of functions, object of functions, Q.Event or URL
+ *  If it is a url, simply follow it with options, callback
+ * @param {Function} callback
+ *  You can pass a function here if callables is a URL
+ * @param {Object} context
+ *  The context in which to call them
+ * @param {Array} args
+ *  An array of arguments to pass to them
+ * @param {Object} options
+ *  If callables is a url, these are the options to pass to Q.loadUrl, if any. Also can include:
+ *  @param {boolean} [options.dontReload=false] if this is true and callback is a url matching current url, it is not reloaded
+ *  @param {boolean} [options.loadUsingAjax=true] if this is true and callback is a url, it is loaded using Q.loadUrl
+ *  @param {Function} [options.externalLoader] when using loadUsingAjax, you can set this to a function to suppress loading of external websites with Q.handle.
+ *	Note: this will still not supress loading of external websites done with other means, such as window.location
+ *  @param {Object} [options.fields] optional fields to pass with any method other than "get"
+ *  @param {String|Function} [options.callback] if a string, adds a '&Q.callback='+encodeURIComponent(callback) to the querystring. If a function, this is the callback.
+ *  @param {String} [options.loadExtras="session"] if "all", asks the server to load the extra scripts, stylesheets, etc. that are loaded on first page load, can also be "response", "initial", "session" or "initial,session"
+ *  @param {String} [options.target] the name of a window or iframe to use as the target. In this case callables is treated as a url.
+ *  @param {String|Array} [options.slotNames] a comma-separated list of slot names, or an array of slot names
+ *  @param {boolean} [options.quiet] defaults to false. If true, allows visual indications that the request is going to take place.
+ *  @param {Function} [options.handleException] pass a function here to handle thrown exceptions instead of rethrowing them
+ * @return {number}
+ *  The number of handlers executed
+ */
+ Q.handle = function _Q_handle(callables, /* callback, */ context, args, options) {
+	try {
+		if (!callables) {
+			return 0;
+		}
+		if (!context) context = root;
+		if (!args) args = [];
+		var i=0, count=0, k, result;
+		if (callables === location) callables = location.href;
+		switch (Q.typeOf(callables)) {
+			case 'function':
+				result = callables.apply(context, args);
+				if (result === false) return false;
+				return 1;
+			case 'array':
+				for (i=0; i<callables.length; ++i) {
+					result = Q.handle(callables[i], context, args);
+					if (result === false) return false;
+					count += result;
+				}
+				return count;
+			case 'Q.Event':
+				return callables.handle.apply(context, args);
+			case 'object':
+				for (k in callables) {
+					result = Q.handle(callables[k], context, args);
+					if (result === false) return false;
+					count += result;
+				}
+				return count;
+			case 'string':
+				var o = Q.extend({}, Q.handle.options, options);
+				if (!callables.isUrl()
+				&& (callables[0] != '#')
+				&& (!o.target || o.target.toLowerCase() === '_self')) {
+					// Assume this is not a URL.
+					// Try to evaluate the expression, and execute the resulting function
+					var c = Q.getObject(callables, context) || Q.getObject(callables);
+					return Q.handle(c, context, args);
+				}
+				// Assume callables is a URL
+				if (o.dontReload && Q.info && Q.info.url === callables) {
+					return 0;
+				}
+				var callback = null;
+				if (typeof arguments[1] === 'function') {
+					// Some syntactic sugar: (url, callback) omitting context, args, options
+					callback = arguments[1];
+					o = Q.handle.options;
+				} else if (arguments[1] && (arguments[3] === undefined)) {
+					// Some more syntactic sugar: (url, options, callback) omitting context, args, options
+					o = Q.extend({}, Q.handle.options, arguments[1]);
+					if (typeof arguments[2] === 'function') {
+						callback = arguments[2];
+					}
+				} else {
+					o = Q.extend({}, Q.handle.options, options);
+					if (o.callback) {
+						callback = o.callback;
+					}
+				}
+				var baseUrl = Q.baseUrl();
+				var sameDomain = callables.sameDomain(baseUrl);
+				if (callables[0] === '#') {
+					root.location.hash = callables;
+				} else if (o.loadUsingAjax && sameDomain
+				&& (!o.target || o.target === true || o.target === '_self')) {
+					if (callables.search(baseUrl) === 0) {
+						// Use AJAX to refresh the page whenever the request is for a local page
+						Q.loadUrl(callables, Q.extend({
+							// shouldn't need to re-load responseExtras, they're the same across sessions
+							loadExtras: 'session',
+							ignoreHistory: false,
+							onActivate: function () {
+								if (callback) callback();
+							}
+						}, o)).then(function (a) {
+							
+						}, function (err) {
+							if (o && o.handleException) {
+								return o.handleException(err);
+							}
+						});
+					} else if (o.externalLoader) {
+						o.externalLoader.apply(this, arguments);
+					} else {
+						root.location = callables;
+					}
+				} else {
+					if (Q.typeOf(o.fields) === 'object') {
+						var method = 'POST';
+						if (o.method) {
+							switch (o.method.toUpperCase()) {
+								case "GET":
+								case "POST":
+									method = o.method;
+									break;
+								default:
+									method = 'POST'; // sadly HTML forms don't support other methods
+									break;
+							}
+						}
+						Q.formPost(callables, o.fields, method, {onLoad: o.callback, target: o.target});
+					} else {
+						if (Q.info && callables === baseUrl) {
+							callables+= '/';
+						}
+						if (!o.target || o.target === true || o.target === '_self') {
+							if (root.location.href == callables) {
+								root.location.reload(true);
+							} else {
+								root.location = callables;
+							}
+						} else {
+							root.open(callables, o.target);
+						}
+					}
+				}
+				Q.handle.onUrl.handle(callables, o);
+				return 1;
+			default:
+				return 0;
+		}
+	} catch (exception) {
+		if (options && options.handleException) {
+			return options.handleException(exception);
+		}
+		throw exception;
+	}
+};
+Q.handle.options = {
+	loadUsingAjax: true,
+	externalLoader: null,
+	dontReload: false
+};
+Q.handle.onUrl = new Q.Event(function () {
+	var elements = document.getElementsByClassName('Q_error_message');
+	Q.each(elements, function () {
+		Q.removeElement(this, true);
+	});
+	Q.Visual.stopHints();
+}, "Q");
+
 /**
  * Iterates over elements in a container, and calls the callback.
  * Use this if you want to avoid problems with loops and closures.
@@ -4031,8 +4206,12 @@ Q.currentScript = function (stackLevels) {
 		console.warn("parseSrc: could not parse src", src);
 		return null;
 	}
+	var src = parts[1] + parts[2].split(/[?#]/)[0];
+	if (!root._Q_currentScript_src) {
+		root._Q_currentScript_src = src;
+	}
 	return {
-		src: parts[1] + parts[2].split(/[?#]/)[0],   // clean URL (no query/hash)
+		src: src,   // clean URL (no query/hash)
 		srcWithQuerystring: parts[1] + parts[2],     // keep full URL
 		path: parts[1],                              // directory path
 		file: parts[2].split(/[?#]/)[0]              // filename only
@@ -4050,7 +4229,21 @@ Q.currentScript = function (stackLevels) {
  * @return {Object} object with properties "src", "path" and "file"
  */
 Q.currentScriptPath = function (subpath, stackLevels) {
-	return Q.currentScript(stackLevels).src.split('/').slice(0, -1).join('/')
+	var cs = Q.currentScript(stackLevels);
+	var src = (cs && cs.src)
+		|| root._Q_currentScript_src
+		|| (document.currentScript && document.currentScript.src);
+	if (!src) {
+		// last resort: most recently added script with a src
+		var scripts = document.getElementsByTagName('script');
+		for (var i = scripts.length - 1; i >= 0; --i) {
+			if (scripts[i].src) { src = scripts[i].src; break; }
+		}
+	}
+	if (!src) {
+		return Q.info && Q.info.baseUrl ? Q.info.baseUrl : '';
+	}
+	return src.split('/').slice(0, -1).join('/')
 		+ (subpath ? '/' + subpath : '');
 };
 var currentScriptPath = Q.currentScriptPath();
@@ -12216,180 +12409,6 @@ Q.loadUrl.request = function (url, slotNames, callback, options) {
 Q.loadUrl.loading = {};
 
 /**
- * Used for handling callbacks, whether they come as functions,
- * strings referring to functions (if evaluated), arrays or hashes.
- * @static
- * @method handle
- * @param {Mixed} callables
- *  The callables to call
- *  Can be a function, array of functions, object of functions, Q.Event or URL
- *  If it is a url, simply follow it with options, callback
- * @param {Function} callback
- *  You can pass a function here if callables is a URL
- * @param {Object} context
- *  The context in which to call them
- * @param {Array} args
- *  An array of arguments to pass to them
- * @param {Object} options
- *  If callables is a url, these are the options to pass to Q.loadUrl, if any. Also can include:
- *  @param {boolean} [options.dontReload=false] if this is true and callback is a url matching current url, it is not reloaded
- *  @param {boolean} [options.loadUsingAjax=true] if this is true and callback is a url, it is loaded using Q.loadUrl
- *  @param {Function} [options.externalLoader] when using loadUsingAjax, you can set this to a function to suppress loading of external websites with Q.handle.
- *	Note: this will still not supress loading of external websites done with other means, such as window.location
- *  @param {Object} [options.fields] optional fields to pass with any method other than "get"
- *  @param {String|Function} [options.callback] if a string, adds a '&Q.callback='+encodeURIComponent(callback) to the querystring. If a function, this is the callback.
- *  @param {String} [options.loadExtras="session"] if "all", asks the server to load the extra scripts, stylesheets, etc. that are loaded on first page load, can also be "response", "initial", "session" or "initial,session"
- *  @param {String} [options.target] the name of a window or iframe to use as the target. In this case callables is treated as a url.
- *  @param {String|Array} [options.slotNames] a comma-separated list of slot names, or an array of slot names
- *  @param {boolean} [options.quiet] defaults to false. If true, allows visual indications that the request is going to take place.
- *  @param {Function} [options.handleException] pass a function here to handle thrown exceptions instead of rethrowing them
- * @return {number}
- *  The number of handlers executed
- */
- Q.handle = function _Q_handle(callables, /* callback, */ context, args, options) {
-	try {
-		if (!callables) {
-			return 0;
-		}
-		if (!context) context = root;
-		if (!args) args = [];
-		var i=0, count=0, k, result;
-		if (callables === location) callables = location.href;
-		switch (Q.typeOf(callables)) {
-			case 'function':
-				result = callables.apply(context, args);
-				if (result === false) return false;
-				return 1;
-			case 'array':
-				for (i=0; i<callables.length; ++i) {
-					result = Q.handle(callables[i], context, args);
-					if (result === false) return false;
-					count += result;
-				}
-				return count;
-			case 'Q.Event':
-				return callables.handle.apply(context, args);
-			case 'object':
-				for (k in callables) {
-					result = Q.handle(callables[k], context, args);
-					if (result === false) return false;
-					count += result;
-				}
-				return count;
-			case 'string':
-				var o = Q.extend({}, Q.handle.options, options);
-				if (!callables.isUrl()
-				&& (callables[0] != '#')
-				&& (!o.target || o.target.toLowerCase() === '_self')) {
-					// Assume this is not a URL.
-					// Try to evaluate the expression, and execute the resulting function
-					var c = Q.getObject(callables, context) || Q.getObject(callables);
-					return Q.handle(c, context, args);
-				}
-				// Assume callables is a URL
-				if (o.dontReload && Q.info && Q.info.url === callables) {
-					return 0;
-				}
-				var callback = null;
-				if (typeof arguments[1] === 'function') {
-					// Some syntactic sugar: (url, callback) omitting context, args, options
-					callback = arguments[1];
-					o = Q.handle.options;
-				} else if (arguments[1] && (arguments[3] === undefined)) {
-					// Some more syntactic sugar: (url, options, callback) omitting context, args, options
-					o = Q.extend({}, Q.handle.options, arguments[1]);
-					if (typeof arguments[2] === 'function') {
-						callback = arguments[2];
-					}
-				} else {
-					o = Q.extend({}, Q.handle.options, options);
-					if (o.callback) {
-						callback = o.callback;
-					}
-				}
-				var baseUrl = Q.baseUrl();
-				var sameDomain = callables.sameDomain(baseUrl);
-				if (callables[0] === '#') {
-					root.location.hash = callables;
-				} else if (o.loadUsingAjax && sameDomain
-				&& (!o.target || o.target === true || o.target === '_self')) {
-					if (callables.search(baseUrl) === 0) {
-						// Use AJAX to refresh the page whenever the request is for a local page
-						Q.loadUrl(callables, Q.extend({
-							// shouldn't need to re-load responseExtras, they're the same across sessions
-							loadExtras: 'session',
-							ignoreHistory: false,
-							onActivate: function () {
-								if (callback) callback();
-							}
-						}, o)).then(function (a) {
-							
-						}, function (err) {
-							if (o && o.handleException) {
-								return o.handleException(err);
-							}
-						});
-					} else if (o.externalLoader) {
-						o.externalLoader.apply(this, arguments);
-					} else {
-						root.location = callables;
-					}
-				} else {
-					if (Q.typeOf(o.fields) === 'object') {
-						var method = 'POST';
-						if (o.method) {
-							switch (o.method.toUpperCase()) {
-								case "GET":
-								case "POST":
-									method = o.method;
-									break;
-								default:
-									method = 'POST'; // sadly HTML forms don't support other methods
-									break;
-							}
-						}
-						Q.formPost(callables, o.fields, method, {onLoad: o.callback, target: o.target});
-					} else {
-						if (Q.info && callables === baseUrl) {
-							callables+= '/';
-						}
-						if (!o.target || o.target === true || o.target === '_self') {
-							if (root.location.href == callables) {
-								root.location.reload(true);
-							} else {
-								root.location = callables;
-							}
-						} else {
-							root.open(callables, o.target);
-						}
-					}
-				}
-				Q.handle.onUrl.handle(callables, o);
-				return 1;
-			default:
-				return 0;
-		}
-	} catch (exception) {
-		if (options && options.handleException) {
-			return options.handleException(exception);
-		}
-		throw exception;
-	}
-};
-Q.handle.options = {
-	loadUsingAjax: true,
-	externalLoader: null,
-	dontReload: false
-};
-Q.handle.onUrl = new Q.Event(function () {
-	var elements = document.getElementsByClassName('Q_error_message');
-	Q.each(elements, function () {
-		Q.removeElement(this, true);
-	});
-	Q.Visual.stopHints();
-}, "Q");
-
-/**
  * Displays a duration
  * @static
  * @method displayDuration
@@ -15954,6 +15973,11 @@ Q.Visual = Q.Pointer = {
 	 * @method preventRubberBand
 	 */
 	preventRubberBand: function (options) {
+		document.documentElement.addClass('Q_preventRubberBand');
+		if (window.CSS && window.CSS.supports
+		&& window.CSS.supports('overscroll-behavior', 'contain')) {
+			return; // already preventing it, no need for JS
+		}
 		if (Q.info.platform !== 'ios') {
 			return;
 		}
@@ -15968,6 +15992,11 @@ Q.Visual = Q.Pointer = {
 	 * @method restoreRubberBand
 	 */
 	restoreRubberBand: function () {
+		document.documentElement.removeClass('Q_preventRubberBand');
+		if (window.CSS && window.CSS.supports
+		&& window.CSS.supports('overscroll-behavior', 'contain')) {
+			return; // already preventing it, no need for JS
+		}
 		Q.removeEventListener(window, 'touchmove', _touchScrollingHandler, {
 			passive: false
 		}, true);

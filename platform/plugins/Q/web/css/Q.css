@@ -211,6 +211,10 @@ body { position: relative; margin: 0; }
 	-webkit-transform: translateZ(0);
 }
 
+.Q_preventRubberBand {
+	overscroll-behavior: none !important;
+}
+
 .Q_verticalOrientation .Q_orientHorizontally {
 	transform: scale(1.5) rotate(90deg);
 }
