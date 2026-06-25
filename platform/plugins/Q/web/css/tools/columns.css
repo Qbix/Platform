@@ -324,7 +324,7 @@ html.Q_mobile .Q_columns_column.Q_columns_hasControls .Q_controls_slot {
     box-shadow: 0 -2px 10px 10px rgba(0, 0, 0, 0.5);    
 }
 
-.Q_mobile.Q_columns_animationFX:not(data-dashboard-position="top") .Q_columns_tool .Q_columns_column.Q_columns_overlapped {
+.Q_mobile.Q_columns_animationFX:not([data-dashboard-position="top"]) .Q_columns_tool .Q_columns_column.Q_columns_overlapped {
     display: inline-block;
     transform: perspective(200px) scaleX(1) scaleY(1) scaleZ(1) rotateX(0.3deg) rotateY(0deg) rotateZ(0deg) translateX(0px) translateY(-12px) translateZ(-15px) skewX(0deg) skewY(0deg);
 }
