@@ -1519,7 +1519,6 @@ Q.typeOf.treatAsObject = Q.typeOf.treatAsObject = {
 	PluginArray: true
 };
 
-
 /**
  * Used for handling callbacks, whether they come as functions,
  * strings referring to functions (if evaluated), arrays or hashes.
@@ -4208,12 +4207,8 @@ Q.currentScript = function (stackLevels) {
 		console.warn("parseSrc: could not parse src", src);
 		return null;
 	}
-	var src = parts[1] + parts[2].split(/[?#]/)[0];
-	if (!root._Q_currentScript_src) {
-		root._Q_currentScript_src = src;
-	}
 	return {
-		src: src,   // clean URL (no query/hash)
+		src: parts[1] + parts[2].split(/[?#]/)[0],   // clean URL (no query/hash)
 		srcWithQuerystring: parts[1] + parts[2],     // keep full URL
 		path: parts[1],                              // directory path
 		file: parts[2].split(/[?#]/)[0]              // filename only
