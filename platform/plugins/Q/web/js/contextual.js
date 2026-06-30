@@ -287,7 +287,8 @@
 					var offset = contextual.offset();
 					var info = Q.Contextual.collection[Q.Contextual.current].info;
 
-					var event = (Q.info.useTouchEvents ? e.originalEvent.touches[0] : e);
+					var oe = e.originalEvent || e;
+					var event = (Q.info.useTouchEvents ? oe.touches[0] : e);
 					var px = Q.Pointer.getX(event), py = Q.Pointer.getY(event);
 					info.startY = info.moveY = py;
 					if (px >= offset.left && px <= offset.left + contextual.outerWidth() &&
@@ -308,9 +309,11 @@
 					{
 						Q.Contextual.hide();
 					}
-					return false;
+					Q.Pointer.preventDefault(e);
 				};
-				$(document.body).on(Q.Pointer.start.eventName, Q.Contextual.startEventHandler);
+				Q.addEventListener(document.body, Q.Pointer.start.eventName, Q.Contextual.startEventHandler, {
+					passive: false
+				});
 			
 				Q.Contextual.moveEventHandler = function(e)
 				{
@@ -438,7 +441,8 @@
 					else
 						listingWrapper = contextual.children('.Q_listing_wrapper');
 
-					var event = (Q.info.useTouchEvents ? e.originalEvent.changedTouches[0] : e);
+					var oe = e.originalEvent || e;
+					var event = (Q.info.useTouchEvents ? oe.changedTouches[0] : e);
 					var target = (info.curScroll === 'iScroll' || info.curScroll === 'touchscroll'
 							? event.target
 							: Q.getObject("moveTarget.0", info) || event.target);
@@ -492,7 +496,9 @@
 						Q.Pointer.cancelClick(false, e);
 					}
 				};
-				$(document.body).on(Q.Pointer.end, Q.Contextual.endEventHandler);
+				Q.addEventListener(document.body, Q.Pointer.end, Q.Contextual.endEventHandler, {
+					passive: false
+				});
 			
 				Q.Contextual.itemSelectHandler = function(element, event)
 				{
