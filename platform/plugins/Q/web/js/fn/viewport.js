@@ -17,6 +17,7 @@
  *   @param {Object} [options.initial.x] horizontal midpoint, from 0 to 1
  *   @param {Object} [options.initial.y] vertical midpoint, from 0 to 1
  *   @param {Object} [options.initial.scale] initial scale
+ *   @param {Object} [options.initial.width="100%"] the initial width to use, if scale is empty
  *   @param {Object} [options.sensitivity] tunes how fast zooming responds
  *   @param {Number} [options.sensitivity.pinch] exponent applied to the finger-distance ratio
  *     during a pinch. 1 maps finger spread to scale 1:1 (the natural feel). Values below 1
@@ -278,9 +279,9 @@ function _Q_viewport(options) {
 		// this is for ios devices only
 		// for some reason photo from camera displayed with bottom gap. Need to process touchstart handler to normalize.
 		if (state.initial && state.initial.width && !state.initial.scale) {
+			var $img = this;
 			$img.width(state.initial.width);
 			if (Q.info.isTouchscreen) {
-				var $img = this;
 				setTimeout(function () { $img.width("100%") }, 200);
 			}
 		}
