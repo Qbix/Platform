@@ -58,6 +58,17 @@ function _Q_viewport(options) {
 	var useZoom = Q.info.isIE(0, 8);
 	
 	function _continue() {
+
+		if (state.initial && state.initial.width && !state.initial.scale) {
+			var $img = this;
+			$img.width(state.initial.width);
+			if (Q.info.isTouchscreen) {
+				// this is for ios devices only
+				// for some reason photo from camera displayed with bottom gap. Need to process touchstart handler to normalize.
+				setTimeout(function () { $img.width(state.initial.width) }, 200);
+			}
+		}
+
 		var ow = this.outerWidth(true);
 		var oh = this.outerHeight(true);
 		if (!state.width) { state.width = ow; }
@@ -275,16 +286,6 @@ function _Q_viewport(options) {
 				Q.addEventListener(window, Q.Pointer.cancel, _cancelHandler, {passive: false});
 			}
 		});
-
-		// this is for ios devices only
-		// for some reason photo from camera displayed with bottom gap. Need to process touchstart handler to normalize.
-		if (state.initial && state.initial.width && !state.initial.scale) {
-			var $img = this;
-			$img.width(state.initial.width);
-			if (Q.info.isTouchscreen) {
-				setTimeout(function () { $img.width("100%") }, 200);
-			}
-		}
 
 		container.on(Q.Pointer.wheel, function (e) {
 			if (Q.Pointer.started) {
