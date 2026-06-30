@@ -95,10 +95,10 @@ function _Q_viewport(options) {
 	
 		var initial = state.initial;
 		var iw = ow, ih = oh, il = 0, it = 0;
-		if (initial && initial.x) {
+		if (initial && initial.x !== undefined) {
 			il -= iw * initial.x - state.width/2;
 		}
-		if (initial && initial.y) {
+		if (initial && initial.y !== undefined) {
 			it -= ih * initial.y - state.height/2;
 		}
 	
@@ -277,9 +277,12 @@ function _Q_viewport(options) {
 
 		// this is for ios devices only
 		// for some reason photo from camera displayed with bottom gap. Need to process touchstart handler to normalize.
-		if (Q.info.isTouchscreen) {
-			var $img = this;
-			setTimeout(function () { $img.width("100%") }, 200);
+		if (state.initial && state.initial.width && !state.initial.scale) {
+			$img.width(state.initial.width);
+			if (Q.info.isTouchscreen) {
+				var $img = this;
+				setTimeout(function () { $img.width("100%") }, 200);
+			}
 		}
 
 		container.on(Q.Pointer.wheel, function (e) {
@@ -373,7 +376,9 @@ function _Q_viewport(options) {
 
 {	// default options:
 	containerClass: '', // any class names to add to the actions container
-	initial: null,
+	initial: {
+		width: '100%'
+	},
 	scale: 1,
 	minScale: null,
 	maxScale: 2,
