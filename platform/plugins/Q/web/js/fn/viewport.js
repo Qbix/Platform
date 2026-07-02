@@ -17,6 +17,7 @@
  *   @param {Object} [options.initial.x] horizontal midpoint, from 0 to 1
  *   @param {Object} [options.initial.y] vertical midpoint, from 0 to 1
  *   @param {Object} [options.initial.scale] initial scale
+ *   @param {Object} [options.initial.width="100%"] the initial width to use, if scale is empty
  *   @param {Object} [options.sensitivity] tunes how fast zooming responds
  *   @param {Number} [options.sensitivity.pinch] exponent applied to the finger-distance ratio
  *     during a pinch. 1 maps finger spread to scale 1:1 (the natural feel). Values below 1
@@ -57,6 +58,17 @@ function _Q_viewport(options) {
 	var useZoom = Q.info.isIE(0, 8);
 	
 	function _continue() {
+
+		if (state.initial && state.initial.width && !state.initial.scale) {
+			var $img = this;
+			$img.width(state.initial.width);
+			if (Q.info.isTouchscreen) {
+				// this is for ios devices only
+				// for some reason photo from camera displayed with bottom gap. Need to process touchstart handler to normalize.
+				setTimeout(function () { $img.width(state.initial.width) }, 200);
+			}
+		}
+
 		var ow = this.outerWidth(true);
 		var oh = this.outerHeight(true);
 		if (!state.width) { state.width = ow; }
@@ -95,10 +107,10 @@ function _Q_viewport(options) {
 	
 		var initial = state.initial;
 		var iw = ow, ih = oh, il = 0, it = 0;
-		if (initial && initial.x) {
+		if (initial && initial.x !== undefined) {
 			il -= iw * initial.x - state.width/2;
 		}
-		if (initial && initial.y) {
+		if (initial && initial.y !== undefined) {
 			it -= ih * initial.y - state.height/2;
 		}
 	
@@ -275,13 +287,6 @@ function _Q_viewport(options) {
 			}
 		});
 
-		// this is for ios devices only
-		// for some reason photo from camera displayed with bottom gap. Need to process touchstart handler to normalize.
-		if (Q.info.isTouchscreen) {
-			var $img = this;
-			setTimeout(function () { $img.width("100%") }, 200);
-		}
-
 		container.on(Q.Pointer.wheel, function (e) {
 			if (Q.Pointer.started) {
 				return;
@@ -373,7 +378,9 @@ function _Q_viewport(options) {
 
 {	// default options:
 	containerClass: '', // any class names to add to the actions container
-	initial: null,
+	initial: {
+		width: '100%'
+	},
 	scale: 1,
 	minScale: null,
 	maxScale: 2,

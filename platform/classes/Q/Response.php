@@ -1833,10 +1833,14 @@ class Q_Response
 	 * @method addHtmlCssClass
 	 * @static
 	 * @param {string} $className
+	 * @param {array} [$options=array()]
+	 * @param {boolean} [$options.weight=1] Higher weight goes first in the class list
 	 */
-	static function addHtmlCssClass($className)
+	static function addHtmlCssClass($className, $options = array())
 	{
-		self::$htmlCssClasses[$className] = true;
+		$weight = Q::ifset($options, 'weight', 1);
+		self::$htmlCssClasses[$className] = $weight;
+		arsort(self::$htmlCssClasses);
 	}
 
 	/**
@@ -1942,7 +1946,7 @@ class Q_Response
 			'lang="' . $language . '"',
 			'prefix="og:http://ogp.me/ns# object:http://ogp.me/ns/object# website:http://ogp.me/ns/website# fb:http://ogp.me/ns/fb#"',
 			'itemscope itemtype="https://schema.org/WebPage"',
-			"class='$touchscreen $mobile $cordova $platform $ie $ie8 $classes'"
+			"class='$classes $touchscreen $mobile $cordova $platform $ie $ie8'"
 		);
 		$attributes = array_merge($defaults, $attributes);
 		return implode($separator, $attributes);
