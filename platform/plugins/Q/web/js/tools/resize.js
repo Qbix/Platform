@@ -23,6 +23,7 @@
         },
 
         {
+            handles: {},
             active: false,
             resize: true,
             move: true,
@@ -174,6 +175,19 @@
                     }
                 }
             },
+            blockTextSelection: function () {
+                var tool = this;
+                if (!tool.selectionIsBlockDebouncer) {
+                    document.body.classList.add('Q_resize_selection_is_blocked');
+                    tool.selectionIsBlockDebouncer = Q.debounce(function () {
+                        document.body.classList.remove('Q_resize_selection_is_blocked');
+                        tool.selectionIsBlockDebouncer = null;
+                    }, 500);
+
+                }
+
+                tool.selectionIsBlockDebouncer();
+            },
             initTool: function () {
                 var tool = this;
                 tool.events = new EventSystem();
@@ -244,7 +258,7 @@
                         capturePointer(e);
                         window.removeEventListener(_isTouchScreen ? 'touchmove' : 'mousemove', capturePointer);
                     });
-                });
+                }, { capture: true });
 
                 var _dragElementTool = (function () {
                     var posX, posY, divTop, divLeft, eWi, eHe, cWi, cHe, maxX, maxY, diffX, diffY, snappedTo;
@@ -280,6 +294,7 @@
                     }
             
                     function drag(evt) {
+                        tool.blockTextSelection();
                         if (tool.state.isResizing || (_isTouchScreen && (tool.state.isResizing || evt.touches.length != 1 || evt.changedTouches.length != 1 || evt.targetTouches.length != 1))) return;
                         evt = evt || window.event;
                         evt.preventDefault();
@@ -305,47 +320,49 @@
                         }
             
                         //snap to sides
-                        if (aX < 10 && aX > -10) {
-                            aX = 0;
-                        }
-                        let rightSidePos = aX + eWi;
-                        if (rightSidePos > (cWi - 10) && rightSidePos < cWi + 10) {
-                            aX = cWi - eWi;
-                        }
-                        if (aY < 10 && aY > -10) {
-                            aY = 0;
-                        }
-                        let bottomSidePos = aY + eHe;
-                        if (bottomSidePos > (cHe - 10) && bottomSidePos < cHe + 10) {
-                            aY = cHe - eHe;
-                        }
-            
-                        //snap to other elements
-                        if (tool.state.snapToRects.length != 0) {
-                            var closestToLeftBorder = tool.state.snapToRects.reduce(function (prev, curr) {
-                                return (Math.abs(curr.right - aX) < Math.abs(prev.right - aX) ? curr : prev);
-                            });
-                            var closestToRightBorder = tool.state.snapToRects.reduce(function (prev, curr) {
-                                return (Math.abs(curr.left - rightSidePos) < Math.abs(prev.left - rightSidePos) ? curr : prev);
-                            });
-                            var closestToTopBorder = tool.state.snapToRects.reduce(function (prev, curr) {
-                                return (Math.abs(curr.bottom - aY) < Math.abs(prev.bottom - aY) ? curr : prev);
-                            });
-                            var closestToBottomBorder = tool.state.snapToRects.reduce(function (prev, curr) {
-                                return (Math.abs(curr.top - bottomSidePos) < Math.abs(prev.top - bottomSidePos) ? curr : prev);
-                            });
-            
-                            if (closestToLeftBorder && aX <= closestToLeftBorder.right + 10 && aX >= closestToLeftBorder.right - 10) {
-                                aX = closestToLeftBorder.right
+                        if (tool.state.snapping !== false) {
+                            if (aX < 10 && aX > -10) {
+                                aX = 0;
                             }
-                            if (closestToRightBorder && rightSidePos <= closestToRightBorder.left + 10 && rightSidePos >= closestToRightBorder.left - 10) {
-                                aX = closestToRightBorder.left - eWi;
+                            let rightSidePos = aX + eWi;
+                            if (rightSidePos > (cWi - 10) && rightSidePos < cWi + 10) {
+                                aX = cWi - eWi;
                             }
-                            if (closestToTopBorder && aY <= closestToTopBorder.bottom + 10 && aY >= closestToTopBorder.bottom - 10) {
-                                aY = closestToTopBorder.bottom;
+                            if (aY < 10 && aY > -10) {
+                                aY = 0;
                             }
-                            if (closestToBottomBorder && bottomSidePos <= closestToBottomBorder.top + 10 && bottomSidePos >= closestToBottomBorder.top - 10) {
-                                aY = closestToBottomBorder.top - eHe;
+                            let bottomSidePos = aY + eHe;
+                            if (bottomSidePos > (cHe - 10) && bottomSidePos < cHe + 10) {
+                                aY = cHe - eHe;
+                            }
+
+                            //snap to other elements
+                            if (tool.state.snapToRects.length != 0) {
+                                var closestToLeftBorder = tool.state.snapToRects.reduce(function (prev, curr) {
+                                    return (Math.abs(curr.right - aX) < Math.abs(prev.right - aX) ? curr : prev);
+                                });
+                                var closestToRightBorder = tool.state.snapToRects.reduce(function (prev, curr) {
+                                    return (Math.abs(curr.left - rightSidePos) < Math.abs(prev.left - rightSidePos) ? curr : prev);
+                                });
+                                var closestToTopBorder = tool.state.snapToRects.reduce(function (prev, curr) {
+                                    return (Math.abs(curr.bottom - aY) < Math.abs(prev.bottom - aY) ? curr : prev);
+                                });
+                                var closestToBottomBorder = tool.state.snapToRects.reduce(function (prev, curr) {
+                                    return (Math.abs(curr.top - bottomSidePos) < Math.abs(prev.top - bottomSidePos) ? curr : prev);
+                                });
+
+                                if (closestToLeftBorder && aX <= closestToLeftBorder.right + 10 && aX >= closestToLeftBorder.right - 10) {
+                                    aX = closestToLeftBorder.right
+                                }
+                                if (closestToRightBorder && rightSidePos <= closestToRightBorder.left + 10 && rightSidePos >= closestToRightBorder.left - 10) {
+                                    aX = closestToRightBorder.left - eWi;
+                                }
+                                if (closestToTopBorder && aY <= closestToTopBorder.bottom + 10 && aY >= closestToTopBorder.bottom - 10) {
+                                    aY = closestToTopBorder.bottom;
+                                }
+                                if (closestToBottomBorder && bottomSidePos <= closestToBottomBorder.top + 10 && bottomSidePos >= closestToBottomBorder.top - 10) {
+                                    aY = closestToBottomBorder.top - eHe;
+                                }
                             }
                         }
             
@@ -417,6 +434,7 @@
                     }
             
                     function initMoving(evt) {
+                        console.log('initMoving START', _elementToMove);
                         if (tool.state.ignoreOnElements.length != 0) {
                             var ignoreEls = tool.state.ignoreOnElements;
                             for (var e in ignoreEls) {
@@ -533,9 +551,13 @@
                     function initDragTool() {
                         var activateOnElement = tool.state.activateOnElement != null ? tool.state.activateOnElement : _elementToMove;
                         
-                        function prepareMoving() {
+                        function prepareMoving(event) {
+                            event.stopImmediatePropagation();
+                            event.stopPropagation();
                             var checkIfShouldInitMoving = function (e) {
-                                if (!tool.state.isMoving && tool.pointerInfo.pointerIsPressed && distance(tool.pointerInfo.startX, tool.pointerInfo.startY, tool.pointerInfo.prevX, tool.pointerInfo.prevY) > 10) {
+                                 console.log('initMoving 1', !tool.state.isMoving, tool.pointerInfo.pointerIsPressed, distance(tool.pointerInfo.startX, tool.pointerInfo.startY, tool.pointerInfo.prevX, tool.pointerInfo.prevY))
+                                if (!tool.state.isMoving && tool.pointerInfo.pointerIsPressed && distance(tool.pointerInfo.startX, tool.pointerInfo.startY, tool.pointerInfo.prevX, tool.pointerInfo.prevY) >= (tool.state.dragThreeshold != null ? tool.state.dragThreeshold : 10)) {
+                                    console.log('initMoving 2')
                                     initMoving(e);
                                 }
                             }
@@ -546,6 +568,7 @@
 
                             activateOnElement.addEventListener(_isTouchScreen ? 'touchmove' : 'mousemove', checkIfShouldInitMoving, false);
                             window.addEventListener(_isTouchScreen ? 'touchend' : 'mouseup', removeCheckIfShouldInitMovingListener, true);
+                            
                         }
                         
                         activateOnElement.addEventListener(_isTouchScreen ? 'touchstart' : 'mousedown', prepareMoving)
@@ -582,6 +605,7 @@
                     var originalHeight = 0;
                     var originalX = 0;
                     var originalY = 0;
+                    var originalRect = 0;
                     var originalMouseX = 0;
                     var originalMouseY = 0;
                     var containerRect;
@@ -593,24 +617,24 @@
                         if (_handlePosition == null) _handlePosition = 'bottomright';
                         _elementToResize = e.target.parentNode;
                         _elementPosition = _elementToResize.style.position;
-                        var elementRect = _elementToResize.getBoundingClientRect();
+                        originalRect = _elementToResize.getBoundingClientRect();
             
                         if (_elementPosition == 'fixed') {
-                            _centerPosition = elementRect.left + elementRect.width / 2;
+                            _centerPosition = originalRect.left + originalRect.width / 2;
                         } else if (_elementPosition == 'absolute') {
-                            _centerPosition = _elementToResize.offsetLeft + elementRect.width / 2;
+                            _centerPosition = _elementToResize.offsetLeft + originalRect.width / 2;
                         }
             
                         if (_elementPosition == 'fixed') {
-                            _centerPositionFromTop = elementRect.top + elementRect.height / 2;
+                            _centerPositionFromTop = originalRect.top + originalRect.height / 2;
                         } else if (_elementPosition == 'absolute') {
-                            _centerPositionFromTop = _elementToResize.offsetTop + elementRect.height / 2;
+                            _centerPositionFromTop = _elementToResize.offsetTop + originalRect.height / 2;
                         }
             
                         if (tool.state.initialSize.width == null || tool.state.initialSize.height == null) {
                             tool.state.initialSize = {
-                                width: elementRect.width,
-                                height: elementRect.height
+                                width: originalRect.width,
+                                height: originalRect.height
                             };
                         }
                         
@@ -662,7 +686,7 @@
                     }
 
                     function sizeIsCorrect(width, height) {
-                        if((width && width < tool.state.minimalSize) || (height && height < tool.state.minimalSize)){
+                        if((width != null && width < tool.state.minimalSize) || (height != null && height < tool.state.minimalSize)){
                             return false;
                         }
                         return true;
@@ -670,6 +694,7 @@
             
                     function startResizing(e) {
                         //if (e.clientX >= docRect.right - (docStyles.paddingRight ? docStyles.paddingRight : '0').replace('px', '')) return;
+                        tool.blockTextSelection();
                         e.preventDefault();
                         e.stopPropagation();
                         var elementRect = _elementToResize.getBoundingClientRect();
@@ -960,10 +985,16 @@
                                     snappedToRight = true;
                                 }
 
-                                if(!sizeIsCorrect(width, null)){
-                                    return;
+                                let valid = sizeIsCorrect(width, null);
+
+                                if(!valid){
+                                    width = tool.state.minimalSize;
                                 }
-                                
+                                let rightBoundX = originalRect.left + width;
+                                if(rightBoundX > containerRect.right) {
+                                    console.log('containerRect rightBoundX', originalX, containerRect, rightBoundX)
+                                    width -= rightBoundX - containerRect.right;
+                                }
                                 _elementToResize.style.width = width + 'px';
             
                                 tool.events.dispatch('resizing', {
@@ -992,8 +1023,21 @@
                                     width = elementRect.width + (elementRect.x - containerRect.x);
                                 }
 
-                                if(!sizeIsCorrect(width, null)){
-                                    return;
+                                let valid = sizeIsCorrect(width, null);
+
+                                if(!valid){
+                                    width = tool.state.minimalSize;
+                                }
+
+                                let preLeftPos = originalX - (width - originalWidth);
+                                let leftPos = preLeftPos < originalX + originalWidth ? preLeftPos : originalX + originalWidth;
+
+                                let leftBoundX = originalRect.right - width;
+                                if(leftBoundX < containerRect.left) {
+                                    console.log('containerRect rightBoundX', originalX, containerRect, leftBoundX)
+                                    let offsetX = containerRect.left - leftBoundX;
+                                    width -= offsetX;
+                                    leftPos += offsetX;
                                 }
 
                                 _elementToResize.style.width = width + 'px'
@@ -1526,120 +1570,91 @@
                             resizeByPinchGesture();
                             return;
                         }
+
+                        function Handle(options) {
+                            this.key = options.key;
+                            this.cursor = options.cursor;
+                            this.show = tool.state.handles[this.key] && tool.state.handles[this.key].show != null ? tool.state.handles[this.key].show : true;
+                            this.width = function () { return tool.state.handles[this.key] && tool.state.handles[this.key].width ? tool.state.handles[this.key].width : 6; }
+                            this.height = function () { return tool.state.handles[this.key] && tool.state.handles[this.key].height ? tool.state.handles[this.key].height : 6; }
+                            this.top = tool.state.handles[this.key] && tool.state.handles[this.key].top ? tool.state.handles[this.key].top : options.top;
+                            this.right = tool.state.handles[this.key] && tool.state.handles[this.key].right ? tool.state.handles[this.key].right : options.right;
+                            this.bottom = tool.state.handles[this.key] && tool.state.handles[this.key].bottom ? tool.state.handles[this.key].bottom : options.bottom;
+                            this.left = tool.state.handles[this.key] && tool.state.handles[this.key].left ? tool.state.handles[this.key].left : options.left;
+                        }
+                        let handles = [
+                            new Handle({
+                                key: 'bottomright',
+                                cursor: 'nwse-resize',
+                                right: function () { return '-' + (this.width() / 2) + 'px'; },
+                                bottom: function () { return '-' + (this.height() / 2) + 'px'; }
+                            }),
+                            new Handle({
+                                key: 'bottomleft',
+                                cursor: 'nesw-resize',
+                                left: function () { return '-' + (this.width() / 2) + 'px'; },
+                                bottom: function () { return '-' + (this.height() / 2) + 'px'; }
+                            }),
+                            new Handle({
+                                key: 'topright',
+                                cursor: 'nesw-resize',
+                                right: function () { return '-' + (this.width() / 2) + 'px'; },
+                                top: function () { return '-' + (this.height() / 2) + 'px'; }
+                            }),
+                            new Handle({
+                                key: 'topleft',
+                                cursor: 'nwse-resize',
+                                left: function () { return '-' + (this.width() / 2) + 'px'; },
+                                top: function () { return '-' + (this.height() / 2) + 'px'; }
+                            }),
+                            new Handle({
+                                key: 'middleright',
+                                cursor: 'ew-resize',
+                                right: function () { return '-' + (this.width() / 2) + 'px'; },
+                                bottom: function () { return 'calc(50% - ' + this.height() / 2 + 'px)'; }
+                            }),
+                            new Handle({
+                                key: 'middleleft',
+                                cursor: 'ew-resize',
+                                left: function () { return '-' + (this.width() / 2) + 'px'; },
+                                bottom: function () { return 'calc(50% - ' + this.height() / 2 + 'px)'; }
+                            }),
+                            new Handle({
+                                key: 'middletop',
+                                cursor: 'ns-resize',
+                                left: function () { return 'calc(50% - ' + this.width() / 2 + 'px)'; },
+                                top: function () { return '-' + (this.height() / 2) + 'px'; }
+                            }),
+                            new Handle({
+                                key: 'middlebottom',
+                                cursor: 'ns-resize',
+                                left: function () { return 'calc(50% - ' + this.width() / 2 + 'px)'; },
+                                bottom: function () { return '-' + (this.height() / 2) + 'px'; }
+                            }),
+                        ];
+
                         _elementToResize.draggable = false;
-                        var resizeHandler = document.createElement('DIV');
-                        resizeHandler.style.position = 'absolute';
-                        resizeHandler.style.right = '-3px';
-                        resizeHandler.style.bottom = '-3px';
-                        resizeHandler.style.width = '6px';
-                        resizeHandler.style.height = '6px';
-                        resizeHandler.style.cursor = 'nwse-resize';
-                        resizeHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) resizeHandler.style.background = 'red';
-                        resizeHandler.dataset.position = 'bottomright';
-                        resizeHandler.draggable = false;
-                        _elementToResize.appendChild(resizeHandler);
-            
-                        var leftBottomHandler = document.createElement('DIV');
-                        leftBottomHandler.style.position = 'absolute';
-                        leftBottomHandler.style.cursor = 'nesw-resize';
-                        leftBottomHandler.style.left = '-3px';
-                        leftBottomHandler.style.bottom = '-3px';
-                        leftBottomHandler.style.width = '6px';
-                        leftBottomHandler.style.height = '6px';
-                        leftBottomHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) leftBottomHandler.style.background = 'red';
-                        leftBottomHandler.dataset.position = 'bottomleft';
-                        leftBottomHandler.draggable = false;
-                        _elementToResize.appendChild(leftBottomHandler);
-            
-                        var topRightHandler = document.createElement('DIV');
-                        topRightHandler.style.position = 'absolute';
-                        topRightHandler.style.cursor = 'nesw-resize';
-                        topRightHandler.style.right = '-3px';
-                        topRightHandler.style.top = '-3px';
-                        topRightHandler.style.width = '6px';
-                        topRightHandler.style.height = '6px';
-                        topRightHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) topRightHandler.style.background = 'red';
-                        topRightHandler.dataset.position = 'topright';
-                        topRightHandler.draggable = false;
-                        _elementToResize.appendChild(topRightHandler);
-            
-                        var topLeftHandler = document.createElement('DIV');
-                        topLeftHandler.style.position = 'absolute';
-                        topLeftHandler.style.cursor = 'nwse-resize';
-                        topLeftHandler.style.left = '-3px';
-                        topLeftHandler.style.top = '-3px';
-                        topLeftHandler.style.width = '6px';
-                        topLeftHandler.style.height = '6px';
-                        topLeftHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) topLeftHandler.style.background = 'red';
-                        topLeftHandler.dataset.position = 'topleft';
-                        topLeftHandler.draggable = false;
-                        _elementToResize.appendChild(topLeftHandler);
-            
-                        var centerRightHandler = document.createElement('DIV');
-                        centerRightHandler.style.position = 'absolute';
-                        centerRightHandler.style.right = '-3px';
-                        centerRightHandler.style.bottom = 'calc(50% - 1.5px)';
-                        centerRightHandler.style.width = '6px';
-                        centerRightHandler.style.height = '6px';
-                        centerRightHandler.style.cursor = 'ew-resize';
-                        centerRightHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) centerRightHandler.style.background = 'red';
-                        centerRightHandler.dataset.position = 'middleright';
-                        centerRightHandler.draggable = false;
-                        _elementToResize.appendChild(centerRightHandler);
-            
-                        var centerLeftHandler = document.createElement('DIV');
-                        centerLeftHandler.style.position = 'absolute';
-                        centerLeftHandler.style.cursor = 'ew-resize';
-                        centerLeftHandler.style.left = '-3px';
-                        centerLeftHandler.style.bottom = 'calc(50% - 1.5px)';
-                        centerLeftHandler.style.width = '6px';
-                        centerLeftHandler.style.height = '6px';
-                        centerLeftHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) centerLeftHandler.style.background = 'red';
-                        centerLeftHandler.dataset.position = 'middleleft';
-                        centerLeftHandler.draggable = false;
-                        _elementToResize.appendChild(centerLeftHandler);
-            
-                        var centerTopHandler = document.createElement('DIV');
-                        centerTopHandler.style.position = 'absolute';
-                        centerTopHandler.style.cursor = 'ns-resize';
-                        centerTopHandler.style.top = '-3px';
-                        centerTopHandler.style.left = 'calc(50% - 1.5px)';
-                        centerTopHandler.style.width = '6px';
-                        centerTopHandler.style.height = '6px';
-                        centerTopHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) centerTopHandler.style.background = 'red';
-                        centerTopHandler.dataset.position = 'middletop';
-                        centerTopHandler.draggable = false;
-                        _elementToResize.appendChild(centerTopHandler);
-            
-                        var centerBottomHandler = document.createElement('DIV');
-                        centerBottomHandler.style.position = 'absolute';
-                        centerBottomHandler.style.cursor = 'ns-resize';
-                        centerBottomHandler.style.bottom = '-3px';
-                        centerBottomHandler.style.left = 'calc(50% - 1.5px)';
-                        centerBottomHandler.style.width = '6px';
-                        centerBottomHandler.style.height = '6px';
-                        centerBottomHandler.style.zIndex = '3';
-                        if(tool.state.showResizeHandles) centerBottomHandler.style.background = 'red';
-                        centerBottomHandler.dataset.position = 'middlebottom';
-                        centerBottomHandler.draggable = false;
-                        _elementToResize.appendChild(centerBottomHandler);
+                        for (let i in handles) {
+                            if(handles[i].show === false) continue;
+                            let resizeHandler = document.createElement('DIV');
+                            resizeHandler.style.position = 'absolute';
+                            if(handles[i].top) resizeHandler.style.top = handles[i].top();
+                            if(handles[i].right) resizeHandler.style.right = handles[i].right();
+                            if(handles[i].bottom) resizeHandler.style.bottom = handles[i].bottom();
+                            if(handles[i].left) resizeHandler.style.left = handles[i].left();
+                            resizeHandler.style.width = handles[i].width() + 'px';
+                            resizeHandler.style.height =  handles[i].height() + 'px';
+                            resizeHandler.style.cursor = handles[i].cursor;
+                            resizeHandler.style.zIndex = '3';
+                            if (tool.state.showResizeHandles) resizeHandler.style.background = 'red';
+                            resizeHandler.dataset.position = handles[i].key;
+                            resizeHandler.draggable = false;
+                            _elementToResize.appendChild(resizeHandler);
+                            resizeHandler.addEventListener('mousedown', startResizingByHendle);
+
+                        }
             
                         if (tool.state.resizeByWheel) bindMouseWheelEvent(_elementToResize);
-                        resizeHandler.addEventListener('mousedown', startResizingByHendle);
-                        leftBottomHandler.addEventListener('mousedown', startResizingByHendle);
-                        topRightHandler.addEventListener('mousedown', startResizingByHendle);
-                        topLeftHandler.addEventListener('mousedown', startResizingByHendle);
-                        centerLeftHandler.addEventListener('mousedown', startResizingByHendle);
-                        centerRightHandler.addEventListener('mousedown', startResizingByHendle);
-                        centerTopHandler.addEventListener('mousedown', startResizingByHendle);
-                        centerBottomHandler.addEventListener('mousedown', startResizingByHendle);
                     }
             
                     return {
