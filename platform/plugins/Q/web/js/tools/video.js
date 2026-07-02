@@ -807,6 +807,7 @@ Q.Tool.define("Q/video", function (options) {
 	 * @method play
 	 */
 	play: function () {
+        console.log('play start')
 		var tool = this;
 		var state = this.state;
 		state.player && state.player.play();
@@ -1052,6 +1053,7 @@ Q.Tool.define("Q/video", function (options) {
 	 * @param {boolean} [pause=false] whether to pause video after position changed
 	 */
 	setCurrentPosition: Q.debounce(function (position, silent, pause) {
+        console.log('setCurrentPosition start', position)
 		var tool = this;
 		var state = this.state;
 		var player = state.player;
@@ -1066,29 +1068,37 @@ Q.Tool.define("Q/video", function (options) {
 			player.waiting(true);
 		}
 
+            console.log('setCurrentPosition 1')
 		// convert to seconds
 		player.currentTime(position > 0 ? position/1000 : 0);
 
+            console.log('setCurrentPosition 3')
 		// this event need to show videojs control bar
 		player.hasStarted && player.hasStarted(true);
 
 		if (silent || pause) {
+            console.log('setCurrentPosition 4')
+
 			// wait for start position
 			var counter = 0;
 			var intervalId = setInterval(function() {
 				var currentPosition = tool.getCurrentPosition();
 
+            console.log('setCurrentPosition 5')
 				if (currentPosition === position || counter > 20) {
 					if (silent) {
 						player.muted(!!state.videojsOptions.muted);
 						player.waiting(false);
 					}
 
+            console.log('setCurrentPosition 6')
 					if (pause) {
 						player.pause();
 
+            console.log('setCurrentPosition 7')
 						// this event need to set status paused, because for some reason it stay in status vjs-playing
 						if (player.trigger) {
+            console.log('setCurrentPosition 8')
 							player.trigger('pause');
 							player.removeClass('vjs-playing');
 						}

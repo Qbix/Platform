@@ -62,6 +62,7 @@ Q.exports(function (Q, root) {
         // ── start ──────────────────────────────────────────────────────────
 
         Q.Speech.Recognition.start = function (options) {
+            debugger
             // Merge: defaults ← persistent options ← call-site options
             // Q.extend handles Q.Event fields by extending their handlers, not replacing
             var o = Q.extend(

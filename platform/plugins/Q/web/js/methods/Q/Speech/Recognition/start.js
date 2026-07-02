@@ -72,7 +72,8 @@ Q.exports(function (Q, root) {
             }
         };
         rec.onresult = function (e) {
-            for (var i = e.resultIndex; i < e.results.length; i++) {
+            Q.handle(R.onResult, R, [e]);
+            /* for (var i = e.resultIndex; i < e.results.length; i++) {
                 var alt = e.results[i][0];
                 Q.handle(R.onResult, R, [{
                     transcript: alt.transcript,
@@ -80,10 +81,16 @@ Q.exports(function (Q, root) {
                     confidence: alt.confidence,
                     speaker:    null
                 }]);
-            }
+            } */
         };
 
-        try { rec.start(); } catch (e) {
+        try { 
+            if(o.source instanceof MediaStreamTrack) {
+                rec.start(o.source); 
+            } else {
+                rec.start(); 
+            }
+        } catch (e) {
             Q.handle(R.onError, R, [{ error: 'start-failed' }]);
         }
     };
