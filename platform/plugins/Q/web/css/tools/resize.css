@@ -9,7 +9,9 @@
     height: 10%;
     z-index: 3;
 }
-
+.Q_resize_selection_is_blocked {
+    user-select: none !important;
+}
 /*
 .Q_resize_snapped_top{
     top: 0 !important;

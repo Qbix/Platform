@@ -334,25 +334,25 @@
 
 /* ── Theme: rise ────────────────────────────────────────────────────────────── */
 
-.Media_presentation_transition_rise .Media_presentation_screen,
-.Media_presentation_transition_rise .Media_presentation_card_screen,
-.Media_presentation_transition_rise .Media_presentation_chart_screen {
+.Media_presentation_transition_rise.Media_presentation_screen,
+.Media_presentation_transition_rise.Media_presentation_card_screen,
+.Media_presentation_transition_rise.Media_presentation_chart_screen {
     --Media-transition-duration: 480ms;
     --Media-transition-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @starting-style {
-    .Media_presentation_transition_rise .Media_presentation_screen,
-    .Media_presentation_transition_rise .Media_presentation_card_screen,
-    .Media_presentation_transition_rise .Media_presentation_chart_screen {
+    .Media_presentation_transition_rise.Media_presentation_screen,
+    .Media_presentation_transition_rise.Media_presentation_card_screen,
+    .Media_presentation_transition_rise.Media_presentation_chart_screen {
         opacity:   0;
         transform: translateY(var(--Media-transition-distance));
     }
 }
 
-.Media_presentation_transition_rise .Media_presentation_screen.Media_presentation_leaving,
-.Media_presentation_transition_rise .Media_presentation_card_screen.Media_presentation_leaving,
-.Media_presentation_transition_rise .Media_presentation_chart_screen.Media_presentation_leaving {
+.Media_presentation_transition_rise.Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_rise.Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_rise.Media_presentation_chart_screen.Media_presentation_leaving {
     opacity:   0;
     transform: translateY(calc(var(--Media-transition-distance) * -0.5));
 }
@@ -360,82 +360,82 @@
 /* ── Theme: drop ────────────────────────────────────────────────────────────── */
 
 @starting-style {
-    .Media_presentation_transition_drop .Media_presentation_screen,
-    .Media_presentation_transition_drop .Media_presentation_card_screen,
-    .Media_presentation_transition_drop .Media_presentation_chart_screen {
+    .Media_presentation_transition_drop.Media_presentation_screen,
+    .Media_presentation_transition_drop.Media_presentation_card_screen,
+    .Media_presentation_transition_drop.Media_presentation_chart_screen {
         opacity:   0;
         transform: translateY(calc(var(--Media-transition-distance) * -1));
     }
 }
 
-.Media_presentation_transition_drop .Media_presentation_screen.Media_presentation_leaving,
-.Media_presentation_transition_drop .Media_presentation_card_screen.Media_presentation_leaving,
-.Media_presentation_transition_drop .Media_presentation_chart_screen.Media_presentation_leaving {
+.Media_presentation_transition_drop.Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_drop.Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_drop.Media_presentation_chart_screen.Media_presentation_leaving {
     opacity:   0;
     transform: translateY(var(--Media-transition-distance));
 }
 
 /* ── Theme: scale ───────────────────────────────────────────────────────────── */
 
-.Media_presentation_transition_scale .Media_presentation_screen,
-.Media_presentation_transition_scale .Media_presentation_card_screen,
-.Media_presentation_transition_scale .Media_presentation_chart_screen {
+.Media_presentation_transition_scale.Media_presentation_screen,
+.Media_presentation_transition_scale.Media_presentation_card_screen,
+.Media_presentation_transition_scale.Media_presentation_chart_screen {
     --Media-transition-ease: cubic-bezier(0.34, 1.56, 0.64, 1); /* spring-ish */
     --Media-transition-duration: 500ms;
 }
 
 @starting-style {
-    .Media_presentation_transition_scale .Media_presentation_screen,
-    .Media_presentation_transition_scale .Media_presentation_card_screen,
-    .Media_presentation_transition_scale .Media_presentation_chart_screen {
+    .Media_presentation_transition_scale.Media_presentation_screen,
+    .Media_presentation_transition_scale.Media_presentation_card_screen,
+    .Media_presentation_transition_scale.Media_presentation_chart_screen {
         opacity:   0;
         transform: scale(var(--Media-transition-scale-from));
     }
 }
 
-.Media_presentation_transition_scale .Media_presentation_screen.Media_presentation_leaving,
-.Media_presentation_transition_scale .Media_presentation_card_screen.Media_presentation_leaving,
-.Media_presentation_transition_scale .Media_presentation_chart_screen.Media_presentation_leaving {
+.Media_presentation_transition_scale.Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_scale.Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_scale.Media_presentation_chart_screen.Media_presentation_leaving {
     opacity:   0;
     transform: scale(calc(var(--Media-transition-scale-from) - 0.02));
 }
 
 /* ── Theme: slide ───────────────────────────────────────────────────────────── */
 
-.Media_presentation_transition_slide .Media_presentation_screen,
-.Media_presentation_transition_slide .Media_presentation_card_screen,
-.Media_presentation_transition_slide .Media_presentation_chart_screen {
+.Media_presentation_transition_slide.Media_presentation_screen,
+.Media_presentation_transition_slide.Media_presentation_card_screen,
+.Media_presentation_transition_slide.Media_presentation_chart_screen {
     --Media-transition-ease: cubic-bezier(0.22, 1, 0.36, 1);
     --Media-transition-duration: 420ms;
 }
 
 @starting-style {
-    .Media_presentation_transition_slide .Media_presentation_screen,
-    .Media_presentation_transition_slide .Media_presentation_card_screen,
-    .Media_presentation_transition_slide .Media_presentation_chart_screen {
+    .Media_presentation_transition_slide.Media_presentation_screen,
+    .Media_presentation_transition_slide.Media_presentation_card_screen,
+    .Media_presentation_transition_slide.Media_presentation_chart_screen {
         opacity:   0;
         transform: translateX(var(--Media-transition-distance));
     }
 }
 
-.Media_presentation_transition_slide .Media_presentation_screen.Media_presentation_leaving,
-.Media_presentation_transition_slide .Media_presentation_card_screen.Media_presentation_leaving,
-.Media_presentation_transition_slide .Media_presentation_chart_screen.Media_presentation_leaving {
+.Media_presentation_transition_slide.Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_slide.Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_slide.Media_presentation_chart_screen.Media_presentation_leaving {
     opacity:   0;
     transform: translateX(calc(var(--Media-transition-distance) * -1));
 }
 
 /* ── Theme: none ────────────────────────────────────────────────────────────── */
 
-.Media_presentation_transition_none .Media_presentation_screen,
-.Media_presentation_transition_none .Media_presentation_card_screen,
-.Media_presentation_transition_none .Media_presentation_chart_screen {
+.Media_presentation_transition_none.Media_presentation_screen,
+.Media_presentation_transition_none.Media_presentation_card_screen,
+.Media_presentation_transition_none.Media_presentation_chart_screen {
     transition: none !important;
 }
 
-.Media_presentation_transition_none .Media_presentation_screen.Media_presentation_leaving,
-.Media_presentation_transition_none .Media_presentation_card_screen.Media_presentation_leaving,
-.Media_presentation_transition_none .Media_presentation_chart_screen.Media_presentation_leaving {
+.Media_presentation_transition_none.Media_presentation_screen.Media_presentation_leaving,
+.Media_presentation_transition_none.Media_presentation_card_screen.Media_presentation_leaving,
+.Media_presentation_transition_none.Media_presentation_chart_screen.Media_presentation_leaving {
     display: none !important;
 }
 
@@ -703,9 +703,9 @@
 /* The wrapper's own opacity transition handles most of it;                  */
 /* these add directionality for themed exits.                                */
 
-.Media_presentation_transition_rise .Media_presentation_chart_screen.Media_presentation_leaving .Q_chart_bar_row,
-.Media_presentation_transition_rise .Media_presentation_card_screen.Media_presentation_leaving  .Q_card_stat_value,
-.Media_presentation_transition_rise .Media_presentation_card_screen.Media_presentation_leaving  .Q_card_quote_text {
+.Media_presentation_transition_rise.Media_presentation_chart_screen.Media_presentation_leaving .Q_chart_bar_row,
+.Media_presentation_transition_rise.Media_presentation_card_screen.Media_presentation_leaving  .Q_card_stat_value,
+.Media_presentation_transition_rise.Media_presentation_card_screen.Media_presentation_leaving  .Q_card_quote_text {
     animation: none;
     transition: opacity 200ms ease, transform 200ms ease;
     opacity: 0;
@@ -904,14 +904,14 @@
     /* ── Transitions on mobile: fade only, no translate/scale ───────────── */
     /* Translate and scale transitions can cause compositing jank on          */
     /* older mobile GPUs. Reduce to opacity only by zeroing distances.        */
-    .Media_presentation_transition_rise .Media_presentation_card_screen,
-    .Media_presentation_transition_rise .Media_presentation_chart_screen,
-    .Media_presentation_transition_drop .Media_presentation_card_screen,
-    .Media_presentation_transition_drop .Media_presentation_chart_screen,
-    .Media_presentation_transition_slide .Media_presentation_card_screen,
-    .Media_presentation_transition_slide .Media_presentation_chart_screen,
-    .Media_presentation_transition_scale .Media_presentation_card_screen,
-    .Media_presentation_transition_scale .Media_presentation_chart_screen {
+    .Media_presentation_transition_rise.Media_presentation_card_screen,
+    .Media_presentation_transition_rise.Media_presentation_chart_screen,
+    .Media_presentation_transition_drop.Media_presentation_card_screen,
+    .Media_presentation_transition_drop.Media_presentation_chart_screen,
+    .Media_presentation_transition_slide.Media_presentation_card_screen,
+    .Media_presentation_transition_slide.Media_presentation_chart_screen,
+    .Media_presentation_transition_scale.Media_presentation_card_screen,
+    .Media_presentation_transition_scale.Media_presentation_chart_screen {
         --Media-transition-distance:   0px;
         --Media-transition-scale-from: 1;
         /* transform transitions now animate to/from identical values = no-op */
@@ -964,9 +964,11 @@
 }
 
 .Media_presentation_card_screen .Q_card,
-.Media_presentation_chart_screen .Q_chart {
+.Media_presentation_chart_screen .Q_chart {    
     max-width: min(900px, 100%);
-    width: 100%;
+    width: fit-content;
+    height: fit-content;
+    overflow: visible;
 }
 
 /* Source/attribution links */
@@ -1225,3 +1227,53 @@
     }
 }
 
+
+
+.Media_presentation_card_profile_tool {
+
+}
+
+.Media_presentation_card_profile_tool .Media_presentation_hero{
+    display: flex;
+}
+.Media_presentation_card_profile_tool .Media_presentation_hero .Media_presentation_card_image {
+    height: 100%;
+}
+.Media_presentation_card_profile_tool .Media_presentation_hero .Media_presentation_card_body {
+   /*  height: 100%; */
+    display: flex;
+    position: relative;
+    flex-grow: 1;
+    flex-direction: row;
+}
+.Media_presentation_card_profile_tool .Media_presentation_hero .Media_presentation_card_body .Q_card_profile_tool{
+    height: 100%;
+    width: 100%;
+    flex: 1;
+    display: flex;
+    /* flex-direction: column; */
+    /* display: flex; */
+    max-height: none;
+    flex-shrink: 0;
+}
+.Media_presentation_card_profile_tool .Media_presentation_hero .Media_presentation_card_body .Q_card_profile_tool .Q_card_profile{
+    height: 100%;
+    border-radius: 0 10px 10px 0;
+}
+
+.Media_presentation_chart_line_tool {
+    background: #0000008a !important;
+}
+.Media_presentation_chart_line_tool .Media_presentation_caption {
+    color: #ffffff;
+}
+.Media_presentation_chart_line_tool .Media_presentation_hero {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.Media_presentation_card_stat_tool .Media_presentation_hero {
+    max-width: 100%;
+}
