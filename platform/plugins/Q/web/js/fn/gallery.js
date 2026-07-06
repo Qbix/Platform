@@ -165,8 +165,10 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	var R = [];   // resolved renderers, parallel to items
 	var RP = [];  // in-flight ensure promises, parallel to items
 	var tm = null, scheduledAt = 0, scheduledDelay = 0, remainingDelay = null;
-	var pendingGoNext = null, resumePending = null;
+	var pendingGoNext = null, resumePending = null, pendingTimers = [];
+	var domObserver = null, domRemovalTimer = null;
 	var animTransition, animInterval, animPreviousInterval;
+	var crossfading = false, destroyed = false;
 	var paused = false, playing = false, everStarted = false, keepGoingFlag = false;
 	var soundOn = !!state.sound;
 	var maxVolume = (typeof state.maxVolume === 'number') ? state.maxVolume : 1;
@@ -398,9 +400,51 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		tm = setTimeout(function () { if (go) go(); }, scheduledDelay);
 	}
 
+	function stopAnimations() {
+		animTransition && animTransition.pause();
+		animInterval && animInterval.pause();
+		animPreviousInterval && animPreviousInterval.pause();
+		animTransition = animInterval = animPreviousInterval = null;
+	}
+
+	function clearPendingTimers() {
+		clearTimeout(tm); tm = null;
+		for (var i = 0; i < pendingTimers.length; i++) clearTimeout(pendingTimers[i]);
+		pendingTimers = [];
+		clearTimeout(domRemovalTimer); domRemovalTimer = null;
+	}
+
+	function disconnectDomObserver() {
+		if (domObserver) {
+			domObserver.disconnect();
+			domObserver = null;
+		}
+		clearTimeout(domRemovalTimer);
+		domRemovalTimer = null;
+	}
+
+	function observeDomRemoval() {
+		Q.ensure('MutationObserver', function () {
+			var el = $this[0];
+			if (!el) return;
+			domObserver = new MutationObserver(function () {
+				if (destroyed || el.isConnected) return;
+				clearTimeout(domRemovalTimer);
+				// defer so a remove+reappend move in the same turn does not destroy
+				domRemovalTimer = setTimeout(function () {
+					domRemovalTimer = null;
+					if (destroyed || el.isConnected) return;
+					disconnectDomObserver();
+					gallery.destroy();
+				}, 0);
+			});
+			domObserver.observe(document.documentElement, { childList: true, subtree: true });
+		});
+	}
+
 	// ── the unified advance ───────────────────────────────────────────────
 	function advance(keepGoing) {
-		if (paused || !items.length) return;
+		if (destroyed || paused || !items.length) return;
 		clearTimeout(tm); tm = null;   // supersede any pending cycle timer
 		resumePending = null;          // a fresh advance invalidates a deferred one
 		previous = current;
@@ -413,7 +457,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		getRenderer(idx).then(function (r) {
 			return Promise.resolve(r.ensure()).then(function () { return r.ready; }).then(function () { return r; });
 		}).then(function (curR) {
-			if (current !== idx) return;   // superseded by a later advance
+			if (destroyed || current !== idx) return;   // superseded by a later advance
 			if (paused) {                  // paused mid-load: defer to resume()
 				resumePending = function () { beginTransition(prevIdx, idx, curR, keepGoing); };
 				return;
@@ -435,6 +479,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		curR.enter(true); // fresh entry: start the clip at its beginning
 		if (curR.type === 'video') applyAudio(curR, idx);
 
+		crossfading = !!(state.transitionToFirst || prevIdx !== -1);
 		function ramp(x, y) {
 			curR.setLevel(y);
 			if (prevR) prevR.setLevel(1 - y);
@@ -445,6 +490,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			if (y === 1) {
 				hideOthers(idx);
 				animPreviousInterval && animPreviousInterval.pause();
+				crossfading = false;
 			}
 		}
 
@@ -495,7 +541,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		// Exactly one advance per cycle, whether the timer fires or the clip ends.
 		var advanced = false;
 		function goNext() {
-			if (advanced || paused) return;
+			if (advanced || paused || destroyed) return;
 			advanced = true;
 			if (curR.clearEndHandler) curR.clearEndHandler();
 			advance(keepGoing);
@@ -614,6 +660,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			paused = true;
 			animTransition && animTransition.pause();
 			animInterval && animInterval.pause();
+			animPreviousInterval && animPreviousInterval.pause();
 			if (tm) {
 				var now = Q.milliseconds ? Q.milliseconds() : Date.now();
 				remainingDelay = Math.max(0, scheduledDelay - (now - scheduledAt));
@@ -637,6 +684,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			}
 			animTransition && animTransition.play();
 			animInterval && animInterval.play();
+			if (crossfading && animPreviousInterval) animPreviousInterval.play();
 			var cr = R[current];
 			if (cr) cr.enter();
 			// pause() -> exit() cleared the clip's end handler; restore it
@@ -655,7 +703,8 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		rewind: function () {
 			this.pause();
 			current = previous = -1;
-			animTransition = animInterval = animPreviousInterval = null;
+			crossfading = false;
+			stopAnimations();
 		},
 		/**
 		 * Advance to the next item.
@@ -670,12 +719,19 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		 * @method destroy
 		 */
 		destroy: function () {
+			if (destroyed) return;
+			destroyed = true;
+			disconnectDomObserver();
 			this.pause();
 			pendingGoNext = null;
+			crossfading = false;
+			stopAnimations();
+			clearPendingTimers();
 			for (var i = 0; i < R.length; i++) {
 				if (R[i] && R[i].destroy) { try { R[i].destroy(); } catch (e) {} }
 				R[i] = null; RP[i] = null;
 			}
+			$this.removeData('gallery');
 		},
 
 		/**
@@ -690,9 +746,12 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			resumePending = null; // a structural change invalidates a deferred frame
 			if (item.playAfterMs != null) {
 				var self = this, ms = item.playAfterMs;
-				setTimeout(function () {
+				var timerId = setTimeout(function () {
+					pendingTimers = pendingTimers.filter(function (id) { return id !== timerId; });
+					if (destroyed) return;
 					self.addItem(Q.extend({}, item, { insertAfterCurrent: true, playAfterMs: null }));
 				}, ms);
+				pendingTimers.push(timerId);
 				// best-effort warm for images; videos warm when actually inserted
 				if (item.type === 'image' && item.src) { var pre = new Image(); pre.src = Q.url(item.src); }
 				return;
@@ -817,6 +876,8 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		gallery.next(false); // prime the first frame, do not loop
 		updateChrome();
 	}
+
+	observeDomRemoval();
 
 	$this.data('gallery', gallery);
 	return this;
