@@ -89,13 +89,24 @@ handlebars.registerHelper('call', function(path) {
 	}
 	if (parts[0] === 'Q') {
 		parts.shift();
-		subpath.shift();
+		subparts.shift();
 		f = Q.getObject(parts, Q);
 		if (typeof f === 'function') {
 			return f.apply(Q.getObject(subparts, Q), params);
 		}
 	}
-	return "{{call "+path+" not found}}";
+	var notFound = "{{call "+path+" not found}}";
+	var logKey = Q.Config.get(['Q', 'handlebars', 'log', 'missingCall'], null)
+		|| Q.Config.get(['Streams', 'types', '*', 'messages', '*', 'log'], null);
+	if (logKey) {
+		Q.log({
+			missingCall: path,
+			context: Q.getObject(subparts, this) && Q.getObject(subparts, this).fields
+		}, logKey);
+	} else {
+		console.warn('Q.Handlebars call helper: '+path+' not found');
+	}
+	return notFound;
 });
 
 handlebars.registerHelper('getObject', function() {
