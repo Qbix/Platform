@@ -648,7 +648,7 @@ function _handlePosAndScroll(o)
 
 	function _adjustPosition() {
 		var da = document.activeElement;
-		var isInput = da && (da.tagName === 'INPUT' || da.tagName === 'TEXTAREA');
+		var isInput = Q.info.isTouchscreen && da && (['INPUT', 'SELECT', 'TEXTAREA'].indexOf(da.tagName) >= 0);
 		if (isInput) {
 			inputWasFocused = true;
 			setTimeout(function () {
@@ -667,7 +667,9 @@ function _handlePosAndScroll(o)
 			bottomMargin = Math.round(parseInt(bottomMargin) / 100 * parentHeight);
 		var prevDisplay = $this.css('display');
 		$this.css('visibility', 'visible');
-		$this.css('max-height', parentHeight - topMargin - bottomMargin);
+		if (!isInput) {
+			$this.css('max-height', parentHeight - topMargin - bottomMargin);
+		}
 		if (prevDisplay !== 'block' && prevDisplay !== 'flex') {
 			clearInterval(interval);
 			return;
@@ -688,7 +690,9 @@ function _handlePosAndScroll(o)
 			}
 			var $ds = $this.find('.Q_dialog_slot');
 			var atBottom = ($ds.scrollTop() >= $ds[0].scrollHeight - $ds[0].clientHeight);
-			$ds.css('max-height', maxHeight + 'px');
+			if (!isInput) {
+				$ds.css('max-height', maxHeight + 'px');
+			}
 			if ($ds.hasClass('Q_scrollToBottom') && atBottom) {
 				$ds.scrollTop($ds[0].scrollHeight - $ds[0].clientHeight);
 			}
