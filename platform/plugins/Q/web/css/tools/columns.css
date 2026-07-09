@@ -295,9 +295,8 @@ html.Q_mobile .Q_columns_column.Q_columns_hasControls .Q_controls_slot {
 }
 
 .Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_columns_latest {
-        box-shadow: rgb(0 0 0 / 90%) 0 -40px 500px;
-    
-    }
+        box-shadow: rgb(0 0 0 / 90%) 0 -40px 500px;    
+}
 
 .Q_mobile.Q_columns_animationFX .Q_columns_tool .Q_column_1 {
     transform: perspective(1800px) scaleX(1) scaleY(1) scaleZ(1) translateX(0) translateY(1px) translateZ(0px) skewX(0deg) skewY(0deg) rotateX(10deg);
