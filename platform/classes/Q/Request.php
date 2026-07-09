@@ -107,7 +107,7 @@ class Q_Request
 
 	/**
 	 * Check whether the current request came from this installation's Node.js process.
-	 * The Q/before/Q_objects hook sets SAFEBOX_NODE_REQUEST=true after verifying
+	 * The Q/before/Q_objects hook sets Q_NODE_REQUEST=true after verifying
 	 * loopback + User-Agent + HMAC-SHA1. This method reads that flag.
 	 * Falls back to loopback + UA check if the hook didn't run (misconfiguration).
 	 * @method isFromNode
@@ -116,7 +116,7 @@ class Q_Request
 	 */
 	static function isFromNode()
 	{
-		if (!empty($_SERVER['SAFEBOX_NODE_REQUEST'])) {
+		if (!empty($_SERVER['Q_NODE_REQUEST'])) {
 			return true;
 		}
 		// Fallback: loopback + UA only (no HMAC — config error path)
