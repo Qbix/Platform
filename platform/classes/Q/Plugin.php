@@ -962,7 +962,7 @@ EOT;
 		if (!file_exists($dir . DS . 'package.json')) {
 			return false;
 		}
-		if (!$exists) {
+		if ($doIt and !$exists) {
 			echo Q_Utils::colored("[WARN] package.json exists in $dir but npm is not installed\n", 'red');
 			return false;
 		}
@@ -980,7 +980,7 @@ EOT;
 		if (!file_exists($dir . DS . 'composer.json') or !$exists) {
 			return false;
 		}
-		if (!$exists) {
+		if ($doIt and !$exists) {
 			echo Q_Utils::colored("[WARN] composer.json exists in $dir but composer is not installed\n", 'red');
 			return false;
 		}
