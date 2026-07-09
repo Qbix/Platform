@@ -88,7 +88,7 @@ function () {
 			var span = $('<span />').css({
 				position: 'relative',
 				width: dim.width,
-				height: dim.height,
+				height: dim.height || 'auto',
 				"vertical-align": Q.getObject("verticalAlign", this.computedStyle('placeholder'))
 					|| Q.getObject("verticalAlign", cs) || "middle",
 				display: display
