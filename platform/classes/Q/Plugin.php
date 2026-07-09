@@ -959,7 +959,11 @@ EOT;
 	static function npmInstall($dir, $doIt = false)
 	{
 		$exists = $doIt && self::commandExists('npm');
-		if (!file_exists($dir . DS . 'package.json') or !$exists) {
+		if (!file_exists($dir . DS . 'package.json')) {
+			return false;
+		}
+		if (!$exists) {
+			echo Q_Utils::colored("[WARN] package.json exists in $dir but npm is not installed\n", 'red');
 			return false;
 		}
 		echo "Installing npm modules into $dir".DS."node_modules\n";
@@ -974,6 +978,10 @@ EOT;
 	{
 		$exists = $doIt && self::commandExists('composer');
 		if (!file_exists($dir . DS . 'composer.json') or !$exists) {
+			return false;
+		}
+		if (!$exists) {
+			echo Q_Utils::colored("[WARN] composer.json exists in $dir but composer is not installed\n", 'red');
 			return false;
 		}
 		echo "Installing composer packages into $dir".DS."vendor\n";
