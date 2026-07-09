@@ -993,19 +993,24 @@ EOT;
 	 */
 	static function composerInstall($dir, $doIt = false)
 	{
-		$exists = $doIt && self::commandExists('composer');
-		if (!file_exists($dir . DS . 'composer.json') or !$exists) {
+		if (!file_exists($dir . DS . 'composer.json')) {
 			return false;
 		}
-		if ($doIt and !$exists) {
+		if (!$doIt) {
+			return false;
+		}
+		if (!self::commandExists('composer')) {
 			echo Q_Utils::colored("[WARN] composer.json exists in $dir but composer is not installed\n", 'red');
 			return false;
 		}
 		echo "Installing composer packages into $dir".DS."vendor\n";
 		$cwd = getcwd();
 		chdir($dir);
-		shell_exec("composer update");
+		passthru("composer install", $exitCode);
 		chdir($cwd);
+		if ($exitCode !== 0) {
+			throw new Exception("Composer install failed in $dir with exit code $exitCode");
+		}
 		return true;
 	}
 
