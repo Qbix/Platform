@@ -49,12 +49,12 @@
 <?php echo $dashboard ?> 
 <!-- - - - - - - - - - - - - - end dashboard slot- - - - - - - - - - - - - - - - -->
 	</div>
-	<div id="page">
-		<div id="notices_slot" class="Q_fixed_top">
+	<div id="notices_slot" class="Q_fixed_top">
 <!-- - - - - - - - - - - - - - begin notices slot- - - - - - - - - - - - - - - - -->
 <?php echo $notices ?> 
 <!-- - - - - - - - - - - - - - end notices slot- - - - - - - - - - - - - - - - - -->
-		</div>
+	</div>
+	<div id="page">
 		<div id="content_slot">
 <!-- - - - - - - - - - - - - - begin content slot- - - - - - - - - - - - - - - - -->
 <?php echo $content; ?> 
