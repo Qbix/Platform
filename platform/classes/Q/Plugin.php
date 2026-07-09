@@ -794,6 +794,7 @@ EOT;
 	}
 
 	/**
+	 * Install plugin into app
 	 * @method installPlugin
 	 * @static
 	 * @param {string} $plugin_name
@@ -956,6 +957,14 @@ EOT;
 		echo Q_Utils::colored("Plugin '$plugin_name' $plugin_version successfully installed".PHP_EOL, 'green');
 	}
 
+	/**
+	 * Install npm modules if package.json exists in the directory
+	 * @method npmInstall
+	 * @static
+	 * @param {string} $dir	
+	 * @param {boolean} $doIt Whether to actually run npm install or just check if it can be run	
+	 * @return {boolean} True if npm install was run or can be run, false if it cannot be run
+	 */
 	static function npmInstall($dir, $doIt = false)
 	{
 		$exists = $doIt && self::commandExists('npm');
@@ -974,6 +983,14 @@ EOT;
 		return true;
 	}
 
+	/**
+	 * Install composer packages if composer.json exists in the directory
+	 * @method composerInstall
+	 * @static
+	 * @param {string} $dir
+	 * @param {boolean} $doIt Whether to actually run composer install or just check if it can be run
+	 * @return {boolean} True if composer install was run or can be run, false if it cannot be run
+	 */
 	static function composerInstall($dir, $doIt = false)
 	{
 		$exists = $doIt && self::commandExists('composer');
@@ -992,6 +1009,13 @@ EOT;
 		return true;
 	}
 
+	/**
+	 * Check if a command exists in the system
+	 * @method commandExists
+	 * @static
+	 * @param {string} $cmd The command to check
+	 * @return {boolean} True if the command exists, false otherwise
+	 */
 	static function commandExists($cmd) {
 		// check which command exist "which" (linux) or "where" (win)
 		$is_win = (substr(strtolower(PHP_OS), 0, 3) === 'win');
