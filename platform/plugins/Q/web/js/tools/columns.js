@@ -39,6 +39,7 @@ var dataKey_opening = 'opening';
  *  @param {Object}  [options.classes] Pairs of columnName: cssClass which is added to the column when it's opened
  *  @param {Object}  [options.handlers] Pairs of columnName: handler where the handler can be a function or a string, in which you assign a function to Q.exports .
  *  @param {Boolean} [options.fullscreen] Whether to use fullscreen mode on mobile phones, using document to scroll instead of relying on possibly buggy "overflow" CSS implementation. Defaults to true on Android stock browser, false everywhere else.
+ *  @param {Boolean} [options.dontUpdateThemeColor] pass true here to prevent updating the window's theme color
  *  @param {Boolean} [options.hideOverlappedColumns=true] Whether to hide background columns on mobile (perhaps improving browser rendering).
  *  @param {Boolean} [options.stretchFirstColumn=true] If true, stretch first column to whole page width if no other columns appear.
  *  @param {Boolean|String} [options.pagePushUrl=true] if this is true and the url of the column
@@ -247,6 +248,7 @@ Q.Tool.define("Q/columns", function(options) {
 	 *  @param {Object} [options.column] override the html of the column
 	 *  @param {Object} [options.url] a url to request the slots "title" and "column" from
 	 *  @param {Object} [options.focusAfterActivate] pass true here to focus the first input after the column is activated
+	 *  @param {Boolean} [options.dontUpdateThemeColor] pass true here to prevent updating the window's theme color
 	 * @param {Number} index The index of the column to open
 	 * @param {Function} callback Called when the column is opened
 	 * @return {Boolean} Whether the column will be opened
@@ -671,7 +673,9 @@ Q.Tool.define("Q/columns", function(options) {
 				var $cs = $('.Q_column_slot', $div);
 				var $ct = $('.Q_columns_title', $div);
 
-				_updateThemeColor(index-1, index, duration);
+				if (!o.dontUpdateThemeColor) {
+					_updateThemeColor(index-1, index, duration);
+				}
 				
 				var $prev = $div.prev();
 				$div.css('z-index', parseInt($prev.css('z-index'))+1 || 1);
