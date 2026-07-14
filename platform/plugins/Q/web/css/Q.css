@@ -266,6 +266,7 @@ html[xmlns] .Q_clearfix { display: block; }
 
 .Q_overlay .Q_title_slot {
     border-top-left-radius: 7px;
+	border-top-right-radius: 7px;
     overflow: hidden;
 }
 
