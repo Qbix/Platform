@@ -7363,6 +7363,14 @@ Q.Response.processScriptDataAndLines = function (response) {
 			}
 		}
 	}
+	if (Q.info && Q.info.uri) {
+		var moduleSlashAction = Q.info.uri.module + "/" + Q.info.uri.action;
+		var uriString = Q.info.uriString;
+		if (uriString !== moduleSlashAction
+		&& (uriString || "").indexOf(moduleSlashAction + "/") !== 0) {
+			Q.info.uriString = moduleSlashAction;
+		}
+	}
 };
 
 Q.Response.processStylesheets = function Q_Response_loadStylesheets(response, callback) {
