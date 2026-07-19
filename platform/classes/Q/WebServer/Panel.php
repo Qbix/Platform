@@ -157,9 +157,9 @@ class Q_WebServer_Panel
 		if (strpos($authHeader, 'Bearer ') === 0) {
 			$token = substr($authHeader, 7);
 		}
-		// Also check X-Panel-Token header
+		// Also check Q-Panel-Token header
 		if (empty($token)) {
-			$token = $parsed['headers']['x-panel-token'] ?? '';
+			$token = $parsed['headers']['q-panel-token'] ?? '';
 		}
 		// Also check cookie
 		if (empty($token)) {
@@ -230,7 +230,7 @@ class Q_WebServer_Panel
 
 		$config['passwordHash'] = password_hash($newPw, PASSWORD_DEFAULT);
 		// Invalidate all other sessions
-		$currentToken = $parsed['headers']['x-panel-token']
+		$currentToken = $parsed['headers']['q-panel-token']
 			?? $parsed['cookies']['Q_panel_token'] ?? '';
 		$config['sessions'] = array();
 		if ($currentToken) {
@@ -244,7 +244,7 @@ class Q_WebServer_Panel
 	{
 		$configPath = self::panelConfigPath();
 		$config = json_decode(file_get_contents($configPath), true);
-		$token = $parsed['headers']['x-panel-token']
+		$token = $parsed['headers']['q-panel-token']
 			?? $parsed['cookies']['Q_panel_token'] ?? '';
 		if ($token && isset($config['sessions'][$token])) {
 			unset($config['sessions'][$token]);
@@ -826,7 +826,7 @@ function setToken(t) {
 async function api(path, body) {
   var headers = {'Content-Type':'application/json'};
   var t = getToken();
-  if (t) headers['X-Panel-Token'] = t;
+  if (t) headers['Q-Panel-Token'] = t;
   var r = await fetch(API+'/'+path, body
     ? {method:'POST', headers:headers, body:JSON.stringify(body)}
     : {headers:headers});

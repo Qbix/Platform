@@ -4,321 +4,280 @@
  */
 
 /**
- * Merkle-tree based component cache with dependency tracking.
+ * Merkle-tree invalidation layer for Q_WebServer_Cache.
+ *
+ * Does NOT store component HTML — only hashes and dependencies.
+ * The actual cached page lives in Q_WebServer_Cache (page-level).
+ * This layer answers one question: "is this cached page still valid?"
  *
  * Better than ESI/SSI because:
- *   - Sub-page granularity (Qbix slot level, not just include blocks)
- *   - Dependency-driven invalidation (Stream changes → specific components)
- *   - Merkle tree aggregation (parent hashes computed from children)
- *   - All in PHP memory — no edge server, no parsing HTML comments
- *   - Composable with Q_Response::fillSlot()
+ *   - No component HTML in memory — just a tree of md5 hashes (~100 bytes/page)
+ *   - Stream-driven invalidation: change a stream → invalidate specific pages
+ *   - Children communicate via response headers, not wire protocol
+ *   - All in parent process memory — no edge proxy, no parsing
  *
- * Architecture:
- *   Parent process holds the Merkle trees + dependency graph in memory.
- *   Forked children register dependencies and send invalidations back
- *   via the Pool wire protocol. Cache hits assemble pages from cached
- *   components without forking a worker.
+ * How it works:
  *
- * A page is a tree of components:
+ *   1. Child renders a page. Q_Response::fillSlot() tracks which slots
+ *      were rendered and which streams each slot read from. After rendering,
+ *      the child sets response headers:
  *
- *   Page /community/123         ← Merkle root (hash of children)
- *   ├── title                   ← leaf (depends on community/name stream)
- *   ├── dashboard               ← subtree
- *   │   ├── avatar              ← leaf (depends on Users/avatar stream)
- *   │   └── notifications       ← leaf (depends on Streams/notifications)
- *   └── content                 ← subtree
- *       ├── feed                ← leaf (depends on community/feed stream)
- *       ├── members             ← leaf (depends on community/participants)
- *       └── sidebar             ← leaf (depends on community/about stream)
+ *        X-Cache-Tree: {"t":{"da":{"av":"a3f2","nt":"b8c1"},"co":{"fe":"d4e5","mb":"f6a7","sb":"c8d9"}},"h":"root_hash"}
+ *        X-Cache-Deps: {"content/feed":["community/feed/456"],"co.mb":["community/participants/456"],"dashboard/avatar":["Users/avatar/123"]}
  *
- * When community/feed gets a new message:
- *   1. Child sends invalidation: {"invalidate": ["community/feed/123"]}
- *   2. Parent looks up dependency: community/feed/123 → page:/community/123#content.feed
- *   3. Invalidate leaf → recompute parent hashes up the tree
- *   4. Mark page as partially stale (only content.feed needs re-render)
- *   5. Next request: re-render feed only, assemble from cached siblings
+ *   2. Parent receives response, caches it in Q_WebServer_Cache (full page),
+ *      and stores the Merkle tree + deps here (hashes only, ~200 bytes).
+ *
+ *   3. When a stream changes (child sends X-Cache-Invalidate header,
+ *      or WebSocket message, or explicit API call):
+ *        - Look up dependency index: stream → [pageKey, leafPath]
+ *        - Remove the page from Q_WebServer_Cache
+ *        - Mark the Merkle leaf as stale (optional: for partial re-render hints)
+ *
+ *   4. Next request for this page: cache miss → fork worker → full re-render
+ *      → new tree + new page cached. The stale leaves tell the child which
+ *      slots changed, enabling smart partial rendering if the app supports it.
  *
  * Config:
  *   "Q": { "web": { "cache": { "components": {
  *     "enabled": true,
- *     "maxPages": 10000,
- *     "maxComponents": 50000
+ *     "maxTrees": 10000
  *   }}}}
  *
  * @class Q_WebServer_Cache_Components
  */
 class Q_WebServer_Cache_Components
 {
-	/**
-	 * Page trees: pageKey => MerkleNode
-	 * A MerkleNode is:
-	 *   ['hash' => string, 'html' => string|null, 'children' => [name => MerkleNode]]
-	 * Leaf nodes have html set and no children.
-	 * Interior nodes have html=null and children.
-	 * The root also stores the assembled page in 'assembled'.
-	 * @property $pages
-	 */
-	protected static $pages = array();
+	// ── State (parent process memory) ───────────────────
 
 	/**
-	 * Dependency index: streamKey => [ [pageKey, componentPath], ... ]
-	 * Maps a stream identifier to every component that depends on it.
+	 * Merkle trees: pageKey => tree
+	 * A tree is: { 'hash' => rootHash, 'leaves' => { 'path' => hash, ... } }
+	 * Compact — no HTML, no children structure. Just leaf hashes + root.
+	 * The hierarchy is encoded in slash-separated leaf paths.
+	 * @property $trees
+	 */
+	protected static $trees = array();
+
+	/**
+	 * Forward dependency index: streamKey => [ [pageKey, leafPath], ... ]
 	 * @property $deps
 	 */
 	protected static $deps = array();
 
 	/**
-	 * Reverse index: "pageKey#componentPath" => [streamKey, ...]
-	 * For cleanup when a page is evicted.
-	 * @property $reverseDeps
+	 * Reverse index: pageKey => [ streamKey, ... ]
+	 * For cleanup when a page tree is evicted.
+	 * @property $pageStreams
 	 */
-	protected static $reverseDeps = array();
+	protected static $pageStreams = array();
 
 	/**
-	 * Component HTML cache: "pageKey#componentPath" => html string
-	 * Separate from the tree for fast lookup during assembly.
-	 * @property $components
+	 * Stale leaves: pageKey => [ leafPath, ... ]
+	 * After invalidation, records which leaves changed so the next
+	 * render can optionally skip unchanged slots.
+	 * @property $staleLeaves
 	 */
-	protected static $components = array();
+	protected static $staleLeaves = array();
 
-	/**
-	 * Stats
-	 */
-	protected static $pageHits = 0;
-	protected static $partialHits = 0;
-	protected static $fullMisses = 0;
+	// ── Stats ───────────────────────────────────────────
+
 	protected static $invalidations = 0;
+	protected static $pagesInvalidated = 0;
 
-	// ── Configuration ───────────────────────────────────
+	// ── Config ──────────────────────────────────────────
 
 	protected static $enabled = false;
-	protected static $maxPages = 10000;
-	protected static $maxComponents = 50000;
+	protected static $maxTrees = 10000;
 
 	/**
 	 * Initialize from config.
-	 * Called once in the parent process at startup.
 	 */
 	static function init()
 	{
 		$config = Q_Config::get('Q', 'web', 'cache', 'components', array());
 		self::$enabled = (bool) Q::ifset($config, 'enabled', false);
-		self::$maxPages = (int) Q::ifset($config, 'maxPages', 10000);
-		self::$maxComponents = (int) Q::ifset($config, 'maxComponents', 50000);
+		self::$maxTrees = (int) Q::ifset($config, 'maxTrees', 10000);
 	}
 
-	/**
-	 * Check if component caching is enabled.
-	 * @return {boolean}
-	 */
 	static function enabled()
 	{
 		return self::$enabled;
 	}
 
-	// ── Page lookup (parent process) ────────────────────
+	// ── Process response headers from child ─────────────
 
 	/**
-	 * Try to serve a full page from component cache.
+	 * Called by the parent after receiving a response from a worker.
+	 * Extracts X-Cache-Tree, X-Cache-Deps, and X-Cache-Invalidate
+	 * headers. Strips them from the response (they're internal).
 	 *
-	 * If all components are cached and the Merkle root is valid,
-	 * assemble the page from cached components without forking.
-	 *
-	 * @method getPage
+	 * @method processResponseHeaders
 	 * @static
-	 * @param {string} $pageKey Cache key for this page (usually path+query)
-	 * @return {string|null} Assembled HTML or null if any component is stale
+	 * @param {string} $pageKey Cache key for this page
+	 * @param {array} &$headers Response headers (modified in place — internal headers removed)
 	 */
-	static function getPage($pageKey)
-	{
-		if (!self::$enabled) return null;
-		if (!isset(self::$pages[$pageKey])) return null;
-
-		$page = self::$pages[$pageKey];
-
-		// Check if any node is marked stale
-		if (self::hasStaleNode($page)) {
-			self::$partialHits++;
-			return null; // caller should re-render stale components only
-		}
-
-		// All components valid — return assembled page
-		if (isset($page['assembled'])) {
-			self::$pageHits++;
-			return $page['assembled'];
-		}
-
-		// Assemble from components
-		$html = self::assembleFromTree($pageKey, $page);
-		if ($html !== null) {
-			self::$pages[$pageKey]['assembled'] = $html;
-			self::$pageHits++;
-		}
-		return $html;
-	}
-
-	/**
-	 * Get the list of stale component paths for a page.
-	 * The caller can re-render only these slots.
-	 *
-	 * @method getStaleComponents
-	 * @static
-	 * @param {string} $pageKey
-	 * @return {array} Array of component paths that need re-rendering, e.g. ['content.feed', 'dashboard.notifications']
-	 */
-	static function getStaleComponents($pageKey)
-	{
-		if (!isset(self::$pages[$pageKey])) return array();
-		$stale = array();
-		self::collectStale(self::$pages[$pageKey], '', $stale);
-		return $stale;
-	}
-
-	/**
-	 * Get cached HTML for a specific component.
-	 *
-	 * @method getComponent
-	 * @static
-	 * @param {string} $pageKey
-	 * @param {string} $componentPath Dot-separated path, e.g. 'content.feed'
-	 * @return {string|null}
-	 */
-	static function getComponent($pageKey, $componentPath)
-	{
-		$key = $pageKey . '#' . $componentPath;
-		return self::$components[$key] ?? null;
-	}
-
-	// ── Registration (called from forked children) ──────
-
-	/**
-	 * Register a rendered component and its dependencies.
-	 *
-	 * Called by Q_Response slot rendering or explicitly by app code.
-	 * In a forked child, this data is sent back to the parent via
-	 * the wire protocol (see processChildMessage).
-	 *
-	 * @method registerComponent
-	 * @static
-	 * @param {string} $pageKey Page cache key
-	 * @param {string} $componentPath Dot-separated path in the tree
-	 * @param {string} $html Rendered HTML for this component
-	 * @param {array} $dependsOn Array of stream keys this component reads from
-	 * @param {string|null} $hash Optional content hash. If null, computed from $html.
-	 */
-	static function registerComponent($pageKey, $componentPath, $html, $dependsOn = array(), $hash = null)
+	static function processResponseHeaders($pageKey, &$headers)
 	{
 		if (!self::$enabled) return;
 
-		if ($hash === null) {
-			$hash = md5($html);
+		// 1. Handle invalidations first (from POST/write requests)
+		$invalidateHeader = self::extractHeader($headers, 'X-Cache-Invalidate');
+		if ($invalidateHeader) {
+			$streams = json_decode($invalidateHeader, true);
+			if (is_array($streams)) {
+				self::invalidateStreams($streams);
+			}
 		}
 
-		// Store component HTML
-		$compKey = $pageKey . '#' . $componentPath;
-		self::$components[$compKey] = $html;
+		// 2. Register tree from GET response
+		$treeHeader = self::extractHeader($headers, 'X-Cache-Tree');
+		$depsHeader = self::extractHeader($headers, 'X-Cache-Deps');
 
-		// Build/update the tree node
-		$node = &self::getNodeRef($pageKey, $componentPath);
-		$node['hash'] = $hash;
-		$node['stale'] = false;
-
-		// Register dependencies
-		foreach ($dependsOn as $streamKey) {
-			// Forward index: stream → components
-			if (!isset(self::$deps[$streamKey])) {
-				self::$deps[$streamKey] = array();
+		if ($treeHeader) {
+			$tree = json_decode($treeHeader, true);
+			if (is_array($tree)) {
+				self::registerTree($pageKey, $tree);
 			}
-			$depEntry = array($pageKey, $componentPath);
-			// Avoid duplicates
-			$found = false;
-			foreach (self::$deps[$streamKey] as $existing) {
-				if ($existing[0] === $pageKey && $existing[1] === $componentPath) {
-					$found = true;
-					break;
+		}
+
+		if ($depsHeader) {
+			$deps = json_decode($depsHeader, true);
+			if (is_array($deps)) {
+				self::registerDeps($pageKey, $deps);
+			}
+		}
+	}
+
+	/**
+	 * Extract and remove an internal header from the response.
+	 * Returns the value or null.
+	 */
+	protected static function extractHeader(&$headers, $name)
+	{
+		$lower = strtolower($name);
+		foreach ($headers as $k => $v) {
+			if (strtolower($k) === $lower) {
+				unset($headers[$k]);
+				return $v;
+			}
+		}
+		return null;
+	}
+
+	// ── Tree registration ───────────────────────────────
+
+	/**
+	 * Register a Merkle tree from a child's response.
+	 *
+	 * Tree format (JSON from X-Cache-Tree header):
+	 *   { "h": "root_hash", "l": { "title": "abc", "content/feed": "def", ... } }
+	 *
+	 * "h" = root hash (md5 of concatenated leaf hashes)
+	 * "l" = leaf hashes, keyed by slash-separated path
+	 *
+	 * @param {string} $pageKey
+	 * @param {array} $tree Decoded JSON
+	 */
+	static function registerTree($pageKey, $tree)
+	{
+		// Evict old tree if exists (cleans up deps)
+		if (isset(self::$trees[$pageKey])) {
+			self::evictTree($pageKey);
+		}
+
+		self::$trees[$pageKey] = array(
+			'hash'   => $tree['h'] ?? self::computeRoot($tree['l'] ?? array()),
+			'leaves' => $tree['l'] ?? array(),
+			'time'   => time(),
+		);
+
+		// Clear any stale markers (we have a fresh render)
+		unset(self::$staleLeaves[$pageKey]);
+
+		// Evict oldest if over limit
+		while (count(self::$trees) > self::$maxTrees) {
+			$oldest = array_key_first(self::$trees);
+			if ($oldest === null || $oldest === $pageKey) break;
+			self::evictTree($oldest);
+		}
+	}
+
+	/**
+	 * Register dependencies from a child's response.
+	 *
+	 * Deps format (JSON from X-Cache-Deps header):
+	 *   { "content/feed": ["community/feed/456"], "dashboard/avatar": ["Users/avatar/123"], ... }
+	 *
+	 * Keys = leaf paths, values = arrays of stream keys that leaf reads from.
+	 *
+	 * @param {string} $pageKey
+	 * @param {array} $deps Decoded JSON
+	 */
+	static function registerDeps($pageKey, $deps)
+	{
+		$allStreams = array();
+
+		foreach ($deps as $leafPath => $streamKeys) {
+			foreach ($streamKeys as $streamKey) {
+				// Forward index
+				if (!isset(self::$deps[$streamKey])) {
+					self::$deps[$streamKey] = array();
 				}
-			}
-			if (!$found) {
-				self::$deps[$streamKey][] = $depEntry;
-			}
-
-			// Reverse index: component → streams
-			if (!isset(self::$reverseDeps[$compKey])) {
-				self::$reverseDeps[$compKey] = array();
-			}
-			if (!in_array($streamKey, self::$reverseDeps[$compKey])) {
-				self::$reverseDeps[$compKey][] = $streamKey;
+				self::$deps[$streamKey][] = array($pageKey, $leafPath);
+				$allStreams[$streamKey] = true;
 			}
 		}
 
-		// Recompute parent hashes up the tree
-		self::recomputeHashes($pageKey);
-
-		// Eviction if over limits
-		self::evictIfNeeded();
+		// Reverse index for cleanup
+		self::$pageStreams[$pageKey] = array_keys($allStreams);
 	}
 
-	/**
-	 * Store the fully assembled page HTML.
-	 * Called after all components have been rendered and the layout
-	 * is assembled. This is the "Merkle root" entry.
-	 *
-	 * @method registerPage
-	 * @static
-	 * @param {string} $pageKey
-	 * @param {string} $assembledHtml The final page HTML
-	 */
-	static function registerPage($pageKey, $assembledHtml)
-	{
-		if (!self::$enabled) return;
-		if (!isset(self::$pages[$pageKey])) {
-			self::$pages[$pageKey] = array('hash' => null, 'children' => array());
-		}
-		self::$pages[$pageKey]['assembled'] = $assembledHtml;
-		self::recomputeHashes($pageKey);
-	}
-
-	// ── Invalidation (parent process) ───────────────────
+	// ── Invalidation ────────────────────────────────────
 
 	/**
-	 * Invalidate all components that depend on a given stream.
-	 *
-	 * Called in the parent process when a child reports a stream change,
-	 * or when a WebSocket message indicates an update.
+	 * Invalidate all pages that depend on a stream.
 	 *
 	 * @method invalidateStream
 	 * @static
-	 * @param {string} $streamKey e.g. 'Streams/avatar/123' or 'community/feed/456'
+	 * @param {string} $streamKey e.g. 'Streams/avatar/123'
 	 */
 	static function invalidateStream($streamKey)
 	{
 		if (!isset(self::$deps[$streamKey])) return;
 
 		self::$invalidations++;
+		$pagesHit = array();
 
 		foreach (self::$deps[$streamKey] as $dep) {
-			list($pageKey, $componentPath) = $dep;
+			list($pageKey, $leafPath) = $dep;
 
-			// Mark component as stale in the tree
-			$node = &self::getNodeRef($pageKey, $componentPath);
-			$node['stale'] = true;
+			if (!isset($pagesHit[$pageKey])) {
+				$pagesHit[$pageKey] = true;
 
-			// Remove cached component HTML
-			$compKey = $pageKey . '#' . $componentPath;
-			unset(self::$components[$compKey]);
-
-			// Clear assembled page (root is stale)
-			if (isset(self::$pages[$pageKey]['assembled'])) {
-				unset(self::$pages[$pageKey]['assembled']);
+				// Purge from page-level cache
+				Q_WebServer_Cache::purge($pageKey);
+				self::$pagesInvalidated++;
 			}
 
-			// Mark all ancestors as stale too
-			self::markAncestorsStale($pageKey, $componentPath);
+			// Record which leaf is stale (hint for partial re-render)
+			if (!isset(self::$staleLeaves[$pageKey])) {
+				self::$staleLeaves[$pageKey] = array();
+			}
+			if (!in_array($leafPath, self::$staleLeaves[$pageKey])) {
+				self::$staleLeaves[$pageKey][] = $leafPath;
+			}
+
+			// Mark leaf hash as stale in tree
+			if (isset(self::$trees[$pageKey]['leaves'][$leafPath])) {
+				self::$trees[$pageKey]['leaves'][$leafPath] = null; // stale
+				self::$trees[$pageKey]['hash'] = null; // root invalid
+			}
 		}
 	}
 
 	/**
-	 * Invalidate multiple streams at once.
+	 * Invalidate multiple streams.
 	 *
 	 * @method invalidateStreams
 	 * @static
@@ -331,328 +290,174 @@ class Q_WebServer_Cache_Components
 		}
 	}
 
+	// ── Query ───────────────────────────────────────────
+
 	/**
-	 * Evict an entire page from the component cache.
+	 * Check if a page's Merkle root still matches what we have.
+	 * Called optionally — the main cache layer (Q_WebServer_Cache)
+	 * already handles TTL-based expiry. This is for instant invalidation.
 	 *
-	 * @method evictPage
+	 * @method isValid
 	 * @static
 	 * @param {string} $pageKey
+	 * @param {string} $rootHash The root hash to check against
+	 * @return {boolean} true if the tree exists and the root matches
 	 */
-	static function evictPage($pageKey)
+	static function isValid($pageKey, $rootHash)
 	{
-		if (!isset(self::$pages[$pageKey])) return;
+		if (!isset(self::$trees[$pageKey])) return true; // no tree = no opinion
+		return self::$trees[$pageKey]['hash'] === $rootHash;
+	}
 
-		// Remove all dependency entries for this page
-		$prefix = $pageKey . '#';
-		foreach (self::$reverseDeps as $compKey => $streams) {
-			if (strpos($compKey, $prefix) !== 0) continue;
-			$parts = explode('#', $compKey, 2);
-			$componentPath = $parts[1] ?? '';
-			foreach ($streams as $streamKey) {
+	/**
+	 * Get the list of stale leaves for a page.
+	 * The child can use this to skip re-rendering unchanged slots.
+	 *
+	 * @method getStaleLeaves
+	 * @static
+	 * @param {string} $pageKey
+	 * @return {array} Leaf paths that changed since last render
+	 */
+	static function getStaleLeaves($pageKey)
+	{
+		return self::$staleLeaves[$pageKey] ?? array();
+	}
+
+	/**
+	 * Check if a specific leaf is stale.
+	 *
+	 * @method isLeafStale
+	 * @static
+	 * @param {string} $pageKey
+	 * @param {string} $leafPath
+	 * @return {boolean}
+	 */
+	static function isLeafStale($pageKey, $leafPath)
+	{
+		if (!isset(self::$staleLeaves[$pageKey])) return false;
+		return in_array($leafPath, self::$staleLeaves[$pageKey]);
+	}
+
+	// ── Hints to child ──────────────────────────────────
+
+	/**
+	 * Build a header value telling the child which slots are stale.
+	 * The child can set this on the request when dispatching to a worker.
+	 *
+	 * @method buildStaleHintsHeader
+	 * @static
+	 * @param {string} $pageKey
+	 * @return {string|null} JSON array of stale leaf paths, or null if none
+	 */
+	static function buildStaleHintsHeader($pageKey)
+	{
+		$stale = self::$staleLeaves[$pageKey] ?? array();
+		return !empty($stale) ? json_encode($stale) : null;
+	}
+
+	// ── Cleanup ─────────────────────────────────────────
+
+	/**
+	 * Remove a page's tree and clean up all its dependency entries.
+	 */
+	protected static function evictTree($pageKey)
+	{
+		// Remove from forward deps
+		if (isset(self::$pageStreams[$pageKey])) {
+			foreach (self::$pageStreams[$pageKey] as $streamKey) {
 				if (isset(self::$deps[$streamKey])) {
-					self::$deps[$streamKey] = array_filter(
+					self::$deps[$streamKey] = array_values(array_filter(
 						self::$deps[$streamKey],
 						function ($d) use ($pageKey) { return $d[0] !== $pageKey; }
-					);
+					));
 					if (empty(self::$deps[$streamKey])) {
 						unset(self::$deps[$streamKey]);
 					}
 				}
 			}
-			unset(self::$reverseDeps[$compKey], self::$components[$compKey]);
+			unset(self::$pageStreams[$pageKey]);
 		}
 
-		unset(self::$pages[$pageKey]);
+		unset(self::$trees[$pageKey], self::$staleLeaves[$pageKey]);
 	}
 
-	// ── Wire protocol: child → parent messages ──────────
+	// ── Merkle computation ──────────────────────────────
 
 	/**
-	 * Process a message from a forked child.
+	 * Compute root hash from leaf hashes.
+	 * Deterministic: sorts by path, concatenates "path:hash", md5s the result.
 	 *
-	 * The Pool's onWorkerData calls this when it sees a message
-	 * with type 'cache'. Children send these after rendering.
-	 *
-	 * Message format:
-	 *   { "type": "cache", "action": "register|invalidate",
-	 *     "pageKey": "...", "componentPath": "...",
-	 *     "html": "...", "hash": "...",
-	 *     "dependsOn": ["stream/key/1", ...],
-	 *     "streams": ["stream/key/1", ...] }
+	 * @param {array} $leaves path => hash pairs
+	 * @return {string} root hash
+	 */
+	protected static function computeRoot($leaves)
+	{
+		if (empty($leaves)) return md5('');
+		ksort($leaves);
+		$concat = '';
+		foreach ($leaves as $path => $hash) {
+			$concat .= $path . ':' . ($hash ?? 'null') . "\n";
+		}
+		return md5($concat);
+	}
+
+	// ── Wire protocol (legacy support) ──────────────────
+
+	/**
+	 * Process a cache message from a child (via Pool wire protocol).
+	 * Supports both the header-based approach and explicit messages.
 	 *
 	 * @method processChildMessage
 	 * @static
-	 * @param {array} $msg Decoded JSON message from child
+	 * @param {array} $msg
 	 */
 	static function processChildMessage($msg)
 	{
 		$action = $msg['action'] ?? '';
-
-		if ($action === 'register') {
-			self::registerComponent(
-				$msg['pageKey'],
-				$msg['componentPath'],
-				$msg['html'] ?? '',
-				$msg['dependsOn'] ?? array(),
-				$msg['hash'] ?? null
-			);
-		} elseif ($action === 'invalidate') {
+		if ($action === 'invalidate') {
 			self::invalidateStreams($msg['streams'] ?? array());
-		} elseif ($action === 'registerPage') {
-			self::registerPage(
-				$msg['pageKey'],
-				$msg['html'] ?? ''
-			);
-		} elseif ($action === 'evict') {
-			self::evictPage($msg['pageKey'] ?? '');
-		}
-	}
-
-	/**
-	 * Build a message to send from a forked child to the parent.
-	 * Helper for use in Q_Response integration.
-	 *
-	 * @method buildRegisterMessage
-	 * @static
-	 * @param {string} $pageKey
-	 * @param {string} $componentPath
-	 * @param {string} $html
-	 * @param {array} $dependsOn
-	 * @return {array} Message array ready for json_encode
-	 */
-	static function buildRegisterMessage($pageKey, $componentPath, $html, $dependsOn = array())
-	{
-		return array(
-			'type' => 'cache',
-			'action' => 'register',
-			'pageKey' => $pageKey,
-			'componentPath' => $componentPath,
-			'html' => $html,
-			'hash' => md5($html),
-			'dependsOn' => $dependsOn,
-		);
-	}
-
-	/**
-	 * Build an invalidation message for a child to send to parent.
-	 *
-	 * @method buildInvalidateMessage
-	 * @static
-	 * @param {array} $streamKeys
-	 * @return {array}
-	 */
-	static function buildInvalidateMessage($streamKeys)
-	{
-		return array(
-			'type' => 'cache',
-			'action' => 'invalidate',
-			'streams' => $streamKeys,
-		);
-	}
-
-	// ── Merkle tree operations ───────────────────────────
-
-	/**
-	 * Get or create a reference to a node in the tree.
-	 * Creates intermediate nodes as needed.
-	 *
-	 * @param {string} $pageKey
-	 * @param {string} $componentPath Dot-separated, e.g. 'content.feed'
-	 * @return {array} Reference to the node
-	 */
-	protected static function &getNodeRef($pageKey, $componentPath)
-	{
-		if (!isset(self::$pages[$pageKey])) {
-			self::$pages[$pageKey] = array(
-				'hash' => null, 'stale' => false, 'children' => array()
-			);
-		}
-
-		$parts = explode('.', $componentPath);
-		$node = &self::$pages[$pageKey];
-
-		foreach ($parts as $part) {
-			if (!isset($node['children'])) {
-				$node['children'] = array();
+		} elseif ($action === 'register') {
+			$pageKey = $msg['pageKey'] ?? '';
+			if (isset($msg['tree'])) {
+				self::registerTree($pageKey, $msg['tree']);
 			}
-			if (!isset($node['children'][$part])) {
-				$node['children'][$part] = array(
-					'hash' => null, 'stale' => true, 'children' => array()
-				);
+			if (isset($msg['deps'])) {
+				self::registerDeps($pageKey, $msg['deps']);
 			}
-			$node = &$node['children'][$part];
-		}
-
-		return $node;
-	}
-
-	/**
-	 * Recompute hashes from leaves up to the root.
-	 * Each interior node's hash = md5(child1_hash . child2_hash . ...)
-	 *
-	 * @param {string} $pageKey
-	 */
-	protected static function recomputeHashes($pageKey)
-	{
-		if (!isset(self::$pages[$pageKey])) return;
-		self::computeNodeHash(self::$pages[$pageKey]);
-	}
-
-	/**
-	 * Recursively compute a node's hash from its children.
-	 * Returns the hash string.
-	 */
-	protected static function computeNodeHash(&$node)
-	{
-		if (empty($node['children'])) {
-			// Leaf node — hash already set by registerComponent
-			return $node['hash'] ?? '';
-		}
-
-		// Interior node — hash from children
-		$childHashes = '';
-		foreach ($node['children'] as $name => &$child) {
-			$childHashes .= $name . ':' . self::computeNodeHash($child);
-		}
-		$node['hash'] = md5($childHashes);
-		return $node['hash'];
-	}
-
-	/**
-	 * Check if any node in the tree is stale.
-	 */
-	protected static function hasStaleNode($node)
-	{
-		if (!empty($node['stale'])) return true;
-		if (!empty($node['children'])) {
-			foreach ($node['children'] as $child) {
-				if (self::hasStaleNode($child)) return true;
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * Collect all stale leaf paths.
-	 */
-	protected static function collectStale($node, $prefix, &$stale)
-	{
-		if (!empty($node['stale']) && empty($node['children'])) {
-			$stale[] = ltrim($prefix, '.');
-			return;
-		}
-		if (!empty($node['children'])) {
-			foreach ($node['children'] as $name => $child) {
-				$path = $prefix ? "$prefix.$name" : $name;
-				self::collectStale($child, $path, $stale);
-			}
-		}
-	}
-
-	/**
-	 * Mark all ancestor nodes as stale (clear assembled page).
-	 */
-	protected static function markAncestorsStale($pageKey, $componentPath)
-	{
-		$parts = explode('.', $componentPath);
-		// Walk from root to parent of the changed node
-		$node = &self::$pages[$pageKey];
-		for ($i = 0; $i < count($parts) - 1; $i++) {
-			$node['hash'] = null; // force recompute
-			if (isset($node['children'][$parts[$i]])) {
-				$node = &$node['children'][$parts[$i]];
-			} else {
-				break;
-			}
-		}
-	}
-
-	/**
-	 * Assemble page HTML from cached components.
-	 * Uses a simple marker replacement: each component's position
-	 * in the layout is marked by <!--Q:component:path--> in the
-	 * layout template.
-	 */
-	protected static function assembleFromTree($pageKey, $page)
-	{
-		// If we have an assembled page and nothing is stale, return it
-		if (isset($page['assembled']) && !self::hasStaleNode($page)) {
-			return $page['assembled'];
-		}
-		// Otherwise, the caller needs to re-render
-		return null;
-	}
-
-	// ── Eviction ────────────────────────────────────────
-
-	/**
-	 * Evict oldest pages if over the limit.
-	 * Simple FIFO — could be upgraded to LRU with access timestamps.
-	 */
-	protected static function evictIfNeeded()
-	{
-		while (count(self::$pages) > self::$maxPages) {
-			// Evict first (oldest) page
-			$key = array_key_first(self::$pages);
-			if ($key === null) break;
-			self::evictPage($key);
-		}
-
-		while (count(self::$components) > self::$maxComponents) {
-			$key = array_key_first(self::$components);
-			if ($key === null) break;
-			unset(self::$components[$key]);
 		}
 	}
 
 	// ── Stats ───────────────────────────────────────────
 
-	/**
-	 * Return stats for the dashboard.
-	 */
 	static function stats()
 	{
 		return array(
-			'pages' => count(self::$pages),
-			'components' => count(self::$components),
-			'streams' => count(self::$deps),
-			'pageHits' => self::$pageHits,
-			'partialHits' => self::$partialHits,
-			'fullMisses' => self::$fullMisses,
-			'invalidations' => self::$invalidations,
+			'trees'            => count(self::$trees),
+			'trackedStreams'    => count(self::$deps),
+			'invalidations'    => self::$invalidations,
+			'pagesInvalidated' => self::$pagesInvalidated,
+			'stalePagesNow'    => count(self::$staleLeaves),
 		);
 	}
 
 	/**
-	 * Dump the tree structure for a page (for debugging/dashboard).
+	 * Dump a page's tree for debugging/dashboard.
 	 *
-	 * @method dumpTree
-	 * @static
 	 * @param {string} $pageKey
-	 * @return {array|null} Simplified tree for JSON output
+	 * @return {array|null}
 	 */
 	static function dumpTree($pageKey)
 	{
-		if (!isset(self::$pages[$pageKey])) return null;
-		return self::simplifyNode(self::$pages[$pageKey], '');
-	}
-
-	protected static function simplifyNode($node, $path)
-	{
-		$result = array(
-			'hash' => substr($node['hash'] ?? '', 0, 8) ?: null,
-			'stale' => !empty($node['stale']),
+		if (!isset(self::$trees[$pageKey])) return null;
+		$tree = self::$trees[$pageKey];
+		return array(
+			'rootHash' => $tree['hash'] ? substr($tree['hash'], 0, 8) : 'STALE',
+			'cachedAt' => date('H:i:s', $tree['time']),
+			'leaves'   => array_map(function ($h) {
+				return $h ? substr($h, 0, 8) : 'STALE';
+			}, $tree['leaves']),
+			'stale'    => self::$staleLeaves[$pageKey] ?? array(),
+			'deps'     => self::$pageStreams[$pageKey] ?? array(),
 		);
-		if (empty($node['children'])) {
-			$result['leaf'] = true;
-		} else {
-			$result['children'] = array();
-			foreach ($node['children'] as $name => $child) {
-				$result['children'][$name] = self::simplifyNode(
-					$child, $path ? "$path.$name" : $name
-				);
-			}
-		}
-		return $result;
 	}
 }

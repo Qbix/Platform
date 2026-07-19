@@ -398,7 +398,22 @@ class Q_WebServer
 		$directIp = self::$clientInfo[$key]['ip'] ?? '0.0.0.0';
 		$parsed['clientIp'] = Q_WebServer_Proxy::clientIp($directIp, $parsed['headers']);
 
-		$keepOpen = self::handleRequest($client, $parsed);
+		try {
+			$keepOpen = self::handleRequest($client, $parsed);
+		} catch (\Throwable $e) {
+			// Never let a request crash the event loop
+			$msg = htmlspecialchars($e->getMessage());
+			self::sendResponse($client, 500, "Internal Server Error: $msg");
+			self::closeClient($key);
+			$ms = round((microtime(true) - $start) * 1000, 1);
+			Q_WebServer_Dashboard::recordRequest(
+				$parsed['method'] ?? 'GET', $parsed['uri'] ?? '/', 500, $ms
+			);
+			if (self::$onRequest) {
+				(self::$onRequest)($parsed['method'] ?? 'GET', $parsed['uri'] ?? '/', 500, $ms);
+			}
+			return;
+		}
 		$ms = round((microtime(true) - $start) * 1000, 1);
 
 		if ($keepOpen) {
@@ -1127,6 +1142,13 @@ HTML
 		$body = ob_get_clean();
 		header_remove();
 		list($_SERVER, $_GET, $_POST, $_REQUEST) = $saved;
+
+		// Process Merkle cache headers (strips Q-Cache-* from response)
+		if (Q_WebServer_Cache_Components::enabled()) {
+			$pageKey = $parsed['path'] . '?' . ($parsed['query'] ?? '');
+			Q_WebServer_Cache_Components::processResponseHeaders($pageKey, $headers);
+		}
+
 		return compact('status', 'body', 'headers');
 	}
 
@@ -1138,9 +1160,11 @@ HTML
 		$headerBlock = substr($raw, 0, $headerEnd);
 		$body = substr($raw, $headerEnd + 4);
 		$lines = explode("\r\n", $headerBlock);
-		preg_match('#^(\w+)\s+([^\s]+)\s+HTTP/#', array_shift($lines), $m);
+		$requestLine = array_shift($lines);
+		preg_match('#^(\w+)\s+([^\s]+)\s+HTTP/(\d\.\d)#', $requestLine, $m);
 		$method = strtoupper($m[1] ?? 'GET');
 		$uri = $m[2] ?? '/';
+		$httpVersion = $m[3] ?? '1.0';
 		$p = parse_url($uri);
 		$path = urldecode($p['path'] ?? '/');
 		$path = preg_replace('#/+#', '/', $path); // collapse //
@@ -1151,7 +1175,11 @@ HTML
 			list($k, $v) = explode(':', $line, 2);
 			$headers[strtolower(trim($k))] = trim($v);
 		}
-		return compact('method', 'uri', 'path', 'query', 'headers', 'body');
+		// HTTP/1.0 defaults to Connection: close
+		if ($httpVersion === '1.0' && !isset($headers['connection'])) {
+			$headers['connection'] = 'close';
+		}
+		return compact('method', 'uri', 'path', 'query', 'headers', 'body', 'httpVersion');
 	}
 
 	// ── Response helpers ─────────────────────────────────

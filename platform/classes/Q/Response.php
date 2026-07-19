@@ -2322,15 +2322,83 @@ class Q_Response
 		unset(self::$cookies[$name]);
 	}
 
+/**
+	 * Cache policy set explicitly by a handler via setCachePolicy().
+	 * If set, sendCacheControlHeaders() uses these instead of automatic defaults.
+	 * @property $_cachePolicy
+	 * @static
+	 * @type array|null
+	 */
+	protected static $_cachePolicy = null;
+
 	/**
-	 * Send Cache-Control headers depending on certain conditions
+	 * Component hashes accumulated during this request.
+	 * Tools/slots call setCacheComponent() as they render.
+	 * Emitted as X-Cache-Tree and X-Cache-Deps headers.
+	 * @property $cacheComponents
+	 * @static
+	 * @type array
+	 */
+	protected static $cacheComponents = array();
+
+	/**
+	 * Component dependencies accumulated during this request.
+	 * @property $cacheDeps
+	 * @static
+	 * @type array
+	 */
+	protected static $cacheDeps = array();
+
+	/**
+	 * Stream invalidations accumulated during this request (on writes).
+	 * @property $_cacheInvalidations
+	 * @static
+	 * @type array
+	 */
+	protected static $_cacheInvalidations = array();
+
+	/**
+	 * Set an explicit cache policy for this response.
+	 *
+	 * If called, sendCacheControlHeaders() will use these directives
+	 * instead of computing them automatically from session state.
+	 * Supports s-maxage for Q_WebServer_Cache (server-side TTL).
+	 *
+	 * Usage:
+	 *   // Public community page, server caches 5 min:
+	 *   Q_Response::setCachePolicy(['maxAge' => 0, 'sMaxAge' => 300]);
+	 *
+	 *   // Static page, browser + server cache 1 hour:
+	 *   Q_Response::setCachePolicy(['public' => true, 'maxAge' => 3600, 'sMaxAge' => 3600]);
+	 *
+	 *   // Never cache this page:
+	 *   Q_Response::setCachePolicy(['noStore' => true]);
+	 *
+	 * @method setCachePolicy
+	 * @static
+	 * @param {array} $options
+	 * @param {integer} [$options.maxAge=0] Browser cache duration in seconds
+	 * @param {integer} [$options.sMaxAge=null] Server/proxy cache duration
+	 * @param {boolean} [$options.public=null] Override public/private (null = auto from session)
+	 * @param {boolean} [$options.noStore=false] Prevent all caching
+	 * @param {boolean} [$options.mustRevalidate=false]
+	 * @param {boolean} [$options.noCache=false] Cache but always revalidate
+	 */
+	static function setCachePolicy($options = array())
+	{
+		self::$_cachePolicy = $options;
+	}
+
+	/**
+	 * Send Cache-Control headers depending on certain conditions.
+	 * If setCachePolicy() was called, uses those directives.
+	 * Otherwise computes automatically from session/CSP state.
 	 * @method sendCacheControlHeaders
 	 * @static
 	 * @return {array} The components of Cache-Control header
 	 */
 	static function sendCacheControlHeaders()
 	{
-		// Send Cache-Control headers
 		if (empty($skipContentSecurityPolicy)
 		and !Q_Config::get('Q', 'web', 'contentSecurityPolicy', 'ignore', false)) {
 			Q_Response::$noTransform = 'no-transform';
@@ -2339,12 +2407,166 @@ class Q_Response
 				? 'no-transform'
 				: '';
 		}
+
+		$policy = self::$_cachePolicy;
 		$prefixSaysAuthenticated = Q_Session::prefixSaysAuthenticated();
-		$publicPrivate = $prefixSaysAuthenticated ? 'private, no-store, no-cache, must-revalidate, max-age=0' : 'public';
-		$noTransform = (Q_Response::$noTransform or $prefixSaysAuthenticated) ? 'no-transform' : '';
-		$directives = array($publicPrivate, $noTransform);
+
+		if ($policy && !empty($policy['noStore'])) {
+			$directives = array('no-store');
+		} elseif ($policy) {
+			$isPublic = isset($policy['public'])
+				? $policy['public']
+				: !$prefixSaysAuthenticated;
+			$directives = array($isPublic ? 'public' : 'private');
+			$maxAge = isset($policy['maxAge']) ? (int)$policy['maxAge'] : 0;
+			$directives[] = "max-age=$maxAge";
+			if (isset($policy['sMaxAge'])) {
+				$directives[] = 's-maxage=' . (int)$policy['sMaxAge'];
+			}
+			if (!empty($policy['mustRevalidate'])) {
+				$directives[] = 'must-revalidate';
+			}
+			if (!empty($policy['noCache'])) {
+				$directives[] = 'no-cache';
+			}
+			if (!$isPublic) {
+				$directives[] = 'no-store';
+			}
+		} else {
+			$publicPrivate = $prefixSaysAuthenticated
+				? 'private, no-store, no-cache, must-revalidate, max-age=0'
+				: 'public';
+			$directives = array($publicPrivate);
+		}
+
+		$noTransform = (Q_Response::$noTransform or $prefixSaysAuthenticated)
+			? 'no-transform' : '';
+		if ($noTransform) {
+			$directives[] = $noTransform;
+		}
+
 		header("Cache-Control: " . implode(', ', $directives));
 		return $directives;
+	}
+
+	/**
+	 * Register a component's hash and dependencies for server-side caching.
+	 *
+	 * Called by tools and slot handlers as they render. Each component
+	 * is identified by a slash-separated path matching Qbix naming:
+	 *   - Tool names: "Streams/chat", "Users/avatar"
+	 *   - Slot names: "content", "dashboard/notifications"
+	 *   - Custom: "sidebar/trending"
+	 *
+	 * The hash represents the rendered content's fingerprint.
+	 * Dependencies are stream identifiers that this component reads from.
+	 * The parent server process uses these to build a Merkle tree
+	 * for instant cache invalidation when streams change.
+	 *
+	 * Usage in a tool:
+	 *   Q_Response::setCacheComponent(
+	 *       'Streams/feed',
+	 *       md5($renderedHtml),
+	 *       ['community/feed/456', 'community/about/456']
+	 *   );
+	 *
+	 * @method setCacheComponent
+	 * @static
+	 * @param {string} $componentPath Slash-separated component identifier
+	 * @param {string} $hash Content hash (md5 of rendered output)
+	 * @param {array} [$dependsOn=array()] Stream keys this component depends on
+	 */
+	static function setCacheComponent($componentPath, $hash, $dependsOn = array())
+	{
+		self::$cacheComponents[$componentPath] = $hash;
+		if (!empty($dependsOn)) {
+			self::$cacheDeps[$componentPath] = $dependsOn;
+		}
+	}
+
+	/**
+	 * Register stream invalidations to send to the parent server.
+	 *
+	 * Called after a write operation (POST/PUT) that modifies a stream.
+	 * The parent server will purge all cached pages that depend on
+	 * these streams.
+	 *
+	 * Usage:
+	 *   Q_Response::invalidateCacheStreams(['community/feed/456']);
+	 *   Q_Response::invalidateCacheStreams('Users/avatar/123');
+	 *
+	 * @method invalidateCacheStreams
+	 * @static
+	 * @param {string|array} $streamKeys Stream identifiers to invalidate
+	 */
+	static function invalidateCacheStreams($streamKeys)
+	{
+		if (!is_array($streamKeys)) {
+			$streamKeys = array($streamKeys);
+		}
+		self::$_cacheInvalidations = array_merge(
+			self::$_cacheInvalidations, $streamKeys
+		);
+	}
+
+	/**
+	 * Emit X-Cache-* headers for the component Merkle tree.
+	 *
+	 * Called automatically at the end of response rendering.
+	 * The parent server process intercepts these headers
+	 * (strips them before sending to client) and uses them
+	 * to maintain its Merkle tree for instant cache invalidation.
+	 *
+	 * Headers emitted:
+	 *   X-Cache-Tree:       JSON of component leaf hashes
+	 *   X-Cache-Deps:       JSON of component → stream dependencies
+	 *   X-Cache-Invalidate: JSON of streams to invalidate (on writes)
+	 *
+	 * These headers use the X-Cache-* namespace so any server
+	 * implementing component-level caching can use the same protocol.
+	 *
+	 * @method sendCacheComponentHeaders
+	 * @static
+	 */
+	static function sendCacheComponentHeaders()
+	{
+		if (!empty(self::$cacheComponents)) {
+			header('X-Cache-Tree: '
+				. json_encode(array('l' => self::$cacheComponents),
+				JSON_UNESCAPED_SLASHES));
+		}
+		if (!empty(self::$cacheDeps)) {
+			header('X-Cache-Deps: '
+				. json_encode(self::$cacheDeps,
+				JSON_UNESCAPED_SLASHES));
+		}
+		if (!empty(self::$_cacheInvalidations)) {
+			$unique = array_values(array_unique(self::$_cacheInvalidations));
+			header('X-Cache-Invalidate: '
+				. json_encode($unique, JSON_UNESCAPED_SLASHES));
+		}
+	}
+
+	/**
+	 * Get the accumulated cache components (for inspection/debugging).
+	 * @method cacheComponents
+	 * @static
+	 * @return {array} componentPath => hash
+	 */
+	static function cacheComponents()
+	{
+		return self::$cacheComponents;
+	}
+
+	/**
+	 * Get the accumulated cache dependencies (for inspection/debugging).
+	 * @method cacheDeps
+	 * @static
+	 * @return {array} componentPath => [streamKey, ...]
+	 */
+	static function cacheDeps()
+	{
+		return self::$cacheDeps;
 	}
 	
 	/**
