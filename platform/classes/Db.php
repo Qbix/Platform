@@ -148,28 +148,6 @@ interface Db_Interface
 	function insertManyAndExecute ($table_into, array $rows = array(), $options = array());
 
 	/**
-	 * Drain rows from a table into a CSV file (optionally zipped) and delete them.
-	 *
-	 * The file is named after the table, field, and the min/max values in the drained batch,
-	 * so the filename itself encodes the range of rows exported. This makes it easy to
-	 * build a "data lake" of historical data while keeping the live table small.
-	 *
-	 * @method archive
-	 * @param {PDO}    $pdo         Active PDO connection
-	 * @param {string} $table       Table name
-	 * @param {string} $field       Indexed field to order by (e.g. "id", "insertedTime")
-	 * @param {array}  [$options]   Optional parameters:
-	 *   @param {int}    [$options.limit=10000]          Number of rows per batch
-	 *   @param {string} [$options.outdir="/var/www/dumps"] Directory to write dump files
-	 *   @param {bool}   [$options.desc=false]           If true, order by DESC (default ASC)
-	 *   @param {string} [$options.prefix=""]            Optional prefix for filename
-	 *   @param {bool}   [$options.dontZip=false]        If true, leave CSV uncompressed
-	 * @return {string|false} Path to the created file (.zip or .csv), or false if no rows drained
-	 * @throws {Exception} If directory creation fails, field is not indexed, or write fails
-	 */
-	function archive($pdo, $table, $field, $options = array());
-
-	/**
 	 * Creates a query to update rows. Needs to be used with Db_Query::set()
 	 * @method update
 	 * @param {string} $table
@@ -1763,61 +1741,31 @@ class Db
 	 * @method exportArray
 	 * @static
 	 * @param {mixed} $what Could be a (multidimensional) array of Db_Row objects or a Db_Row object
-	 * @param {array} [$options=array()] Options for row exportArray methods:
-	 *   @param {bool}   [$options.skipUsingSchema=false]
-	 *       If true, always return associative arrays without using schema.
-	 *   @param {string} [$options.schemaName]
-	 *       Schema name in the views folder. Defaults to the Db_Row class name,
-	 *       e.g. class `Streams_Avatar` to "Streams/templates/Avatar".
-	 *   @param {bool}   [$options.numeric=false]
-	 *       If true, makes a plain numerically indexed array even if $what has keys.
-	 * @return {array} Exported data, recursively applying exportArray or schema mapping.
+	 * @param {array} $options Options for row exportArray methods. Can also include the following:
+	 * @param {boolean} [$options.numeric]: Makes a plain numerically indexed array, even if $what has keys
+	 * @return {string}
 	 */
 	static function exportArray($what, $options = array())
 	{
 		$arr = is_array($what) ? $what : array($what);
 		$result = array();
-
 		foreach ($arr as $k => $row) {
-			if (is_array($row)) {
-				$r = self::exportArray($row, $options);
-
-			} elseif ($row) {
-				if (method_exists($row, 'exportArray')) {
-					$data = $row->exportArray($options);
-				} elseif (property_exists($row, 'fields')) {
-					$data = $row->fields;
-				} else {
-					$data = $row;
-				}
-				if (is_array($data) && empty($options['skipUsingSchema'])) {
-					if ($schema = Q_Models::schemaFromClassName(get_class($row), false)) {
-						$mapped = array();
-						foreach ($schema['fieldNames'] as $field) {
-							$mapped[] = array_key_exists($field, $data) ? $data[$field] : null;
-						}
-						if ($a = array_diff(array_keys($data), array_values($schema['fieldNames']))) {
-							echo $a; 
-						}
-						$data = $mapped;
-					}
-				}
-
-				$r = $data;
-			} else {
-				$r = $row;
-			}
-
+			$r = is_array($row) ? self::exportArray($row, $options) : (
+				$row ? (
+					method_exists($row, 'exportArray')
+					? $row->exportArray($options)
+					: $row->fields
+				) : $row
+			);
 			if (empty($options['numeric'])) {
 				$result[$k] = $r;
 			} else {
 				$result[] = $r;
 			}
 		}
-
 		return $result;
 	}
-
+	
 	/**
 	 * Calculates a hash code from a string, to match String.prototype.hashCode() in Q.js
 	 * @static
@@ -1896,20 +1844,6 @@ class Db
 	static function hash($text)
 	{
 		return md5(Db::normalize($text));
-	}
-
-	/**
-	 * Converts number to string in a standard way
-	 * @method decimalToString
-	 * @static
-	 * @param {double} $number
-	 * @param {integer} [$decimals=2]
-	 * @return {string}
-	 *	The hash string
-	 */
-	static function decimalToString($number, $decimals = 2)
-	{
-		return sprintf("%015.{$decimals}f", $number);
 	}
 	
 	/**
