@@ -623,7 +623,7 @@ class Q_WebServer
 		$method = $parsed['method'];
 		$path = $parsed['path'];
 
-		// 1. Dashboard + WebSocket + Health (/Q/*)
+		// 1. Dashboard + Panel + WebSocket + Health (/Q/*)
 		if (strpos($path, '/Q/') === 0) {
 			if ($path === '/Q/ws') {
 				$upgraded = Q_WebSocket::upgrade(
@@ -638,6 +638,10 @@ class Q_WebServer
 					'application/json');
 				return false;
 			}
+			// Panel (control panel + API)
+			$handled = Q_WebServer_Panel::handle($client, $parsed);
+			if ($handled) return false;
+			// Dashboard (live stats)
 			$handled = Q_WebServer_Dashboard::handle($client, $parsed);
 			if ($handled) return false;
 		}
@@ -648,7 +652,19 @@ class Q_WebServer
 			return false;
 		}
 
-		// 3. Reverse cache check (before forking a worker)
+		// 3. Component cache check (Merkle tree — serves from cached slots)
+		if (Q_WebServer_Cache_Components::enabled()) {
+			$pageKey = $parsed['path'] . '?' . ($parsed['query'] ?? '');
+			$cachedPage = Q_WebServer_Cache_Components::getPage($pageKey);
+			if ($cachedPage !== null) {
+				self::sendResponse($client, 200, $cachedPage,
+					'text/html; charset=utf-8',
+					array('X-Cache' => 'HIT-COMPONENTS'));
+				return false;
+			}
+		}
+
+		// 4. Reverse cache check (before forking a worker)
 		$cached = Q_WebServer_Cache::get($parsed);
 		if ($cached) {
 			self::sendResponse($client, $cached['status'],
@@ -1068,7 +1084,8 @@ HTML
 		$_SERVER['QUERY_STRING'] = $parsed['query'];
 		$_SERVER['SCRIPT_NAME'] = '/index.php';
 		$_SERVER['SCRIPT_FILENAME'] = self::$rootDir . 'index.php';
-		$_SERVER['SERVER_NAME'] = $parsed['headers']['host'] ?? 'localhost';
+		$host = $parsed['headers']['host'] ?? 'localhost';
+		$_SERVER['SERVER_NAME'] = explode(':', $host)[0]; // strip port from Host header
 		$_SERVER['SERVER_PORT'] = self::$port;
 		foreach ($parsed['headers'] as $k => $v) {
 			$_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $k))] = $v;

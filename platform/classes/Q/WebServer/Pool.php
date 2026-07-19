@@ -261,6 +261,14 @@ class Q_WebServer_Pool
 		$json = substr($buf, 4, $len);
 		$response = json_decode($json, true);
 
+		// Check for cache messages piggybacked on the response
+		if ($response && !empty($response['_cacheMessages'])) {
+			foreach ($response['_cacheMessages'] as $msg) {
+				Q_WebServer_Cache_Components::processChildMessage($msg);
+			}
+			unset($response['_cacheMessages']);
+		}
+
 		$client = $this->workerClients[$index] ?? null;
 		if ($response && $client && is_resource($client)) {
 			$this->sendHttp($client, $response, $index);

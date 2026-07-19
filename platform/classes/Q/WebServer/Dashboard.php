@@ -51,6 +51,8 @@ class Q_WebServer_Dashboard
 			'workers' => $pool ? $pool->idleCount().'/'.$pool->targetSize : 'in-process',
 			'wsClients' => Q_WebSocket::clientCount(),
 			'cache' => Q_WebServer_Cache::stats(),
+			'components' => Q_WebServer_Cache_Components::enabled()
+				? Q_WebServer_Cache_Components::stats() : null,
 		);
 	}
 

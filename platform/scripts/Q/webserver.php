@@ -56,9 +56,9 @@ foreach ($argv as $arg) {
 
 // ── Bootstrap ────────────────────────────────────────────
 
-$LOCAL_DIR = $FROM_APP ? APP_DIR : ($argv[1] ?? dirname(dirname(dirname(__FILE__))));
+$LOCAL_DIR = $FROM_APP ? APP_DIR : dirname(dirname(dirname(__FILE__)));
 if (!defined('APP_DIR')) define('APP_DIR', $LOCAL_DIR);
-$Q_inc = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Q.inc.php';
+$Q_inc = dirname(dirname(__FILE__)) . DIRECTORY_SEPARATOR . 'Q.inc.php';
 if (!file_exists($Q_inc)) die("[ERROR] Q.inc.php not found\n");
 include($Q_inc);
 
@@ -178,6 +178,7 @@ echo "  └───────────────────────
 Q_WebServer_Dashboard::init();
 Q_WebServer_Log::init();
 Q_WebServer_Cache::init();
+Q_WebServer_Cache_Components::init();
 
 // If amphp/http-server is installed, use it for HTTP/2 + async I/O.
 // Otherwise fall back to Q_WebServer's built-in HTTP/1.1.
