@@ -2204,7 +2204,7 @@ EOT;
 EOT;
 					if ($type_display_range and $type_display_range < $this->maxCheckStrlen) {
 						$functions["beforeSet_$field_name_safe"][] = <<<EOT
-		if (strlen(\$value) > $type_display_range)
+		if (mb_strlen(\$value) > $type_display_range)
 			throw new Exception('Exceedingly long value being assigned to '.\$this->getTable().".$field_name");
 EOT;
 					}
