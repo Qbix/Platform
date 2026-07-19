@@ -21,7 +21,9 @@
 class Q_WebServer_Panel
 {
 	/**
-	 * Handle panel requests.
+	 * Handle panel requests with authentication.
+	 * First visitor sets a password. All subsequent requests require it.
+	 * Password stored in APP_DIR/local/panel.json (gitignored).
 	 * @method handle
 	 * @static
 	 * @param {resource} $client
@@ -38,8 +40,25 @@ class Q_WebServer_Panel
 			return true;
 		}
 
-		// API endpoints
+		// API endpoints — require authentication
 		if (strpos($path, '/Q/api/') === 0) {
+			// Password setup endpoint — no auth needed
+			$route = substr($path, 7);
+			if ($route === 'auth/setup' || $route === 'auth/login') {
+				$result = self::handleAuthApi($route, $parsed);
+				Q_WebServer::sendResponse($client, $result['status'] ?? 200,
+					json_encode($result), 'application/json');
+				return true;
+			}
+
+			// All other API calls require a valid session token
+			$authResult = self::checkAuth($parsed);
+			if (!$authResult['ok']) {
+				Q_WebServer::sendResponse($client, 401,
+					json_encode($authResult), 'application/json');
+				return true;
+			}
+
 			$result = self::handleApi($path, $parsed);
 			Q_WebServer::sendResponse($client, $result['status'] ?? 200,
 				json_encode($result), 'application/json');
@@ -47,6 +66,117 @@ class Q_WebServer_Panel
 		}
 
 		return false;
+	}
+
+	/**
+	 * Get the panel config file path
+	 */
+	private static function panelConfigPath()
+	{
+		return defined('APP_DIR')
+			? APP_DIR . '/local/panel.json'
+			: sys_get_temp_dir() . '/qbix-panel.json';
+	}
+
+	/**
+	 * Handle auth API endpoints
+	 */
+	private static function handleAuthApi($route, $parsed)
+	{
+		$configPath = self::panelConfigPath();
+		$config = file_exists($configPath)
+			? json_decode(file_get_contents($configPath), true)
+			: array();
+
+		$body = !empty($parsed['body'])
+			? json_decode($parsed['body'], true)
+			: array();
+
+		if ($route === 'auth/setup') {
+			// First-time setup: set password
+			if (!empty($config['passwordHash'])) {
+				return array('error' => 'Password already set. Use auth/login.',
+					'needsSetup' => false);
+			}
+			$password = $body['password'] ?? '';
+			if (strlen($password) < 6) {
+				return array('error' => 'Password must be at least 6 characters');
+			}
+			$config['passwordHash'] = password_hash($password, PASSWORD_DEFAULT);
+			$token = bin2hex(random_bytes(32));
+			$config['sessions'][$token] = time() + 86400 * 7; // 7 day expiry
+			file_put_contents($configPath, json_encode($config, JSON_PRETTY_PRINT));
+			@chmod($configPath, 0600);
+			return array('ok' => true, 'token' => $token);
+		}
+
+		if ($route === 'auth/login') {
+			if (empty($config['passwordHash'])) {
+				return array('needsSetup' => true);
+			}
+			$password = $body['password'] ?? '';
+			if (!password_verify($password, $config['passwordHash'])) {
+				usleep(500000); // 500ms delay to slow brute force
+				return array('error' => 'Wrong password', 'status' => 401);
+			}
+			// Issue session token
+			$token = bin2hex(random_bytes(32));
+			if (!isset($config['sessions'])) $config['sessions'] = array();
+			// Clean expired sessions
+			$now = time();
+			foreach ($config['sessions'] as $t => $exp) {
+				if ($exp < $now) unset($config['sessions'][$t]);
+			}
+			$config['sessions'][$token] = $now + 86400 * 7;
+			file_put_contents($configPath, json_encode($config, JSON_PRETTY_PRINT));
+			return array('ok' => true, 'token' => $token);
+		}
+
+		return array('error' => 'Unknown auth endpoint');
+	}
+
+	/**
+	 * Check if the request has a valid auth token
+	 */
+	private static function checkAuth($parsed)
+	{
+		$configPath = self::panelConfigPath();
+		if (!file_exists($configPath)) {
+			return array('ok' => false, 'needsSetup' => true,
+				'error' => 'No password set. Call auth/setup first.');
+		}
+		$config = json_decode(file_get_contents($configPath), true);
+		if (empty($config['passwordHash'])) {
+			return array('ok' => false, 'needsSetup' => true,
+				'error' => 'No password set. Call auth/setup first.');
+		}
+
+		// Check Authorization: Bearer <token> header
+		$authHeader = $parsed['headers']['authorization'] ?? '';
+		$token = '';
+		if (strpos($authHeader, 'Bearer ') === 0) {
+			$token = substr($authHeader, 7);
+		}
+		// Also check X-Panel-Token header
+		if (empty($token)) {
+			$token = $parsed['headers']['x-panel-token'] ?? '';
+		}
+		// Also check cookie
+		if (empty($token)) {
+			$token = $parsed['cookies']['Q_panel_token'] ?? '';
+		}
+
+		if (empty($token)) {
+			return array('ok' => false, 'error' => 'No auth token provided');
+		}
+
+		$sessions = $config['sessions'] ?? array();
+		$expiry = $sessions[$token] ?? 0;
+		if ($expiry < time()) {
+			return array('ok' => false, 'error' => 'Token expired or invalid');
+		}
+
+		return array('ok' => true);
 	}
 
 	static function handleApi($path, $parsed)
@@ -72,9 +202,55 @@ class Q_WebServer_Panel
 				return self::apiListPlugins();
 			case 'system':
 				return self::apiSystemInfo();
+			case 'auth/password':
+				return self::apiChangePassword($parsed);
+			case 'auth/logout':
+				return self::apiLogout($parsed);
 			default:
 				return array('status' => 404, 'error' => 'Unknown endpoint');
 		}
+	}
+
+	private static function apiChangePassword($parsed)
+	{
+		$body = !empty($parsed['body'])
+			? json_decode($parsed['body'], true) : array();
+		$configPath = self::panelConfigPath();
+		$config = json_decode(file_get_contents($configPath), true);
+
+		$oldPw = $body['oldPassword'] ?? '';
+		$newPw = $body['newPassword'] ?? '';
+
+		if (!password_verify($oldPw, $config['passwordHash'])) {
+			return array('error' => 'Current password is wrong');
+		}
+		if (strlen($newPw) < 6) {
+			return array('error' => 'New password must be at least 6 characters');
+		}
+
+		$config['passwordHash'] = password_hash($newPw, PASSWORD_DEFAULT);
+		// Invalidate all other sessions
+		$currentToken = $parsed['headers']['x-panel-token']
+			?? $parsed['cookies']['Q_panel_token'] ?? '';
+		$config['sessions'] = array();
+		if ($currentToken) {
+			$config['sessions'][$currentToken] = time() + 86400 * 7;
+		}
+		file_put_contents($configPath, json_encode($config, JSON_PRETTY_PRINT));
+		return array('ok' => true);
+	}
+
+	private static function apiLogout($parsed)
+	{
+		$configPath = self::panelConfigPath();
+		$config = json_decode(file_get_contents($configPath), true);
+		$token = $parsed['headers']['x-panel-token']
+			?? $parsed['cookies']['Q_panel_token'] ?? '';
+		if ($token && isset($config['sessions'][$token])) {
+			unset($config['sessions'][$token]);
+			file_put_contents($configPath, json_encode($config, JSON_PRETTY_PRINT));
+		}
+		return array('ok' => true);
 	}
 
 	// ── Apps API ─────────────────────────────────────────
@@ -631,10 +807,140 @@ input:focus,select:focus{outline:none;border-color:var(--ac);box-shadow:0 0 0 3p
 const API = '/Q/api';
 let hasNode = false;
 let hasComposer = false;
+let authToken = null;
+
+// ── Auth ─────────────────────────────────────────────
+
+function getToken() {
+  if (authToken) return authToken;
+  try { authToken = sessionStorage.getItem('Q_panel_token'); } catch(e) {}
+  return authToken;
+}
+function setToken(t) {
+  authToken = t;
+  try { sessionStorage.setItem('Q_panel_token', t); } catch(e) {}
+  // Also set as cookie for WebSocket auth
+  document.cookie = 'Q_panel_token=' + t + '; path=/; SameSite=Strict';
+}
 
 async function api(path, body) {
-  const r = await fetch(API+'/'+path, body ? {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)} : {});
-  return r.json();
+  var headers = {'Content-Type':'application/json'};
+  var t = getToken();
+  if (t) headers['X-Panel-Token'] = t;
+  var r = await fetch(API+'/'+path, body
+    ? {method:'POST', headers:headers, body:JSON.stringify(body)}
+    : {headers:headers});
+  var data = await r.json();
+  if (data.error && (data.needsSetup || r.status === 401)) {
+    showAuthScreen(data.needsSetup);
+    throw new Error('auth');
+  }
+  return data;
+}
+
+function showAuthScreen(isSetup) {
+  var main = document.getElementById('main-content');
+  if (!main) {
+    // Wrap everything after tabs in a container
+    var tabs = document.querySelector('.tabs');
+    var els = [];
+    var sib = tabs.nextElementSibling;
+    while (sib) { els.push(sib); sib = sib.nextElementSibling; }
+    main = document.createElement('div');
+    main.id = 'main-content';
+    els.forEach(function(el) { main.appendChild(el); });
+    tabs.parentNode.insertBefore(main, tabs.nextSibling);
+  }
+  main.style.display = 'none';
+  document.querySelector('.tabs').style.display = 'none';
+
+  var existing = document.getElementById('auth-screen');
+  if (existing) existing.remove();
+
+  var screen = document.createElement('div');
+  screen.id = 'auth-screen';
+  screen.className = 'content';
+  screen.style.maxWidth = '380px';
+  screen.style.margin = '40px auto';
+  screen.innerHTML = '<div class="card">'
+    + '<h3 style="margin-bottom:12px">' + (isSetup ? 'Set Panel Password' : 'Panel Login') + '</h3>'
+    + (isSetup ? '<p style="font-size:13px;color:var(--dim);margin-bottom:16px">You\'re the first person to access this panel. Set a password to secure it.</p>' : '')
+    + '<div class="form-row"><label>Password</label><input type="password" id="auth-pw" placeholder="' + (isSetup ? 'Choose a password (6+ chars)' : 'Enter password') + '"></div>'
+    + (isSetup ? '<div class="form-row"><label>Confirm</label><input type="password" id="auth-pw2" placeholder="Confirm password"></div>' : '')
+    + '<button class="btn btn-primary" onclick="doAuth(' + (isSetup ? 'true' : 'false') + ')" style="width:100%">' + (isSetup ? 'Set Password' : 'Login') + '</button>'
+    + '<div id="auth-error" style="color:var(--red);font-size:13px;margin-top:8px;display:none"></div>'
+    + '</div>';
+  document.body.insertBefore(screen, document.querySelector('.tabs').nextSibling);
+
+  // Enter key
+  screen.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doAuth(isSetup);
+  });
+  document.getElementById('auth-pw').focus();
+}
+
+async function doAuth(isSetup) {
+  var pw = document.getElementById('auth-pw').value;
+  var errEl = document.getElementById('auth-error');
+  errEl.style.display = 'none';
+
+  if (isSetup) {
+    var pw2 = document.getElementById('auth-pw2').value;
+    if (pw !== pw2) { errEl.textContent = 'Passwords don\'t match'; errEl.style.display = 'block'; return; }
+    if (pw.length < 6) { errEl.textContent = 'Must be at least 6 characters'; errEl.style.display = 'block'; return; }
+  }
+
+  var endpoint = isSetup ? 'auth/setup' : 'auth/login';
+  var r = await fetch(API + '/' + endpoint, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({password: pw})
+  });
+  var data = await r.json();
+  if (data.error) {
+    errEl.textContent = data.error;
+    errEl.style.display = 'block';
+    return;
+  }
+  if (data.token) {
+    setToken(data.token);
+    document.getElementById('auth-screen').remove();
+    document.querySelector('.tabs').style.display = '';
+    document.getElementById('main-content').style.display = '';
+    initPanel();
+  }
+}
+
+async function checkAuthAndInit() {
+  try {
+    // Quick auth check — system endpoint requires auth
+    var r = await fetch(API + '/auth/login', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    });
+    var data = await r.json();
+    if (data.needsSetup) {
+      showAuthScreen(true);
+      return;
+    }
+    // Has password — check if we have a valid token
+    var t = getToken();
+    if (!t) {
+      showAuthScreen(false);
+      return;
+    }
+    // Validate token by calling a real endpoint
+    try { await api('system'); initPanel(); }
+    catch (e) { /* showAuthScreen already called by api() */ }
+  } catch (e) {
+    showAuthScreen(false);
+  }
+}
+
+function initPanel() {
+  detectTools();
+  loadApps();
 }
 
 // Node detection + suggestions
@@ -842,8 +1148,7 @@ async function loadSystem() {
 }
 
 // Init
-detectTools();
-loadApps();
+checkAuthAndInit();
 </script></body></html>
 HTML;
 	}

@@ -331,16 +331,47 @@ class Q_WebServer_Pool
 		return null;
 	}
 
-	function shutdown()
+	/**
+	 * Graceful shutdown: SIGTERM all workers, wait up to $timeout seconds,
+	 * then SIGKILL any remaining.
+	 * @param {float} $timeout Seconds to wait after SIGTERM before SIGKILL
+	 */
+	function shutdown($timeout = 3.0)
 	{
+		// Cancel watchers and close sockets
 		foreach ($this->workers as $i => $w) {
-			if (isset($this->watchers[$i])) Q_Evented::cancel($this->watchers[$i]);
+			if (isset($this->watchers[$i])) {
+				Q_Evented::cancel($this->watchers[$i]);
+			}
 			@fclose($w['socket']);
+		}
+
+		// Send SIGTERM to all workers
+		foreach ($this->workers as $w) {
 			posix_kill($w['pid'], SIGTERM);
 		}
-		foreach ($this->workers as $w) {
+
+		// Wait for workers to exit gracefully
+		$deadline = microtime(true) + $timeout;
+		$remaining = $this->workers;
+		while (!empty($remaining) && microtime(true) < $deadline) {
+			foreach ($remaining as $i => $w) {
+				$result = pcntl_waitpid($w['pid'], $st, WNOHANG);
+				if ($result > 0 || $result === -1) {
+					unset($remaining[$i]);
+				}
+			}
+			if (!empty($remaining)) {
+				usleep(50000); // 50ms
+			}
+		}
+
+		// SIGKILL any workers that didn't exit in time
+		foreach ($remaining as $w) {
+			posix_kill($w['pid'], SIGKILL);
 			pcntl_waitpid($w['pid'], $st, 0);
 		}
+
 		$this->workers = array();
 	}
 

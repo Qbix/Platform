@@ -234,9 +234,20 @@ class Q_WebServer
 		}
 	}
 
-	static function stop()
+	/**
+	 * Graceful shutdown: stop accepting new connections,
+	 * wait for in-flight requests to complete (up to timeout),
+	 * then close everything.
+	 * @method stop
+	 * @static
+	 * @param {float} $drainTimeout Max seconds to wait for in-flight requests
+	 */
+	static function stop($drainTimeout = 5.0)
 	{
+		if (!self::$running) return;
 		self::$running = false;
+
+		// 1. Stop accepting new connections
 		if (self::$acceptWatcher) {
 			Q_Evented::cancel(self::$acceptWatcher);
 			self::$acceptWatcher = null;
@@ -245,14 +256,31 @@ class Q_WebServer
 			Q_Evented::cancel(self::$tlsWatcher);
 			self::$tlsWatcher = null;
 		}
+		if (self::$socket) { @fclose(self::$socket); self::$socket = null; }
+		if (self::$tlsSocket) { @fclose(self::$tlsSocket); self::$tlsSocket = null; }
+
+		// 2. Wait for in-flight connections to drain (up to timeout)
+		$deadline = microtime(true) + $drainTimeout;
+		while (!empty(self::$clients) && microtime(true) < $deadline) {
+			Q_Evented::tick(0.1); // process pending I/O briefly
+		}
+
+		// 3. Force-close remaining connections
+		foreach (self::$timeoutWatchers as $id) Q_Evented::cancel($id);
+		self::$timeoutWatchers = array();
 		foreach (self::$clientWatchers as $id) Q_Evented::cancel($id);
 		self::$clientWatchers = array();
 		foreach (self::$clients as $c) @fclose($c);
 		self::$clients = array();
+		self::$buffers = array();
+		self::$clientInfo = array();
+		self::$keepAliveCount = array();
+
+		// 4. Disconnect WebSockets
 		Q_WebSocket::disconnectAll();
+
+		// 5. Gracefully shut down worker pool (SIGTERM → wait → SIGKILL)
 		if (self::$pool) { self::$pool->shutdown(); self::$pool = null; }
-		if (self::$socket) { @fclose(self::$socket); self::$socket = null; }
-		if (self::$tlsSocket) { @fclose(self::$tlsSocket); self::$tlsSocket = null; }
 	}
 
 	static function run()
@@ -260,11 +288,12 @@ class Q_WebServer
 		if (!self::$running) return;
 		if (function_exists('pcntl_signal')) {
 			Q_Evented::onSignal(SIGINT, function () {
-				echo "\nShutting down...\n";
+				echo "\n  Graceful shutdown (SIGINT)...\n";
 				self::stop();
 				Q_Evented::stop();
 			});
 			Q_Evented::onSignal(SIGTERM, function () {
+				echo "\n  Graceful shutdown (SIGTERM)...\n";
 				self::stop();
 				Q_Evented::stop();
 			});
@@ -297,10 +326,21 @@ class Q_WebServer
 
 		// Store remote IP for logging + proxy resolution
 		$peer = stream_socket_get_name($client, true);
+		$ip = $peer ? explode(':', $peer)[0] : '0.0.0.0';
 		self::$clientInfo[$key] = array(
-			'ip' => $peer ? explode(':', $peer)[0] : '0.0.0.0',
+			'ip' => $ip,
 			'connectTime' => microtime(true)
 		);
+
+		// Rate limit check
+		if (!self::checkRateLimit($ip)) {
+			@fwrite($client, "HTTP/1.1 429 Too Many Requests\r\n"
+				. "Retry-After: 60\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");
+			@fclose($client);
+			unset(self::$clients[$key], self::$buffers[$key], self::$keepAliveCount[$key],
+				self::$clientInfo[$key]);
+			return;
+		}
 
 		self::$clientWatchers[$key] = Q_Evented::onReadable(
 			$client, function ($c) { Q_WebServer::onClientData($c); }
@@ -813,10 +853,8 @@ class Q_WebServer
 	 * Also: dotfiles/dotdirs (except /.well-known/)
 	 * Also: paths in Q.web.blocked.paths config
 	 *
-	 * NOT blocked: _noindex / noindex_ directories — those are
-	 * publicly accessible, just hidden from directory listings.
-	 * For true access control, use X-Accel-Redirect (PHP checks
-	 * permissions, server does file I/O).
+	 * For true access control on files, use X-Accel-Redirect
+	 * (PHP checks permissions, server does file I/O).
 	 *
 	 * @method isBlocked
 	 * @static
@@ -1143,6 +1181,91 @@ HTML
 
 	// ── Path resolution ──────────────────────────────────
 
+	/**
+	 * Parse a Cookie header string into an associative array
+	 * @method parseCookieHeader
+	 * @static
+	 * @param {string} $header The raw Cookie header value
+	 * @return {array} name => value pairs
+	 */
+	static function parseCookieHeader($header)
+	{
+		$cookies = array();
+		if (empty($header)) return $cookies;
+		$pairs = explode(';', $header);
+		foreach ($pairs as $pair) {
+			$pair = trim($pair);
+			if ($pair === '') continue;
+			$eq = strpos($pair, '=');
+			if ($eq === false) {
+				$cookies[$pair] = '';
+			} else {
+				$name = trim(substr($pair, 0, $eq));
+				$value = trim(substr($pair, $eq + 1));
+				$cookies[$name] = urldecode($value);
+			}
+		}
+		return $cookies;
+	}
+
+	/**
+	 * Check rate limit for a client IP. Returns true if allowed, false if over limit.
+	 * Configured via Q.webserver.rateLimit:
+	 *   { "enabled": true, "requests": 100, "window": 60, "burstRequests": 20, "burstWindow": 1 }
+	 * @method checkRateLimit
+	 * @static
+	 * @param {string} $ip Client IP address
+	 * @return {boolean} true if request is allowed
+	 */
+	static function checkRateLimit($ip)
+	{
+		if (!Q_Config::get('Q', 'webserver', 'rateLimit', 'enabled', false)) {
+			return true;
+		}
+		$now = time();
+		$maxReqs = Q_Config::get('Q', 'webserver', 'rateLimit', 'requests', 100);
+		$window = Q_Config::get('Q', 'webserver', 'rateLimit', 'window', 60);
+		$burstReqs = Q_Config::get('Q', 'webserver', 'rateLimit', 'burstRequests', 20);
+		$burstWindow = Q_Config::get('Q', 'webserver', 'rateLimit', 'burstWindow', 1);
+
+		// Clean old entries
+		if (!isset(self::$rateLimitData[$ip])) {
+			self::$rateLimitData[$ip] = array();
+		}
+		$hits = &self::$rateLimitData[$ip];
+		$cutoff = $now - $window;
+		$hits = array_filter($hits, function ($t) use ($cutoff) {
+			return $t >= $cutoff;
+		});
+
+		// Check window limit
+		if (count($hits) >= $maxReqs) {
+			return false;
+		}
+
+		// Check burst limit
+		$burstCutoff = $now - $burstWindow;
+		$recent = array_filter($hits, function ($t) use ($burstCutoff) {
+			return $t >= $burstCutoff;
+		});
+		if (count($recent) >= $burstReqs) {
+			return false;
+		}
+
+		$hits[] = $now;
+
+		// Periodic cleanup: remove IPs not seen in the last window
+		if (mt_rand(0, 99) < 5) { // 5% chance per request
+			foreach (self::$rateLimitData as $k => $v) {
+				if (empty($v) || max($v) < $cutoff) {
+					unset(self::$rateLimitData[$k]);
+				}
+			}
+		}
+
+		return true;
+	}
+
 	private static function resolveStatic($urlPath)
 	{
 		$rel = str_replace('/', DS, ltrim($urlPath, '/'));
@@ -1200,4 +1323,5 @@ HTML
 		'mp3','wav','ogg','mp4','webm',
 		'pdf','zip'
 	);
+	private static $rateLimitData = array(); // ip => [timestamps]
 }
