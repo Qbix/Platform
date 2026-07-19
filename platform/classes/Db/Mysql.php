@@ -206,6 +206,10 @@ class Db_Mysql implements Db_Interface
 	{
 		return 'mysql';
 	}
+	
+	/**
+	 * Returns the name of the shard currently selected with reallyConnect, if any
+	 * @return {string}
 	 */
 	function shardName()
 	{
