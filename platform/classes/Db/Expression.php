@@ -175,3 +175,4 @@ class Db_Expression
 		return $this->expression;
 	}
 }
+;
