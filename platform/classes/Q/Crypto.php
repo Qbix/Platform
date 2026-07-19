@@ -819,7 +819,7 @@ class Q_Crypto
             $value = substr($value, 2);
         }
 
-        if (strlen($value) % 2 !== 0) {
+        if (mb_strlen($value) % 2 !== 0) {
             throw new Exception("invalid hex");
         }
 

@@ -309,7 +309,7 @@ class Q_Crypto_EIP712
             if ($bin === false) { throw new Exception('Q_Crypto_EIP712: invalid hex string'); }
             return $bin;
         }
-        if (strlen($value) % 2 === 0 && strlen($value) > 0 && ctype_xdigit($value)) {
+        if (mb_strlen($value) % 2 === 0 && strlen($value) > 0 && ctype_xdigit($value)) {
             $bin = hex2bin($value);
             if ($bin !== false) { return $bin; }
         }

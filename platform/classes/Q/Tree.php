@@ -337,7 +337,7 @@ class Q_Tree
 					is_array($valueTo) ? $valueTo : array()
 				);
 				if ($keyField) {
-					$diff = self::diffByKey($value, $valueTo, $context->keyField);
+					$diff = self::diffByKey($value, $valueTo, $keyField);
 					if (!empty($diff)) {
 						call_user_func_array(array($context->diff, 'set'), array_merge($path, array($diff)));
 					}
@@ -723,21 +723,43 @@ class Q_Tree
 	protected static function merge_internal($array1 = array(), $array2 = array(), $noNumericArrays = false)
 	{
 		if (!Q::isAssociative($array1)) {
+			if ((isset($array2['add']) or isset($array2['remove']))
+			and !isset($array2['updates'])) {
+				throw new Q_Exception(
+					"Q_Tree::merge: 'add'/'remove' require 'updates' to supply the keyField"
+				);
+			}
 			if (isset($array2['updates'])) {
 				$keyField = $array2['updates'][0];
 				$updates = array_slice($array2['updates'], 1);
 				foreach ($updates as $upd) {
 					foreach ($array1 as &$obj) {
 						if (isset($obj[$keyField]) && $obj[$keyField] === $upd[$keyField]) {
-							foreach ($upd as $k=>$v) $obj[$k] = $v;
+							foreach ($upd as $k=>$v) {
+								$obj[$k] = $v;
+							}
 						}
 					}
 				}
-				if (isset($array2['add'])) $array1 = array_merge($array1, $array2['add']);
+				if (isset($array2['add'])) {
+					foreach ($array2['add'] as $a) {
+						$found = false;
+						foreach ($array1 as $o) {
+							if (isset($o[$keyField]) and isset($a[$keyField])
+							&& $o[$keyField] === $a[$keyField]) {
+								$found = true; break;
+							}
+						}
+						if (!$found) $array1[] = $a;    // skip the incoming, keep the incumbent
+					}
+				}
 				if (isset($array2['remove'])) {
 					$array1 = array_values(array_filter($array1, function($o) use($array2,$keyField){
 						foreach ($array2['remove'] as $r) {
-							if ($o[$keyField] === $r[$keyField]) return false;
+							if (isset($o[$keyField]) && isset($r[$keyField])
+							&& $o[$keyField] === $r[$keyField]) {
+								return false;
+							}
 						}
 						return true;
 					}));

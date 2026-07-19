@@ -318,19 +318,36 @@ module.exports = function (linked) {
 
 	function _merge(first, second, noNumericArrays) {
 		if (Array.isArray(first)) {
+			if ((second.add || second.remove) && !second.updates) {
+				throw new Q.Exception(
+					"Q.Tree.merge: 'add'/'remove' require 'updates' to supply the keyField"
+				);
+			}
 			if (second.updates) {
 				var keyField = second.updates[0], updates = second.updates.slice(1);
 				updates.forEach(function (upd) {
 					for (var i = 0; i < first.length; i++) {
-						if (first[i][keyField] === upd[keyField]) {
+						if (first[i] && first[i][keyField] !== undefined
+						&& first[i][keyField] === upd[keyField]) {
 							first[i] = Object.assign({}, first[i], upd);
 						}
 					}
 				});
-				if (second.add) first = first.concat(second.add);
+				if (second.add) {
+					second.add.forEach(function (a) {
+						var found = false;
+						for (var i = 0; i < first.length; i++) {
+							if (first[i] && first[i][keyField] !== undefined
+							&& first[i][keyField] === a[keyField]) { found = true; break; }
+						}
+						if (!found) first = first.concat([a]);
+					});
+				}
 				if (second.remove) {
 					first = first.filter(function (o) {
-						return !second.remove.some(function (r) { return o[keyField] === r[keyField]; });
+						return !second.remove.some(function (r) {
+							return o && o[keyField] !== undefined && o[keyField] === r[keyField];
+						});
 					});
 				}
 				return first;
@@ -340,35 +357,56 @@ module.exports = function (linked) {
 
 			if (second.prepend || second.append) {
 				var result = first.slice();
-
 				if (Array.isArray(second.prepend)) {
 					for (var i = second.prepend.length - 1; i >= 0; i--) {
 						var v = second.prepend[i];
 						if (result.indexOf(v) === -1) result.unshift(v);
 					}
 				}
-
 				if (Array.isArray(second.append)) {
 					for (var i = 0; i < second.append.length; i++) {
 						var v2 = second.append[i];
 						if (result.indexOf(v2) === -1) result.push(v2);
 					}
 				}
-
 				return result;
 			}
 		}
 
+		// ── THE MISSING BRANCH ────────────────────────────────────────────────
+		// PHP: $isNumeric = !$noNumericArrays && !isAssociative($array1)
+		//                                     && !isAssociative($array2);
+		//      if ($isNumeric) { if (!in_array($value, $result, true)) $result[] = $value; }
+		// Without it, ["a","b","c"] + ["a","b","z"] index-assigns to ["a","b","z"]
+		// in Node but appends to ["a","b","c","z"] in PHP.
+		var isNumeric = !noNumericArrays && Array.isArray(first) && Array.isArray(second);
+
 		var resultObj = Array.isArray(first)
 			? (noNumericArrays ? Object.assign([], first) : first.slice())
 			: Object.assign({}, first);
-		for (var k in second) {
-			if (!(k in resultObj)) resultObj[k] = second[k];
-			else if (typeof resultObj[k] !== 'object' || resultObj[k] === null) resultObj[k] = second[k];
-			else if (typeof second[k] !== 'object' || second[k] === null) resultObj[k] = second[k];
-			else resultObj[k] = _merge(resultObj[k], second[k], noNumericArrays);
+
+		if (isNumeric) {
+			for (var i = 0; i < second.length; i++) {
+				if (resultObj.indexOf(second[i]) === -1) resultObj.push(second[i]);
+			}
+			return resultObj;
+		}
+
+		var keys = Object.keys(second);
+		for (var j = 0; j < keys.length; j++) {
+			var k = keys[j];
+			var bothMergeable = _mergeable(resultObj[k]) && _mergeable(second[k]);
+			if (Object.prototype.hasOwnProperty.call(resultObj, k) && bothMergeable) {
+				resultObj[k] = _merge(resultObj[k], second[k], noNumericArrays);
+			} else {
+				resultObj[k] = second[k];
+			}
 		}
 		return resultObj;
+	}
+
+	function _mergeable(v) {
+		return Array.isArray(v) || Q.isPlainObject(v);
 	}
 
 	function _diffByKey(oldArr,newArr,keyField) {
