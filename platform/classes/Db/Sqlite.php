@@ -374,7 +374,7 @@ class Db_Sqlite implements Db_Interface
 	 * @protected
 	 * @return {array}
 	 */
-	protected function _listTables()
+	public function _listTables()
 	{
 		$sql = "
 			SELECT name
@@ -393,7 +393,7 @@ class Db_Sqlite implements Db_Interface
 	 * @param {string} $table_name
 	 * @return {array}
 	 */
-	protected function _introspectColumns($table_name)
+	public function _introspectColumns($table_name)
 	{
 		$sql = "PRAGMA table_info(" . Db_Query_Sqlite::quoted($table_name) . ")";
 		$rows = $this->rawQuery($sql)->execute()->fetchAll(PDO::FETCH_ASSOC);
@@ -435,7 +435,7 @@ class Db_Sqlite implements Db_Interface
 	 * @method _introspectTableComment
 	 * @protected
 	 */
-	protected function _introspectTableComment($table_name)
+	public function _introspectTableComment($table_name)
 	{
 		return '';
 	}
@@ -445,7 +445,7 @@ class Db_Sqlite implements Db_Interface
 	 * @method _introspectTableIndexes
 	 * @protected
 	 */
-	protected function _introspectTableIndexes($table_name)
+	public function _introspectTableIndexes($table_name)
 	{
 		$list = $this->rawQuery(
 			"PRAGMA index_list(" . Db_Query_Sqlite::quoted($table_name) . ")"
@@ -481,7 +481,7 @@ class Db_Sqlite implements Db_Interface
 	 * @method _introspectModelComment
 	 * @protected
 	 */
-	protected function _introspectModelComment($prefix)
+	public function _introspectModelComment($prefix)
 	{
 		return '';
 	}
@@ -491,7 +491,7 @@ class Db_Sqlite implements Db_Interface
 	 * @method _normalizeDefault
 	 * @protected
 	 */
-	protected function _normalizeDefault($d)
+	public function _normalizeDefault($d)
 	{
 		if ($d === null || $d === '') {
 			return null;

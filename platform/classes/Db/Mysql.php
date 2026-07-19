@@ -1467,21 +1467,21 @@ class Db_Mysql implements Db_Interface
 		);
 	}
 
-	protected function _listTables() {
+	public function _listTables() {
 		return $this->rawQuery('SHOW TABLES')->execute()->fetchAll(PDO::FETCH_COLUMN, 0);
 	}
 
-	protected function _introspectColumns($table_name) {
+	public function _introspectColumns($table_name) {
 		return $this->rawQuery("SHOW FULL COLUMNS FROM $table_name")->execute()->fetchAll(PDO::FETCH_ASSOC);
 	}
 
-	protected function _introspectTableComment($table_name) {
+	public function _introspectTableComment($table_name) {
 		$table_status = $this->rawQuery("SHOW TABLE STATUS WHERE Name = '$table_name'")
 			->execute()->fetchAll(PDO::FETCH_COLUMN, 17);
 		return (!empty($table_status[0])) ? " * <br>{$table_status[0]}\n" : '';
 	}
 
-	protected function _introspectTableIndexes($table_name)
+	public function _introspectTableIndexes($table_name)
 	{
 		$rows = $this->rawQuery("SHOW INDEX FROM $table_name")
 			->execute()
@@ -1513,7 +1513,7 @@ class Db_Mysql implements Db_Interface
 	}
 
 
-	protected function _normalizeDefault($d) {
+	public function _normalizeDefault($d) {
 		if ($d === null || $d === '') {
 			return null;
 		}
@@ -1524,7 +1524,7 @@ class Db_Mysql implements Db_Interface
 		return $d;
 	}
 
-	protected function _introspectModelComment($prefix) {
+	public function _introspectModelComment($prefix) {
 		$sql = "
 			SELECT table_comment
 			FROM INFORMATION_SCHEMA.TABLES

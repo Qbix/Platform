@@ -1245,7 +1245,7 @@ EOT;
 		$pk_json = json_encode($pk);
 
 		// Fetch index information
-		$indexes = $db->_introspectTableIndexes($table_name)
+		$indexes = $db->_introspectTableIndexes($table_name);
 
 		$indexes_exported = var_export($indexes, true);
 		$indexes_json = json_encode($indexes);

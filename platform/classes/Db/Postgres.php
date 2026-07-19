@@ -385,7 +385,7 @@ class Db_Postgres implements Db_Interface
 	/**
 	 * List all tables in the current database/schema (Postgres).
 	 */
-	protected function _listTables()
+	public function _listTables()
 	{
 		$sql = "
 			SELECT tablename
@@ -399,7 +399,7 @@ class Db_Postgres implements Db_Interface
 	/**
 	 * Introspect table columns for Postgres.
 	 */
-	protected function _introspectColumns($table_name)
+	public function _introspectColumns($table_name)
 	{
 		$sql = "
 			SELECT 
@@ -498,7 +498,7 @@ class Db_Postgres implements Db_Interface
 	/**
 	 * Introspect table comment for Postgres.
 	 */
-	protected function _introspectTableComment($table_name)
+	public function _introspectTableComment($table_name)
 	{
 		$sql = "
 			SELECT obj_description(c.oid) AS comment
@@ -519,7 +519,7 @@ class Db_Postgres implements Db_Interface
 	/**
 	 * Introspect indexes for Postgres.
 	 */
-	protected function _introspectTableIndexes($table_name)
+	public function _introspectTableIndexes($table_name)
 	{
 		$sql = "
 			SELECT
@@ -560,7 +560,7 @@ class Db_Postgres implements Db_Interface
 		return $indexes;
 	}
 
-	protected function _introspectModelComment($prefix)
+	public function _introspectModelComment($prefix)
 	{
 		$sql = "
 			SELECT obj_description(c.oid) AS comment
@@ -582,7 +582,7 @@ class Db_Postgres implements Db_Interface
 	/**
 	 * Normalize default value from Postgres.
 	 */
-	protected function _normalizeDefault($d)
+	public function _normalizeDefault($d)
 	{
 		if ($d === null || $d === '') {
 			return null;
