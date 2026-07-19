@@ -93,6 +93,14 @@
 				"twitter:card": "summary" /* can be summary or summary_large_image */
 			}
 		},
+		"webserver": {
+			"preload": [
+				"Q_Dispatcher", "Q_Request", "Q_Response",
+				"Q_Uri", "Q_Html", "Q_Utils", "Q_Session", "Q_Cache",
+				"Db", "Db_Mysql", "Db_Row", "Db_Query", "Db_Result",
+				"Db_Range", "Db_Expression"
+			]
+		},
 		"proxies": {},
 		"static": {
 			"url": "{{web}}/Q/static",
