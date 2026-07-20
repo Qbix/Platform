@@ -3156,8 +3156,12 @@ abstract class Db_Query extends Db_Expression
 			return $this->criteria_internal_tuple($parts, $value, $fillCriteria, $i);
 		}
 
-		if ($value === null) {
-			return "ISNULL($expr)";
+		if ($value === null || $value === Db_Values::$IS_NULL) {
+			return static::column($expr) . " IS NULL";
+		}
+
+		if ($value === Db_Values::$NOT_NULL) {
+			return static::column($expr) . " IS NOT NULL";
 		}
 
 		if ($value instanceof Db_Expression) {
