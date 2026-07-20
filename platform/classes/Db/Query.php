@@ -2404,7 +2404,7 @@ abstract class Db_Query extends Db_Expression
 
 	protected function build_insertQuery($joinClauses, $where, $orderBy, $limit) {
 		$into = $this->build_into();
-		return $this->build_insert($into) . $this->build_onDuplicateKeyUpdate();
+		return $this->build_insert($into);
 	}
 
 	protected function build_insertSelectQuery($joinClauses, $where, $orderBy, $limit) {
