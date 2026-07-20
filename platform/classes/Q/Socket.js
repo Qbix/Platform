@@ -97,7 +97,8 @@ Socket.listen = function (options) {
 		options.path = options.path.interpolate({baseUrl: baseUrl});
 	}
 	var server = Q.listen(options);
-	if (!server.attached.socket) {
+	var socket = server.attached.socket;
+	if (!socket) {
 		if (!_listening) {
 			try {
 				log("Version of socket.io: " + require('socket.io/package').version);
@@ -109,14 +110,20 @@ Socket.listen = function (options) {
 			+server.host+":"+server.port + (server.internalString || '')
 		);
 		try {
-			server.attached.socket = new Q.Socket(server, Q.take(options, [
+			socket = server.attached.socket = new Q.Socket(server, Q.take(options, [
 				'path', 'serveClient', 'adapter', 'origins', 'parser'
 			]));
 		} catch (e) {
 			log("Socket was not attached.", e);
 		}
 	}
-	return server.attached.socket;
+	if (socket) {
+		socket.io.of('/Q').on('connection', function(client) {
+			Q.log("Socket.IO client connected " + client.id);
+			_registerEvents(client)
+		});
+	}
+	return socket;
 };
 
 Q.makeEventEmitter(Socket);

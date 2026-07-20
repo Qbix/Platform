@@ -2514,6 +2514,7 @@ Q.listen = function _Q_listen(options, callback) {
 		else server.once('listening', function () {
 			callback && callback(server.address());
 		});
+		_registerMethods(server);
 		return server;
 	}
 
@@ -2762,6 +2763,10 @@ Q.listen = function _Q_listen(options, callback) {
 
 	return server;
 };
+
+function _registerMethods(server) {
+	// no core methods for now, but this is where we would register them if we had any
+}
 
 /**
  * This should be called from Q.inc.js

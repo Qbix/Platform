@@ -2485,28 +2485,79 @@ class Q_Response
 	}
 
 	/**
-	 * Register stream invalidations to send to the parent server.
+	 * Register dependency invalidations to send to the parent server.
 	 *
 	 * Called after a write operation (POST/PUT) that modifies a stream.
 	 * The parent server will purge all cached pages that depend on
 	 * these streams.
 	 *
 	 * Usage:
-	 *   Q_Response::invalidateCacheStreams(['community/feed/456']);
-	 *   Q_Response::invalidateCacheStreams('Users/avatar/123');
+	 *   Q_Response::invalidateCacheDeps(['community/feed/456']);
+	 *   Q_Response::invalidateCacheDeps('Users/avatar/123');
 	 *
-	 * @method invalidateCacheStreams
+	 * @method invalidateCacheDeps
 	 * @static
-	 * @param {string|array} $streamKeys Stream identifiers to invalidate
+	 * @param {string|array} $keys Stream identifiers to invalidate
 	 */
-	static function invalidateCacheStreams($streamKeys)
+	static function invalidateCacheDeps($keys)
 	{
-		if (!is_array($streamKeys)) {
-			$streamKeys = array($streamKeys);
+		if (!is_array($keys)) {
+			$keys = array($keys);
 		}
 		self::$_cacheInvalidations = array_merge(
-			self::$_cacheInvalidations, $streamKeys
+			self::$_cacheInvalidations, $keys
 		);
+	}
+
+/**
+	 * Get the root hash (ETag) computed from all registered components.
+	 * Call after all tools have rendered and called setCacheComponent().
+	 * This is the Merkle root — if it matches the client's cached root,
+	 * nothing changed.
+	 *
+	 * @method cacheEtag
+	 * @static
+	 * @return {string|null} Root hash, or null if no components registered
+	 */
+	static function cacheEtag()
+	{
+		if (empty(self::$cacheComponents)) return null;
+		$keys = array_keys(self::$cacheComponents);
+		sort($keys);
+		$concat = '';
+		foreach ($keys as $k) {
+			$concat .= $k . ':' . (self::$cacheComponents[$k] ?? 'null') . "\n";
+		}
+		return md5($concat);
+	}
+
+	/**
+	 * Get which components the parent server considers stale.
+	 * The parent passes this via the X-Cache-Stale request header
+	 * when dispatching to a worker, based on its Merkle tree.
+	 *
+	 * Tools can check this to skip expensive rendering for
+	 * components that haven't changed:
+	 *
+	 *   $stale = Q_Response::cacheStale();
+	 *   if ($stale !== null && !in_array('Streams/feed', $stale)) {
+	 *       // this component isn't stale, could use cached version
+	 *   }
+	 *
+	 * Returns null if no stale hints available (full render needed).
+	 * Returns empty array if nothing is stale (shouldn't happen —
+	 * parent would have served from cache).
+	 *
+	 * @method cacheStale
+	 * @static
+	 * @return {array|null} Array of stale component paths, or null
+	 */
+	static function cacheStale()
+	{
+		$header = $_SERVER['HTTP_X_CACHE_STALE'] ?? null;
+		if ($header === null) return null;
+		$decoded = json_decode($header, true);
+		return is_array($decoded) ? $decoded : null;
 	}
 
 	/**
@@ -2562,7 +2613,7 @@ class Q_Response
 	 * Get the accumulated cache dependencies (for inspection/debugging).
 	 * @method cacheDeps
 	 * @static
-	 * @return {array} componentPath => [streamKey, ...]
+	 * @return {array} componentPath => [dependencyKey, ...]
 	 */
 	static function cacheDeps()
 	{
