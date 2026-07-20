@@ -71,18 +71,32 @@ Q.Tool.jQuery('Q/textfill',
 				}
 			}
 			var fontSize = o.maxFontPixels || ($this.height() + 10);
-			var lastGoodFontSize = 0, lastBadFontSize = fontSize, jump;
+			var lastGoodFontSize = o.minFontPixels;
+			var lastBadFontSize = fontSize;
+			var jump;
 			var $c = o.fillParent ? $this.parent() : $this;
 			if (!$c.length) {
 				return false; // it's not part of the DOM yet
 			}
 			var maxHeight = o.maxHeight || Math.round(o.fillPadding ? $c.innerHeight() : $c.height());
 			var maxWidth = o.maxWidth || Math.round(o.fillPadding ? $c.innerWidth() : $c.width());
-			var lineHeight = parseInt(document.defaultView.getComputedStyle($c[0], null).getPropertyValue("line-height"));
-			var textHeight, textWidth, lines, tooBig;
+			var textHeight, textWidth, lines, tooBig, lineHeight;
 			$e.addClass('Q_textfill_resizing');
 			for (var i=0; i<100; ++i) {
 				$e.css('font-size', fontSize + 'px');
+
+				// Recompute lineHeight each iteration since font-size affects it
+				if (o.maxLines) {
+					lineHeight = parseFloat(
+						document.defaultView.getComputedStyle($e[0], null)
+							.getPropertyValue("line-height")
+					);
+					// "normal" parses to NaN; fall back to ~1.2x the current font size
+					if (isNaN(lineHeight)) {
+						lineHeight = Math.round(fontSize * 1.2);
+					}
+				}
+
 				var rect = $e[0].getBoundingClientRect();
 				textWidth = Math.floor(rect.width
 					+ parseFloat($e.css('margin-left'))
@@ -91,28 +105,29 @@ Q.Tool.jQuery('Q/textfill',
 					+ parseFloat($e.css('margin-top'))
 					+ parseFloat($e.css('margin-bottom')));
 				if (o.maxLines) {
-					lines = Math.round(textHeight/lineHeight);
+					lines = Math.round(textHeight / lineHeight);
 				}
 				tooBig = (textHeight > maxHeight || textWidth > maxWidth
-					|| (o.maxLines && lines > o.maxLines))
+					|| (o.maxLines && lines > o.maxLines));
 				if (tooBig) {
 					lastBadFontSize = fontSize;
 					jump = (lastGoodFontSize - fontSize) / 2;
 				} else {
 					lastGoodFontSize = fontSize;
-					jump = (lastBadFontSize - fontSize) / 2
+					jump = (lastBadFontSize - fontSize) / 2;
 				}
 				if (Math.abs(jump) < 1) {
 					break;
 				}
 				fontSize = Math.floor(fontSize + jump);
-				if (fontSize < 3) {
-					lastGoodFontSize = 3;
-					break; // container is super small
+				if (fontSize < o.minFontPixels) {
+					lastGoodFontSize = o.minFontPixels;
+					break;
 				}
 			}
 			lastGoodFontSize = Math.max(o.minFontPixels, lastGoodFontSize);
-			$e.add(this).css('font-size', lastGoodFontSize + 'px');
+			$e.css('font-size', lastGoodFontSize + 'px');
+			$this.css('font-size', lastGoodFontSize + 'px');
 			$e.removeClass('Q_textfill_resizing').addClass('Q_textfill_resized');
 			if ($child) {
 				var cn = $child[0].childNodes;
