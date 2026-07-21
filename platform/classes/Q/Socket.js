@@ -77,6 +77,14 @@ function Socket (server, options) {
 
 var _listening = false;
 
+function _registerEvents(client) {
+	if (client.alreadyListeningQ) {
+		return;
+	}
+	client.alreadyListeningQ = true;
+	// no core events for now, but this is where we would register them if we had any
+}
+
 /**
  * Start http server if needed and start listening to socket
  * @method listen
