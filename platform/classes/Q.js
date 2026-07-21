@@ -2916,6 +2916,12 @@ Q.init = function _Q_init(app, noServers) {
 	 */
 	Q.Request = require('./Q/Request');
 	/**
+	 * Reference to Q.Response class
+	 * @property Response
+	 * @type {object}
+	 */
+	Q.Response = require('./Q/Response');
+	/**
 	 * Reference to Q.Socket class
 	 * @property Socket
 	 * @type {object}
