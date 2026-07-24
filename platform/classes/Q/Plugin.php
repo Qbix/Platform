@@ -971,7 +971,10 @@ EOT;
 		if (!file_exists($dir . DS . 'package.json')) {
 			return false;
 		}
-		if ($doIt and !$exists) {
+		if (!$doIt) {
+			return false;
+		}
+		if (!$exists) {
 			echo Q_Utils::colored("[WARN] package.json exists in $dir but npm is not installed\n", 'red');
 			return false;
 		}

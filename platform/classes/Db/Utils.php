@@ -873,7 +873,7 @@ class $class_name extends Base_$class_name
 	{
 		parent::setUp();
 		// INSERT YOUR CODE HERE
-		// e.g. \$db->hasMany(...) and stuff like that.
+		// e.g. \$this->hasMany(...) and stuff like that.
 	}
 
 	/*
@@ -1374,11 +1374,11 @@ EOT;
 EOT;
 					$functions["beforeSet_$field_name_safe"][] = <<<EOT
 		{$null_check}{$dbe_check}if (!is_numeric(\$value) or floor(\$value) != \$value)
-			throw new Exception('Non-integer value being assigned to '.\$db->getTable().".$field_name");
+			throw new Exception('Non-integer value being assigned to '.\$this->getTable().".$field_name");
 		\$value = intval(\$value);
 		if (\$value < $type_range_min or \$value > $type_range_max) {
 			\$json = json_encode(\$value);
-			throw new Exception("Out-of-range value \$json being assigned to ".\$db->getTable().".$field_name");
+			throw new Exception("Out-of-range value \$json being assigned to ".\$this->getTable().".$field_name");
 		}
 EOT;
 					$functions["beforeSet_$field_name_safe"]['comment'] = <<<EOT
@@ -1428,7 +1428,7 @@ EOT;
 					$js_properties[] = "String $field_name";
 					$functions["beforeSet_$field_name_safe"][] = <<<EOT
 		{$null_check}{$dbe_check}if (!in_array(\$value, array($type_display_range)))
-			throw new Exception("Out-of-range value '\$value' being assigned to ".\$db->getTable().".$field_name");
+			throw new Exception("Out-of-range value '\$value' being assigned to ".\$this->getTable().".$field_name");
 EOT;
 					$functions["beforeSet_$field_name_safe"]['comment'] = <<<EOT
 	$dc
@@ -1491,13 +1491,13 @@ EOT;
 EOT;
 					$functions["beforeSet_$field_name_safe"][] = <<<EOT
 		{$null_check}{$null_fix}{$dbe_check}if (!is_string(\$value) and !is_numeric(\$value))
-			throw new Exception('Must pass a string to '.\$db->getTable().".$field_name");
+			throw new Exception('Must pass a string to '.\$this->getTable().".$field_name");
 
 EOT;
 					if ($type_display_range and $type_display_range < $db->maxCheckStrlen) {
 						$functions["beforeSet_$field_name_safe"][] = <<<EOT
 		if (mb_strlen(\$value) > $type_display_range)
-			throw new Exception('Exceedingly long value being assigned to '.\$db->getTable().".$field_name");
+			throw new Exception('Exceedingly long value being assigned to '.\$this->getTable().".$field_name");
 EOT;
 					}
 					$functions["beforeSet_$field_name_safe"]['comment'] = <<<EOT
@@ -1553,7 +1553,7 @@ EOT;
 		{$null_check}{$dbe_check}\$date = date_parse(\$value);
 		if (!empty(\$date['errors'])) {
 			\$json = json_encode(\$value);
-			throw new Exception("Date \$json in incorrect format being assigned to ".\$db->getTable().".$field_name");
+			throw new Exception("Date \$json in incorrect format being assigned to ".\$this->getTable().".$field_name");
 		}
 		\$value = date("Y-m-d H:i:s", strtotime(\$value));
 		\$date = date_parse(\$value);
@@ -1667,7 +1667,7 @@ EOT;
 					$js_properties[] = "Number $field_name";
 					$functions["beforeSet_$field_name_safe"][] = <<<EOT
 		{$null_check}{$dbe_check}if (!is_numeric(\$value))
-			throw new Exception('Non-numeric value being assigned to '.\$db->getTable().".$field_name");
+			throw new Exception('Non-numeric value being assigned to '.\$this->getTable().".$field_name");
 		\$value = floatval(\$value);
 EOT;
 					$js_functions["beforeSet_$field_name_safe"][] = <<<EOT
@@ -1758,15 +1758,15 @@ EOT;
 		);
 		
 		
-		$field_names_exported = "\$db->fieldNames()";
+		$field_names_exported = "\$this->fieldNames()";
 		
 		$functions['beforeSave'] = array();
 		$js_functions['beforeSave'] = array();
 		if ($required_field_names) {
 			$required_fields_string = implode(',', $required_field_names);
 			$beforeSave_code = <<<EOT
-		if (!\$db->retrieved) {
-			\$table = \$db->getTable();
+		if (!\$this->retrieved) {
+			\$table = \$this->getTable();
 			foreach (array($required_fields_string) as \$name) {
 				if (!isset(\$value[\$name])) {
 					throw new Exception("the field \$table.\$name needs a value, because it is NOT NULL, not auto_increment, and lacks a default value.");
@@ -1797,8 +1797,8 @@ EOT;
 				if (in_array($cmf, $magic_field_names)) {
 					$beforeSave_code .= <<<EOT
 
-		if (!\$db->retrieved and !isset(\$value['$cmf'])) {
-			\$db->$cmf = \$value['$cmf'] = new Db_Expression('CURRENT_TIMESTAMP');
+		if (!\$this->retrieved and !isset(\$value['$cmf'])) {
+			\$this->$cmf = \$value['$cmf'] = new Db_Expression('CURRENT_TIMESTAMP');
 		}
 
 EOT;
@@ -1816,7 +1816,7 @@ EOT;
 					$beforeSave_code .= <<<EOT
 						
 		// convention: we'll have $umf = $cmf if just created.
-		\$db->$umf = \$value['$umf'] = new Db_Expression('CURRENT_TIMESTAMP');
+		\$this->$umf = \$value['$umf'] = new Db_Expression('CURRENT_TIMESTAMP');
 EOT;
 					$js_beforeSave_code .= <<<EOT
 
@@ -1847,8 +1847,8 @@ EOT;
 			if ($fd !== 'null') {
 				$functions["beforeSave"][] = <<<EOT
 
-		if (!isset(\$db->fields[$fn_json]) and !isset(\$value[$fn_json])) {
-			\$db->$fn = \$value[$fn_json] = $fd;
+		if (!isset(\$this->fields[$fn_json]) and !isset(\$value[$fn_json])) {
+			\$this->$fn = \$value[$fn_json] = $fd;
 		}
 EOT;
 				$js_functions["beforeSave"][] = <<<EOT
@@ -2063,9 +2063,9 @@ $field_hints
 	 */
 	function setUp()
 	{
-		\$db->setDb(self::db());
-		\$db->setTable(self::table());
-		\$db->setPrimaryKey(
+		\$this->setDb(self::db());
+		\$this->setTable(self::table());
+		\$this->setPrimaryKey(
 			$pk_exported_indented
 		);
 	}
