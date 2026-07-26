@@ -252,23 +252,136 @@ class Q_Image
 	}
 	
 	/**
+	 * Parse an HTTP status code from a PHP `$http_response_header`-style array.
+	 * @method httpStatusFromHeaders
+	 * @static
+	 * @param {array|null} $headers
+	 * @return {integer} Status code, or 0 if unknown
+	 */
+	static function httpStatusFromHeaders($headers)
+	{
+		if (empty($headers) || !is_array($headers)) {
+			return 0;
+		}
+		foreach ($headers as $headerLine) {
+			if (preg_match('#^HTTP/\S+\s+(\d+)#', $headerLine, $m)) {
+				return (int)$m[1];
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * Decode an image-provider JSON body and normalize transport/API failures.
+	 *
+	 * Success: decoded associative array (no `error` key).
+	 * Failure: `array('error' => mixed, 'http' => int)` unless throwException.
+	 *
+	 * @method decodeProviderResponse
+	 * @static
+	 * @param {string|false|null} $json Raw response body
+	 * @param {integer} [$http=0] HTTP status if known
+	 * @param {array} [$options]
+	 * @param {boolean} [$options.throwException=false]
+	 *   If true, throw Exception with HTTP/503 code instead of returning error array
+	 * @return {array}
+	 * @throws {Exception} When options.throwException is true and the response failed
+	 */
+	static function decodeProviderResponse($json, $http = 0, $options = array())
+	{
+		$throwException = !empty($options['throwException']);
+		$http = (int)$http;
+
+		$fail = function ($error, $code) use ($throwException) {
+			$code = (int)$code;
+			if ($code < 400) {
+				$code = 503;
+			}
+			if ($throwException) {
+				if (is_array($error)) {
+					$message = Q::ifset($error, 'message', Q::json_encode($error));
+				} elseif (is_string($error)) {
+					$message = $error;
+				} else {
+					$message = 'provider request failed';
+				}
+				throw new Exception($message, $code);
+			}
+			return array(
+				'error' => $error,
+				'http' => $code
+			);
+		};
+
+		if ($json === false || $json === null || $json === '') {
+			if ($json === false) {
+				$error = Q::take(error_get_last(), array('type', 'message')) ?: true;
+			} else {
+				$error = array('message' => 'empty response');
+			}
+			return $fail($error, $http ?: 503);
+		}
+
+		if ($http >= 400) {
+			return $fail(array('message' => 'HTTP '.$http), $http);
+		}
+
+		try {
+			$data = Q::json_decode($json, true);
+		} catch (Exception $e) {
+			return $fail(array('message' => 'invalid JSON response'), $http ?: 503);
+		}
+
+		if (!is_array($data)) {
+			return $fail(array('message' => 'invalid JSON response'), $http ?: 503);
+		}
+
+		if (!empty($data['error'])) {
+			$error = is_array($data['error'])
+				? $data['error']
+				: array('message' => (string)$data['error']);
+			$apiHttp = (int)Q::ifset($data, 'error', 'code', 0);
+			return $fail($error, $apiHttp >= 400 ? $apiHttp : ($http ?: 503));
+		}
+
+		return $data;
+	}
+
+	/**
 	 * Get an image from pixabay search
 	 * @param {string} $keywords Specify some string to search images on pixabay
 	 * @param {array} [$options=array()] Any additional options for pixabay api as per its documentation
+	 * @param {boolean} [$options.throwException=false] Throw on transport/API failure instead of error array
 	 * @param {boolean} [$returnFirstImage=false] If true, downloads and returns the first image as data
-	 * @return {string} JSON according to pixabay api documentation
+	 * @return {array|string|null} Decoded Pixabay JSON, error array, image bytes, or null
 	 * @throws Q_Exception_MissingConfig
+	 * @throws {Exception} When options.throwException is true and the request failed
 	 */
 	static function pixabay($keywords, $options = array(), $returnFirstImage = false)
 	{
 		$key = Q_Config::expect('Q', 'images', 'pixabay', 'key');
+		$throwException = !empty($options['throwException']);
+		unset($options['throwException']);
 		$defaults = array();
 		$options = array_merge($defaults, $options);
 		$optionString = http_build_query($options, '', '&');
 		$keywords = urlencode(mb_strtolower($keywords, 'UTF-8'));
 		$url = "https://pixabay.com/api/?key=$key&q=$keywords&$optionString";
-		$json = @file_get_contents($url);
-		$data = Q::json_decode($json, true);
+		$context = stream_context_create(array(
+			'http' => array(
+				'timeout' => 15,
+				'ignore_errors' => false,
+				'header' => "User-Agent: Mozilla/5.0\r\n"
+			)
+		));
+		$json = @file_get_contents($url, false, $context);
+		$http = self::httpStatusFromHeaders(isset($http_response_header) ? $http_response_header : null);
+		$data = self::decodeProviderResponse($json, $http, array(
+			'throwException' => $throwException
+		));
+		if (!empty($data['error'])) {
+			return $data;
+		}
 		if (!$returnFirstImage) {
 			return $data;
 		}
@@ -299,11 +412,14 @@ class Q_Image
 	 *   original, large2x, large, medium, small, portrait, landscape, tiny
 	 * @param {boolean} [$options.curated=false] Use the curated endpoint (/v1/curated)
 	 *   instead of search. Keywords are ignored. Returns editorially selected photos.
+	 * @param {boolean} [$options.throwException=false] Throw on transport/API failure
 	 * @param {boolean} [$returnFirstImage=false] If true, downloads and returns the
 	 *   raw bytes of the first result's primary src URL.
-	 * @return {array|string|null} Decoded Pexels response array, raw image bytes
-	 *   (when $returnFirstImage is true), or null on failure.
+	 * @return {array|string|null} Decoded Pexels response array, error array
+	 *   (`error`/`http`), raw image bytes (when $returnFirstImage is true),
+	 *   or null when $returnFirstImage and no photo was found.
 	 * @throws Q_Exception_MissingConfig
+	 * @throws {Exception} When options.throwException is true and the request failed
 	 */
 	static function pexels($keywords, $options = array(), $returnFirstImage = false)
 	{
@@ -314,48 +430,48 @@ class Q_Image
 			'page'        => 1,
 			'orientation' => 'landscape',
 			'src_size'    => 'landscape',
+			'size'		  => 'medium',
 			'curated'     => false,
+			//'color' => null,
+			//'locale' => null
 		);
 		$options = array_merge($defaults, $options);
 
 		// Pull out non-API options before building the query string
 		$curated  = (bool)$options['curated'];
 		$srcSize  = $options['src_size'];
-		unset($options['curated'], $options['src_size']);
+		$throwException = !empty($options['throwException']);
+		unset($options['curated'], $options['src_size'], $options['throwException']);
 
 		$context = stream_context_create(array(
 			'http' => array(
 				'header'  => "Authorization: {$key}\r\nUser-Agent: Qbix/1.0\r\n",
-				'timeout' => 10,
+				'timeout' => 15,
+				'ignore_errors' => false
 			)
 		));
 
 		if ($curated) {
 			// Curated endpoint: only per_page and page are accepted
-			$apiOptions = array(
-				'per_page' => $options['per_page'],
-				'page'     => $options['page'],
-			);
-			$url = 'https://api.pexels.com/v1/curated?' . http_build_query($apiOptions, '', '&');
+			$url = 'https://api.pexels.com/v1/curated?' . http_build_query(array_intersect_key(
+				$options,
+				array('per_page' => true, 'page' => true)
+			), '', '&');
 		} else {
-			$keywords = urlencode(mb_strtolower($keywords, 'UTF-8'));
-			// Remove src_size-related keys that aren't valid Pexels query params
-			$apiOptions = $options;
-			unset($apiOptions['src_size']);
-			$url = 'https://api.pexels.com/v1/search?query=' . $keywords
-			     . '&' . http_build_query($apiOptions, '', '&');
+			$options['query'] = mb_strtolower($keywords, 'UTF-8');
+			$url = 'https://api.pexels.com/v1/search?' . http_build_query($options, '', '&');
 		}
 
 		$json = @file_get_contents($url, false, $context);
-		if ($json === false) {
-			return null;
-		}
-		$data = Q::json_decode($json, true);
-		if (empty($data)) {
-			return null;
+		$http = self::httpStatusFromHeaders(isset($http_response_header) ? $http_response_header : null);
+		$data = self::decodeProviderResponse($json, $http, array(
+			'throwException' => $throwException
+		));
+		if (!empty($data['error'])) {
+			return $data;
 		}
 
-		// Tag which src size was requested so normalizeImages() picks the right URL
+		// Tag which src size was requested so normalize() picks the right URL
 		$data['_src_size'] = $srcSize;
 
 		if (!$returnFirstImage) {
@@ -402,6 +518,9 @@ class Q_Image
 	static function normalize($data, $provider)
 	{
 		$out = array();
+		if (!is_array($data) || !empty($data['error'])) {
+			return $out;
+		}
 
 		if ($provider === 'pexels') {
 			if (empty($data['photos']) || !is_array($data['photos'])) {
@@ -527,22 +646,25 @@ class Q_Image
      * @param {Number} [options.min.height]
      *   Minimum required image height in pixels.
      *
+     * @param {Boolean} [options.throwException=false]
+     *   If true, throw on network / invalid JSON / API errors.
+     *   If false (default), return an empty array (or null when
+     *   $returnFirstImage) for backward compatibility.
+     *
      * @param {Boolean} [returnFirstImage=false]
      *   Whether to return only the first image result.
      *
      * @return {Array|String|null}
      *   If returnFirstImage is FALSE:
-     *     Returns an array of image result objects:
-     *     {
-     *       url: String,
-     *       width: Number,
-     *       height: Number,
-     *       mime: String|null
-     *     }
+     *     Returns an array of image URL strings, or [] on soft failure
+     *     when throwException is false.
      *
      *   If returnFirstImage is TRUE:
      *     Returns the first image URL as a string,
      *     or NULL if no valid results were found.
+     *
+     * @throws {Exception} When options.throwException is true and the
+     *   request fails or the API returns an error.
      *
      * @example
      *     Images.google(
@@ -573,9 +695,19 @@ class Q_Image
 		));
         $minWidth = Q::ifset($options, 'min', 'width', null);
         $minHeight = Q::ifset($options, 'min', 'height', null);
+		$throwException = !empty($options['throwException']);
+		$softFail = function () use ($returnFirstImage) {
+			return $returnFirstImage ? null : array();
+		};
 
 		$json = Q_Utils::get($url);
-		$result = Q::json_decode($json, true);
+		$result = self::decodeProviderResponse($json, 0, array(
+			'throwException' => $throwException
+		));
+		if (!empty($result['error'])) {
+			// throwException false: keep legacy soft-fail return (empty array / null)
+			return $softFail();
+		}
 		$results = array();
 		if (!empty($result['items'])) {
 			foreach ($result['items'] as $item) {
@@ -1636,7 +1768,7 @@ class Q_Image
                     'User-Agent: '.Q_Config::expect('Q', 'curl', 'userAgent'),
                     'Accept: image/webp,image/*,*/*;q=0.8'
                 ),
-                'timeout' => 10
+                'timeout' => 15
             )
         ));
         $headers = @get_headers($path, 1, $context);
