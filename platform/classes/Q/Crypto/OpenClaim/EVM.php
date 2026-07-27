@@ -36,6 +36,12 @@ class Q_Crypto_OpenClaim_EVM
             ['name' => 'line',           'type' => 'uint256'],
             ['name' => 'nbf',            'type' => 'uint256'],
             ['name' => 'exp',            'type' => 'uint256'],
+            // 8th field: the OpenClaiming deployment this payment is valid
+            // for. Signed (not merely in the domain) so wallets DISPLAY it
+            // and so a token can never be replayed against another
+            // deployment. Named `contract` on the wire; the Solidity member
+            // is `contractAddr` because `contract` is a reserved word.
+            ['name' => 'contract',       'type' => 'address'],
         ],
     ];
 
@@ -56,6 +62,10 @@ class Q_Crypto_OpenClaim_EVM
             ['name' => 'minimum',         'type' => 'uint256'],
             ['name' => 'fraction',        'type' => 'uint256'],
             ['name' => 'delay',           'type' => 'uint256'],
+            // EIP-2771 forwarding target: when non-zero, `invoker` is the
+            // address the rail forwards the invoke as. Zero = direct
+            // execution (actionsExecute); non-zero = actionsInvoke.
+            ['name' => 'invoker',         'type' => 'address'],
             ['name' => 'nbf',             'type' => 'uint256'],
             ['name' => 'exp',             'type' => 'uint256'],
         ],
@@ -85,6 +95,59 @@ class Q_Crypto_OpenClaim_EVM
      * @param  array $claim
      * @return array { 'digest' => string(32 raw bytes), 'payload' => array }
      */
+
+    /**
+     * Derive the bytes32 `endpointType` for a MessageAssociation.
+     *   endpointType = keccak256(utf8(strtolower(protocol)))
+     * Lowercased so "HTTPS" and "https" are the same binding. Byte-identical
+     * to EVM.endpointType() in JS — pinned by shared test vectors.
+     */
+    public static function endpointType(string $protocol): string
+    {
+        if ($protocol === '') {
+            throw new \Exception('endpointType: protocol must be a non-empty string');
+        }
+        return '0x' . bin2hex(self::keccak256(strtolower($protocol)));
+    }
+
+    /**
+     * Derive the bytes32 `commitment` binding an identity to an endpoint URL
+     * without publishing the URL.
+     *   commitment = keccak256(utf8(endpointUrl) || salt)
+     * $salt is 32 raw bytes (or 0x-prefixed hex) held by the owner. REQUIRED:
+     * endpoint URLs are low entropy, so an unsalted hash is trivially
+     * brute-forced and would leak what the commitment exists to hide.
+     */
+    public static function endpointCommitment(string $endpointUrl, string $salt): string
+    {
+        if ($endpointUrl === '') {
+            throw new \Exception('endpointCommitment: endpointUrl must be a non-empty string');
+        }
+        if (preg_match('/^(0x)?[0-9a-fA-F]{64}$/', $salt)) {
+            $saltBin = hex2bin(preg_replace('/^0x/', '', $salt));
+        } else {
+            $saltBin = $salt;
+        }
+        if (strlen($saltBin) !== 32) {
+            throw new \Exception('endpointCommitment: salt must be exactly 32 bytes '
+                . '— an unsalted commitment leaks the URL');
+        }
+        return '0x' . bin2hex(self::keccak256($endpointUrl . $saltBin));
+    }
+
+    /**
+     * Verify a revealed (endpointUrl, salt) pair against a published commitment.
+     */
+    public static function endpointVerify(string $commitment, string $endpointUrl, string $salt): bool
+    {
+        try {
+            return strtolower($commitment)
+                === strtolower(self::endpointCommitment($endpointUrl, $salt));
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
     public static function hashTypedData(array $claim): array
     {
         $payload = self::_buildPayload($claim);
@@ -215,7 +278,9 @@ class Q_Crypto_OpenClaim_EVM
         return [
             'primaryType' => 'Payment',
             'domain' => [
-                'name'              => 'OpenClaiming.payments',
+                // Canonical: one domain for the whole contract (matches
+                // OpenClaiming.sol NAME_HASH = keccak256("OpenClaiming")).
+                'name'              => 'OpenClaiming',
                 'version'           => '1',
                 'chainId'           => self::_caip2ToChainId(self::_read($claim, 'chainId')),
                 'verifyingContract' => self::_read($claim, 'contract'),
@@ -229,6 +294,7 @@ class Q_Crypto_OpenClaim_EVM
                 'line'           => (string)(self::_read($claim, 'line', 0) ?? 0),
                 'nbf'            => (string)(self::_read($claim, 'nbf',  0) ?? 0),
                 'exp'            => (string)(self::_read($claim, 'exp',  0) ?? 0),
+                'contract'       => strtolower((string)self::_read($claim, 'contract', '')),
             ],
         ];
     }
@@ -252,7 +318,8 @@ class Q_Crypto_OpenClaim_EVM
         return [
             'primaryType' => 'Action',
             'domain' => [
-                'name'              => 'OpenClaiming.actions',
+                // Canonical: same domain as payments — one contract, one domain.
+                'name'              => 'OpenClaiming',
                 'version'           => '1',
                 'chainId'           => self::_caip2ToChainId(self::_read($claim, 'chainId')),
                 'verifyingContract' => self::_read($claim, 'contract'),
@@ -267,6 +334,8 @@ class Q_Crypto_OpenClaim_EVM
                 'minimum'         => (string)(self::_read($claim, 'minimum', 0) ?? 0),
                 'fraction'        => (string)(self::_read($claim, 'fraction', 0) ?? 0),
                 'delay'           => (string)(self::_read($claim, 'delay',   0) ?? 0),
+                'invoker'         => strtolower((string)(self::_read($claim, 'invoker', '')
+                                        ?: '0x0000000000000000000000000000000000000000')),
                 'nbf'             => (string)(self::_read($claim, 'nbf',     0) ?? 0),
                 'exp'             => (string)(self::_read($claim, 'exp',     0) ?? 0),
             ],
@@ -278,6 +347,12 @@ class Q_Crypto_OpenClaim_EVM
         return [
             'primaryType' => 'MessageAssociation',
             'domain' => [
+                // Separate domain ON PURPOSE — do not "canonicalize" this to
+                // 'OpenClaiming' like payments and actions were.
+                // MessageAssociation is verified by a future endpoint-registry
+                // contract, NOT by OpenClaiming.sol (which contains no
+                // messaging functions at all). Distinct contracts must never
+                // share an EIP-712 domain.
                 'name'              => 'OpenClaiming.messages',
                 'version'           => '1',
                 'chainId'           => self::_caip2ToChainId(self::_read($claim, 'chainId')),

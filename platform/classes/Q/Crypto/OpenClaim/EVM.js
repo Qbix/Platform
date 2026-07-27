@@ -48,7 +48,13 @@ var PAYMENT_TYPES = {
         { name: 'max',            type: 'uint256' },
         { name: 'line',           type: 'uint256' },
         { name: 'nbf',            type: 'uint256' },
-        { name: 'exp',            type: 'uint256' }
+        { name: 'exp',            type: 'uint256' },
+        // 8th field: the OpenClaiming deployment this payment is valid for.
+        // Signed (not just in the domain) so wallets DISPLAY it and so a
+        // token can never be replayed against a different deployment.
+        // Named `contract` on the wire; the Solidity member is `contractAddr`
+        // because `contract` is a reserved word.
+        { name: 'contract',       type: 'address' }
     ]
 };
 
@@ -69,6 +75,10 @@ var ACTIONS_TYPES = {
         { name: 'minimum',         type: 'uint256' },
         { name: 'fraction',        type: 'uint256' },
         { name: 'delay',           type: 'uint256' },
+        // EIP-2771 forwarding target: when non-zero, `invoker` is the
+        // address the rail forwards the invoke as. Zero = direct execution
+        // (actionsExecute); non-zero = actionsInvoke.
+        { name: 'invoker',         type: 'address' },
         { name: 'nbf',             type: 'uint256' },
         { name: 'exp',             type: 'uint256' }
     ]
@@ -217,7 +227,9 @@ function _paymentPayload(claim) {
     return {
         primaryType: 'Payment',
         domain: {
-            name:              'OpenClaiming.payments',
+            // Canonical: one domain for the whole contract (matches
+            // OpenClaiming.sol NAME_HASH = keccak256("OpenClaiming")).
+            name:              'OpenClaiming',
             version:           '1',
             chainId:           _caip2ToChainId(_read(claim, 'chainId')),
             verifyingContract: _read(claim, 'contract')
@@ -230,7 +242,8 @@ function _paymentPayload(claim) {
             max:  BigInt(_read(claim, 'max',  0) || 0),
             line: BigInt(_read(claim, 'line', 0) || 0),
             nbf:  BigInt(_read(claim, 'nbf',  0) || 0),
-            exp:  BigInt(_read(claim, 'exp',  0) || 0)
+            exp:  BigInt(_read(claim, 'exp',  0) || 0),
+            contract: _lower(_read(claim, 'contract', ''))
         }
     };
 }
@@ -252,7 +265,8 @@ function _actionsPayload(claim) {
     return {
         primaryType: 'Action',
         domain: {
-            name:              'OpenClaiming.actions',
+            // Canonical: same domain as payments — one contract, one domain.
+            name:              'OpenClaiming',
             version:           '1',
             chainId:           _caip2ToChainId(_read(claim, 'chainId')),
             verifyingContract: _read(claim, 'contract')
@@ -267,6 +281,8 @@ function _actionsPayload(claim) {
             minimum:         BigInt(_read(claim, 'minimum', 0) || 0),
             fraction:        BigInt(_read(claim, 'fraction', 0) || 0),
             delay:           BigInt(_read(claim, 'delay',   0) || 0),
+            invoker:         _lower(_read(claim, 'invoker', '')
+                                 || '0x0000000000000000000000000000000000000000'),
             nbf:             BigInt(_read(claim, 'nbf',     0) || 0),
             exp:             BigInt(_read(claim, 'exp',     0) || 0)
         }
@@ -277,6 +293,11 @@ function _messagesPayload(claim) {
     return {
         primaryType: 'MessageAssociation',
         domain: {
+            // Separate domain ON PURPOSE — do not "canonicalize" this to
+            // 'OpenClaiming' like payments and actions were. MessageAssociation
+            // is verified by a future endpoint-registry contract, NOT by
+            // OpenClaiming.sol (which contains no messaging functions at all).
+            // Distinct contracts must never share an EIP-712 domain.
             name:              'OpenClaiming.messages',
             version:           '1',
             chainId:           _caip2ToChainId(_read(claim, 'chainId')),
@@ -294,6 +315,77 @@ function _messagesPayload(claim) {
 // ── EVM namespace ──────────────────────────────────────────────────────────────
 
 var EVM = Q.Crypto.OpenClaim.EVM = {};
+
+/**
+ * Derive the bytes32 `endpointType` for a MessageAssociation.
+ *
+ *   endpointType = keccak256(utf8(lowercase(protocol)))
+ *
+ * The protocol is lowercased first so "HTTPS" and "https" are the same
+ * binding. Must be used by every implementation — the raw struct field is
+ * bytes32 and passing a human-readable string is now a hard error.
+ *
+ * @method endpointType
+ * @static
+ * @param {String} protocol e.g. 'https' | 'webhook' | 'p2p'
+ * @return {String} 0x-prefixed 32-byte hex
+ */
+EVM.endpointType = function (protocol) {
+    if (typeof protocol !== 'string' || !protocol.length) {
+        throw new Error('EVM.endpointType: protocol must be a non-empty string');
+    }
+    return '0x' + _keccak256(Buffer.from(protocol.toLowerCase(), 'utf8')).toString('hex');
+};
+
+/**
+ * Derive the bytes32 `commitment` binding an identity to an endpoint URL
+ * WITHOUT publishing the URL.
+ *
+ *   commitment = keccak256(utf8(endpointUrl) || salt)
+ *
+ * The salt is 32 random bytes the owner keeps. Revealing (endpointUrl, salt)
+ * later proves the binding. The salt is REQUIRED: endpoint URLs are low
+ * entropy, so an unsalted hash is trivially brute-forced and the commitment
+ * would leak the very thing it exists to hide.
+ *
+ * @method endpointCommitment
+ * @static
+ * @param {String} endpointUrl
+ * @param {String|Buffer} salt 32 bytes (0x-hex or Buffer)
+ * @return {String} 0x-prefixed 32-byte hex
+ */
+EVM.endpointCommitment = function (endpointUrl, salt) {
+    if (typeof endpointUrl !== 'string' || !endpointUrl.length) {
+        throw new Error('EVM.endpointCommitment: endpointUrl must be a non-empty string');
+    }
+    var saltBuf;
+    if (Buffer.isBuffer(salt)) { saltBuf = salt; }
+    else if (typeof salt === 'string' && /^(0x)?[0-9a-fA-F]{64}$/.test(salt)) {
+        saltBuf = Buffer.from(salt.replace(/^0x/, ''), 'hex');
+    } else {
+        throw new Error('EVM.endpointCommitment: salt must be 32 bytes '
+            + '(0x-prefixed hex or Buffer) — an unsalted commitment leaks the URL');
+    }
+    if (saltBuf.length !== 32) {
+        throw new Error('EVM.endpointCommitment: salt must be exactly 32 bytes');
+    }
+    return '0x' + _keccak256(Buffer.concat([
+        Buffer.from(endpointUrl, 'utf8'), saltBuf
+    ])).toString('hex');
+};
+
+/**
+ * Verify a revealed (endpointUrl, salt) pair against a published commitment.
+ * @method endpointVerify
+ * @static
+ * @return {Boolean}
+ */
+EVM.endpointVerify = function (commitment, endpointUrl, salt) {
+    try {
+        return String(commitment).toLowerCase()
+            === EVM.endpointCommitment(endpointUrl, salt).toLowerCase();
+    } catch (e) { return false; }
+};
 
 EVM.hashTypedData = function (claim, callback) {
     var p = new Promise(function (resolve, reject) {
@@ -435,6 +527,24 @@ function _hashTypedData(domain, primaryType, message, types) {
                 : (typeof value === 'string' && value.indexOf('0x') === 0
                     ? value.slice(2)
                     : (typeof value === 'string' ? value : Buffer.from(value).toString('hex')));
+            // CRITICAL: Buffer.from(str,'hex') silently STOPS at the first
+            // non-hex character and returns a short (often empty) buffer.
+            // Without this check, every malformed bytesN value encodes to the
+            // same thing: "https", "webhook" and "https://mallory.evil/inbox"
+            // all produced an identical digest, so one signed
+            // MessageAssociation authorised any endpoint over any protocol.
+            // Fail loudly instead — a caller must pass 0x-prefixed hex or a
+            // Buffer, never a human-readable string.
+            if (!/^[0-9a-fA-F]*$/.test(bHex) || bHex.length === 0) {
+                throw new Error('EIP-712: ' + type + ' expects 0x-prefixed hex '
+                    + 'or a Buffer, got ' + JSON.stringify(value)
+                    + ' — use a hashing helper (e.g. EVM.endpointType) to derive it');
+            }
+            var want = parseInt(type.slice(5), 10) * 2;   // bytes4 → 8 hex chars
+            if (bHex.length > want) {
+                throw new Error('EIP-712: ' + type + ' value too long ('
+                    + (bHex.length / 2) + ' bytes)');
+            }
             return Buffer.from(bHex.padEnd(64, '0').slice(0, 64), 'hex');
         }
         if (types[type]) { return _hashStruct(type, value); }
