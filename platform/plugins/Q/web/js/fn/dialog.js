@@ -35,6 +35,9 @@ Q.Tool.jQuery('Q/overlay',
 
 	function _Q_overlay(o) {
 		function calculatePosition($this) {
+			if (!$this.is(":visible")) {
+				return;
+			}
 			var data = $this.data('Q/overlay');
 			o = (data && data.options) || o;
 			if (o.noCalculatePosition) {
@@ -128,7 +131,7 @@ Q.Tool.jQuery('Q/overlay',
 				if (o.elementId) {
 					$this.attr('id', o.elementId);
 				}
-				var topZ = Q.zIndexTopmost();
+				var topZ = Math.min(Q.zIndexTopmost(), 1000000000); // hints are above this
 				$this.css('z-index', topZ + 1);
 				Q.handle(data.options.beforeLoad, $this[0], [$this[0]]);
 				calculatePosition($this);
@@ -225,42 +228,48 @@ Q.Tool.jQuery('Q/overlay',
 				if (e) {
 					e.preventDefault();
 				}
-				Q.Visual.stopHints($this[0]);
-				Q.Visual.cancelClick();
-				dialogs.pop();
 				var data = $this.data('Q/overlay');
+				// defer one tick, in case close was called synchronously
+				// e.g. by a tool, while opening the dialog
 				setTimeout(function () {
-					$body.removeClass('Q_preventScroll').css(data.bodyStyle);
-					window.scrollTo(data.windowParams.scrollLeft, data.windowParams.scrollTop);
-				}, 500);
-				if (!data.options.noClose) {
-					$(document).off('keydown', closeThisOverlayOnEsc);
-				}
-				$this.find('input, select, textarea').trigger('blur');
+					Q.Visual.cancelClick();
+					Q.Visual.stopHints($this[0]);
+					dialogs.pop();
+					var data = $this.data('Q/overlay');
+					setTimeout(function () {
+						$body.removeClass('Q_preventScroll').css(data.bodyStyle);
+						window.scrollTo(data.windowParams.scrollLeft, data.windowParams.scrollTop);
+					}, 500);
+					if (!data.options.noClose) {
+						$(document).off('keydown', closeThisOverlayOnEsc);
+					}
+					$this.find('input, select, textarea').trigger('blur');
 
-				if (false === Q.handle(data.options.beforeClose, $this[0], [$this[0]])) {
-					return false;
-				}
-				$this.removeClass('Q_overlay_open');
-				if (data.options.fadeInOut
-				&& !document.documentElement.hasClass('Q_dialogs_animationFX')) {
-					Q.Visual.animationStarted(o.fadeTime);
-					Q.Animation.play(function (x, y) {
-						if (x === 1) {
-							_doClose();
-						} else {
-							$this.css('opacity', 1-y);
-						}
-					}, o.fadeTime);
-				} else {
-					_doClose();
-				}
+					if (false === Q.handle(data.options.beforeClose, $this[0], [$this[0]])) {
+						return false;
+					}
+					$this.removeClass('Q_overlay_open');
+					if (data.options.fadeInOut
+					&& !document.documentElement.hasClass('Q_dialogs_animationFX')) {
+						Q.Visual.animationStarted(o.fadeTime);
+						Q.Animation.play(function (x, y) {
+							if (x === 1) {
+								_doClose();
+							} else {
+								$this.css('opacity', 1-y);
+							}
+						}, o.fadeTime);
+					} else {
+						_doClose();
+					}
+				}, 0);
 
 				function _doClose() {
 					$this.hide();
 					var htmlClass = data.options.htmlClass;
-					if (htmlClass) {
-						if (--_htmlClassCount[htmlClass] == 0) {
+					if (htmlClass && _htmlClassCount[htmlClass] > 0) {
+						--_htmlClassCount[htmlClass];
+						if (_htmlClassCount[htmlClass] == 0) {
 							$('html').removeClass(htmlClass);
 						}
 					}

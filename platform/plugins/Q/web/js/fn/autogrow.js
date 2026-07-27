@@ -77,6 +77,10 @@ function _Q_autogrow(o) {
 		var prevH = 0;
 
 		function updateHeight() {
+			if (!$t.state('Q/autogrow')) {
+				// it was probably removed
+				return;
+			}
 			var minHeight = $t.state('Q/autogrow').minHeight || 0;
 			t.style.height = '0px';
 			var tH = t.scrollHeight; // + H;
