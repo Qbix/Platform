@@ -110,6 +110,59 @@ function kenburnsGeometry(iw, ih, $w, $h, from, to, z) {
 	return { left: left+'px', top: top+'px', width: width+'px', height: height+'px' };
 }
 
+// ── GPU-friendly ken-burns via transform ──────────────────────────────────
+// Converts the layout-property geometry (left/top/width/height) into a
+// translate3d+scale transform relative to a fixed "base" size. This moves the
+// per-frame work from the layout+paint pipeline to the compositor thread,
+// eliminating style-recalc/layout/paint/raster entirely.
+//
+// Call kenburnsSetupBase once when the item enters, then kenburnsTransformStr
+// on every frame.
+
+function kenburnsSetupBase(iw, ih, $w, $h, from, to) {
+	// Pick the larger endpoint as the CSS base size so we only ever
+	// scale <= 1, which avoids upscaling the rasterised texture.
+	var g0 = kenburnsGeometry(iw, ih, $w, $h, from, to, 0);
+	var g1 = kenburnsGeometry(iw, ih, $w, $h, from, to, 1);
+	var w0 = parseFloat(g0.width), w1 = parseFloat(g1.width);
+	var bw = (w0 > w1) ? w0 : w1;
+	// Preserve aspect ratio (geometry guarantees width/height == constant
+	// after aspect correction, so either endpoint's ratio works).
+	var bh = bw * (parseFloat(g0.height) / w0);
+	return { baseW: bw, baseH: bh };
+}
+
+function kenburnsTransformStr(geom, baseW) {
+	var gw = parseFloat(geom.width);
+	var gl = parseFloat(geom.left);
+	var gt = parseFloat(geom.top);
+	var s  = gw / baseW;
+	return 'translate3d(' + gl + 'px,' + gt + 'px,0) scale(' + s + ')';
+}
+
+// ── WAAPI helpers ─────────────────────────────────────────────────────
+// Resolve a Q.Animation ease name (e.g. "smooth") to a JS function
+// (t)→t so it can be baked into WAAPI keyframe offsets. Returns null
+// when the name can't be resolved, signalling the caller to fall back
+// to Q.Animation.
+function resolveEaseFn(easeName) {
+	if (typeof easeName === 'function') return easeName;
+	if (!easeName || easeName === 'linear') return function (t) { return t; };
+	var eases = Q.Animation && Q.Animation.ease;
+	if (eases && typeof eases[easeName] === 'function') return eases[easeName];
+	return null;
+}
+
+// Cancel a WAAPI Animation (preferred) or pause a Q.Animation,
+// whichever the argument happens to be.
+function cancelAnim(anim) {
+	if (!anim) return;
+	try {
+		if (typeof anim.cancel === 'function') anim.cancel();
+		else if (anim.pause) anim.pause();
+	} catch (e) {}
+}
+
 // minimal, overridable chrome styling (injected once)
 function injectChromeCss() {
 	if (document.getElementById('Q_gallery_chrome_css')) return;
@@ -205,6 +258,9 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		var ensured = false, resolveReady;
 		var ready = new Promise(function (r) { resolveReady = r; });
 
+		// WAAPI Animation reference for an active kenburns pan.
+		var _wapiAnim = null;
+
 		function createCaption(html, style, customPos, name) {
 			var capCss = Q.extend({ visibility: 'hidden' }, style || {});
 			$cap = $('<div class="Q_gallery_caption" />').css(capCss).html(html).appendTo($this);
@@ -263,18 +319,64 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			kenburns: function (z, interval) {
 				if (!$img || !$img[0]) return;
 				interval = interval || deepMerge(state.interval, item.interval);
-				if ((interval.type || "") !== 'kenburns') return; // "" type: no transform
+				if ((interval.type || "") !== 'kenburns') return;
 				var geom = kenburnsGeometry(
 					$img[0].naturalWidth, $img[0].naturalHeight,
 					$this.width(), $this.height(),
 					interval.from, interval.to, z
 				);
-				geom.visibility = 'visible';
-				$img.css(geom);
+				// Width/height from the geometry — identical to the original.
+				// Position via translate3d instead of CSS left/top —
+				// compositor-only, no layout trigger for the pan.
+				$img.css({ width: geom.width, height: geom.height, visibility: 'visible' });
+				$img[0].style.transform =
+					'translate3d(' + geom.left + ',' + geom.top + ',0)';
 				if ($cap && $cap.length) $cap.css('visibility', 'visible');
 			},
+			/**
+			 * WAAPI kenburns: width/height/translate3d in keyframes.
+			 */
+			createKenburnsAnimation: function (interval, durationMs, easeFn) {
+				if (!$img || !$img[0]) return null;
+				if ((interval.type || "") !== 'kenburns') return null;
+				if (typeof $img[0].animate !== 'function') return null;
+
+				var iw = $img[0].naturalWidth || 1;
+				var ih = $img[0].naturalHeight || 1;
+				var cw = $this.width(), ch = $this.height();
+				var N = 24;
+				var keyframes = [];
+				for (var i = 0; i <= N; i++) {
+					var t = i / N;
+					var z = easeFn(t);
+					var geom = kenburnsGeometry(iw, ih, cw, ch,
+						interval.from, interval.to, z);
+					keyframes.push({
+						offset: t,
+						width: geom.width,
+						height: geom.height,
+						transform:
+							'translate3d(' + geom.left + ',' + geom.top + ',0)'
+					});
+				}
+
+				if (_wapiAnim) { _wapiAnim.cancel(); _wapiAnim = null; }
+
+				_wapiAnim = $img[0].animate(keyframes, {
+					duration: durationMs,
+					easing: 'linear',
+					fill: 'forwards'
+				});
+				return _wapiAnim;
+			},
 			show: function () { if ($img) $img.add($cap && $cap.length ? $cap : $([])).css({ display: 'block', visibility: 'visible' }); },
-			hide: function () { if ($img) $img.add($cap && $cap.length ? $cap : $([])).css({ display: 'none' }); },
+			hide: function () {
+				if (_wapiAnim) { _wapiAnim.cancel(); _wapiAnim = null; }
+				if ($img) {
+					$img[0].style.transform = '';
+					$img.add($cap && $cap.length ? $cap : $([])).css({ display: 'none' });
+				}
+			},
 			setCaption: function (html, style, centered) {
 				item.caption = html;
 				if (style) { item.style = style; item.customCaptionPosition = true; }
@@ -294,6 +396,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				if ($cap && $cap.length) { $cap.remove(); $cap = $([]); }
 			},
 			destroy: function () {
+				if (_wapiAnim) { _wapiAnim.cancel(); _wapiAnim = null; }
 				if ($img) $img.remove();
 				if ($cap && $cap.length) $cap.remove();
 				$img = $cap = null;
@@ -526,16 +629,28 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			else { useTimer = false; } // unknown / live: wait for the clip to end
 		}
 
-		// Only run a per-frame animation when there is actually a ken-burns pan
-		// to render. A plain crossfade gallery does ZERO per-frame work between
+		// Only run an animation when there is actually a ken-burns pan to
+		// render. A plain crossfade gallery does ZERO per-frame work between
 		// transitions — the difference between idle and a spinning fan.
+		//
+		// Prefer WAAPI: the ease is baked into sampled keyframe offsets and
+		// the compositor interpolates between them at the display's native
+		// refresh rate (120 Hz on ProMotion, 90 Hz on Quest, …) with zero
+		// JS in the loop. Falls back to Q.Animation (per-frame callback)
+		// when the ease name cannot be resolved or WAAPI is unavailable.
 		animPreviousInterval = animInterval;
+		animInterval = null;
 		if ((interval.type || "") === 'kenburns') {
-			animInterval = Q.Animation.play(function (x, y) {
-				curR.kenburns(y, interval); // pass merged interval; no per-frame alloc
-			}, displayMs, interval.ease);
-		} else {
-			animInterval = null;
+			var easeFn = resolveEaseFn(interval.ease);
+			if (easeFn && curR.createKenburnsAnimation) {
+				animInterval = curR.createKenburnsAnimation(interval, displayMs, easeFn);
+			}
+			if (!animInterval) {
+				// Fallback: per-frame callback (Q.Animation)
+				animInterval = Q.Animation.play(function (x, y) {
+					curR.kenburns(y, interval);
+				}, displayMs, interval.ease);
+			}
 		}
 
 		// Exactly one advance per cycle, whether the timer fires or the clip ends.
@@ -857,10 +972,25 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 
 		// exposed for the video renderer (single source of truth for kenburns)
 		state: state,
+		// Backward-compatible: returns layout-property geometry object.
 		_kenburnsCss: function (mediaEl, $container, from, to, z) {
 			var iw = mediaEl.naturalWidth || mediaEl.videoWidth || 1;
 			var ih = mediaEl.naturalHeight || mediaEl.videoHeight || 1;
 			return kenburnsGeometry(iw, ih, $container.width(), $container.height(), from, to, z);
+		},
+		// GPU-accelerated: returns { transform, baseW } for the video
+		// renderer to apply via el.style.transform. Uses the media's
+		// natural dimensions as the base (uniform scale, never stretches).
+		_kenburnsTransform: function (mediaEl, $container, from, to, z, baseW) {
+			var iw = mediaEl.naturalWidth || mediaEl.videoWidth || 1;
+			var ih = mediaEl.naturalHeight || mediaEl.videoHeight || 1;
+			if (!baseW) baseW = iw;
+			var cw = $container.width(), ch = $container.height();
+			var geom = kenburnsGeometry(iw, ih, cw, ch, from, to, z);
+			return {
+				transform: kenburnsTransformStr(geom, baseW),
+				baseW: baseW
+			};
 		},
 		_maxVolume: function () { return maxVolume; },
 		_soundOn: function () { return soundOn; },
