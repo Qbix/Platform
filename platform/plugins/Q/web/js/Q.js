@@ -13997,9 +13997,12 @@ Q.Socket.onEvent = Q.Event.factory(
 		event.onEmpty().set(function () {
 			// Every handler was removed from the event
 			for (var ns in _qsockets) {
-				for (var u in _qsockets) {
+				for (var u in _qsockets[ns]) {
 					if (u === url || url === '') {
-						qs.socket.off(name, event.handle);
+						var qs = _qsockets[ns][u];
+						if (qs && qs.socket && qs.socket.off) {
+							qs.socket.off(name, event.handle);
+						}
 					}
 				}
 			}
