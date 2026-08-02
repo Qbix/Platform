@@ -598,8 +598,14 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		}
 
 		if (!state.transitionToFirst && prevIdx === -1) {
-			curR.setLevel(1);
+			// Start the kenburns animation BEFORE making the image visible
+			// so the first painted frame already has the animation's
+			// geometry applied. kenburns(0) primes inline styles as a
+			// fallback; beginInterval creates the actual animation
+			// (WAAPI or Q.Animation) which overrides them.
+			curR.kenburns(0, deepMerge(state.interval, item.interval));
 			beginInterval(idx, prevIdx, curR, t, keepGoing);
+			curR.setLevel(1);
 			return;
 		}
 		animTransition = Q.Animation.play(ramp, t.duration, t.ease);
