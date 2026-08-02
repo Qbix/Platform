@@ -3713,8 +3713,8 @@ abstract class Db_Query extends Db_Expression
 	 */
 	static $cache = array();
 	
-	protected $cachedShardIndex = null;
+	public $cachedShardIndex = null;
 
-	protected $lastChunkValue = null;
+	public $lastChunkValue = null;
 
 }

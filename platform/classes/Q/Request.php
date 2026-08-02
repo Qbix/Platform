@@ -391,18 +391,18 @@ class Q_Request
 	 * @method tail
 	 * @static
 	 * @param {string} [$url=Q_Request::url()] Defaults to the currently requested url
-	 * @param {string} [$dontReturnInvalidUrls=false] Set to true to return invalid URLs
+	 * @param {string} [$returnInvalidUrls=false] Set to true to return invalid URLs
 	 *  that are passed, as the return value, treating them as relative URLs already.
 	 * @return {string}
 	 */
 	static function tail(
 	 $url = null,
-	 $dontReturnInvalidUrls = false)
+	 $returnInvalidUrls = false)
 	{
 		if (!isset($url)) {
 			$url = self::url();
 		} else if (!Q_Valid::url($url)){
-			return $dontReturnInvalidUrls ? $url : null;
+			return $returnInvalidUrls ? $url : null;
 		}
 		$base_url = self::baseUrl(true); // first, try with the controller URL
 		$base_url_len = strlen($base_url);
@@ -1445,13 +1445,16 @@ class Q_Request
 	 * @see Q_Valid::requireFields
 	 * @method requireFields
 	 * @static
-	 * @param {array} $fields Array of strings or arrays naming fields that are required
+	 * @param {string|array} $fields String or Array of strings or arrays naming fields that are required
 	 * @param {boolean} [$throwIfMissing=false] Whether to throw an exception if the field is missing
 	 * @param {boolean} [$emptyMeansMissing=false] Whether empty value means missing field
 	 * @return {array} The resulting list of exceptions
 	 */
 	static function requireFields($fields, $throwIfMissing = false, $throwIfEmpty = false)
 	{
+		if (is_string($fields)) {
+			$fields = array($fields);
+		}
 		$args = func_get_args();
 		array_splice($args, 1, 0, array(null));
 		$exceptions = call_user_func_array(array('Q_Valid', 'requireFields'), $args);
