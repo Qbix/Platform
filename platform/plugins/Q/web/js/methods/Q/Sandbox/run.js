@@ -25,69 +25,51 @@ Q.exports(function (Q) {
 	 * @return {String} JS source to prepend to user code
 	 */
 	function buildPreamble(methodNames) {
-		// top  : { "streams": { "get": "streams.get", "create": "streams.create" } }
-		// three: { "crypto":  { "openClaim": { "sign": "crypto.openClaim.sign" } } }
-		var top = {};
+		// Every namespace SEGMENT (all parts except the final method leaf) is
+		// PascalCased, arbitrary-depth. The method leaf keeps its authored case,
+		// so "safebox.protocol.HTTP" is reachable as Safebox.Protocol.HTTP and
+		// "safebox.protocol.Files.read" as Safebox.Protocol.Files.read — matching
+		// how shipped capabilities call their protocols.
+		function cap(x) { return x ? x.charAt(0).toUpperCase() + x.slice(1) : x; }
 
+		var tree = {};
 		methodNames.forEach(function (name) {
 			var parts = name.split(".");
-			if (parts.length < 2) return; // bare name — no namespace sugar needed
-
-			var ns = parts[0];
-			if (!top[ns]) top[ns] = {};
-
-			if (parts.length === 2) {
-				// e.g. "streams.get"  ->  top.streams.get = "streams.get"
-				top[ns][parts[1]] = name;
-			} else {
-				// e.g. "crypto.openClaim.sign"
-				// ->  top.crypto.openClaim = top.crypto.openClaim || {}
-				// ->  top.crypto.openClaim.sign = "crypto.openClaim.sign"
-				var sub = parts[1];
-				var leaf = parts.slice(2).join(".");
-				if (typeof top[ns][sub] !== "object" || top[ns][sub] === null) {
-					top[ns][sub] = {};
-				}
-				top[ns][sub][leaf] = name;
+			if (parts.length < 2) { tree[name] = { __leaf: name }; return; }
+			var node = tree;
+			for (var i = 0; i < parts.length - 1; i++) {
+				var seg = cap(parts[i]);
+				if (!node[seg] || typeof node[seg] !== "object" || node[seg].__leaf) node[seg] = {};
+				node = node[seg];
 			}
+			node[parts[parts.length - 1]] = { __leaf: name };
 		});
 
-		var lines = [];
-
-		Object.keys(top).forEach(function (ns) {
-			// Capitalise first letter: "streams" -> "Streams"
-			var varName = ns.charAt(0).toUpperCase() + ns.slice(1);
-			var nsObj = top[ns];
-			var topProps = [];
-
-			Object.keys(nsObj).forEach(function (key) {
-				var val = nsObj[key];
-
-				if (typeof val === "string") {
-					// Simple two-level: Streams.get = function(){ return methods["streams.get"](...) }
-					topProps.push(
-						'  ' + JSON.stringify(key) + ': function() { return methods[' + JSON.stringify(val) + '].apply(null, arguments); }'
-					);
+		function emit(node, indent) {
+			var props = [];
+			Object.keys(node).forEach(function (key) {
+				var v = node[key];
+				if (v && v.__leaf) {
+					props.push(indent + JSON.stringify(key)
+						+ ': function() { return methods[' + JSON.stringify(v.__leaf)
+						+ '].apply(null, arguments); }');
 				} else {
-					// Three-level: Crypto.openClaim = { sign: function(){ ... }, verify: function(){ ... } }
-					var subProps = [];
-					Object.keys(val).forEach(function (leaf) {
-						var fullName = val[leaf];
-						subProps.push(
-							'    ' + JSON.stringify(leaf) + ': function() { return methods[' + JSON.stringify(fullName) + '].apply(null, arguments); }'
-						);
-					});
-					topProps.push(
-						'  ' + JSON.stringify(key) + ': {\n' + subProps.join(',\n') + '\n  }'
-					);
+					props.push(indent + JSON.stringify(key) + ': ' + emit(v, indent + '  '));
 				}
 			});
+			return '{\n' + props.join(',\n') + '\n' + indent + '}';
+		}
 
-			lines.push('var ' + varName + ' = {');
-			lines.push(topProps.join(',\n'));
-			lines.push('};');
+		var lines = [];
+		Object.keys(tree).forEach(function (topKey) {
+			var v = tree[topKey];
+			if (v && v.__leaf) {
+				lines.push('var ' + topKey + ' = function() { return methods['
+					+ JSON.stringify(v.__leaf) + '].apply(null, arguments); };');
+			} else {
+				lines.push('var ' + topKey + ' = ' + emit(v, '  ') + ';');
+			}
 		});
-
 		return lines.join('\n');
 	}
 
@@ -175,8 +157,9 @@ Q.exports(function (Q) {
 						type: "done", ok: false,
 						error: "Sandbox hardening failed — network/import hatches still reachable"
 					});
-					// Intentionally do not register onmessage — worker becomes inert.
-					return;
+					// Do not register onmessage — throw so the worker becomes inert
+					// (top-level return would be a SyntaxError in a classic worker script).
+					throw new Error("Sandbox hardening failed");
 				}
 
 				try {
@@ -374,9 +357,22 @@ Q.exports(function (Q) {
 							'var IDBFactory = undefined;',
 							'var IDBDatabase = undefined;',
 							'var IDBObjectStore = undefined;',
+							// Read-only Q.Config.get(path, default) from a plain config snapshot
+							// passed as context.__configTree (capabilities read config-driven
+							// defaults via Q.Config.get). No functions cross the boundary.
+							'var Q = { Config: { get: function(__p, __d){ var __t = (__env && __env.__configTree) || {}; var __ps = Array.isArray(__p) ? __p : String(__p == null ? "" : __p).split("."); for (var __i = 0; __i < __ps.length; __i++){ if (__t == null || typeof __t !== "object") return __d; __t = __t[__ps[__i]]; } return (__t === undefined) ? __d : __t; } } };',
 							preamble,
+							// body style (top-level await + return) OR module style
+							// (module.exports = async function(input){...}) both supported
+							'var module = { exports: undefined };',
+							'var exports = undefined;',
 							'var __user = async function (input) {',
+							'  var __bodyResult = await (async function () {',
 							code,
+							'  }).call(undefined);',
+							'  if (typeof module.exports === "function") { return await module.exports(input); }',
+							'  if (module.exports !== undefined) { return module.exports; }',
+							'  return __bodyResult;',
 							'};',
 							'return __user(__input);'
 						].join('\n');

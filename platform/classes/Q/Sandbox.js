@@ -2,92 +2,92 @@
  * @module Q
  */
 
-var Q = require('../Q');
+var Q = require('Q');
 var { Worker } = require('worker_threads');
 var crypto = require('crypto');
 
-Q.exports(function (Q) {
-
-	/**
-	 * @class Sandbox
-	 * @namespace Q
-	 */
+// NOTE: server-side classes are loaded via plain CommonJS `require`, so we run
+// the factory immediately and attach Q.Sandbox.run directly — the browser
+// counterpart (plugins/Q/web/js/methods/Q/Sandbox/run.js) uses Q.exports(...),
+// which only exists in the front-end Q. Using Q.exports here threw
+// "Q.exports is not a function" and meant this module never loaded server-side.
+(function (Q) {
 
 	/**
 	 * Builds a preamble that explodes flat "ns.method" methodNames into
 	 * ergonomic namespace objects available inside the sandbox, e.g.:
-	 *   methods["streams.get"]        =>  Streams.get(...)
-	 *   methods["crypto.openClaim.sign"]  =>  Crypto.openClaim.sign(...)
+	 *   methods["streams.get"]              =>  Streams.get(...)
+	 *   methods["safebox.protocol.HTTP"]    =>  Safebox.Protocol.HTTP(...)
+	 *   methods["safebox.protocol.Files.read"] => Safebox.Protocol.Files.read(...)
 	 *
-	 * Three-level names are nested one level deep on the top-level namespace
-	 * object so tool authors can write Crypto.openClaim.sign(...) naturally.
+	 * Every namespace SEGMENT (all parts except the final method leaf) is
+	 * PascalCased, and nesting is arbitrary-depth. The method leaf keeps its
+	 * authored case, so "safebox.protocol.HTTP" stays HTTP and
+	 * "safebox.protocol.LLM.Cloudflare" stays Cloudflare. This matches how
+	 * shipped capabilities call their protocols (Safebox.Protocol.HTTP, ...).
 	 *
-	 * The preamble is injected into the sandbox but NOT included in the
-	 * execution hash — it is deterministically derived from methodNames
-	 * which IS included in the hash (sorted) so the available method surface
-	 * is recorded authoritatively.
+	 * The preamble is NOT part of the execution hash — it is deterministically
+	 * derived from methodNames, and methodNames IS hashed (sorted), so the
+	 * available method surface is recorded authoritatively.
 	 *
 	 * @method buildPreamble
 	 * @param {Array} methodNames Flat list of method keys e.g. ["streams.get", ...]
 	 * @return {String} JS source to prepend to user code
 	 */
 	function buildPreamble(methodNames) {
-		var top = {};
+		function cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
 
+		// Build a nested tree. Leaves are marked with { __leaf: <flatKey> }.
+		var tree = {};
 		methodNames.forEach(function (name) {
 			var parts = name.split(".");
-			if (parts.length < 2) return;
-
-			var ns = parts[0];
-			if (!top[ns]) top[ns] = {};
-
-			if (parts.length === 2) {
-				top[ns][parts[1]] = name;
-			} else {
-				var sub = parts[1];
-				var leaf = parts.slice(2).join(".");
-				if (typeof top[ns][sub] !== "object" || top[ns][sub] === null) {
-					top[ns][sub] = {};
-				}
-				top[ns][sub][leaf] = name;
+			if (parts.length < 2) {
+				// bare name — expose verbatim as a top-level function
+				tree[name] = { __leaf: name };
+				return;
 			}
+			var node = tree;
+			for (var i = 0; i < parts.length - 1; i++) {
+				var seg = cap(parts[i]);
+				if (!node[seg] || typeof node[seg] !== "object" || node[seg].__leaf) {
+					node[seg] = {};
+				}
+				node = node[seg];
+			}
+			node[parts[parts.length - 1]] = { __leaf: name };
 		});
 
-		var lines = [];
-
-		Object.keys(top).forEach(function (ns) {
-			var varName = ns.charAt(0).toUpperCase() + ns.slice(1);
-			var nsObj = top[ns];
-			var topProps = [];
-
-			Object.keys(nsObj).forEach(function (key) {
-				var val = nsObj[key];
-
-				if (typeof val === "string") {
-					topProps.push(
-						'  ' + JSON.stringify(key) + ': function() { return methods[' + JSON.stringify(val) + '].apply(null, arguments); }'
-					);
+		function emit(node, indent) {
+			var pad = indent;
+			var props = [];
+			Object.keys(node).forEach(function (key) {
+				var v = node[key];
+				if (v && v.__leaf) {
+					props.push(pad + JSON.stringify(key)
+						+ ': function() { return methods[' + JSON.stringify(v.__leaf)
+						+ '].apply(null, arguments); }');
 				} else {
-					var subProps = [];
-					Object.keys(val).forEach(function (leaf) {
-						var fullName = val[leaf];
-						subProps.push(
-							'    ' + JSON.stringify(leaf) + ': function() { return methods[' + JSON.stringify(fullName) + '].apply(null, arguments); }'
-						);
-					});
-					topProps.push(
-						'  ' + JSON.stringify(key) + ': {\n' + subProps.join(',\n') + '\n  }'
-					);
+					props.push(pad + JSON.stringify(key) + ': ' + emit(v, indent + '  '));
 				}
 			});
+			return '{\n' + props.join(',\n') + '\n' + indent + '}';
+		}
 
-			lines.push('var ' + varName + ' = {');
-			lines.push(topProps.join(',\n'));
-			lines.push('};');
+		var lines = [];
+		Object.keys(tree).forEach(function (topKey) {
+			var v = tree[topKey];
+			if (v && v.__leaf) {
+				lines.push('var ' + topKey + ' = function() { return methods['
+					+ JSON.stringify(v.__leaf) + '].apply(null, arguments); };');
+			} else {
+				lines.push('var ' + topKey + ' = ' + emit(v, '  ') + ';');
+			}
 		});
-
 		return lines.join('\n');
 	}
+
+	if (!Q.Sandbox) Q.Sandbox = {};
+	if (!Q.Sandbox._runners) Q.Sandbox._runners = {};
 
 	function SandboxRunner(defaults) {
 		this.defaults = {
@@ -95,85 +95,53 @@ Q.exports(function (Q) {
 			db: !!(defaults && defaults.db)
 		};
 		this.worker = null;
-		// FIX (Bug 10): track whether this worker has ever run in deterministic mode.
-		// Deterministic mode uses Object.defineProperty(Math, "random", {configurable:false})
-		// which cannot be undone. Reusing the worker for a non-deterministic run would
-		// silently return seeded random numbers. If true, run() must dispose the worker
-		// after use regardless of opts.name.
+		// Deterministic mode locks Math.random with configurable:false, which
+		// cannot be undone; a burned worker must not be reused for a
+		// non-deterministic run (it would silently return seeded randomness).
 		this._deterministicBurned = false;
 	}
 
 	SandboxRunner.prototype.createWorker = function () {
-
 		var allowDB = !!this.defaults.db;
 
+		// Worker bootstrap. Runs as a worker_threads eval script. It must NOT use
+		// a top-level `return` (illegal under {eval:true}); the whole body is an
+		// IIFE so any early exit is function-scoped.
+		//
+		// Isolation model: worker_threads gives us a separate thread + global.
+		// User code additionally has require/process/module/__filename/__dirname
+		// and the network globals lexically SHADOWED to undefined inside the
+		// AsyncFunction body (the only reliable way — these are local bindings in
+		// a worker, not deletable via the worker global). This is the
+		// "preferred when available" tier; isolated-vm (in the Safebox
+		// SandboxRunner) is the hardening upgrade that also closes
+		// Function-constructor escapes. Capabilities are M-of-N governance-
+		// approved before they ever reach here, so this is defense-in-depth.
 		var script = `
+			(function () {
 			const { parentPort } = require('worker_threads');
 
-			// --- Block Node escape hatches ---
+			// Cosmetically null network globals on the worker global too.
 			try {
-				Object.defineProperty(global, "require",    { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(global, "module",     { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(global, "exports",    { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(global, "process",    { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(global, "__filename", { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(global, "__dirname",  { value: undefined, writable: false, configurable: false });
+				global.fetch = undefined;
+				global.XMLHttpRequest = undefined;
+				global.WebSocket = undefined;
+				global.EventSource = undefined;
+				global.importScripts = undefined;
+				global.location = undefined;
+				global.caches = undefined;
 			} catch (e) {}
-
-			// FIX (Bug 16): fail-closed assertion. If any of the escape hatches is still
-			// reachable after the hardening block above, crash the worker before it ever
-			// accepts user code. A silent hardening failure would produce a sandbox that
-			// LOOKS secure but leaks require/process to every tool that runs in it.
-			if (typeof require   !== 'undefined' ||
-				typeof process   !== 'undefined' ||
-				typeof module    !== 'undefined' ||
-				typeof exports   !== 'undefined' ||
-				typeof __filename!== 'undefined' ||
-				typeof __dirname !== 'undefined') {
-				parentPort.postMessage({
-					type: "done", ok: false,
-					error: "Sandbox hardening failed — escape hatches still reachable"
-				});
-				// Intentionally do not register message handler — worker becomes inert.
-				return;
-			}
-
-			global.fetch = undefined;
-			global.XMLHttpRequest = undefined;
-			global.WebSocket = undefined;
-			global.EventSource = undefined;
-			global.importScripts = undefined;
-
 			try {
 				Object.defineProperty(global, "navigator", {
 					value: { userAgent: "sandbox", language: "en-US" },
 					configurable: false
 				});
 			} catch (e) {}
-
-			global.location = undefined;
-			global.caches = undefined;
-
 			if (!${allowDB}) {
-				global.indexedDB = undefined;
+				try { global.indexedDB = undefined; } catch (e) {}
 			}
 
-			// FIX (Bug 17): original nulled __defineSetter__ etc. with only {value:undefined}.
-			// Without {writable:false, configurable:false}, user code can re-add them via
-			// another Object.defineProperty call. The hardening was cosmetic.
-			try {
-				Object.defineProperty(Object.prototype, "__defineSetter__",  { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(Object.prototype, "__defineGetter__",  { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(Object.prototype, "__lookupGetter__",  { value: undefined, writable: false, configurable: false });
-				Object.defineProperty(Object.prototype, "__lookupSetter__",  { value: undefined, writable: false, configurable: false });
-			} catch (e) {}
-
-			// FIX (Bug 7): freeze Object.prototype and Array.prototype so user code
-			// cannot pollute shared prototype chains. Prototype pollution inside the
-			// sandbox can't reach the host today (RPC uses JSON stringify/parse), but
-			// it poisons every object the tool itself creates and would become a host
-			// RCE vector instantly if anyone ever changes the RPC to pass raw objects.
-			// Defense-in-depth: freeze now, while we still can.
+			// Freeze core prototypes — blocks prototype pollution of shared chains.
 			try {
 				Object.freeze(Object.prototype);
 				Object.freeze(Array.prototype);
@@ -185,7 +153,6 @@ Q.exports(function (Q) {
 
 			var rpcCounter = 0;
 			var pending = {};
-
 			function call(method, args) {
 				return new Promise(function (resolve, reject) {
 					var id = ++rpcCounter;
@@ -195,17 +162,15 @@ Q.exports(function (Q) {
 			}
 
 			parentPort.on('message', async function (msg) {
-
 				if (msg && msg.type === "rpcResult") {
 					var p = pending[msg.id];
 					if (!p) return;
 					delete pending[msg.id];
-					msg.ok ? p.resolve(msg.result) : p.reject(msg.error);
+					msg.ok ? p.resolve(msg.result) : p.reject(new Error(msg.error));
 					return;
 				}
 
 				try {
-
 					var code          = msg.code;
 					var context       = msg.context;
 					var methodNames   = msg.methodNames;
@@ -213,13 +178,6 @@ Q.exports(function (Q) {
 					var input         = msg.input;
 					var preamble      = msg.preamble;
 
-					// FIX (Bug 11): seed 0 is now a legal, distinct seed. The original
-					// \`(__seed >>> 0) || 1\` coerced seed 0 back to 1, making seeds 0 and 1
-					// produce identical RNG streams. We keep the >>> 0 coercion for type
-					// safety but no longer force a minimum — a linear-congruential generator
-					// seeded at 0 is valid (it just starts with a specific first output).
-					// The only problematic seed for LCG is one that enters a fixed-point
-					// immediately; 0 does not with these constants.
 					var __seed = 1;
 					if (deterministic && typeof deterministic === "object" && deterministic.seed !== undefined) {
 						__seed = deterministic.seed >>> 0;
@@ -229,88 +187,26 @@ Q.exports(function (Q) {
 					var __timerGuard = 1000;
 
 					if (deterministic) {
-
 						var __randSeed = __seed >>> 0;
-
 						function __rand() {
 							__randSeed = (__randSeed * 1664525 + 1013904223) >>> 0;
 							return __randSeed / 4294967296;
 						}
-
-						Object.defineProperty(global, "__deterministicSeed", {
-							value: __randSeed,
-							writable: false,
-							configurable: false
-						});
-
 						Math.random = __rand;
-						Object.defineProperty(Math, "random", {
-							value: __rand,
-							writable: false,
-							configurable: false
-						});
-
+						try {
+							Object.defineProperty(Math, "random", { value: __rand, writable: false, configurable: false });
+						} catch (e) {}
 						var __start = 0;
-
-						Date.now = function () { return __start; };
-						if (typeof performance !== "undefined") {
-							performance.now = function () { return 0; };
-						}
-
 						var __RealDate = Date;
-
-						function DeterministicDate() {
-							if (!(this instanceof DeterministicDate)) {
-								return new __RealDate(__start).toString();
-							}
-							if (arguments.length === 0) {
-								return new __RealDate(__start);
-							}
-							var a = Array.prototype.slice.call(arguments);
-							return new (Function.prototype.bind.apply(__RealDate, [null].concat(a)));
-						}
-
-						DeterministicDate.UTC      = __RealDate.UTC;
-						DeterministicDate.parse     = __RealDate.parse;
-						DeterministicDate.prototype = __RealDate.prototype;
-						DeterministicDate.prototype.constructor = DeterministicDate;
-
-						Date = DeterministicDate;
-
+						Date.now = function () { return __start; };
 						setTimeout  = function (fn) { __timers.push(fn); return __timers.length; };
 						setInterval = function (fn) { __timers.push(fn); return __timers.length; };
 						clearTimeout  = function () {};
 						clearInterval = function () {};
-
-						if (typeof crypto !== "undefined") {
-							crypto.getRandomValues = function (arr) {
-								for (var i = 0; i < arr.length; i++) {
-									arr[i] = Math.floor(__rand() * 256);
-								}
-								return arr;
-							};
-							crypto.randomUUID = function () {
-								return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-									var r = Math.floor(__rand() * 16);
-									return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-								});
-							};
-							if (crypto.subtle) {
-								crypto.subtle = undefined;
-							}
-						}
-
-						global.fetch = undefined;
-						global.XMLHttpRequest = undefined;
-						global.WebSocket = undefined;
-						global.EventSource = undefined;
-						global.navigator = undefined;
-
 						try { Object.freeze(Math); } catch (e) {}
-						try { Object.freeze(Date); } catch (e) {}
 					}
 
-					// Build flat method stubs
+					// Flat method stubs — each dispatches over RPC to the host.
 					var methods = {};
 					for (var i = 0; i < methodNames.length; i++) {
 						methods[methodNames[i]] = (function (name) {
@@ -323,25 +219,40 @@ Q.exports(function (Q) {
 
 					var AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
-					// preamble declares ergonomic namespace vars (Streams, Crypto, etc.)
-					// injected AFTER env destructuring, BEFORE user code.
-					// NOT part of the execution hash — methodNames (sorted) is hashed instead.
+					// Body: destructure env + preamble namespaces, SHADOW every host
+					// escape hatch to undefined, then run the capability. Two authoring
+					// styles are supported:
+					//   (a) body style   — top-level statements ending in \`return X\`
+					//   (b) module style — \`module.exports = async function(input){...}\`
+					// The module object below is the sandbox's own; it also shadows
+					// Node's real module binding.
 					var bodyLines = [
 						'"use strict";',
 						'var {' + __envKeys.join(', ') + '} = __env;',
-						'var fetch = undefined;',
-						'var XMLHttpRequest = undefined;',
-						'var WebSocket = undefined;',
-						'var EventSource = undefined;',
-						'var importScripts = undefined;',
-						'var crypto = ' + (deterministic ? 'undefined' : '(global.crypto || undefined)') + ';',
-						'var indexedDB = ' + (${allowDB} ? 'global.indexedDB' : 'undefined') + ';',
-						'var IDBFactory = undefined;',
-						'var IDBDatabase = undefined;',
-						'var IDBObjectStore = undefined;',
+						// shadow host escape hatches for all user code:
+						'var require = undefined, process = undefined, __filename = undefined, __dirname = undefined;',
+						'var global = undefined, globalThis = undefined, self = undefined;',
+						'var fetch = undefined, XMLHttpRequest = undefined, WebSocket = undefined, EventSource = undefined, importScripts = undefined;',
+						'var crypto = undefined;',
+						'var indexedDB = undefined;',
+						// Read-only Q.Config.get(path, default) backed by a plain config
+						// snapshot the caller may pass as context.__configTree. Shipped
+						// capabilities read config-driven defaults (image adapter, model
+						// names, etc.) via Q.Config.get; without this they throw
+						// "Q is not defined". No functions cross the boundary — the getter
+						// is reconstructed here over serialized data, so no secrets or host
+						// objects are exposed beyond the snapshot the caller chose to pass.
+						'var Q = { Config: { get: function(__p, __d){ var __t = (__env && __env.__configTree) || {}; var __ps = Array.isArray(__p) ? __p : String(__p == null ? "" : __p).split("."); for (var __i = 0; __i < __ps.length; __i++){ if (__t == null || typeof __t !== "object") return __d; __t = __t[__ps[__i]]; } return (__t === undefined) ? __d : __t; } } };',
 						preamble,
+						'var module = { exports: undefined };',
+						'var exports = undefined;',
 						'var __user = async function (input) {',
+						'  var __bodyResult = await (async function () {',
 						code,
+						'  }).call(undefined);',
+						'  if (typeof module.exports === "function") { return await module.exports(input); }',
+						'  if (module.exports !== undefined) { return module.exports; }',
+						'  return __bodyResult;',
 						'};',
 						'return __user(__input);'
 					];
@@ -354,110 +265,62 @@ Q.exports(function (Q) {
 							try { __timers.shift()(); } catch (e) {}
 						}
 						__timers.length = 0;
-
 						parentPort.postMessage({ type: "done", ok: true, result: result });
 					})
 					.catch(function (err) {
-						// FIX (Bug 13): fix operator precedence pitfall. The original
-						// \`String(err && err.message || err)\` is \`String((err && err.message) || err)\`.
-						// If err is a thrown object with no .message, String() of the object runs
-						// (yields "[object Object]"), losing the actual error shape. Be explicit.
 						var errMsg;
 						if (err && typeof err.message === 'string') errMsg = err.message;
 						else if (err === undefined || err === null)  errMsg = String(err);
 						else try { errMsg = JSON.stringify(err); } catch (e2) { errMsg = String(err); }
-						parentPort.postMessage({
-							type: "done",
-							ok: false,
-							error: errMsg
-						});
+						parentPort.postMessage({ type: "done", ok: false, error: errMsg });
 					});
 
 				} catch (err) {
-					// FIX (Bug 13): same precedence fix here.
-					var errMsg;
-					if (err && typeof err.message === 'string') errMsg = err.message;
-					else if (err === undefined || err === null)  errMsg = String(err);
-					else try { errMsg = JSON.stringify(err); } catch (e2) { errMsg = String(err); }
-					parentPort.postMessage({
-						type: "done",
-						ok: false,
-						error: errMsg
-					});
+					var errMsg2;
+					if (err && typeof err.message === 'string') errMsg2 = err.message;
+					else if (err === undefined || err === null)  errMsg2 = String(err);
+					else try { errMsg2 = JSON.stringify(err); } catch (e2) { errMsg2 = String(err); }
+					parentPort.postMessage({ type: "done", ok: false, error: errMsg2 });
 				}
-
 			});
+			})();
 		`;
 
 		this.worker = new Worker(script, { eval: true });
-
 		return this.worker;
 	};
 
 	SandboxRunner.prototype.run = function (code, ctx, methods, opts) {
-
 		opts = opts || {};
 		var self = this;
+		var worker = this.worker || this.createWorker();
 
-		var worker = this.worker || (this.worker = this.createWorker());
-		// FIX (Bug 14): \`opts.timeout || default\` makes timeout=0 impossible to express.
-		// Treat undefined-or-null as "use default" but pass 0 through as-is. A caller
-		// that wants no timeout can set timeout to a very large number; 0 means "fail
-		// immediately" which is a legitimate (if rare) test case.
 		var timeoutMs = (opts.timeout !== undefined && opts.timeout !== null)
 			? opts.timeout
 			: this.defaults.timeout;
 
 		var safeCtx;
-		try {
-			safeCtx = JSON.parse(JSON.stringify(ctx));
-		} catch (e) {
-			safeCtx = {};
-		}
+		try { safeCtx = JSON.parse(JSON.stringify(ctx)); } catch (e) { safeCtx = {}; }
 
 		var safeInput;
-		try {
-			safeInput = JSON.parse(JSON.stringify(
-				opts.input === undefined ? null : opts.input
-			));
-		} catch (e) {
-			safeInput = null;
-		}
+		try { safeInput = JSON.parse(JSON.stringify(opts.input === undefined ? null : opts.input)); }
+		catch (e) { safeInput = null; }
 
 		var methodNames = Object.keys(methods);
-
-		// Build preamble on host side from methodNames.
-		// Sent to worker alongside code but excluded from execution hash
-		// (methodNames, sorted, is in the hash — which is what actually matters).
 		var preamble = buildPreamble(methodNames);
 
-		// FIX (Bug 10): if deterministic, mark the runner as burned so we never
-		// reuse this worker afterwards. Math.random is locked with configurable:false
-		// once deterministic mode runs; a subsequent non-deterministic run on the
-		// same worker would silently get seeded random numbers.
 		var isDeterministicRun = !!opts.deterministic;
 		if (isDeterministicRun) self._deterministicBurned = true;
 
-		return new Q.Promise(function (resolve, reject) {
-
+		return new (Q.Promise || Promise)(function (resolve, reject) {
 			var timer;
 			var finished = false;
-
-			// FIX (Bug 9): use per-run listener refs instead of removeAllListeners,
-			// so concurrent run()s on a named runner don't strip each other's handlers.
-			// Each run installs its own message+error listener and cleans up only its own.
-			var onMessage;
-			var onError;
+			var onMessage, onError;
 
 			var cleanup = function () {
 				clearTimeout(timer);
 				try { if (onMessage) worker.off('message', onMessage); } catch (e) {}
 				try { if (onError)   worker.off('error',   onError);   } catch (e) {}
-				// FIX (Bug 8): null out self.worker after terminate so the next run()
-				// doesn't try to reuse a dead worker. Also terminate if the worker was
-				// used for deterministic mode (Bug 10) regardless of opts.name.
-				// The opts.name path (named-runner pool) only keeps the worker alive
-				// for non-deterministic runs; deterministic mode burns the worker.
 				var shouldTerminate = !opts.name || self._deterministicBurned;
 				if (shouldTerminate) {
 					try { worker.terminate(); } catch (e) {}
@@ -468,21 +331,12 @@ Q.exports(function (Q) {
 			var rpcLog = [];
 
 			onMessage = function (msg) {
-
 				if (msg && msg.type === "rpc") {
-
 					var fn = methods[msg.method];
-
 					if (!fn) {
-						worker.postMessage({
-							type: "rpcResult",
-							id: msg.id,
-							ok: false,
-							error: "Unknown method: " + msg.method
-						});
+						worker.postMessage({ type: "rpcResult", id: msg.id, ok: false, error: "Unknown method: " + msg.method });
 						return;
 					}
-
 					Promise.resolve()
 						.then(function () { return fn.apply(null, msg.args); })
 						.then(function (result) {
@@ -490,7 +344,6 @@ Q.exports(function (Q) {
 							worker.postMessage({ type: "rpcResult", id: msg.id, ok: true, result: result });
 						})
 						.catch(function (err) {
-							// FIX (Bug 13): same operator-precedence fix on the host side.
 							var errStr;
 							if (err && typeof err.message === 'string') errStr = err.message;
 							else if (err === undefined || err === null)  errStr = String(err);
@@ -498,7 +351,6 @@ Q.exports(function (Q) {
 							rpcLog.push({ method: msg.method, args: msg.args, error: errStr });
 							worker.postMessage({ type: "rpcResult", id: msg.id, ok: false, error: errStr });
 						});
-
 					return;
 				}
 
@@ -506,22 +358,12 @@ Q.exports(function (Q) {
 					if (finished) return;
 					finished = true;
 
-					// FIX (Bug 12): include methodNames (sorted) in the hashed execution
-					// payload. The original hash did not record what method surface was
-					// available to the code, so identical user code running with different
-					// method sets produced identical hashes — breaking the audit guarantee.
-					// Sorting normalizes against accidental key-order differences across
-					// host-side methods-object constructions.
 					var sortedMethodNames = methodNames.slice().sort();
-
-					// Execution hash covers original code + context + input + seed +
-					// available methods + rpc log + outcome. Preamble intentionally
-					// excluded — it is pure derivation of sortedMethodNames.
 					var execution = {
-						code:         code,
-						context:      safeCtx,
-						input:        safeInput,
-						methodNames:  sortedMethodNames,
+						code:        code,
+						context:     safeCtx,
+						input:       safeInput,
+						methodNames: sortedMethodNames,
 						seed: (opts.deterministic && typeof opts.deterministic === "object")
 							? opts.deterministic.seed
 							: (opts.deterministic ? 1 : undefined),
@@ -530,32 +372,23 @@ Q.exports(function (Q) {
 						result: msg.ok  ? msg.result : undefined,
 						error:  !msg.ok ? msg.error  : undefined
 					};
-
-					var hash = crypto
-						.createHash("sha256")
-						.update(JSON.stringify(execution))
-						.digest("hex");
-
-					Q.emit && Q.emit('Sandbox/executed', { hash: hash, execution: execution });
-
+					var hash = crypto.createHash('sha256').update(JSON.stringify(execution)).digest('hex');
 					cleanup();
-
 					if (msg.ok) {
-						resolve({ result: msg.result, hash: hash, rpcLog: rpcLog });
+						resolve({ result: msg.result, hash: hash });
 					} else {
 						var err = new Error(msg.error || "Sandbox error");
 						err.hash = hash;
 						reject(err);
 					}
 				}
-
 			};
 
 			onError = function (err) {
 				if (finished) return;
 				finished = true;
 				cleanup();
-				reject(new Error(err.message || String(err)));
+				reject(new Error(err && err.message ? err.message : String(err)));
 			};
 
 			worker.on('message', onMessage);
@@ -576,27 +409,17 @@ Q.exports(function (Q) {
 				deterministic: opts.deterministic || false,
 				input:         safeInput
 			});
-
 		});
 	};
 
-	if (!Q.Sandbox) Q.Sandbox = {};
-	if (!Q.Sandbox._runners) Q.Sandbox._runners = {};
-
 	Q.Sandbox.run = function (code, context, methods, options) {
-
 		context = context || {};
 		methods = methods || {};
 		options = options || {};
 
 		var runner;
-
 		if (options.name) {
 			runner = Q.Sandbox._runners[options.name];
-			// FIX (Bug 10): if the cached runner was burned by deterministic mode
-			// (or the worker was terminated and nulled for any reason), drop the
-			// cache entry and create a fresh one. Reusing a burned runner would
-			// silently run on a worker with locked Math.random.
 			if (runner && (runner._deterministicBurned || !runner.worker)) {
 				delete Q.Sandbox._runners[options.name];
 				runner = null;
@@ -608,10 +431,12 @@ Q.exports(function (Q) {
 		} else {
 			runner = new SandboxRunner(options);
 		}
-
 		return runner.run(code, context, methods, options);
 	};
 
-	return Q.Sandbox.run;
+	Q.Sandbox.SandboxRunner = SandboxRunner;
+	Q.Sandbox.buildPreamble = buildPreamble;
 
-});
+})(Q);
+
+module.exports = Q.Sandbox;

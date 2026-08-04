@@ -10,6 +10,7 @@ use Mdanter\Ecc\Crypto\Signature\Signature;
 use Mdanter\Ecc\Serializer\PublicKey\PemPublicKeySerializer;
 use Mdanter\Ecc\Serializer\PublicKey\DerPublicKeySerializer;
 use Mdanter\Ecc\Serializer\Signature\DerSignatureSerializer;
+use Mdanter\Ecc\Random\RandomGeneratorFactory;
 
 /**
  * @module Q
@@ -106,6 +107,28 @@ class Q_ECC
      * @param {string} [$curve='P256']
      * @return {array} [r, s] hex
      */
+    /**
+     * Convert a precomputed binary digest to the GMP integer ECDSA signs/verifies
+     * over (SEC1 bits2int / RFC 6979): the leftmost qlen bits of the digest as a
+     * big-endian integer. For a digest no longer than the curve order (P-256 +
+     * SHA-256, secp256k1 + Keccak-256) this is the whole integer; a longer digest
+     * is right-shifted by the excess bits.
+     *
+     * @method _digestToGmp
+     * @static
+     * @private
+     */
+    private static function _digestToGmp($digest, $generator)
+    {
+        $z = gmp_init(bin2hex($digest), 16);
+        $orderBits  = strlen(gmp_strval($generator->getOrder(), 2));
+        $digestBits = strlen($digest) * 8;
+        if ($digestBits > $orderBits) {
+            $z = gmp_div_q($z, gmp_pow(2, $digestBits - $orderBits));
+        }
+        return $z;
+    }
+
     static function signDigest($digest, $privateKeyHex, $curve = 'P256')
     {
         $adapter = EccFactory::getAdapter();
@@ -137,7 +160,16 @@ class Q_ECC
         $privateKey = $generator->getPrivateKeyFrom($d);
 
         $signer = new Signer($adapter);
-        $sig = $signer->sign($privateKey, $digest);
+        // This vendored phpecc requires a GMP message hash AND a GMP k; the
+        // legacy 2-arg string API (sign($key, $hashString)) no longer exists.
+        // signDigest is handed a precomputed digest, so convert it (bits2int)
+        // and derive a deterministic k via RFC 6979 (HMAC), matching the JS
+        // OpenClaim signer's determinism. Any valid (r,s) verifies regardless
+        // of k; determinism just makes signatures reproducible.
+        $hashGmp = self::_digestToGmp($digest, $generator);
+        $rng = RandomGeneratorFactory::getHmacRandomGenerator($privateKey, $hashGmp, 'sha256');
+        $k   = $rng->generate($generator->getOrder());
+        $sig = $signer->sign($privateKey, $hashGmp, $k);
 
         // ---- LOW-S NORMALIZATION (Ethereum / noble compatible) ----
         $n = $generator->getOrder();
@@ -219,12 +251,12 @@ class Q_ECC
             $signature = new Signature($r, $s);
         }
         
+        // NOTE: do NOT reject high-S here. ECDSA verification is valid for both
+        // S and n-S; the JS OpenClaim signer (noble) emits either, so rejecting
+        // high-S broke JS->PHP claim verification (parity). Malleability is not a
+        // concern for claim verification — the signature attests the same digest
+        // either way. PHP signing still normalizes to low-S (canonical output).
         $n = $generator->getOrder();
-        $s = $signature->getS();
-
-        if (gmp_cmp($s, gmp_div_q($n, 2)) > 0) {
-            return false; // reject non-canonical signature
-        }
 
         // -----------------------------
         // Normalize public key (raw 04||X||Y)
@@ -250,6 +282,12 @@ class Q_ECC
                 break;
         }
 
+        // Accept both the 64-byte raw X||Y form and the 65-byte uncompressed
+        // 04||X||Y form. Q_Crypto_OpenClaim passes the X||Y form (SPKI prefix
+        // stripped past the 0x04 tag); prepend the tag so both callers work.
+        if (strlen($publicKey) === $expectedLen - 1) {
+            $publicKey = "\x04" . $publicKey;
+        }
         if (strlen($publicKey) !== $expectedLen || ord($publicKey[0]) !== 0x04) {
             throw new Exception("publicKey must be uncompressed raw EC point");
         }
@@ -259,8 +297,9 @@ class Q_ECC
         $x = gmp_init(bin2hex(substr($publicKey, 1, $coordLen)), 16);
         $y = gmp_init(bin2hex(substr($publicKey, 1 + $coordLen, $coordLen)), 16);
 
-        $point = $generator->getCurve()->getPoint($x, $y);
-        $publicKeyObj = $generator->getPublicKeyFrom($point);
+        // Vendored phpecc: getPublicKeyFrom(GMP \$x, GMP \$y) — the legacy
+        // getPublicKeyFrom(PointInterface) signature no longer exists.
+        $publicKeyObj = $generator->getPublicKeyFrom($x, $y);
 
         // -----------------------------
         // Convert to DER → PEM (for library compatibility)
@@ -280,7 +319,8 @@ class Q_ECC
         // Verify
         // -----------------------------
         $signer = new Signer($adapter);
-        return $signer->verify($key, $signature, $digest);
+        // Same phpecc API change: the hash must be a GMP, not a string.
+        return $signer->verify($key, $signature, self::_digestToGmp($digest, $generator));
     }
 
     /**

@@ -106,14 +106,14 @@ class Q_Crypto_OpenClaim
         $seen[] = $keyStr;
 
         // data:key/
-        if (str_starts_with($keyStr, 'data:key/')) {
+        if (strpos($keyStr, 'data:key/') === 0) {
             $parsed = self::_parseDataKey($keyStr);
             self::$keyCache[$keyStr] = $parsed;
             return $parsed;
         }
 
         // URL document
-        if (str_starts_with($keyStr, 'http')) {
+        if (strpos($keyStr, 'http') === 0) {
             $parts   = explode('#', $keyStr);
             $url     = $parts[0];
             $raw     = self::_fetchCached($url);

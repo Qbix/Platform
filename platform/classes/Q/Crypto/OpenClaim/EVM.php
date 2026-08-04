@@ -460,14 +460,14 @@ class Q_Crypto_OpenClaim_EVM
     {
         if (is_int($v)) { return $v; }
         $s = (string)$v;
-        if (str_starts_with($s, 'eip155:')) { return (int)substr($s, 7); }
+        if (strpos($s, 'eip155:') === 0) { return (int)substr($s, 7); }
         if (preg_match('/^evm:(\d+):/', $s, $m)) { return (int)$m[1]; }
         return (int)$s;
     }
 
     private static function _normalizeSigToBinary(string $sig): string
     {
-        if (str_starts_with($sig, '0x') || str_starts_with($sig, '0X')) {
+        if (strpos($sig, '0x') === 0 || strpos($sig, '0X') === 0) {
             return hex2bin(substr($sig, 2));
         }
         if (strlen($sig) === 130 && ctype_xdigit($sig)) {

@@ -674,7 +674,7 @@ class Q_Data
         if ($value === false)       { return 'false'; }
         if (is_int($value))         { return (string)$value; }
         if (is_float($value))       { return self::_canonicalizeNumber($value); }
-        if (is_string($value))      { return json_encode($value, JSON_UNESCAPED_UNICODE); }
+        if (is_string($value))      { return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE); }
 
         if (is_array($value)) {
             if (!$value || array_keys($value) === range(0, count($value) - 1)) {
@@ -689,7 +689,7 @@ class Q_Data
                 ksort($value, SORT_STRING);
                 $parts = [];
                 foreach ($value as $k => $v) {
-                    $parts[] = json_encode((string)$k, JSON_UNESCAPED_UNICODE)
+                    $parts[] = json_encode((string)$k, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
                              . ':' . self::_jcs($v);
                 }
                 return '{' . implode(',', $parts) . '}';

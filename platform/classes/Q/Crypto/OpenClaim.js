@@ -294,9 +294,14 @@ OpenClaim.sign = function (claim, secret, existing, callback) {
                     ]);
                     var privKeyObj = nodeCrypto.createPrivateKey({ key: sec1, format: 'der', type: 'sec1' });
 
-                    // sign(null,...) produces DER-encoded ECDSA signature.
-                    // OCP wire format stores raw r||s (64 bytes, IEEE P1363) — convert.
-                    var derSig = nodeCrypto.sign(null, digest, privKeyObj);
+                    // sign over the canonical bytes with SHA-256 (Node hashes
+                    // ONCE) → this signs SHA-256(canon), the same digest the
+                    // browser signs with noble.p256.sign(digest). The earlier
+                    // sign(null, digest) form re-hashed the digest (SHA-256 of the
+                    // digest), which did NOT match the client or PHP — a claim
+                    // signed here could not be verified in the browser.
+                    // Produces DER; OCP wire format stores raw r||s (P1363).
+                    var derSig = nodeCrypto.sign('sha256', Buffer.from(canon, 'utf8'), privKeyObj);
                     var rawSig = Q.Data.DERToRAW(derSig); // 64 bytes — matches browser sig[]
 
                     var idx = state.keys.indexOf(signerKey);
@@ -394,12 +399,16 @@ OpenClaim.verify = function (claim, policy, callback) {
                                 });
 
                                 // sig[] is base64 raw r||s (64 bytes, IEEE P1363).
-                                // nodeCrypto.verify(null,...) requires DER — convert first.
+                                // nodeCrypto.verify requires DER — convert first.
                                 var rawSigBuf = Buffer.from(sig, 'base64');
                                 var derSigBuf = Q.Data.RAWtoDER(rawSigBuf);
 
-                                // verify(null,...) treats data as already-hashed raw bytes.
-                                var ok = nodeCrypto.verify(null, digest, pubKeyObj, derSigBuf);
+                                // verify over the canonical bytes with SHA-256
+                                // (Node hashes ONCE) → verifies against SHA-256(canon),
+                                // the digest the browser/PHP signed. The earlier
+                                // verify(null, digest) form re-hashed the digest and
+                                // rejected every browser- and PHP-signed claim.
+                                var ok = nodeCrypto.verify('sha256', Buffer.from(canon, 'utf8'), pubKeyObj, derSigBuf);
                                 if (ok) { verified = true; break; }
                             } catch (e) { /* try next */ }
                             continue;

@@ -1,6 +1,7 @@
 <?php
 
 use Mdanter\Ecc\Curves\CurveFactory;
+use Mdanter\Ecc\EccFactory;
 use Crypto\Keccak;
 
 /**

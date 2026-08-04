@@ -22,6 +22,16 @@
 					"extensions": ["gmp"],
 					"functions": ["gmp_init", "hex2bin", "chunk_split"]
 				},
+				"Q_ECC": {
+					"PHP": "7.3",
+					"extensions": ["gmp"],
+					"functions": ["gmp_init", "gmp_strval", "gmp_cmp", "gmp_div_q", "gmp_sub", "gmp_pow"]
+				},
+				"Q_Crypto_OpenClaim": {
+					"PHP": "7.3",
+					"extensions": ["gmp"],
+					"functions": ["hash", "base64_decode"]
+				},
 				"Crypto_EthSigRecover.php": { "PHP": 7.3 },
 				"Crypto_Keccak": { "PHP": 7.3 },
 				"Crypto_PointMathGMP": { "PHP": 7.3 },
