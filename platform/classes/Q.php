@@ -64,6 +64,34 @@ class Q
 		$path = array_slice($args, 1, -1);
 		return self::getObject($ref, $path, $def);
 	}
+
+	/**
+	 * Convenience alias for Q_Utils::randomString(). Several Safebox/Safebots
+	 * handlers and classes call Q::random($len) — this delegates to the canonical
+	 * implementation so those call sites resolve instead of fataling on an
+	 * undefined method.
+	 * @method random
+	 * @static
+	 * @param {integer} [$len=8] Length of the random string to return
+	 * @return {string} A random string of the given length
+	 */
+	static function random($len = 8)
+	{
+		return Q_Utils::randomString($len);
+	}
+
+	/**
+	 * URL-encode a string. Alias used by Safebox to build safe stream-name
+	 * segments from issuer URLs.
+	 * @method url_encode
+	 * @static
+	 * @param {string} $s
+	 * @return {string} The URL-encoded string
+	 */
+	static function url_encode($s)
+	{
+		return urlencode($s);
+	}
 	
 	/**
 	 * Used to unset information deep inside arrays and objects

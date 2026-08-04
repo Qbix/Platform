@@ -1231,6 +1231,17 @@ EOT;
 		}
 		$class_name = ucfirst($classname_prefix) . $class_name_base;
 		$table_cols = $db->_introspectColumns($table_name);
+		// BUG #17: capture each column's DB default at introspection time. The
+		// per-field $field_default used further down does not survive intact
+		// (it reads NULL for columns whose real default is the empty string),
+		// which caused NOT NULL DEFAULT '' columns to be marked REQUIRED in the
+		// generated model — stricter than the database, and enough to make every
+		// user creation throw once Streams_Access relied on those defaults.
+		$_columnHasDefault = array();
+		foreach ($table_cols as $_tc) {
+			$_columnHasDefault[$_tc['Field']] =
+				array_key_exists('Default', $_tc) && $_tc['Default'] !== null;
+		}
 		$table_comment = $db->_introspectTableComment($table_name);
 		
 		// Calculate primary key
@@ -1713,7 +1724,8 @@ EOT;
 			}
 			if (! $field_null and ! $is_magic_field
 			and ((!$isNumberLike and !$isTextLike) or in_array($field_name, $pk))
-			and ! $auto_inc and !isset($field_default)) {
+			and ! $auto_inc
+			and empty($_columnHasDefault[$field_name])) {   // BUG #17
 				$required_field_names[] = $field_name_exported;
 			}
 			
