@@ -68,7 +68,11 @@ function Q_columns_tool($options)
 		}
 		$attrs1 = "data-index=\"$i\" data-name=\"$n\"";
 		if (isset($column['url'])) {
-			$attrs1 .= " data-url=\"" . Q_Html::text($column['url']) . "\"";
+			$url = Q_Uri::url(Q_Uri::from($column['url']));
+			if (!$url) {
+				$url = $column['url'];
+			}
+			$attrs1 .= " data-url=\"" . Q_Html::text($url) . "\"";
 		}
 		if (isset($column['attributes'])) {
 			$attrs1 .= ' ' . Q_Html::attributes($column['attributes']);

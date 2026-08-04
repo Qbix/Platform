@@ -2,2134 +2,1508 @@
 "use strict";
 
 /*
-	Fully Hardened SMTP Relay (Option A)
-	-----------------------------------
-	• Complete RFC5321 DATA octet preservation
-	• Correct CRLF processing
-	• Dot-stuffing handling (inbound + outbound)
-	• Full MIME parsing from raw bytes (no line canonicalization)
-	• Attachment limits
-	• Max-message, omitted-summary, cooldown, exponential backoff
-	• Logging + metrics
-	• Production-grade error handling
-	• Drop-in replacement SMTP relay
-	• One file, zero dependencies
-*/
+ * SMTP relay / gateway
+ * ====================
+ *
+ * Listens on localhost, relays to an upstream SMTP server (e.g. SES),
+ * logs every message, and enforces rate limits.
+ *
+ *
+ * CONFIG (env or .env; CLI --flags override)
+ * ------------------------------------------
+ *   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD
+ *   SMTP_SECURE=true         implicit TLS (port 465)
+ *   SMTP_STARTTLS=true       upgrade after EHLO (port 587)
+ *   LISTEN_HOST=127.0.0.1    LISTEN_PORT=2525
+ *   LISTEN_USER / LISTEN_PASS   require AUTH from local clients (optional)
+ *   DEFAULT_FROM             envelope sender when a client omits one
+ *   SES_CONFIG_SET           adds X-SES-CONFIGURATION-SET
+ *   MAX_PER_MINUTE=60        token bucket toward upstream
+ *   MAX_PER_HOUR=1000        circuit breaker; trips and stops relaying
+ *   DIGEST=false             batch repeat mail per recipient
+ *   LOG_FILE                 JSON lines; stdout if unset
+ */
 
-/********************************************************************
- * CONFIG, LOGGING, METRICS, BASIC UTILITIES
- ********************************************************************/
-function asyncGeneratorStep(n, t, e, r, o, a, c) { try { var i = n[a](c), u = i.value; } catch (n) { return void e(n); } i.done ? t(u) : Promise.resolve(u).then(r, o); }
-function _asyncToGenerator(n) { return function () { var t = this, e = arguments; return new Promise(function (r, o) { var a = n.apply(t, e); function _next(n) { asyncGeneratorStep(a, r, o, _next, _throw, "next", n); } function _throw(n) { asyncGeneratorStep(a, r, o, _next, _throw, "throw", n); } _next(void 0); }); }; }
-function _slicedToArray(r, e) { return _arrayWithHoles(r) || _iterableToArrayLimit(r, e) || _unsupportedIterableToArray(r, e) || _nonIterableRest(); }
-function _nonIterableRest() { throw new TypeError("Invalid attempt to destructure non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
-function _iterableToArrayLimit(r, l) { var t = null == r ? null : "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (null != t) { var e, n, i, u, a = [], f = !0, o = !1; try { if (i = (t = t.call(r)).next, 0 === l) { if (Object(t) !== t) return; f = !1; } else for (; !(f = (e = i.call(t)).done) && (a.push(e.value), a.length !== l); f = !0); } catch (r) { o = !0, n = r; } finally { try { if (!f && null != t.return && (u = t.return(), Object(u) !== u)) return; } finally { if (o) throw n; } } return a; } }
-function _arrayWithHoles(r) { if (Array.isArray(r)) return r; }
-function _createForOfIteratorHelper(r, e) { var t = "undefined" != typeof Symbol && r[Symbol.iterator] || r["@@iterator"]; if (!t) { if (Array.isArray(r) || (t = _unsupportedIterableToArray(r)) || e && r && "number" == typeof r.length) { t && (r = t); var _n = 0, F = function F() {}; return { s: F, n: function n() { return _n >= r.length ? { done: !0 } : { done: !1, value: r[_n++] }; }, e: function e(r) { throw r; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var o, a = !0, u = !1; return { s: function s() { t = t.call(r); }, n: function n() { var r = t.next(); return a = r.done, r; }, e: function e(r) { u = !0, o = r; }, f: function f() { try { a || null == t.return || t.return(); } finally { if (u) throw o; } } }; }
-function _unsupportedIterableToArray(r, a) { if (r) { if ("string" == typeof r) return _arrayLikeToArray(r, a); var t = {}.toString.call(r).slice(8, -1); return "Object" === t && r.constructor && (t = r.constructor.name), "Map" === t || "Set" === t ? Array.from(r) : "Arguments" === t || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(t) ? _arrayLikeToArray(r, a) : void 0; } }
-function _arrayLikeToArray(r, a) { (null == a || a > r.length) && (a = r.length); for (var e = 0, n = Array(a); e < a; e++) n[e] = r[e]; return n; }
-function ownKeys(e, r) { var t = Object.keys(e); if (Object.getOwnPropertySymbols) { var o = Object.getOwnPropertySymbols(e); r && (o = o.filter(function (r) { return Object.getOwnPropertyDescriptor(e, r).enumerable; })), t.push.apply(t, o); } return t; }
-function _objectSpread(e) { for (var r = 1; r < arguments.length; r++) { var t = null != arguments[r] ? arguments[r] : {}; r % 2 ? ownKeys(Object(t), !0).forEach(function (r) { _defineProperty(e, r, t[r]); }) : Object.getOwnPropertyDescriptors ? Object.defineProperties(e, Object.getOwnPropertyDescriptors(t)) : ownKeys(Object(t)).forEach(function (r) { Object.defineProperty(e, r, Object.getOwnPropertyDescriptor(t, r)); }); } return e; }
-function _defineProperty(e, r, t) { return (r = _toPropertyKey(r)) in e ? Object.defineProperty(e, r, { value: t, enumerable: !0, configurable: !0, writable: !0 }) : e[r] = t, e; }
-function _toPropertyKey(t) { var i = _toPrimitive(t, "string"); return "symbol" == typeof i ? i : i + ""; }
-function _toPrimitive(t, r) { if ("object" != typeof t || !t) return t; var e = t[Symbol.toPrimitive]; if (void 0 !== e) { var i = e.call(t, r || "default"); if ("object" != typeof i) return i; throw new TypeError("@@toPrimitive must return a primitive value."); } return ("string" === r ? String : Number)(t); }
 const fs = require("fs");
 const net = require("net");
 const tls = require("tls");
 const crypto = require("crypto");
 const readline = require("readline");
-const os = require("os");
+
+/* ------------------------------------------------------------------ *
+ * Args and env
+ * ------------------------------------------------------------------ */
+
 const ARGS = {};
 process.argv.slice(2).forEach((a, i, arr) => {
-  if (!a.startsWith("--")) return;
-  const key = a.slice(2);
-  const val = arr[i + 1] && !arr[i + 1].startsWith("--") ? arr[i + 1] : true;
-  ARGS[key] = val;
+	if (!a.startsWith("--")) return;
+	const key = a.slice(2);
+	const next = arr[i + 1];
+	ARGS[key] = next && !next.startsWith("--") ? next : true;
 });
+
 function loadEnv(path) {
-  if (!fs.existsSync(path)) return;
-  fs.readFileSync(path, "utf8").split(/\r?\n/).forEach(line => {
-    const m = line.match(/^([\w_]+)=(.*)$/);
-    if (m) process.env[m[1]] = m[2];
-  });
+	if (!fs.existsSync(path)) return;
+	for (const line of fs.readFileSync(path, "utf8").split(/\r?\n/)) {
+		const m = line.match(/^([\w_]+)=(.*)$/);
+		if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2];
+	}
 }
 loadEnv(ARGS.env || ".env");
 
-// ------------------------------------------------------------------
-// CONFIG
-// ------------------------------------------------------------------
-
-// Normalize boolean-ish env vars to proper string values
-function normalizeEnvBool(name) {
-    const v = process.env[name];
-    if (v === true || v === "true" || v === 1 || v === "1") {
-        process.env[name] = "true";
-    } else {
-        process.env[name] = "false";
-    }
+function str(name, flag, dflt) {
+	const v = ARGS[flag] !== undefined ? ARGS[flag] : process.env[name];
+	return v === undefined || v === "" ? dflt : String(v);
+}
+function num(name, flag, dflt) {
+	const v = str(name, flag, null);
+	if (v === null) return dflt;
+	const n = parseFloat(v);
+	return Number.isFinite(n) ? n : dflt;
+}
+function bool(name, flag, dflt) {
+	const v = ARGS[flag] !== undefined ? ARGS[flag] : process.env[name];
+	if (v === undefined || v === "") return dflt;
+	return v === true || /^(1|true|yes|on)$/i.test(String(v));
 }
 
-normalizeEnvBool("SMTP_SECURE");
-normalizeEnvBool("SMTP_STARTTLS");
+const CFG = {
+	listenHost: str("LISTEN_HOST", "listen-host", "127.0.0.1"),
+	listenPort: num("LISTEN_PORT", "listen-port", 2525),
+	listenTlsPort: num("LISTEN_PORT_TLS", "listen-tls-port", 0), // 0 = disabled
+	listenUser: str("LISTEN_USER", "listen-user", null),
+	listenPass: str("LISTEN_PASS", "listen-pass", null),
 
-const LISTEN_PORT = parseInt(ARGS["listen-port"] || process.env.LISTEN_PORT || 2525, 10);
-const LISTEN_HOST = ARGS["listen-host"] || process.env.LISTEN_HOST || "0.0.0.0";
-const LISTEN_USER = process.env.LISTEN_USER || null;
-const LISTEN_PASS = process.env.LISTEN_PASS || null;
-const REQUIRE_AUTH = !!(LISTEN_USER && LISTEN_PASS);
-const USE_SSL = !!ARGS["listen-ssl"];
-let SSL_KEY = null,
-  SSL_CERT = null;
-if (USE_SSL) {
-  SSL_KEY = fs.readFileSync(ARGS.key || process.env.SSL_KEY);
-  SSL_CERT = fs.readFileSync(ARGS.cert || process.env.SSL_CERT);
-}
-const SMTP_HOST = ARGS["smtp-host"] || process.env.SMTP_HOST;
-const SMTP_PORT = parseInt(ARGS["smtp-port"] || process.env.SMTP_PORT || 587, 10);
-const SMTP_USER = ARGS.user || process.env.SMTP_USER;
-const DEFAULT_FROM = process.env.DEFAULT_FROM || null;
+	sslKeyPath: str("SSL_KEY", "key", null),
+	sslCertPath: str("SSL_CERT", "cert", null),
 
+	smtpHost: str("SMTP_HOST", "smtp-host", null),
+	smtpPort: num("SMTP_PORT", "smtp-port", 587),
+	smtpUser: str("SMTP_USER", "user", null),
+	smtpPass: str("SMTP_PASSWORD", null, null),
+	smtpSecure: bool("SMTP_SECURE", "smtp-secure", false),
+	smtpStartTls: bool("SMTP_STARTTLS", "smtp-starttls", false),
+	smtpIgnoreCert: bool("SMTP_IGNORE_CERT_ERRORS", null, false),
 
-// Password comes later via readPassword()
+	defaultFrom: str("DEFAULT_FROM", "default-from", null),
+	sesConfigSet: str("SES_CONFIG_SET", "ses-config-set", null),
 
-// Digest / backoff config
-const SUBJECT_TEMPLATE = ARGS.subject || process.env.SUBJECT_TEMPLATE || "{{count}} Updates";
-const DELAY_FIRST = parseInt(ARGS["first-delay"] || process.env.DELAY_FIRST || 60000, 10);
-const DELAY_BACKOFF = parseFloat(ARGS.backoff || process.env.BACKOFF || "2.0");
-const DIGEST_TIME_ASCENDING =
-	(process.env.DIGEST_TIME_ASCENDING || "false") === "true";
-const SEP_TEXT = ARGS["separator-text"] || process.env.SEPARATOR_TEXT || "\n\n---\n\n";
-const SEP_HTML = ARGS["separator-html"] || process.env.SEPARATOR_HTML || "<br><br>---<br><br>";
-const MAX_LINES = parseInt(ARGS["max-lines"] || process.env.MAX_LINES || 20000, 10);
-const MAX_SIZE = parseInt(ARGS["max-size"] || process.env.MAX_SIZE || 5 * 1024 * 1024, 10);
-const MAX_MESSAGES = parseInt(ARGS["max-messages-per-digest"] || process.env.MAX_MESSAGES || 20, 10);
-const MAX_ATTACH_SIZE = parseInt(ARGS["max-attachment-size"] || process.env.MAX_ATTACHMENT_SIZE || 5 * 1024 * 1024, 10);
-const MAX_TOTAL_ATTACH = parseInt(ARGS["max-total-attachments"] || process.env.MAX_TOTAL_ATTACH || 10 * 1024 * 1024, 10);
-const GLOBAL_MEMORY_CAP = parseInt(ARGS["global-memory-cap"] || process.env.GLOBAL_MEMORY_CAP || 100 * 1024 * 1024, 10);
-const COOLDOWN_MIN = parseInt(ARGS["cooldown-minutes"] || process.env.COOLDOWN_MINUTES || 30, 10);
-const OMIT_FORMAT = ARGS["omitted-format"] || process.env.OMITTED_FORMAT || "+ {{N}} messages omitted ({{A}} attachments, {{S}} bytes)";
+	maxPerMinute: num("MAX_PER_MINUTE", "max-per-minute", 60),
+	maxPerHour: num("MAX_PER_HOUR", "max-per-hour", 1000),
 
-// Concurrency
-const MAX_CONC = parseInt(ARGS.concurrency || process.env.CONCURRENCY || 50, 10);
-const SESSION_TIMEOUT = parseInt(ARGS.timeout || process.env.TIMEOUT || 30000, 10);
+	maxSize: num("MAX_SIZE", "max-size", 25 * 1024 * 1024),
+	maxLines: num("MAX_LINES", "max-lines", 200000),
+	maxRecipients: num("MAX_RECIPIENTS", "max-recipients", 50),
+	maxConcurrent: num("CONCURRENCY", "concurrency", 50),
+	sessionTimeout: num("TIMEOUT", "timeout", 300000),
+	smtpTimeout: num("SMTP_TIMEOUT", "smtp-timeout", 30000),
 
-// Logging
-const LOG_FILE = ARGS["log-file"] || process.env.LOG_FILE || null;
-const LOG_LEVEL = ARGS["log-level"] || process.env.LOG_LEVEL || "info";
-const LOG_SUCCESS = (ARGS["log-success"] || process.env.LOG_SUCCESS || "false") === "true";
-const LOG_FD = LOG_FILE ? fs.openSync(LOG_FILE, "a") : null;
+	retries: num("RETRIES", "retries", 2),
+	retryDelay: num("RETRY_DELAY", "retry-delay", 5000),
 
-// ------------------------------------------------------------------
-// LOGGING
-// ------------------------------------------------------------------
+	digest: bool("DIGEST", "digest", false),
+	digestFirstDelay: num("DELAY_FIRST", "first-delay", 60000),
+	digestBackoff: num("BACKOFF", "backoff", 2.0),
+	digestMaxDelay: num("DELAY_MAX", "max-delay", 3600000),
+	digestMaxMessages: num("MAX_MESSAGES", "max-messages-per-digest", 20),
+	digestCooldownMin: num("COOLDOWN_MINUTES", "cooldown-minutes", 30),
+	digestSubject: str("SUBJECT_TEMPLATE", "subject", "{{count}} Updates"),
+	digestBypassHeader: str("DIGEST_BYPASS_HEADER", null, "x-no-digest"),
+	sepText: str("SEPARATOR_TEXT", "separator-text", "\n\n---\n\n"),
+	sepHtml: str("SEPARATOR_HTML", "separator-html", "<br><br>---<br><br>"),
+	maxAttachSize: num("MAX_ATTACHMENT_SIZE", "max-attachment-size", 5 * 1024 * 1024),
+	maxTotalAttach: num("MAX_TOTAL_ATTACH", "max-total-attachments", 10 * 1024 * 1024),
+	globalMemoryCap: num("GLOBAL_MEMORY_CAP", "global-memory-cap", 100 * 1024 * 1024),
+	omitFormat: str("OMITTED_FORMAT", "omitted-format",
+		"+ {{N}} messages omitted ({{A}} attachments, {{S}} bytes)"),
 
-function shouldLog(level) {
-  const L = {
-    debug: 1,
-    info: 2,
-    warn: 3,
-    error: 4
-  };
-  return L[level] >= L[LOG_LEVEL];
-}
-function log(level, obj) {
-  if (!shouldLog(level)) return;
-  const line = JSON.stringify(_objectSpread({
-    ts: new Date().toISOString(),
-    level
-  }, obj)) + "\n";
-  if (LOG_FD) fs.writeSync(LOG_FD, line);else process.stdout.write(line);
-}
-
-// ------------------------------------------------------------------
-// METRICS
-// ------------------------------------------------------------------
-
-const metrics = {
-  msg_in: 0,
-  msg_out: 0,
-  digest_sent: 0,
-  omit_msg: 0,
-  omit_attach: 0,
-  attach_forwarded: 0,
-  attach_dropped: 0
+	logFile: str("LOG_FILE", "log-file", null),
+	logLevel: str("LOG_LEVEL", "log-level", "info")
 };
 
-// ------------------------------------------------------------------
-// PASSWORD PROMPT
-// ------------------------------------------------------------------
-function readPassword(prompt) {
-	return new Promise(function(resolve) {
-		const stdin = process.stdin;
-		const stdout = process.stdout;
+/* ------------------------------------------------------------------ *
+ * Logging
+ * ------------------------------------------------------------------ */
 
-		stdout.write(prompt);
+const LEVELS = { debug: 1, info: 2, warn: 3, error: 4 };
+let LOG_FD = null;
 
-		stdin.resume();
-		stdin.setRawMode(true);
+function openLog() {
+	if (CFG.logFile && LOG_FD === null) LOG_FD = fs.openSync(CFG.logFile, "a");
+}
 
-		let buf = "";
+function log(level, obj) {
+	if (LEVELS[level] < LEVELS[CFG.logLevel]) return;
+	const line = JSON.stringify(Object.assign({
+		ts: new Date().toISOString(),
+		level
+	}, obj)) + "\n";
+	if (LOG_FD !== null) {
+		try { fs.writeSync(LOG_FD, line); } catch (e) { process.stdout.write(line); }
+	} else {
+		process.stdout.write(line);
+	}
+}
 
-		function onData(ch) {
-			ch = ch.toString("utf8");
+const metrics = {
+	msg_in: 0, msg_out: 0, msg_failed: 0, digest_sent: 0,
+	omit_msg: 0, attach_forwarded: 0, attach_dropped: 0,
+	rate_limited: 0, breaker_trips: 0
+};
 
-			if (ch === "\n" || ch === "\r") {
-				stdin.setRawMode(false);
-				stdin.removeListener("data", onData);
-				stdout.write("\n");
-				resolve(buf);
-				return;
-			}
+/* ------------------------------------------------------------------ *
+ * Rate limiting and circuit breaker
+ *
+ * The point of both: on 2026-08-03 an unexplained 34,000 messages left in a
+ * few hours. A token bucket makes that physically slow; the hourly breaker
+ * makes it stop. Recovery is manual and deliberate.
+ * ------------------------------------------------------------------ */
 
-			if (ch === "\u0003") {
-				// Ctrl+C
-				stdin.setRawMode(false);
-				process.stdout.write("\n");
-				process.exit();
-			}
+const limiter = {
+	tokens: CFG.maxPerMinute,
+	last: Date.now(),
+	hourWindow: [],
+	tripped: false,
 
-			buf += ch;
+	refill() {
+		const now = Date.now();
+		const gained = ((now - this.last) / 60000) * CFG.maxPerMinute;
+		if (gained > 0) {
+			this.tokens = Math.min(CFG.maxPerMinute, this.tokens + gained);
+			this.last = now;
+		}
+	},
+
+	// Returns ms to wait, or -1 if the breaker has tripped.
+	acquire() {
+		if (this.tripped) return -1;
+
+		const now = Date.now();
+		this.hourWindow = this.hourWindow.filter(t => now - t < 3600000);
+		if (this.hourWindow.length >= CFG.maxPerHour) {
+			this.tripped = true;
+			metrics.breaker_trips++;
+			log("error", {
+				msg: "circuit_breaker_tripped",
+				sent_last_hour: this.hourWindow.length,
+				limit: CFG.maxPerHour,
+				note: "relaying halted; restart or send SIGHUP to reset"
+			});
+			return -1;
 		}
 
-		stdin.on("data", onData);
+		this.refill();
+		if (this.tokens >= 1) {
+			this.tokens -= 1;
+			this.hourWindow.push(now);
+			return 0;
+		}
+		metrics.rate_limited++;
+		return Math.ceil(((1 - this.tokens) / CFG.maxPerMinute) * 60000);
+	},
+
+	reset() {
+		this.tripped = false;
+		this.hourWindow = [];
+		this.tokens = CFG.maxPerMinute;
+		log("warn", { msg: "circuit_breaker_reset" });
+	}
+};
+
+process.on("SIGHUP", () => limiter.reset());
+
+function waitForSlot() {
+	return new Promise((resolve, reject) => {
+		const attempt = () => {
+			const wait = limiter.acquire();
+			if (wait < 0) return reject(new Error("circuit breaker tripped"));
+			if (wait === 0) return resolve();
+			setTimeout(attempt, Math.min(wait, 5000));
+		};
+		attempt();
 	});
 }
 
+/* ------------------------------------------------------------------ *
+ * Byte-level helpers: DATA terminator, dot-stuffing
+ * ------------------------------------------------------------------ */
 
-// ------------------------------------------------------------------
-// ADDRESS NORMALIZATION
-// ------------------------------------------------------------------
-
-function normalizeAddress(addr) {
-  addr = addr.trim().toLowerCase();
-  addr = addr.replace(/^<+|>+$/g, "");
-  const m = addr.match(/^([^@]+)@(.+)$/);
-  if (!m) return addr;
-  const local = m[1].split("+")[0];
-  return local + "@" + m[2];
+// Detects the CRLF "." CRLF terminator, including the edge case where the
+// message body is empty and the client sends ".\r\n" as the very first bytes.
+class DotTerminatorScanner {
+	constructor() {
+		this.tail = Buffer.alloc(0);
+		this.total = 0;
+	}
+	push(chunk) {
+		this.tail = Buffer.concat([this.tail, chunk]);
+		this.total += chunk.length;
+		if (this.tail.length > 5) this.tail = this.tail.slice(this.tail.length - 5);
+	}
+	isTerminated() {
+		const w = this.tail;
+		if (this.total === 3 && w.length === 3) {
+			return w[0] === 46 && w[1] === 13 && w[2] === 10; // ".\r\n"
+		}
+		if (w.length < 5) return false;
+		return w[0] === 13 && w[1] === 10 && w[2] === 46 && w[3] === 13 && w[4] === 10;
+	}
 }
 
-// ------------------------------------------------------------------
-// GLOBAL DIGEST STATE
-// ------------------------------------------------------------------
-
-/* Per-recipient structure:
-{
-	nextDelay,
-	timer,
-	lastReceived,
-	textParts,
-	htmlParts,
-	attachments:[{filename, contentType, size, content:Buffer}],
-	attachBytes,
-	msgCount,
-	omitMeta:{count, attachCount, attachBytes}
+// RFC 5321: a line beginning with "." had one dot prepended by the sender.
+// Strip exactly one leading dot per line. Byte-preserving otherwise.
+function inboundDotUnstuff(buf) {
+	const out = Buffer.allocUnsafe(buf.length);
+	let o = 0;
+	let atLineStart = true;
+	for (let i = 0; i < buf.length; i++) {
+		const b = buf[i];
+		if (atLineStart && b === 46) {
+			atLineStart = false;
+			continue; // drop the stuffed dot
+		}
+		out[o++] = b;
+		atLineStart = (b === 10);
+	}
+	return out.slice(0, o);
 }
-*/
+
+function outboundDotStuff(s) {
+	if (s.startsWith(".")) s = "." + s;
+	return s.replace(/\r\n\./g, "\r\n..");
+}
+
+/* ------------------------------------------------------------------ *
+ * Header parsing (used for logging and for MIME work)
+ * ------------------------------------------------------------------ */
+
+function decodeRFC2047(s) {
+	return s.replace(/=\?([^?]+)\?([bBqQ])\?([^?]*)\?=/g, (whole, charset, enc, text) => {
+		try {
+			let buf;
+			if (enc.toUpperCase() === "B") {
+				buf = Buffer.from(text, "base64");
+			} else {
+				const qp = text.replace(/_/g, " ")
+					.replace(/=([A-Fa-f0-9]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
+				buf = Buffer.from(qp, "binary");
+			}
+			return buf.toString("utf8");
+		} catch (e) {
+			return whole;
+		}
+	});
+}
+
+function splitHeaderBody(raw) {
+	let idx = 0;
+	while (idx < raw.length) {
+		const end = raw.indexOf("\n", idx);
+		if (end === -1) break;
+		const line = raw.slice(idx, end).replace(/\r$/, "");
+		if (line === "") return { headersRaw: raw.slice(0, idx), body: raw.slice(end + 1) };
+		idx = end + 1;
+	}
+	return { headersRaw: raw, body: "" };
+}
+
+function parseHeaders(raw) {
+	const headers = {};
+	let last = null;
+	for (const line of raw.split(/\r?\n/)) {
+		if (/^[ \t]/.test(line)) {
+			if (last && headers[last].length) {
+				headers[last][headers[last].length - 1] += " " + line.trim();
+			}
+			continue;
+		}
+		const m = line.match(/^([^:]+):\s*(.*)$/);
+		if (m) {
+			const key = m[1].toLowerCase().trim();
+			if (!headers[key]) headers[key] = [];
+			headers[key].push(m[2]);
+			last = key;
+		} else {
+			last = null;
+		}
+	}
+	return headers;
+}
+
+function headerValue(headers, name) {
+	const v = headers[name.toLowerCase()];
+	return v && v.length ? decodeRFC2047(v[0]) : null;
+}
+
+/* ------------------------------------------------------------------ *
+ * MIME parsing (digest mode only)
+ * ------------------------------------------------------------------ */
+
+function extractBoundary(contentType) {
+	if (!contentType) return null;
+	const m = contentType.match(/boundary\s*=\s*("?)([^";]+)\1/i);
+	return m ? m[2].trim() : null;
+}
+
+function splitMultipart(body, boundary) {
+	const marker = "--" + boundary;
+	const final = "--" + boundary + "--";
+	const lines = body.replace(/\r?\n/g, "\n").split("\n");
+	const parts = [];
+	let current = [];
+	let inPart = false;
+	for (const line of lines) {
+		if (line === marker) {
+			if (inPart) parts.push(current.join("\r\n"));
+			current = [];
+			inPart = true;
+			continue;
+		}
+		if (line === final) {
+			if (inPart) parts.push(current.join("\r\n"));
+			return parts;
+		}
+		if (inPart) current.push(line);
+	}
+	if (inPart) parts.push(current.join("\r\n"));
+	return parts;
+}
+
+function extractFilename(headers) {
+	const cd = headers["content-disposition"] ? headers["content-disposition"][0] : null;
+	if (cd) {
+		const m = cd.match(/filename\*?=([^;]+)/i);
+		if (m) {
+			let fn = m[1].trim().replace(/^"(.*)"$/, "$1");
+			if (/^utf-8''/i.test(fn)) {
+				try { fn = decodeURIComponent(fn.slice(7)); } catch (e) { /* keep raw */ }
+			}
+			return fn;
+		}
+	}
+	const ct = headers["content-type"] ? headers["content-type"][0] : null;
+	if (ct) {
+		const m = ct.match(/name="?([^";]+)"?/i);
+		if (m) return m[1].trim();
+	}
+	return "attachment";
+}
+
+function decodeQuotedPrintable(qp) {
+	qp = qp.replace(/=\r?\n/g, "");
+	const out = [];
+	for (let i = 0; i < qp.length; i++) {
+		if (qp[i] === "=") {
+			const h = qp.substr(i + 1, 2);
+			if (/^[A-Fa-f0-9]{2}$/.test(h)) {
+				out.push(parseInt(h, 16));
+				i += 2;
+				continue;
+			}
+		}
+		out.push(qp.charCodeAt(i) & 0xff);
+	}
+	return Buffer.from(out);
+}
+
+function parseMIMERecursive(body, headers, results, depth) {
+	if (depth > 20) return; // malformed / hostile nesting
+	const ct = headers["content-type"] ? headers["content-type"][0] : "text/plain";
+	const lower = ct.split(";")[0].trim().toLowerCase();
+
+	if (lower.startsWith("multipart/")) {
+		const boundary = extractBoundary(ct);
+		if (!boundary) return;
+		for (const part of splitMultipart(body, boundary)) {
+			const split = splitHeaderBody(part);
+			parseMIMERecursive(split.body, parseHeaders(split.headersRaw), results, depth + 1);
+		}
+		return;
+	}
+
+	const disposition = headers["content-disposition"] ? headers["content-disposition"][0] : "";
+	const enc = headers["content-transfer-encoding"]
+		? headers["content-transfer-encoding"][0].toLowerCase().trim() : "";
+
+	if (lower.startsWith("text/plain") && !/attachment/i.test(disposition)) {
+		results.text.push(enc === "quoted-printable"
+			? decodeQuotedPrintable(body).toString("utf8")
+			: enc === "base64"
+				? Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8")
+				: body);
+		return;
+	}
+	if (lower.startsWith("text/html") && !/attachment/i.test(disposition)) {
+		results.html.push(enc === "quoted-printable"
+			? decodeQuotedPrintable(body).toString("utf8")
+			: enc === "base64"
+				? Buffer.from(body.replace(/\s+/g, ""), "base64").toString("utf8")
+				: body);
+		return;
+	}
+
+	let buf;
+	try {
+		if (enc === "base64") buf = Buffer.from(body.replace(/\s+/g, ""), "base64");
+		else if (enc === "quoted-printable") buf = decodeQuotedPrintable(body);
+		else buf = Buffer.from(body, "binary");
+	} catch (e) {
+		buf = Buffer.alloc(0);
+	}
+	results.attachments.push({
+		filename: extractFilename(headers),
+		size: buf.length,
+		contentType: lower,
+		content: buf,
+		isInlineImage: /^image\//.test(lower) && /inline/i.test(disposition)
+	});
+}
+
+function parseFullMIME(raw) {
+	const split = splitHeaderBody(raw);
+	const results = { text: [], html: [], attachments: [] };
+	parseMIMERecursive(split.body, parseHeaders(split.headersRaw), results, 0);
+	return results;
+}
+
+function sanitizeHTML(html, droppedInline) {
+	html = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
+	html = html.replace(/\son[a-z]+\s*=\s*(['"])[\s\S]*?\1/gi, "");
+	if (droppedInline.length) {
+		html = html.replace(/<img[^>]+cid:[^"'>]+[^>]*>/gi, "<span>[inline image omitted]</span>");
+	}
+	return html;
+}
+
+/* ------------------------------------------------------------------ *
+ * Digest store
+ *
+ * Key is recipient + envelope sender. The previous version built this key in
+ * three places and reset it in a fourth using only the recipient, which is
+ * what caused digests to accumulate forever.
+ * ------------------------------------------------------------------ */
 
 const DIGESTS = new Map();
+
+function normalizeAddress(addr) {
+	if (!addr) return "";
+	addr = String(addr).trim().toLowerCase().replace(/^<+|>+$/g, "");
+	const m = addr.match(/^([^@]+)@(.+)$/);
+	if (!m) return addr;
+	return m[1].split("+")[0] + "@" + m[2];
+}
+
+function digestKey(rcpt, mailFrom) {
+	return normalizeAddress(rcpt) + "|" + normalizeAddress(mailFrom);
+}
+
 function newDigest(mailFrom) {
-  return {
-    mailFrom: mailFrom,
-    nextDelay: DELAY_FIRST,
-    timer: null,
-    lastReceived: Date.now(),
-    textParts: [],
-    htmlParts: [],
-    attachments: [],
-    attachBytes: 0,
-    msgCount: 0,
-    omitMeta: {
-      count: 0,
-      attachCount: 0,
-      attachBytes: 0
-    }
-  };
+	return {
+		mailFrom: mailFrom || null,
+		nextDelay: CFG.digestFirstDelay,
+		timer: null,
+		lastReceived: Date.now(),
+		textParts: [],
+		htmlParts: [],
+		attachments: [],
+		attachBytes: 0,
+		msgCount: 0,
+		omitMeta: { count: 0, attachCount: 0, attachBytes: 0 }
+	};
 }
 
-// ------------------------------------------------------------------
-// BYTE-LEVEL CRLF DETECTION + DOT-STUFFING HANDLING
-// ------------------------------------------------------------------
-
-/*
-	Option A requires strict byte preservation:
-	- Detect end-of-DATA using  \r\n.\r\n
-	- Do not split lines prematurely
-	- Dot-unescape inbound (strip leading ".")
-	- Dot-stuff outbound (escape leading ".")
-*/
-
-// For scanning DATA stream, we keep a small sliding buffer:
-class DotTerminatorScanner {
-  // Detects \r\n.\r\n
-  constructor() {
-    this.window = Buffer.alloc(0);
-  }
-  push(chunk) {
-    // Append
-    this.window = Buffer.concat([this.window, chunk]);
-    // Cap window at length 5 (max needed)
-    if (this.window.length > 5) {
-      this.window = this.window.slice(this.window.length - 5);
-    }
-  }
-  isTerminated() {
-    // Look for exact terminator: CRLF "." CRLF
-    const w = this.window;
-    if (w.length < 5) return false;
-    return w[w.length - 5] === 13 &&
-    // \r
-    w[w.length - 4] === 10 &&
-    // \n
-    w[w.length - 3] === 46 &&
-    // "."
-    w[w.length - 2] === 13 &&
-    // \r
-    w[w.length - 1] === 10 &&
-    // \n
-    // MUST ensure the "." is on its own line:
-    // verify previous byte is LF
-    // OR this is the very beginning of the message
-    true;
-  }
+function estimateDigestMemory() {
+	let total = 0;
+	for (const d of DIGESTS.values()) {
+		for (const a of d.attachments) total += a.size;
+		for (const t of d.textParts) total += Buffer.byteLength(t, "utf8");
+		for (const h of d.htmlParts) total += Buffer.byteLength(h, "utf8");
+	}
+	return total;
 }
 
-// Remove dot-stuffing for inbound DATA
-// According to RFC5321: lines beginning with ".." become ".".
-// But we must preserve CRLF.
-//
-// Simplest: examine line starts in byte space.
-//
-// CAVEAT: We should NOT convert CRLFs; use regex on Buffer? No.
-//
-// We implement a byte-by-byte state machine:
-function inboundDotUnstuff(buf) {
-  const out = [];
-  let sawCR = false;
-  let sawCRLF = true;
-  for (let i = 0; i < buf.length; i++) {
-    const b = buf[i];
-    if (sawCR) {
-      sawCR = false;
-      if (b === 10) {
-        // CRLF detected
-        out.push(13, 10);
-        sawCRLF = true;
-        continue;
-      } else {
-        // Lone CR
-        out.push(13);
-      }
-    }
-    if (b === 13) {
-      sawCR = true;
-      continue;
-    }
-    if (sawCRLF) {
-      if (b === 46 && i + 1 < buf.length && buf[i + 1] === 46) {
-        continue; // unstuff
-      }
-      sawCRLF = false;
-    }
-    if (b === 10) {
-      out.push(10);
-      sawCRLF = true;
-      continue;
-    }
-    out.push(b);
-  }
-  if (sawCR) out.push(13);
-  return Buffer.from(out);
+function addToDigest(rcpt, mailFrom, raw) {
+	const key = digestKey(rcpt, mailFrom);
+	let d = DIGESTS.get(key);
+	const now = Date.now();
+
+	if (!d) {
+		d = newDigest(mailFrom);
+	} else if (now - d.lastReceived > CFG.digestCooldownMin * 60000) {
+		if (d.timer) clearTimeout(d.timer);
+		d = newDigest(mailFrom);
+		log("info", { msg: "cooldown_reset", rcpt });
+	}
+	d.lastReceived = now;
+	if (!d.mailFrom) d.mailFrom = mailFrom;
+
+	const parsed = parseFullMIME(raw);
+
+	if (d.msgCount >= CFG.digestMaxMessages) {
+		d.omitMeta.count++;
+		metrics.omit_msg++;
+		for (const a of parsed.attachments) {
+			d.omitMeta.attachCount++;
+			d.omitMeta.attachBytes += a.size;
+		}
+		DIGESTS.set(key, d);
+		return;
+	}
+
+	if (estimateDigestMemory() > CFG.globalMemoryCap) {
+		log("warn", { msg: "global_memory_cap_reached", action: "message_omitted" });
+		d.omitMeta.count++;
+		metrics.omit_msg++;
+		DIGESTS.set(key, d);
+		return;
+	}
+
+	for (const t of parsed.text) d.textParts.push(t);
+	for (const h of parsed.html) d.htmlParts.push(h);
+
+	const droppedInline = [];
+	for (const a of parsed.attachments) {
+		if (a.size > CFG.maxAttachSize || d.attachBytes + a.size > CFG.maxTotalAttach) {
+			d.omitMeta.attachCount++;
+			d.omitMeta.attachBytes += a.size;
+			metrics.attach_dropped++;
+			if (a.isInlineImage) droppedInline.push({ filename: a.filename });
+			continue;
+		}
+		d.attachments.push(a);
+		d.attachBytes += a.size;
+		metrics.attach_forwarded++;
+	}
+
+	if (droppedInline.length && d.htmlParts.length) {
+		d.htmlParts = [sanitizeHTML(d.htmlParts.join(CFG.sepHtml), droppedInline)];
+	}
+
+	d.msgCount++;
+	DIGESTS.set(key, d);
 }
 
-// Dot-stuff outbound
-function outboundDotStuff(str) {
-  // Escape leading dot at start
-  if (str.startsWith(".")) {
-    str = "." + str;
-  }
-
-  // CRLF . → CRLF..
-  str = str.replace(/\r\n\./g, "\r\n..");
-
-  // LF . → LF.. (fallback for non-CRLF input)
-  str = str.replace(/\n\.(?=[^\n])/g, "\n..");
-  return str;
+function scheduleDigest(rcpt, mailFrom) {
+	const key = digestKey(rcpt, mailFrom);
+	const d = DIGESTS.get(key);
+	if (!d || d.timer) return;
+	d.timer = setTimeout(() => {
+		d.timer = null;
+		flushDigest(rcpt, mailFrom);
+	}, d.nextDelay);
 }
 
-// ------------------------------------------------------------------
-// SAFE BOUNDS CHECKING FOR SIZE + LINES
-// ------------------------------------------------------------------
+function flushDigest(rcpt, mailFrom) {
+	const key = digestKey(rcpt, mailFrom);
+	const d = DIGESTS.get(key);
+	if (!d || d.msgCount === 0) return;
 
-function safeAppendData(currentSize, currentLines, chunk) {
-  // Count newlines in chunk
-  let lines = currentLines;
-  for (let i = 0; i < chunk.length; i++) {
-    if (chunk[i] === 10) lines++;
-  }
-  const newSize = currentSize + chunk.length;
-  if (lines > MAX_LINES || newSize > MAX_SIZE) {
-    return {
-      ok: false
-    };
-  }
-  return {
-    ok: true,
-    size: newSize,
-    lines
-  };
+	const mime = buildDigestMIME(rcpt, d);
+	const nextDelay = Math.min(d.nextDelay * CFG.digestBackoff, CFG.digestMaxDelay);
+	const from = d.mailFrom;
+
+	// Reset under the SAME key before sending, so anything arriving during
+	// delivery starts a fresh digest instead of being re-sent.
+	const fresh = newDigest(from);
+	fresh.nextDelay = nextDelay;
+	fresh.lastReceived = Date.now();
+	DIGESTS.set(key, fresh);
+
+	deliver(mime, [rcpt], from, false, { mode: "digest", count: d.msgCount })
+		.then(() => { metrics.digest_sent++; })
+		.catch(err => log("error", { msg: "digest_send_fail", rcpt, err: String(err) }));
 }
 
-/********************************************************************
- * INBOUND SMTP STATE MACHINE
- ********************************************************************/
+function buildDigestMIME(rcpt, d) {
+	let text = d.textParts.join(CFG.sepText);
+	let html = d.htmlParts.join(CFG.sepHtml);
 
-let ACTIVE_SESSIONS = 0;
+	if (d.omitMeta.count > 0) {
+		const note = CFG.omitFormat
+			.replace("{{N}}", d.omitMeta.count)
+			.replace("{{A}}", d.omitMeta.attachCount)
+			.replace("{{S}}", d.omitMeta.attachBytes);
+		if (text) text += "\n\n" + note;
+		if (html) html += "<br><br>" + note;
+		if (!text && !html) text = note;
+	}
 
-// Reject SMTP pipelining: RFC says one command at a time unless server advertises PIPELINING.
-const PIPELINE_ALLOWED = false;
+	const subject = CFG.digestSubject.replace("{{count}}", String(d.msgCount));
+	const from = d.mailFrom || CFG.defaultFrom || "relay@localhost";
+	const hasText = text.length > 0;
+	const hasHtml = html.length > 0;
+	const hasAttach = d.attachments.length > 0;
+	const alt = "alt_" + crypto.randomBytes(8).toString("hex");
+	const mix = "mix_" + crypto.randomBytes(8).toString("hex");
 
-// ------------------------------------------------------------------
-// CREATE SESSION OBJECT
-// ------------------------------------------------------------------
+	const head = [
+		"From: " + from,
+		"To: " + rcpt,
+		"Subject: " + subject,
+		"MIME-Version: 1.0"
+	];
 
-function createSession(socket, isTLSStart) {
-  const session = {
-    sock: socket,
-    isTLS: !!isTLSStart,
-    tlsUpgraded: !!isTLSStart,
-    remote: socket.remoteAddress,
-    state: "GREET",
-    // GREET → AUTH_ZOMBIE → COMMAND → DATA → QUIT
-    expectResponse: false,
-    // To enforce no pipelining
-    mailFrom: null,
-    rcptTo: null,
-    dataMode: false,
-    dataBuf: Buffer.alloc(0),
-    // only used for the FIRST immediate message
-    dataBytes: 0,
-    dataLines: 0,
-    dotScanner: new DotTerminatorScanner(),
-    rawChunks: [],
-    // All collected DATA bytes (except for \r\n.\r\n), then dot-unstuffed
+	// Note: no Content-Transfer-Encoding: quoted-printable here. The previous
+	// version declared QP on content it never QP-encoded, which produces
+	// visible "=3D" style artifacts in some clients.
+	const bodyAlt = () => [
+		"--" + alt,
+		"Content-Type: text/plain; charset=utf-8",
+		"",
+		text,
+		"",
+		"--" + alt,
+		"Content-Type: text/html; charset=utf-8",
+		"",
+		html,
+		"",
+		"--" + alt + "--"
+	].join("\r\n");
 
-    timer: null
-  };
-  return session;
+	if (!hasAttach) {
+		if (hasText && hasHtml) {
+			return head.concat([
+				'Content-Type: multipart/alternative; boundary="' + alt + '"',
+				"",
+				bodyAlt(),
+				""
+			]).join("\r\n");
+		}
+		return head.concat([
+			"Content-Type: text/" + (hasHtml ? "html" : "plain") + "; charset=utf-8",
+			"",
+			hasHtml ? html : text,
+			""
+		]).join("\r\n");
+	}
+
+	const parts = [];
+	if (hasText && hasHtml) {
+		parts.push([
+			"--" + mix,
+			'Content-Type: multipart/alternative; boundary="' + alt + '"',
+			"",
+			bodyAlt()
+		].join("\r\n"));
+	} else {
+		parts.push([
+			"--" + mix,
+			"Content-Type: text/" + (hasHtml ? "html" : "plain") + "; charset=utf-8",
+			"",
+			hasHtml ? html : text
+		].join("\r\n"));
+	}
+
+	for (const a of d.attachments) {
+		const encoded = a.content.toString("base64").replace(/(.{76})/g, "$1\r\n");
+		parts.push([
+			"--" + mix,
+			"Content-Type: " + (a.contentType || "application/octet-stream"),
+			'Content-Disposition: attachment; filename="' + a.filename.replace(/"/g, "") + '"',
+			"Content-Transfer-Encoding: base64",
+			"",
+			encoded
+		].join("\r\n"));
+	}
+	parts.push("--" + mix + "--");
+
+	return head.concat([
+		'Content-Type: multipart/mixed; boundary="' + mix + '"',
+		"",
+		parts.join("\r\n"),
+		""
+	]).join("\r\n");
 }
 
-// ------------------------------------------------------------------
-// SEND LINE (CRLF)
-// ------------------------------------------------------------------
+/* ------------------------------------------------------------------ *
+ * Outbound SMTP client
+ *
+ * Rewritten. The previous implementation only ever ran inside a
+ * "secureConnect" handler, so with SMTP_SECURE=false nothing executed and
+ * the STARTTLS branch was unreachable.
+ * ------------------------------------------------------------------ */
 
-function ssend(sess, msg) {
-  if (!sess || sess.sock.destroyed) return;
-  sess.sock.write(msg + "\r\n");
+class SmtpConn {
+	constructor(sock) {
+		this.buf = "";
+		this.waiters = [];
+		this.closed = false;
+		this.attach(sock);
+	}
+
+	attach(sock) {
+		this.sock = sock;
+		this.onData = chunk => {
+			this.buf += chunk.toString("latin1");
+			this.drain();
+		};
+		this.onError = err => this.fail(err);
+		this.onClose = () => this.fail(new Error("connection closed by peer"));
+		sock.on("data", this.onData);
+		sock.on("error", this.onError);
+		sock.on("close", this.onClose);
+	}
+
+	detach() {
+		this.sock.removeListener("data", this.onData);
+		this.sock.removeListener("error", this.onError);
+		this.sock.removeListener("close", this.onClose);
+		return this.sock;
+	}
+
+	fail(err) {
+		this.closed = true;
+		const waiters = this.waiters.splice(0);
+		for (const w of waiters) {
+			clearTimeout(w.timer);
+			w.reject(err);
+		}
+	}
+
+	// A reply is complete when a line starts with three digits and a space
+	// (or is exactly three digits). Continuation lines use "250-".
+	replyEnd() {
+		let pos = 0;
+		for (;;) {
+			const nl = this.buf.indexOf("\n", pos);
+			if (nl === -1) return -1;
+			const line = this.buf.slice(pos, nl).replace(/\r$/, "");
+			if (/^\d{3}(?: |$)/.test(line)) return nl + 1;
+			pos = nl + 1;
+		}
+	}
+
+	drain() {
+		while (this.waiters.length) {
+			const end = this.replyEnd();
+			if (end === -1) return;
+			const reply = this.buf.slice(0, end);
+			this.buf = this.buf.slice(end);
+			const w = this.waiters.shift();
+			clearTimeout(w.timer);
+			w.resolve(reply);
+		}
+	}
+
+	read(timeout) {
+		return new Promise((resolve, reject) => {
+			if (this.closed) return reject(new Error("connection closed"));
+			const w = { resolve, reject };
+			w.timer = setTimeout(() => {
+				const i = this.waiters.indexOf(w);
+				if (i >= 0) this.waiters.splice(i, 1);
+				reject(new Error("SMTP read timeout"));
+			}, timeout || CFG.smtpTimeout);
+			this.waiters.push(w);
+			this.drain();
+		});
+	}
+
+	write(data) { this.sock.write(data); }
+
+	async cmd(line, timeout) {
+		this.sock.write(line + "\r\n");
+		return this.read(timeout);
+	}
+
+	end() {
+		try { this.sock.end(); } catch (e) { /* already gone */ }
+		try { this.sock.destroy(); } catch (e) { /* already gone */ }
+	}
 }
 
-// ------------------------------------------------------------------
-// RESET SESSION TIMER
-// ------------------------------------------------------------------
-
-function resetTimer(sess) {
-  if (sess.timer) clearTimeout(sess.timer);
-  sess.timer = setTimeout(() => {
-    log("warn", {
-      msg: "session_timeout",
-      remote: sess.remote
-    });
-    try {
-      ssend(sess, "421 Timeout");
-    } catch (e) {}
-    try {
-      sess.sock.end();
-    } catch (e) {}
-  }, SESSION_TIMEOUT);
+function code(reply) {
+	const lines = reply.trim().split(/\r?\n/);
+	return parseInt(lines[lines.length - 1].slice(0, 3), 10);
 }
 
-// ------------------------------------------------------------------
-// CLOSE SESSION
-// ------------------------------------------------------------------
-
-function closeSession(sess) {
-  if (sess.timer) clearTimeout(sess.timer);
-  ACTIVE_SESSIONS--;
-  try {
-    sess.sock.end();
-  } catch (e) {}
+function expect(reply, want) {
+	const c = code(reply);
+	if (c !== want) {
+		throw new Error("SMTP expected " + want + ", got: " + reply.trim().replace(/\s+/g, " "));
+	}
+	return c;
 }
 
-// ------------------------------------------------------------------
-// STARTTLS UPGRADE
-// ------------------------------------------------------------------
-
-function doSTARTTLS(sess) {
-  if (sess.tlsUpgraded) {
-    ssend(sess, "454 TLS already active");
-    return;
-  }
-  ssend(sess, "220 Ready to start TLS");
-  const plain = sess.sock;
-  for (var _i = 0, _arr = ["data", "error", "end", "close"]; _i < _arr.length; _i++) {
-    const ev = _arr[_i];
-    plain.removeAllListeners(ev);
-  }
-
-  // PREVENT leftover plaintext bytes from entering TLS
-  plain.pause();
-
-  // Ensure no queued data is left unread
-  while (plain.read() !== null) {}
-  const tlsSock = new tls.TLSSocket(plain, {
-    isServer: true,
-    secureContext: tls.createSecureContext({
-      key: SSL_KEY,
-      cert: SSL_CERT,
-      minVersion: "TLSv1.2"
-    })
-  });
-  tlsSock.once("secureConnect", () => {
-    sess.sock = tlsSock;
-    sess.tlsUpgraded = true;
-
-    // Once TLS is up, we don't need the early-error handler anymore
-    tlsSock.removeAllListeners("error");
-    tlsSock.on("data", chunk => handleChunk(sess, chunk));
-    tlsSock.on("error", e => {
-      log("error", {
-        msg: "tls_error",
-        err: e.toString()
-      });
-      closeSession(sess);
-    });
-    tlsSock.on("end", () => closeSession(sess));
-    ssend(sess, "220 TLS OK");
-  });
-
-  // Handles TLS handshake failures or early socket errors
-  tlsSock.on("error", e => {
-    log("error", {
-      msg: "starttls_fail",
-      err: e.toString()
-    });
-    closeSession(sess);
-  });
+function connectSocket() {
+	return new Promise((resolve, reject) => {
+		let sock;
+		const onErr = err => { cleanup(); reject(err); };
+		const cleanup = () => {
+			if (!sock) return;
+			sock.removeListener("error", onErr);
+		};
+		if (CFG.smtpSecure) {
+			sock = tls.connect({
+				host: CFG.smtpHost,
+				port: CFG.smtpPort,
+				rejectUnauthorized: !CFG.smtpIgnoreCert,
+				minVersion: "TLSv1.2"
+			});
+			sock.once("secureConnect", () => { cleanup(); resolve(sock); });
+		} else {
+			sock = net.connect(CFG.smtpPort, CFG.smtpHost);
+			sock.once("connect", () => { cleanup(); resolve(sock); });
+		}
+		sock.once("error", onErr);
+		sock.setTimeout(CFG.smtpTimeout, () => onErr(new Error("connect timeout")));
+	});
 }
 
-// ------------------------------------------------------------------
-// HANDLE DATA BODY COMPLETE
-// ------------------------------------------------------------------
+async function smtpDeliver(rawMessage, recipients, mailFrom, bytePreserved) {
+	const sock = await connectSocket();
+	sock.setTimeout(0);
+	let conn = new SmtpConn(sock);
 
-function finishData(sess) {
-  // Remove trailing "\r\n.\r\n"
-  // If rawChunks holds everything including it, we must trim.
-  // Remove *exactly one* terminating <CRLF>.<CRLF> from the end
-  let full = Buffer.concat(sess.rawChunks);
+	try {
+		expect(await conn.read(), 220);
 
-  // Expect the terminator ONLY at the end of DATA
-  const TERM = Buffer.from("\r\n.\r\n", "latin1");
-  let body;
-  if (full.length >= TERM.length && full.slice(full.length - TERM.length).equals(TERM)) {
-    // Slice off the terminator cleanly
-    body = full.slice(0, full.length - TERM.length);
-  } else {
-    // Fallback: should never occur unless client misbehaved
-    body = full;
-  }
+		let ehlo = await conn.cmd("EHLO relay.local");
+		if (code(ehlo) !== 250) {
+			expect(await conn.cmd("HELO relay.local"), 250);
+		}
 
-  // Remove dot-stuffing inside the body
-  body = inboundDotUnstuff(body);
-  sess.rawChunks = [];
-  sess.dataMode = false;
-  sess.dotScanner = new DotTerminatorScanner();
+		if (CFG.smtpStartTls && !CFG.smtpSecure) {
+			expect(await conn.cmd("STARTTLS"), 220);
+			if (conn.buf.length) throw new Error("data pending before TLS handshake");
 
-  // Turn body into string for MIME parsing/digests
-  let rawString = body.toString("latin1");
+			const plain = conn.detach();
+			plain.pause();
+			const tlsSock = tls.connect({
+				socket: plain,
+				servername: CFG.smtpHost,
+				rejectUnauthorized: !CFG.smtpIgnoreCert,
+				minVersion: "TLSv1.2"
+			});
+			await new Promise((res, rej) => {
+				tlsSock.once("secureConnect", res);
+				tlsSock.once("error", rej);
+			});
+			conn = new SmtpConn(tlsSock);
+			ehlo = await conn.cmd("EHLO relay.local"); // must re-EHLO after upgrade
+			expect(ehlo, 250);
+		}
 
-  // For immediate-delivery messages (no digest yet)
-  processInboundMessage(sess, rawString);
+		if (CFG.smtpUser) {
+			expect(await conn.cmd("AUTH LOGIN"), 334);
+			expect(await conn.cmd(Buffer.from(CFG.smtpUser, "utf8").toString("base64")), 334);
+			const r = await conn.cmd(Buffer.from(CFG.smtpPass || "", "utf8").toString("base64"));
+			if (code(r) !== 235) throw new Error("SMTP auth failed: " + r.trim());
+		}
+
+		const envFrom = mailFrom || CFG.defaultFrom || "relay@localhost";
+		expect(await conn.cmd("MAIL FROM:<" + envFrom + ">"), 250);
+
+		let accepted = 0;
+		for (const rcpt of recipients) {
+			const r = await conn.cmd("RCPT TO:<" + rcpt + ">");
+			const c = code(r);
+			if (c === 250 || c === 251) accepted++;
+			else log("warn", { msg: "rcpt_rejected", rcpt, reply: r.trim() });
+		}
+		if (accepted === 0) throw new Error("all recipients rejected");
+
+		expect(await conn.cmd("DATA"), 354);
+
+		let msg = bytePreserved ? rawMessage : rawMessage.replace(/\r?\n/g, "\r\n");
+		conn.write(Buffer.from(outboundDotStuff(msg) + "\r\n.\r\n", "latin1"));
+		expect(await conn.read(), 250);
+
+		try { await conn.cmd("QUIT", 5000); } catch (e) { /* QUIT is advisory */ }
+		conn.end();
+	} catch (err) {
+		conn.end();
+		throw err;
+	}
 }
 
-// ------------------------------------------------------------------
-// PROCESS MAIL LOGIC (IMMEDIATE OR DIGEST)
-// ------------------------------------------------------------------
+function ensureOutboundHeaders(raw, envFrom) {
+	const domain = (envFrom || "localhost").split("@")[1] || "localhost";
+	const add = [];
+
+	if (!/^Date:/mi.test(raw)) add.push("Date: " + new Date().toUTCString());
+	if (!/^Message-ID:/mi.test(raw)) {
+		const id = crypto.randomUUID
+			? crypto.randomUUID()
+			: crypto.randomBytes(16).toString("hex");
+		add.push("Message-ID: <" + id + "@" + domain + ">");
+	}
+	if (!/^From:/mi.test(raw)) add.push("From: " + envFrom);
+	if (CFG.sesConfigSet && !/^X-SES-CONFIGURATION-SET:/mi.test(raw)) {
+		add.push("X-SES-CONFIGURATION-SET: " + CFG.sesConfigSet);
+	}
+	if (!add.length) return raw;
+	return add.join("\r\n") + "\r\n" + raw;
+}
+
+/* ------------------------------------------------------------------ *
+ * Delivery with logging, rate limiting, bounded retry
+ * ------------------------------------------------------------------ */
+
+async function deliver(raw, recipients, mailFrom, bytePreserved, meta) {
+	const envFrom = mailFrom || CFG.defaultFrom || "relay@localhost";
+	const message = ensureOutboundHeaders(raw, envFrom);
+
+	// Per-message audit line: from / to / subject / message-id / bytes.
+	// This is the record that did not exist on 2026-08-03.
+	const headers = parseHeaders(splitHeaderBody(message).headersRaw);
+	const audit = {
+		msg: "mail",
+		mode: (meta && meta.mode) || "immediate",
+		from: envFrom,
+		to: recipients,
+		subject: headerValue(headers, "subject"),
+		message_id: headerValue(headers, "message-id"),
+		bytes: Buffer.byteLength(message, "latin1")
+	};
+	if (meta && meta.count) audit.digest_count = meta.count;
+
+	let lastErr = null;
+	for (let attempt = 0; attempt <= CFG.retries; attempt++) {
+		try {
+			await waitForSlot();
+			await smtpDeliver(message, recipients, envFrom, bytePreserved);
+			metrics.msg_out++;
+			log("info", Object.assign({}, audit, { result: "sent", attempt }));
+			return;
+		} catch (err) {
+			lastErr = err;
+			if (/circuit breaker/.test(String(err))) break;
+			const permanent = /SMTP expected 250, got: 5\d\d/.test(String(err))
+				|| /auth failed/i.test(String(err));
+			if (permanent || attempt === CFG.retries) break;
+			await new Promise(r => setTimeout(r, CFG.retryDelay * Math.pow(2, attempt)));
+		}
+	}
+
+	metrics.msg_failed++;
+	log("error", Object.assign({}, audit, { result: "failed", err: String(lastErr) }));
+	throw lastErr;
+}
+
+/* ------------------------------------------------------------------ *
+ * Inbound message routing
+ * ------------------------------------------------------------------ */
 
 function processInboundMessage(sess, raw) {
-  metrics.msg_in++;
-  let rcpt = normalizeAddress(sess.rcptTo);
-  let digestKey = rcpt + "|" + normalizeAddress(sess.mailFrom || "");
-  let existing = DIGESTS.get(digestKey);
+	metrics.msg_in++;
 
-  // First message for this recipient → deliver immediately (byte-preserved)
-  if (!existing) {
-    let mailFrom = sess.mailFrom; // before it's reset
-    DIGESTS.set(digestKey, newDigest(mailFrom));
-    relayImmediateBytePreserved(raw, rcpt, sess.mailFrom, err => {
-      if (err) {
-        log("error", {
-          msg: "immediate_fail",
-          rcpt,
-          err: err.toString()
-        });
-      } else if (LOG_SUCCESS) {
-        log("info", {
-          msg: "immediate_ok",
-          rcpt,
-          mailFrom: mailFrom
-        });
-      }
-      metrics.msg_out++;
-    });
-    return;
-  }
+	const headers = parseHeaders(splitHeaderBody(raw).headersRaw);
+	const bypass = CFG.digestBypassHeader && headers[CFG.digestBypassHeader.toLowerCase()];
 
-  // Otherwise add to digest
-  addToDigest(rcpt, sess.mailFrom, raw);
-  scheduleDigest(rcpt, sess.mailFrom);
+	// Pure relay unless digesting is explicitly enabled. Batching password
+	// resets and login codes behind an exponential backoff is not something
+	// to do by default.
+	if (!CFG.digest || bypass) {
+		deliver(raw, sess.rcptTo.slice(), sess.mailFrom, true, { mode: "immediate" })
+			.catch(() => { /* already logged */ });
+		return;
+	}
 
+	for (const rcpt of sess.rcptTo) {
+		const key = digestKey(rcpt, sess.mailFrom);
+		if (!DIGESTS.has(key)) {
+			// First message to this pair goes straight out; later ones batch.
+			DIGESTS.set(key, newDigest(sess.mailFrom));
+			deliver(raw, [rcpt], sess.mailFrom, true, { mode: "immediate" })
+				.catch(() => { /* already logged */ });
+			continue;
+		}
+		addToDigest(rcpt, sess.mailFrom, raw);
+		scheduleDigest(rcpt, sess.mailFrom);
+	}
 }
 
-// ------------------------------------------------------------------
-// COMMAND HANDLING
-// ------------------------------------------------------------------
+/* ------------------------------------------------------------------ *
+ * Inbound SMTP server
+ * ------------------------------------------------------------------ */
+
+let ACTIVE_SESSIONS = 0;
+const REQUIRE_AUTH = !!(CFG.listenUser && CFG.listenPass);
+
+function ssend(sess, line) {
+	if (!sess || !sess.sock || sess.sock.destroyed) return;
+	sess.sock.write(line + "\r\n");
+}
+
+function resetTimer(sess) {
+	if (sess.timer) clearTimeout(sess.timer);
+	sess.timer = setTimeout(() => {
+		log("warn", { msg: "session_timeout", remote: sess.remote });
+		ssend(sess, "421 Timeout");
+		closeSession(sess);
+	}, CFG.sessionTimeout);
+}
+
+function closeSession(sess) {
+	if (sess.closed) return; // guard: previously double-decremented the counter
+	sess.closed = true;
+	if (sess.timer) clearTimeout(sess.timer);
+	ACTIVE_SESSIONS--;
+	try { sess.sock.end(); } catch (e) { /* already gone */ }
+}
+
+function resetTransaction(sess) {
+	sess.mailFrom = null;
+	sess.rcptTo = [];
+	sess.dataMode = false;
+	sess.rawChunks = [];
+	sess.dataBytes = 0;
+	sess.dataLines = 0;
+	sess.scanner = new DotTerminatorScanner();
+}
+
+function createSession(sock, isTLS) {
+	const sess = {
+		sock,
+		closed: false,
+		tlsUpgraded: !!isTLS,
+		remote: sock.remoteAddress,
+		authed: !REQUIRE_AUTH,
+		expectAuthUser: false,
+		expectAuthPass: false,
+		cmdBuffer: "",
+		timer: null
+	};
+	resetTransaction(sess);
+	return sess;
+}
+
+function doSTARTTLS(sess, key, cert) {
+	if (sess.tlsUpgraded) return ssend(sess, "454 TLS already active");
+	ssend(sess, "220 Ready to start TLS");
+
+	const plain = sess.sock;
+	for (const ev of ["data", "error", "end", "close"]) plain.removeAllListeners(ev);
+	plain.pause();
+	while (plain.read() !== null) { /* discard any plaintext still buffered */ }
+
+	const tlsSock = new tls.TLSSocket(plain, {
+		isServer: true,
+		secureContext: tls.createSecureContext({ key, cert, minVersion: "TLSv1.2" })
+	});
+
+	tlsSock.once("secureConnect", () => {
+		sess.sock = tlsSock;
+		sess.tlsUpgraded = true;
+		sess.cmdBuffer = "";
+		resetTransaction(sess);
+		tlsSock.removeAllListeners("error");
+		tlsSock.on("data", chunk => handleChunk(sess, chunk));
+		tlsSock.on("error", e => {
+			log("error", { msg: "tls_error", err: String(e) });
+			closeSession(sess);
+		});
+		tlsSock.on("end", () => closeSession(sess));
+	});
+	tlsSock.on("error", e => {
+		log("error", { msg: "starttls_fail", err: String(e) });
+		closeSession(sess);
+	});
+}
+
+function finishData(sess) {
+	const full = Buffer.concat(sess.rawChunks);
+	const TERM = Buffer.from("\r\n.\r\n", "latin1");
+	const SHORT = Buffer.from(".\r\n", "latin1");
+
+	let body;
+	if (full.length >= TERM.length && full.slice(full.length - TERM.length).equals(TERM)) {
+		body = full.slice(0, full.length - TERM.length);
+	} else if (full.equals(SHORT)) {
+		body = Buffer.alloc(0);
+	} else {
+		body = full;
+	}
+
+	body = inboundDotUnstuff(body);
+	const raw = body.toString("latin1");
+
+	resetTransaction(sess);
+	ssend(sess, "250 OK");
+
+	try {
+		processInboundMessage({ mailFrom: sess.lastFrom, rcptTo: sess.lastRcpt }, raw);
+	} catch (err) {
+		log("error", { msg: "process_failed", err: String(err) });
+	}
+}
 
 function handleCommand(sess, line) {
-
-	//
-	// 1. AUTH LOGIN username phase
-	//
 	if (sess.expectAuthUser) {
-		const user = Buffer.from(line.trim(), "base64").toString("utf8");
 		sess.expectAuthUser = false;
-
-		if (user !== LISTEN_USER) {
+		const user = Buffer.from(line.trim(), "base64").toString("utf8");
+		if (user !== CFG.listenUser) {
 			ssend(sess, "535 Authentication failed");
-			closeSession(sess);
-			return;
+			return closeSession(sess);
 		}
-
 		sess.expectAuthPass = true;
-		ssend(sess, "334 UGFzc3dvcmQ6"); // "Password:"
-		sess.expectResponse = false;      // *** CRITICAL FIX ***
-		return;
+		return ssend(sess, "334 UGFzc3dvcmQ6");
 	}
 
-	//
-	// 2. AUTH LOGIN password phase
-	//
 	if (sess.expectAuthPass) {
-		const pass = Buffer.from(line.trim(), "base64").toString("utf8");
 		sess.expectAuthPass = false;
-
-		if (pass !== LISTEN_PASS) {
+		const pass = Buffer.from(line.trim(), "base64").toString("utf8");
+		if (pass !== CFG.listenPass) {
 			ssend(sess, "535 Authentication failed");
-			closeSession(sess);
-			return;
+			return closeSession(sess);
 		}
-
 		sess.authed = true;
-		ssend(sess, "235 Authentication successful");
-		sess.expectResponse = false;      // *** CRITICAL FIX ***
-		return;
+		return ssend(sess, "235 Authentication successful");
 	}
 
-	//
-	// 3. No pipelining allowed during response flush
-	//
-	if (!PIPELINE_ALLOWED && sess.expectResponse) {
-		ssend(sess, "503 Bad sequence: no pipelining");
-		return;
-	}
-
-	const cmd = line.split(" ")[0].toUpperCase();
-
-	// Enter COMMAND mode (except AUTH LOGIN which has early returns)
-	sess.expectResponse = true;
+	const parts = line.trim().split(/\s+/);
+	const cmd = (parts[0] || "").toUpperCase();
 
 	switch (cmd) {
-
 		case "EHLO":
+			resetTransaction(sess);
+			ssend(sess, "250-relay.local");
+			if (!sess.tlsUpgraded && SSL.key && SSL.cert) ssend(sess, "250-STARTTLS");
+			if (REQUIRE_AUTH) ssend(sess, "250-AUTH LOGIN PLAIN");
+			ssend(sess, "250-8BITMIME");
+			ssend(sess, "250 SIZE " + CFG.maxSize);
+			return;
+
 		case "HELO":
-			sess.mailFrom = null;
-			sess.rcptTo = null;
-			sess.dataMode = false;
-			if (cmd === "EHLO") {
-				ssend(sess, "250-relay.local");
-				if (USE_SSL) {
-					if (!sess.tlsUpgraded) ssend(sess, "250-STARTTLS");
-				}
-				if (REQUIRE_AUTH) ssend(sess, "250-AUTH LOGIN");
-				ssend(sess, "250 OK");
-			} else {
-				ssend(sess, "250 relay.local");
-			}
-			break;
+			resetTransaction(sess);
+			return ssend(sess, "250 relay.local");
 
 		case "STARTTLS":
-			if (sess.tlsUpgraded) {
-				ssend(sess, "454 TLS already active");
-			} else {
-				doSTARTTLS(sess);
-			}
-			break;
+			if (!SSL.key || !SSL.cert) return ssend(sess, "454 TLS not available");
+			return doSTARTTLS(sess, SSL.key, SSL.cert);
 
-		//
-		// AUTH command
-		//
 		case "AUTH": {
-			const parts = line.split(/\s+/);
-			const method = parts[1] ? parts[1] : toUpperCase();
-
-			if (!REQUIRE_AUTH) {
-				ssend(sess, "503 AUTH not required");
-				sess.expectResponse = false;    // *** CRITICAL FIX ***
-				return;
+			if (!REQUIRE_AUTH) return ssend(sess, "503 AUTH not required");
+			// Previously: parts[1] ? parts[1] : toUpperCase()  -- undefined function.
+			const method = (parts[1] || "").toUpperCase();
+			if (method === "PLAIN") {
+				if (parts[2]) {
+					const dec = Buffer.from(parts[2], "base64").toString("utf8").split("\0");
+					if (dec[1] === CFG.listenUser && dec[2] === CFG.listenPass) {
+						sess.authed = true;
+						return ssend(sess, "235 Authentication successful");
+					}
+					ssend(sess, "535 Authentication failed");
+					return closeSession(sess);
+				}
+				return ssend(sess, "334 ");
 			}
-
-			if (method !== "LOGIN") {
-				ssend(sess, "504 Unsupported authentication method");
-				sess.expectResponse = false;    // *** CRITICAL FIX ***
-				return;
-			}
-
+			if (method !== "LOGIN") return ssend(sess, "504 Unsupported authentication method");
 			sess.expectAuthUser = true;
-			ssend(sess, "334 VXNlcm5hbWU6"); // Username:
-			sess.expectResponse = false;      // *** CRITICAL FIX ***
-			return;
+			return ssend(sess, "334 VXNlcm5hbWU6");
 		}
 
-		//
-		// MAIL
-		//
-		case "MAIL":
-			if (REQUIRE_AUTH && !sess.authed) {
-				ssend(sess, "530 Authentication required");
-				break;
-			}
-			if (sess.mailFrom || sess.rcptTo) {
-				ssend(sess, "503 Nested MAIL not allowed; use RSET");
-				break;
-			}
-			const mFrom = line.match(/<([^>]+)>/);
-			if (!mFrom) {
-				ssend(sess, "501 Syntax");
-				break;
-			}
-			sess.mailFrom = mFrom[1];
-			sess.rcptTo = null;
-			ssend(sess, "250 OK");
-			break;
+		case "MAIL": {
+			if (REQUIRE_AUTH && !sess.authed) return ssend(sess, "530 Authentication required");
+			if (sess.mailFrom) return ssend(sess, "503 Nested MAIL not allowed; use RSET");
+			const m = line.match(/FROM:\s*<([^>]*)>/i);
+			if (!m) return ssend(sess, "501 Syntax: MAIL FROM:<address>");
+			sess.mailFrom = m[1];
+			sess.rcptTo = [];
+			return ssend(sess, "250 OK");
+		}
 
-		//
-		// RCPT
-		//
-		case "RCPT":
-			if (REQUIRE_AUTH && !sess.authed) {
-				ssend(sess, "530 Authentication required");
-				break;
-			}
-			if (!sess.mailFrom) {
-				ssend(sess, "503 Bad sequence; MAIL first");
-				break;
-			}
-			const mRcpt = line.match(/<([^>]+)>/);
-			if (!mRcpt) {
-				ssend(sess, "501 Syntax");
-				break;
-			}
-			if (sess.rcptTo) {
-				ssend(sess, "452 Too many recipients");
-				break;
-			}
-			sess.rcptTo = mRcpt[1];
-			ssend(sess, "250 OK");
-			break;
+		case "RCPT": {
+			if (REQUIRE_AUTH && !sess.authed) return ssend(sess, "530 Authentication required");
+			if (!sess.mailFrom) return ssend(sess, "503 Bad sequence; MAIL first");
+			const m = line.match(/TO:\s*<([^>]+)>/i);
+			if (!m) return ssend(sess, "501 Syntax: RCPT TO:<address>");
+			// Previously capped at one recipient with a 452.
+			if (sess.rcptTo.length >= CFG.maxRecipients) return ssend(sess, "452 Too many recipients");
+			sess.rcptTo.push(m[1]);
+			return ssend(sess, "250 OK");
+		}
 
-		//
-		// DATA
-		//
 		case "DATA":
-			if (REQUIRE_AUTH && !sess.authed) {
-				ssend(sess, "530 Authentication required");
-				break;
-			}
-			if (!sess.mailFrom || !sess.rcptTo) {
-				ssend(sess, "503 Bad sequence");
-				break;
-			}
+			if (REQUIRE_AUTH && !sess.authed) return ssend(sess, "530 Authentication required");
+			if (!sess.mailFrom || !sess.rcptTo.length) return ssend(sess, "503 Bad sequence");
+			sess.lastFrom = sess.mailFrom;
+			sess.lastRcpt = sess.rcptTo.slice();
 			sess.dataMode = true;
 			sess.rawChunks = [];
 			sess.dataBytes = 0;
 			sess.dataLines = 0;
-			sess.dotScanner = new DotTerminatorScanner();
-			ssend(sess, "354 End data with <CR><LF>.<CR><LF>");
-			break;
+			sess.scanner = new DotTerminatorScanner();
+			return ssend(sess, "354 End data with <CR><LF>.<CR><LF>");
 
 		case "RSET":
-			sess.mailFrom = null;
-			sess.rcptTo = null;
-			sess.dataMode = false;
-			sess.rawChunks = [];
-			sess.dataBytes = 0;
-			sess.dataLines = 0;
-			sess.dotScanner = new DotTerminatorScanner();
-			ssend(sess, "250 OK");
-			break;
+			resetTransaction(sess);
+			return ssend(sess, "250 OK");
+
+		case "NOOP":
+			return ssend(sess, "250 OK");
+
+		case "VRFY":
+			return ssend(sess, "252 Cannot VRFY user");
 
 		case "QUIT":
 			ssend(sess, "221 Bye");
-			closeSession(sess);
-			break;
+			return closeSession(sess);
 
 		default:
-			ssend(sess, "500 Command unrecognized");
-			break;
+			return ssend(sess, "500 Command unrecognized");
 	}
-
-	setImmediate(() => {
-		sess.expectResponse = false;
-	});
 }
-
-// ------------------------------------------------------------------
-// HANDLE RAW SOCKET CHUNKS
-// ------------------------------------------------------------------
 
 function handleChunk(sess, chunk) {
-  resetTimer(sess);
-
-  // DATA mode: raw byte collection
-  if (sess.dataMode) {
-    const _safeAppendData = safeAppendData(sess.dataBytes, sess.dataLines, chunk),
-      ok = _safeAppendData.ok,
-      size = _safeAppendData.size,
-      lines = _safeAppendData.lines;
-    if (!ok) {
-      ssend(sess, "552 Message too large");
-      sess.dataMode = false;
-      sess.rawChunks.length = 0;
-      return;
-    }
-
-    // Prevent memory DoS by bounding rawChunks
-    if (sess.dataBytes > MAX_SIZE) {
-      ssend(sess, "552 Message too large");
-      sess.dataMode = false;
-      sess.rawChunks.length = 0;
-      return;
-    }
-    sess.dataBytes = size;
-    sess.dataLines = lines;
-
-    // Prevent unbounded array growth (DoS protection)
-    if (sess.rawChunks.length > 20000) {
-      // ~20k chunks max
-      ssend(sess, "552 Too many chunks");
-      sess.dataMode = false;
-      sess.rawChunks = [];
-      return;
-    }
-    sess.rawChunks.push(chunk);
-    sess.dotScanner.push(chunk);
-    if (sess.dotScanner.isTerminated()) {
-      finishData(sess);
-      sess.mailFrom = null;
-      sess.rcptTo = null;
-      ssend(sess, "250 OK");
-    }
-    return;
-  }
-
-  // COMMAND mode
-  let data = chunk.toString("latin1"); // do not re-encode as utf8
-  sess.cmdBuffer = (sess.cmdBuffer || "") + data;
-
-  // Process complete lines
-  let idx;
-  while ((idx = sess.cmdBuffer.indexOf("\n")) !== -1) {
-    let line = sess.cmdBuffer.slice(0, idx).replace(/\r$/, "");
-    sess.cmdBuffer = sess.cmdBuffer.slice(idx + 1);
-    if (line.length > 1000) {
-      ssend(sess, "500 Line too long");
-      sess.cmdBuffer = ""; // dump buffer to avoid amplification attack
-      continue;
-    }
-    handleCommand(sess, line);
-  }
-}
-
-// ------------------------------------------------------------------
-// ACCEPT NEW INBOUND CONNECTIONS
-// ------------------------------------------------------------------
-
-function inboundConnection(sock, isTLS) {
-  if (ACTIVE_SESSIONS >= MAX_CONC) {
-    try {
-      ssend({
-        sock
-      }, "421 Too busy");
-    } catch (e) {}
-    try {
-      sock.end();
-    } catch (e) {}
-    return;
-  }
-  ACTIVE_SESSIONS++;
-  const sess = createSession(sock, isTLS);
-  sess.authed = !REQUIRE_AUTH;
-  sess.expectAuthUser = false;
-  sess.expectAuthPass = false;
-  resetTimer(sess);
-  sock.on("data", chunk => handleChunk(sess, chunk));
-  sock.on("error", e => log("error", {
-    msg: "socket_error",
-    err: e.toString()
-  }));
-  sock.on("end", () => closeSession(sess));
-
-  // Send greeting
-  ssend(sess, "220 relay.local ESMTP");
-}
-
-/********************************************************************
- * MIME PARSING + DIGEST ACCUMULATION
- ********************************************************************/
-
-function decodeRFC2047(str) {
-  return str.replace(/=\?([^?]+)\?([bBqQ])\?([^?]+)\?=/g, (_, charset, enc, text) => {
-    try {
-      let buf;
-      if (enc.toUpperCase() === "B") {
-        buf = Buffer.from(text, "base64");
-      } else {
-        let qp = text.replace(/_/g, " ").replace(/=([A-Fa-f0-9]{2})/g, (m, h) => String.fromCharCode(parseInt(h, 16)));
-        buf = Buffer.from(qp, "binary");
-      }
-      return buf.toString("utf8");
-    } catch (e) {
-      return str;
-    }
-  });
-}
-
-/********************************************************************
- * RFC 5322 HEADER PARSER WITH FOLDING SUPPORT
- ********************************************************************/
-
-function parseHeaders(raw) {
-  // raw is a string containing the header block
-  // This parser supports header folding: CRLF + whitespace continues a header
-  //
-  const lines = raw.split(/\r?\n/);
-  const headers = {};
-  let last = null;
-  var _iterator = _createForOfIteratorHelper(lines),
-    _step;
-  try {
-    for (_iterator.s(); !(_step = _iterator.n()).done;) {
-      let line = _step.value;
-      if (/^[ \t]/.test(line)) {
-        // folded continuation
-        if (last) headers[last] += " " + line.trim();
-        continue;
-      }
-      const m = line.match(/^([^:]+):\s*(.*)$/);
-      if (m) {
-        const key = m[1].toLowerCase();
-        const val = m[2];
-        if (!headers[key]) headers[key] = [];
-        headers[key].push(decodeRFC2047(val));
-        last = key;
-      } else {
-        // malformed header, ignore safely
-        last = null;
-      }
-    }
-  } catch (err) {
-    _iterator.e(err);
-  } finally {
-    _iterator.f();
-  }
-  return headers;
-}
-
-/********************************************************************
- * BUFFER -> HEADERS + BODY SPLIT (RAW PRESERVATION)
- ********************************************************************/
-
-function splitHeaderBody(raw) {
-  // RFC5322: headers end at the FIRST empty line.
-  let idx = 0;
-  const len = raw.length;
-  while (idx < len) {
-    // Find end of line
-    let end = raw.indexOf("\n", idx);
-    if (end === -1) break;
-
-    // Extract current line (trim only CR at end)
-    let line = raw.slice(idx, end).replace(/\r$/, "");
-
-    // Empty line = end of headers
-    if (line === "") {
-      const bodyStart = end + 1;
-      return {
-        headersRaw: raw.slice(0, idx),
-        body: raw.slice(bodyStart)
-      };
-    }
-    idx = end + 1;
-  }
-
-  // No blank line → treat whole block as headers (rare)
-  return {
-    headersRaw: raw,
-    body: ""
-  };
-}
-
-/********************************************************************
- * MIME UTILITY: BOUNDARY EXTRACTION
- ********************************************************************/
-
-function extractBoundary(contentType) {
-  if (!contentType) return null;
-  // RFC 2046: boundary can be quoted or unquoted, ends before ";" or whitespace
-  const m = contentType.match(/boundary\s*=\s*("?)([^";]+)\1/i);
-  return m ? m[2].trim() : null;
-}
-
-/********************************************************************
- * MULTIPART SPLIT BASED ON BOUNDARY
- ********************************************************************/
-
-function splitMultipart(body, boundary) {
-  const marker = `--${boundary}`;
-  const final = `--${boundary}--`;
-
-  // Normalize to CRLF to simplify boundary matching
-  // Must NOT rewrite bytes — split lines manually on LF
-  // Normalize to LF-only to simplify boundary detection
-  const norm = body.replace(/\r?\n/g, "\n");
-
-  // Now split on LF (correct)
-  const lines = norm.split("\n");
-  let parts = [];
-  let current = [];
-  let inPart = false;
-  var _iterator2 = _createForOfIteratorHelper(lines),
-    _step2;
-  try {
-    for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
-      let line = _step2.value;
-      if (line === marker) {
-        // Start a new part
-        if (inPart) parts.push(current.join("\r\n"));
-        current = [];
-        inPart = true;
-        continue;
-      }
-      if (line === final) {
-        // Last part
-        if (inPart) parts.push(current.join("\r\n"));
-        return parts;
-      }
-      if (inPart) {
-        current.push(line);
-      }
-    }
-  } catch (err) {
-    _iterator2.e(err);
-  } finally {
-    _iterator2.f();
-  }
-  return parts;
-}
-
-/********************************************************************
- * RFC 2231 FILENAME EXTRACTION (fallback only)
- ********************************************************************/
-
-function extractFilename(headers) {
-  let fn = null;
-
-  // Content-Disposition
-  let cd = headers["content-disposition"];
-  if (cd) {
-    let m = cd.match(/filename\*?=([^;]+)/i);
-    if (m) {
-      fn = m[1].trim().replace(/^"(.*)"$/, "$1");
-      if (fn.startsWith("utf-8''")) fn = decodeURIComponent(fn.slice(7));
-      return fn;
-    }
-  }
-
-  // Content-Type name=
-  let ctype = headers["content-type"];
-  if (ctype) {
-    let m = ctype.match(/name="?([^"]+)"?/i);
-    if (m) return m[1];
-  }
-  return "attachment";
-}
-
-/********************************************************************
- * MIME PART PARSING RECURSIVE
- ********************************************************************/
-
-function decodeQuotedPrintable(qp) {
-  // 1. Remove soft line breaks: "=\r\n" or "=\n"
-  qp = qp.replace(/=\r?\n/g, "");
-
-  // 2. Decode =XX hex escapes safely and byte-accurately
-  let out = [];
-  for (let i = 0; i < qp.length; i++) {
-    if (qp[i] === "=") {
-      const h1 = qp[i + 1];
-      const h2 = qp[i + 2];
-      if (h1 && h2 && /[A-Fa-f0-9]{2}/.test(h1 + h2)) {
-        out.push(parseInt(h1 + h2, 16));
-        i += 2;
-        continue;
-      }
-      // If it's "=", but not a valid hex code, keep literally
-      out.push(qp.charCodeAt(i));
-      continue;
-    }
-    out.push(qp.charCodeAt(i));
-  }
-  return Buffer.from(out);
-}
-function parseMIMERecursive(body, headers, results) {
-  // results: {text, html, attachments[], inlineImages[] (as attachments too), droppedInline[] }
-
-  let ct = headers["content-type"] ? headers["content-type"][0] : "text/plain";
-  let lower = ct.split(";")[0].trim().toLowerCase();
-  if (lower.startsWith("multipart/")) {
-    let boundary = extractBoundary(ct);
-    if (!boundary) return;
-    let parts = splitMultipart(body, boundary);
-    var _iterator3 = _createForOfIteratorHelper(parts),
-      _step3;
-    try {
-      for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
-        let part = _step3.value;
-        let _splitHeaderBody = splitHeaderBody(part),
-          headersRaw = _splitHeaderBody.headersRaw,
-          innerBody = _splitHeaderBody.body;
-        let h = parseHeaders(headersRaw);
-        parseMIMERecursive(innerBody, h, results);
-      }
-    } catch (err) {
-      _iterator3.e(err);
-    } finally {
-      _iterator3.f();
-    }
-    return;
-  }
-
-  // Single-part
-  let disposition = headers["content-disposition"] ? headers["content-disposition"][0] : "";
-  let isAttach = /attachment|inline/i.test(disposition) && !lower.startsWith("text/");
-  let isInlineImage = /^image\//.test(lower) && /inline/i.test(disposition);
-  if (lower.startsWith("text/plain")) {
-    results.text.push(body);
-    return;
-  }
-  if (lower.startsWith("text/html")) {
-    results.html.push(body);
-    return;
-  }
-  if (isAttach || isInlineImage || !lower.startsWith("text/")) {
-    let filename = extractFilename(headers);
-    let enc = headers["content-transfer-encoding"] ? headers["content-transfer-encoding"][0].toLowerCase() : "";
-    let buf;
-    try {
-      if (enc === "base64") {
-        buf = Buffer.from(body.replace(/\s+/g, ""), "base64");
-      } else if (enc === "quoted-printable") {
-        buf = decodeQuotedPrintable(body);
-      } else {
-        buf = Buffer.from(body, "binary");
-      }
-    } catch (e) {
-      buf = Buffer.from("");
-    }
-    results.attachments.push({
-      filename,
-      size: buf.length,
-      contentType: lower,
-      content: buf,
-      isInlineImage
-    });
-    return;
-  }
-
-  // Unknown but non-text
-  results.attachments.push({
-    filename: "attachment",
-    size: Buffer.byteLength(body),
-    contentType: lower,
-    content: Buffer.from(body, "binary"),
-    isInlineImage: false
-  });
-}
-
-/********************************************************************
- * TOP-LEVEL MIME PARSE
- ********************************************************************/
-
-function parseFullMIME(raw) {
-  const _splitHeaderBody2 = splitHeaderBody(raw),
-    headersRaw = _splitHeaderBody2.headersRaw,
-    body = _splitHeaderBody2.body;
-  const headers = parseHeaders(headersRaw);
-  const results = {
-    text: [],
-    html: [],
-    attachments: []
-  };
-  parseMIMERecursive(body, headers, results);
-  return results;
-}
-
-/********************************************************************
- * INLINE IMAGE REMOVAL / ANNOTATION IN HTML
- ********************************************************************/
-
-function sanitizeHTML(htmlParts, droppedInline) {
-  let html = htmlParts.join(SEP_HTML);
-
-  // Remove scripts and event handlers (safety)
-  html = html.replace(/<script[\s\S]*?>[\s\S]*?<\/script>/gi, "");
-  html = html.replace(/\son[a-z]+\s*=\s*(['"]).*?\1/gi, "");
-
-  // For each dropped inline image, remove or annotate the CID
-  var _iterator4 = _createForOfIteratorHelper(droppedInline),
-    _step4;
-  try {
-    for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
-      let di = _step4.value;
-      const safeFilename = di.filename.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-      // Remove <img ... cid:...> completely
-      html = html.replace(new RegExp(`<img[^>]+cid:[^"'>]+[^>]*>`, "gi"), `<span>[inline image omitted: ${safeFilename}]</span>`);
-    }
-  } catch (err) {
-    _iterator4.e(err);
-  } finally {
-    _iterator4.f();
-  }
-  return html;
-}
-
-/********************************************************************
- * DIGEST ACCUMULATION ENGINE
- ********************************************************************/
-
-function addToDigest(rcpt, mailFrom, raw) {
-  const digestKey = rcpt + "|" + normalizeAddress(mailFrom || "");
-  let d = DIGESTS.get(digestKey) || newDigest();
-  let now = Date.now();
-
-  // Cooldown logic
-  if (now - d.lastReceived > COOLDOWN_MIN * 60000) {
-    d = newDigest();
-    log("info", { msg: "cooldown_reset", rcpt });
-  }
-  d.lastReceived = now;
-
-  // Parse MIME
-  const parsed = parseFullMIME(raw);
-
-  // Check message count limit
-  if (d.msgCount >= MAX_MESSAGES) {
-    d.omitMeta.count++;
-
-    for (const a of parsed.attachments) {
-      d.omitMeta.attachCount++;
-      d.omitMeta.attachBytes += a.size;
-    }
-
-    d.mailFrom = d.mailFrom || mailFrom;
-
-    if (!d.mailFrom) {
-      log("warn", { msg: "digest_missing_mailfrom", rcpt });
-      return;
-    }
-
-    DIGESTS.set(digestKey, d);
-    return;
-  }
-
-  // Text
-  for (const t of parsed.text) d.textParts.push(t);
-
-  // HTML
-  for (const h of parsed.html) d.htmlParts.push(h);
-
-  // Attachments
-  let droppedInline = [];
-  for (const a of parsed.attachments) {
-    if (a.size > MAX_ATTACH_SIZE ||
-        d.attachBytes + a.size > MAX_TOTAL_ATTACH) {
-
-      d.omitMeta.attachCount++;
-      d.omitMeta.attachBytes += a.size;
-      metrics.attach_dropped++;
-
-      if (a.isInlineImage) {
-        droppedInline.push({ filename: a.filename, size: a.size });
-      }
-      continue;
-    }
-
-    d.attachments.push(a);
-    d.attachBytes += a.size;
-    metrics.attach_forwarded++;
-  }
-
-  // Sanitize HTML
-  if (droppedInline.length > 0 && d.htmlParts.length > 0) {
-    d.htmlParts = [sanitizeHTML(d.htmlParts, droppedInline)];
-  }
-
-  d.msgCount++;
-
-  // Global memory cap
-  if (estimateDigestMemory() > GLOBAL_MEMORY_CAP) {
-    log("warn", { msg: "global_memory_cap_reached" });
-  }
-
-  DIGESTS.set(digestKey, d);
-}
-
-/********************************************************************
- * SCHEDULE DIGEST SEND (EXPONENTIAL BACKOFF)
- ********************************************************************/
-
-function scheduleDigest(rcpt, mailFrom) {
-  let digestKey = rcpt + "|" + normalizeAddress(mailFrom || "");
-  let d = DIGESTS.get(digestKey);
-  if (!d) return;
-  if (d.timer) return;
-  d.timer = setTimeout(() => {
-    d.timer = null;
-    flushDigest(rcpt, mailFrom);
-    // Exponential backoff
-    d.nextDelay = Math.min(
-      d.nextDelay * DELAY_BACKOFF,
-      60 * 60 * 1000      // 1 hour max backoff
-    );
-  }, d.nextDelay);
-}
-
-/********************************************************************
- * ESTIMATE DIGEST MEMORY FOR SAFETY
- ********************************************************************/
-function estimateDigestMemory() {
-  let total = 0;
-  var _iterator9 = _createForOfIteratorHelper(DIGESTS),
-    _step9;
-  try {
-    for (_iterator9.s(); !(_step9 = _iterator9.n()).done;) {
-      let _step9$value = _slicedToArray(_step9.value, 2),
-        rcpt = _step9$value[0],
-        d = _step9$value[1];
-      var _iterator0 = _createForOfIteratorHelper(d.attachments),
-        _step0;
-      try {
-        for (_iterator0.s(); !(_step0 = _iterator0.n()).done;) {
-          let a = _step0.value;
-          total += a.size;
-        }
-      } catch (err) {
-        _iterator0.e(err);
-      } finally {
-        _iterator0.f();
-      }
-      var _iterator1 = _createForOfIteratorHelper(d.textParts),
-        _step1;
-      try {
-        for (_iterator1.s(); !(_step1 = _iterator1.n()).done;) {
-          let t = _step1.value;
-          total += Buffer.byteLength(t, "utf8");
-        }
-      } catch (err) {
-        _iterator1.e(err);
-      } finally {
-        _iterator1.f();
-      }
-      var _iterator10 = _createForOfIteratorHelper(d.htmlParts),
-        _step10;
-      try {
-        for (_iterator10.s(); !(_step10 = _iterator10.n()).done;) {
-          let h = _step10.value;
-          total += Buffer.byteLength(h, "utf8");
-        }
-      } catch (err) {
-        _iterator10.e(err);
-      } finally {
-        _iterator10.f();
-      }
-    }
-  } catch (err) {
-    _iterator9.e(err);
-  } finally {
-    _iterator9.f();
-  }
-  return total;
-}
-
-/********************************************************************
- * FINAL DIGEST SEND
- ********************************************************************/
-
-function flushDigest(rcpt, mailFrom) {
-  let digestKey = rcpt + "|" + normalizeAddress(mailFrom || "");
-  let d = DIGESTS.get(digestKey);
-  if (!d) return;
-  let mime = buildDigestMIME(rcpt, d);
-  relayDigest(mime, rcpt, mailFrom, err => {
-    if (err) {
-      log("error", {
-        msg: "digest_send_fail",
-        rcpt,
-        err: err.toString()
-      });
-    } else if (LOG_SUCCESS) {
-      log("info", {
-        msg: "digest_ok",
-        rcpt
-      });
-    }
-    metrics.digest_sent++;
-  });
-
-  // Reset digest
-  DIGESTS.set(rcpt, newDigest());
-}
-
-/********************************************************************
- * DIGEST MIME CONSTRUCTION
- ********************************************************************/
-
-function buildDigestMIME(rcpt, d) {
-  // Text & HTML combined
-  if (DIGEST_TIME_ASCENDING) {
-    // Sort by arrival order: oldest → newest
-    // (d.textParts and d.htmlParts already follow arrival order, but we enforce)
-    d.textParts.sort((a, b) => a.timestamp - b.timestamp);
-    d.htmlParts.sort((a, b) => a.timestamp - b.timestamp);
-  }
-  let text = d.textParts.join(SEP_TEXT);
-  let html = d.htmlParts.join(SEP_HTML);
-
-
-
-  let omitted = d.omitMeta.count;
-  if (omitted > 0) {
-    let note = OMIT_FORMAT.replace("{{N}}", omitted).replace("{{A}}", d.omitMeta.attachCount).replace("{{S}}", d.omitMeta.attachBytes);
-    text += "\n\n" + note;
-    html += "<br><br>" + note;
-  }
-  let subject = SUBJECT_TEMPLATE.replace("{{count}}", d.msgCount);
-  let boundary = "mix_" + crypto.randomBytes(8).toString("hex");
-  let altBoundary = "alt_" + crypto.randomBytes(8).toString("hex");
-  const hasText = d.textParts.length > 0;
-  const hasHtml = d.htmlParts.length > 0;
-  const hasAttach = d.attachments.length > 0;
-
-  // Build final MIME
-  if (!hasAttach) {
-    if (hasText && hasHtml) {
-      return `Subject: ${subject}
-To: ${rcpt}
-From: ${SMTP_USER || "relay@localhost"}
-MIME-Version: 1.0
-Content-Type: multipart/alternative; boundary="${altBoundary}"
-
---${altBoundary}
-Content-Type: text/plain; charset=utf-8
-
-${text}
-
---${altBoundary}
-Content-Type: text/html; charset=utf-8
-Content-Transfer-Encoding: quoted-printable
-
-${html}
-
---${altBoundary}--
-`;
-    }
-    if (hasText) {
-      return `Subject: ${subject}
-To: ${rcpt}
-From: ${d.mailFrom || DEFAULT_FROM || "relay@localhost"}
-Content-Type: text/plain; charset=utf-8
-
-${text}
-`;
-    }
-    return `Subject: ${subject}
-To: ${rcpt}
-From: ${d.mailFrom || DEFAULT_FROM || "relay@localhost"}
-Content-Type: text/html; charset=utf-8
-Content-Transfer-Encoding: quoted-printable
-
-${html}
-`;
-  }
-
-  // With attachments: multipart/mixed
-  let parts = [];
-
-  // alternative
-  if (hasText && hasHtml) {
-    parts.push(`--${boundary}
-Content-Type: multipart/alternative; boundary="${altBoundary}"
-
---${altBoundary}
-Content-Type: text/plain; charset=utf-8
-
-${text}
-
---${altBoundary}
-Content-Type: text/html; charset=utf-8
-
-${html}
-
---${altBoundary}--
-`);
-  } else if (hasText) {
-    parts.push(`--${boundary}
-Content-Type: text/plain; charset=utf-8
-
-${text}
-`);
-  } else if (hasHtml) {
-    parts.push(`--${boundary}
-Content-Type: text/html; charset=utf-8
-
-${html}
-`);
-  }
-
-  // attachments
-  var _iterator11 = _createForOfIteratorHelper(d.attachments),
-    _step11;
-  try {
-    for (_iterator11.s(); !(_step11 = _iterator11.n()).done;) {
-      let a = _step11.value;
-      let encoded = a.content.toString("base64").replace(/(.{76})/g, "$1\r\n");
-      parts.push(`--${boundary}
-Content-Type: ${a.contentType || "application/octet-stream"}
-Content-Disposition: attachment; filename="${a.filename}"
-Content-Transfer-Encoding: base64
-
-${encoded}
-`);
-    }
-  } catch (err) {
-    _iterator11.e(err);
-  } finally {
-    _iterator11.f();
-  }
-  parts.push(`--${boundary}--`);
-  return `Subject: ${subject}
-To: ${rcpt}
-From: ${SMTP_USER || "relay@localhost"}
-MIME-Version: 1.0
-Content-Type: multipart/mixed; boundary="${boundary}"
-
-\r\n${parts.join("\r\n")}
-
-`;
-}
-
-/********************************************************************
- * OUTBOUND SMTP CLIENT + SERVER BOOTSTRAP
- ********************************************************************/
-
-/********************************************************************
- * DOT-STUFFING FOR OUTBOUND DATA
- ********************************************************************/
-
-/********************************************************************
- * SEND COMMAND AND READ RESPONSE
- ********************************************************************/
-
-function smtpSend(sock, line) {
-	return new Promise((resolve, reject) => {
-		let buf = "";
-
-		const onData = chunk => {
-			buf += chunk.toString("latin1");
-			const lines = buf.split(/\r?\n/);
-      const lastComplete = lines.length > 1 ? lines[lines.length - 2] : lines[0];
-
-			// Single-line SMTP reply ends with "XYZ <space>"
-			if (/^[0-9]{3} /.test(lastComplete)) {
-				cleanup();
-				resolve(buf);
-			}
-		};
-
-		const cleanup = () => {
-			clearTimeout(timer);
-			sock.removeListener("data", onData);
-		};
-
-		const timer = setTimeout(() => {
-			cleanup();
-			reject(new Error("SMTP timeout"));
-		}, 30000);
-
-		sock.on("data", onData);
-		sock.write(line + "\r\n");
-	});
-}
-
-
-function smtpSendMulti(sock, line) {
-	return new Promise((resolve, reject) => {
-		let buf = "";
-
-		const onData = chunk => {
-			buf += chunk.toString("latin1");
-
-			const lines = buf.split(/\r?\n/);
-
-			// Multiline ends ONLY when a line begins with "250 "
-			const done = lines.find(l => /^250 /.test(l));
-
-			if (done) {
-				cleanup();
-				resolve(buf);
-			}
-		};
-
-		const cleanup = () => {
-			clearTimeout(timer);
-			sock.removeListener("data", onData);
-		};
-
-		const timer = setTimeout(() => {
-			cleanup();
-			reject(new Error("SMTP timeout"));
-		}, 30000);
-
-		// multiline requires .on(), not .once()
-		sock.on("data", onData);
-		sock.write(line + "\r\n");
-	});
-}
-
-/********************************************************************
- * PARSE SMTP RESPONSE CODES
- ********************************************************************/
-
-function checkResp(resp, expected) {
-  const lines = resp.trim().split(/\r?\n/);
-  const last = lines[lines.length - 1];
-  const code = parseInt(last.slice(0, 3), 10);
-  if (code !== expected) {
-    throw new Error(`SMTP expected ${expected}, got ${last}`);
-  }
-}
-
-/********************************************************************
- * OUTBOUND SMTP: FULL SEND
- ********************************************************************/
-function smtpDeliver(_x, _x2, _x3, _x4) {
-  return _smtpDeliver.apply(this, arguments);
-}
-/********************************************************************
- * IMMEDIATE BYTE-PRESERVED RELAY
- ********************************************************************/
-function _smtpDeliver() {
-  _smtpDeliver = _asyncToGenerator(function* (rawMessage, rcpt, isBytePreserved, mailFrom) {
-    return new Promise(/*#__PURE__*/function () {
-      var _ref2 = _asyncToGenerator(function* (resolve, reject) {
-        let sock = null;
-        let useTLS = !!SMTP_SECURE; // FIXED: was SMTP_TLS (undefined)
-
-        try {
-          if (useTLS) {
-            global.SMTP_IGNORE_CERT_ERRORS = process.env.SMTP_IGNORE_CERT_ERRORS === "true";
-            sock = tls.connect(SMTP_PORT, SMTP_HOST, {
-              // FIXED: SMTP_PORT is now defined globally
-              rejectUnauthorized: !SMTP_IGNORE_CERT_ERRORS,
-              minVersion: "TLSv1.2"
-            });
-          } else {
-            sock = net.connect(SMTP_PORT, SMTP_HOST); // FIXED: same
-          }
-        } catch (e) {
-          return reject(e);
-        }
-
-        // Install error handler ONLY until STARTTLS or AUTH
-        sock.on("error", e => reject(e));
-        sock.once("secureConnect", /*#__PURE__*/_asyncToGenerator(function* () {
-          // After connect, remove the temporary plain error handler.
-          sock.removeAllListeners("error");
-          // Reinstall a general handler for pre-STARTTLS phase:
-          sock.on("error", e => reject(e));
-          try {
-            // Greeting
-            let resp = yield new Promise((res, rej) => {
-              let buf = "";
-              function onD(ch) {
-                buf += ch.toString("latin1");
-                let lines = buf.split(/\r?\n/);
-                let lastComplete = lines.length > 1 ? lines[lines.length - 2] : lines[0];
-                if (/^[0-9]{3} /.test(lastComplete)) {
-                  sock.removeListener("data", onD);
-                  clearTimeout(t);
-                  res(buf);
-                }
-              }
-              let t = setTimeout(() => {
-                sock.removeAllListeners("data");
-                rej(new Error("Timeout waiting greeting"));
-              }, 10000);
-              sock.on("data", onD);
-            });
-            checkResp(resp, 220);
-
-            // EHLO
-            resp = yield smtpSendMulti(sock, "EHLO relay.local");
-            if (!/^250/.test(resp)) {
-              resp = yield smtpSend(sock, "HELO relay.local");
-              checkResp(resp, 250);
-            }
-
-            // STARTTLS upgrade
-            if (SMTP_STARTTLS && !useTLS) {
-              resp = yield smtpSend(sock, "STARTTLS");
-              checkResp(resp, 220);
-
-              // 1. Prevent any plaintext bytes after STARTTLS
-              sock.pause();
-
-              // Drain any pending plaintext to ensure TLS cleanliness
-              while (sock.read() !== null) {}
-
-              // 2. Remove ALL listeners safely
-              for (var _i2 = 0, _arr2 = ["data", "error", "end", "close"]; _i2 < _arr2.length; _i2++) {
-                const ev = _arr2[_i2];
-                sock.removeAllListeners(ev);
-              }
-
-              // 3. Wrap into TLS
-              const tlsSock = tls.connect({
-                socket: sock,
-                rejectUnauthorized: !SMTP_IGNORE_CERT_ERRORS,
-                minVersion: "TLSv1.2",
-                secureContext: tls.createSecureContext({
-                  minVersion: "TLSv1.2"
-                })
-              });
-
-              // 4. Wait securely for TLS handshake
-              yield new Promise((resolve, rejectTLS) => {
-                tlsSock.once("secureConnect", resolve);
-                tlsSock.once("error", rejectTLS);
-              });
-
-              // 5. Make TLS socket active
-              tlsSock.resume();
-
-              // 6. Replace socket reference
-              sock = tlsSock;
-              useTLS = true;
-
-              // 7. Install post-TLS handlers
-              sock.on("error", reject);
-            }
-
-            // AUTH only if username is provided
-            if (SMTP_USER) {
-              resp = yield smtpSend(sock, "AUTH LOGIN");
-              checkResp(resp, 334);
-              resp = yield smtpSend(sock, Buffer.from(SMTP_USER, "utf8").toString("base64"));
-              checkResp(resp, 334);
-              resp = yield smtpSend(sock, Buffer.from(SMTP_PASSWORD || "", "utf8").toString("base64"));
-              if (!/^235/.test(resp)) throw new Error("SMTP auth failed");
-            }
-
-            // MAIL FROM
-            resp = yield smtpSend(sock, `MAIL FROM:<${mailFrom || DEFAULT_FROM || "relay@localhost"}>`);
-            checkResp(resp, 250);
-
-            // RCPT TO
-            resp = yield smtpSend(sock, `RCPT TO:<${rcpt}>`);
-            checkResp(resp, 250);
-
-            // DATA
-            resp = yield smtpSend(sock, "DATA");
-            checkResp(resp, 354);
-
-            // Inject required RFC headers + optional SES config-set header
-            rawMessage = ensureOutboundHeaders(rawMessage, {
-              mailFrom: mailFrom || DEFAULT_FROM,
-              domain: (mailFrom || DEFAULT_FROM || "localhost").split("@")[1] || "localhost",
-              sesConfigSet: process.env.SES_CONFIG_SET || ARGS["ses-config-set"] || null
-            });
-
-            // CRLF-normalize only when we aren’t byte-preserving
-            let normalized = rawMessage;
-            if (!isBytePreserved) {
-              normalized = rawMessage.replace(/\r?\n/g, "\r\n");
-            }
-
-            // Dot-stuff and terminate with <CRLF>.<CRLF>
-            const finalMessage =
-              outboundDotStuff(normalized) +
-              "\r\n.\r\n";
-
-            sock.write(finalMessage);
-
-
-            // Final result
-            resp = yield new Promise((res, rej) => {
-              let buf = "";
-              const onD = ch => {
-                buf += ch.toString("latin1");
-                const lines = buf.split(/\r?\n/);
-                const lastComplete = lines.length > 1 ? lines[lines.length - 2] : lines[0];
-                if (/^[0-9]{3} /.test(lastComplete)) {
-                  sock.removeListener("data", onD);
-                  res(buf);
-                }
-              };
-              sock.on("data", onD);
-              setTimeout(() => rej(new Error("Timeout waiting for final OK")), 15000);
-            });
-            checkResp(resp, 250);
-
-            // QUIT
-            try {
-                yield smtpSend(sock, "QUIT");
-            } catch (e) {
-                // ignore failures on QUIT
-            }
-
-            try { sock.end(); } catch (e) {}
-            try { sock.destroy(); } catch (e) {}
-
-            return resolve();
-
-          } catch (e) {
-            try {
-              sock.end();
-            } catch (e2) {}
-            reject(e);
-          }
-        }));
-      });
-      return function (_x5, _x6) {
-        return _ref2.apply(this, arguments);
-      };
-    }());
-  });
-  return _smtpDeliver.apply(this, arguments);
-}
-
-function relayImmediateBytePreserved(raw, rcpt, mailFrom, cb) {
-    smtpDeliver(raw, rcpt, true, mailFrom)
-        .then(() => cb(null))
-        .catch(cb);
-}
-
-function ensureOutboundHeaders(raw, env) {
-	// Insert Date
-	if (!/^Date:/mi.test(raw)) {
-		raw = `Date: ${new Date().toUTCString()}\r\n` + raw;
-	}
-
-	// Insert Message-ID
-	if (!/^Message-ID:/mi.test(raw)) {
-		const id = crypto.randomUUID ? crypto.randomUUID() :
-			Math.random().toString(36).slice(2);
-		raw = `Message-ID: <${id}@${env.domain}>\r\n` + raw;
-	}
-
-	// Ensure From header exists (and matches envelope for SES)
-	if (!/^From:/mi.test(raw)) {
-		raw = `From: ${env.mailFrom}\r\n` + raw;
-	}
-
-	// Optional SES config-set
-	if (env.sesConfigSet && !/^X-SES-CONFIGURATION-SET:/mi.test(raw)) {
-		raw = `X-SES-CONFIGURATION-SET: ${env.sesConfigSet}\r\n` + raw;
-	}
-
-	return raw;
-}
-
-
-/********************************************************************
- * DIGEST RELAY
- ********************************************************************/
-
-function relayDigest(mime, rcpt, mailFrom, cb) {
-  smtpDeliver(mime, rcpt, false, mailFrom).then(() => cb(null)).catch(cb);
-}
-
-/********************************************************************
- * SERVER START LOGIC (AUTO TLS IF CERTS AVAILABLE)
- ********************************************************************/
-
-function startRelay() {
-  // Always start plaintext SMTP
-  const plainServer = net.createServer(sock => inboundConnection(sock, false));
-  plainServer.on("error", e => log("error", {
-    msg: "plain_server_error",
-    err: e.toString()
-  }));
-  plainServer.listen(LISTEN_PORT, LISTEN_HOST, () => {
-    log("info", {
-      msg: "plain_smtp_listening",
-      port: LISTEN_PORT,
-      host: LISTEN_HOST
-    });
-  });
-
-  // Optional TLS SMTP (if cert+key exist)
-  let haveTLS = false;
-  try {
-    if (SSL_KEY && SSL_CERT && SSL_KEY.length > 0 && SSL_CERT.length > 0) {
-      haveTLS = true;
-    }
-  } catch (e) {
-    haveTLS = false;
-  }
-  const LISTEN_PORT_TLS = global.LISTEN_PORT_TLS || 465;
-  if (haveTLS) {
-    const tlsServer = tls.createServer({
-      key: SSL_KEY,
-      cert: SSL_CERT,
-      minVersion: "TLSv1.2"
-    }, sock => inboundConnection(sock, true));
-    tlsServer.on("error", e => log("error", {
-      msg: "tls_server_error",
-      err: e.toString()
-    }));
-    tlsServer.listen(LISTEN_PORT_TLS, LISTEN_HOST, () => {
-      log("info", {
-        msg: "tls_smtp_listening",
-        port: LISTEN_PORT_TLS,
-        host: LISTEN_HOST
-      });
-    });
-  } else {
-    log("info", {
-      msg: "tls_disabled_no_certs"
-    });
-  }
-  console.log("SMTP Relay Started. Mode: RFC-correct raw DATA preservation (Option A).");
-}
-
-/********************************************************************
- * OPTIONAL INTERACTIVE SETUP (runs only if missing SMTP settings)
- ********************************************************************/
-function ask(_x4) {
-  return _ask.apply(this, arguments);
-}
-function _ask() {
-  _ask = _asyncToGenerator(function* (question, {
-    mask = false
-  } = {}) {
-    return new Promise(resolve => {
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      if (!mask) {
-        rl.question(question, answer => {
-          rl.close();
-          resolve(answer.trim());
-        });
-        return;
-      }
-
-      // Masked password entry
-      process.stdout.write(question);
-      let input = "";
-      readline.emitKeypressEvents(process.stdin);
-      process.stdin.setRawMode(true);
-      const handler = (str, key) => {
-        if (key && key.name === 'return') {
-          process.stdin.setRawMode(false);
-          process.stdin.removeListener('keypress', handler);
-          rl.close();
-          process.stdout.write("\n");
-          resolve(input);
-          return;
-        }
-        if (key && key.name === 'backspace') {
-          if (input.length > 0) {
-            input = input.slice(0, -1);
-            process.stdout.write("\b \b");
-          }
-          return;
-        }
-        // default
-        input += str;
-        process.stdout.write('*');
-      };
-      process.stdin.on('keypress', handler);
-    });
-  });
-  return _ask.apply(this, arguments);
-}
-function interactiveSetup() {
-  return _interactiveSetup.apply(this, arguments);
-}
-/********************************************************************
- * RUN INTERACTIVE SETUP *BEFORE* using SMTP_* variables
- ********************************************************************/
-function readPassword(prompt) {
-	return new Promise(function(resolve) {
-		const stdin = process.stdin;
-		const stdout = process.stdout;
-
-		stdout.write(prompt);
-
-		stdin.resume();
-		stdin.setRawMode(true);
-
-		let buf = "";
-
-		function onData(ch) {
-			ch = ch.toString("utf8");
-
-			// Enter
-			if (ch === "\n" || ch === "\r") {
-				stdin.setRawMode(false);
-				stdin.removeListener("data", onData);
-				stdout.write("\n");
-				resolve(buf);
-				return;
-			}
-
-			// Ctrl+C
-			if (ch === "\u0003") {
-				stdin.setRawMode(false);
-				stdout.write("\n");
-				process.exit();
-			}
-
-			buf += ch;
+	resetTimer(sess);
+
+	if (sess.dataMode) {
+		let lines = sess.dataLines;
+		for (let i = 0; i < chunk.length; i++) if (chunk[i] === 10) lines++;
+		const size = sess.dataBytes + chunk.length;
+
+		if (size > CFG.maxSize || lines > CFG.maxLines) {
+			ssend(sess, "552 Message too large");
+			resetTransaction(sess);
+			return;
 		}
 
+		sess.dataBytes = size;
+		sess.dataLines = lines;
+		sess.rawChunks.push(chunk);
+		sess.scanner.push(chunk);
+
+		if (sess.scanner.isTerminated()) finishData(sess);
+		return;
+	}
+
+	sess.cmdBuffer += chunk.toString("latin1");
+	let idx;
+	while ((idx = sess.cmdBuffer.indexOf("\n")) !== -1) {
+		const line = sess.cmdBuffer.slice(0, idx).replace(/\r$/, "");
+		sess.cmdBuffer = sess.cmdBuffer.slice(idx + 1);
+		if (line.length > 1000) {
+			ssend(sess, "500 Line too long");
+			sess.cmdBuffer = "";
+			continue;
+		}
+		handleCommand(sess, line);
+		if (sess.closed) return;
+		if (sess.dataMode && sess.cmdBuffer.length) {
+			// Client pipelined the body right after DATA.
+			const rest = Buffer.from(sess.cmdBuffer, "latin1");
+			sess.cmdBuffer = "";
+			handleChunk(sess, rest);
+			return;
+		}
+	}
+}
+
+function inboundConnection(sock, isTLS) {
+	if (ACTIVE_SESSIONS >= CFG.maxConcurrent) {
+		try { sock.write("421 Too busy\r\n"); sock.end(); } catch (e) { /* nothing to do */ }
+		return;
+	}
+	ACTIVE_SESSIONS++;
+	const sess = createSession(sock, isTLS);
+	resetTimer(sess);
+	sock.on("data", chunk => handleChunk(sess, chunk));
+	sock.on("error", e => {
+		log("warn", { msg: "socket_error", err: String(e) });
+		closeSession(sess);
+	});
+	sock.on("end", () => closeSession(sess));
+	ssend(sess, "220 relay.local ESMTP");
+}
+
+/* ------------------------------------------------------------------ *
+ * Startup
+ * ------------------------------------------------------------------ */
+
+const SSL = { key: null, cert: null };
+
+function loadTLSMaterial() {
+	if (!CFG.sslKeyPath || !CFG.sslCertPath) return;
+	try {
+		SSL.key = fs.readFileSync(CFG.sslKeyPath);
+		SSL.cert = fs.readFileSync(CFG.sslCertPath);
+	} catch (e) {
+		log("warn", { msg: "tls_material_unreadable", err: String(e) });
+		SSL.key = SSL.cert = null;
+	}
+}
+
+function startRelay() {
+	// An unauthenticated relay bound to a public interface is an open relay.
+	const loopback = /^(127\.|::1$|localhost$)/.test(CFG.listenHost);
+	if (!loopback && !REQUIRE_AUTH) {
+		log("error", {
+			msg: "refusing_to_start",
+			reason: "non-loopback LISTEN_HOST without LISTEN_USER/LISTEN_PASS would be an open relay",
+			listenHost: CFG.listenHost
+		});
+		process.exit(1);
+	}
+
+	const plain = net.createServer(sock => inboundConnection(sock, false));
+	plain.on("error", e => {
+		log("error", { msg: "plain_server_error", err: String(e) });
+		process.exit(1);
+	});
+	plain.listen(CFG.listenPort, CFG.listenHost, () => {
+		log("info", {
+			msg: "listening",
+			host: CFG.listenHost,
+			port: CFG.listenPort,
+			auth: REQUIRE_AUTH,
+			upstream: CFG.smtpHost + ":" + CFG.smtpPort,
+			tls: CFG.smtpSecure ? "implicit" : (CFG.smtpStartTls ? "starttls" : "none"),
+			digest: CFG.digest,
+			max_per_minute: CFG.maxPerMinute,
+			max_per_hour: CFG.maxPerHour
+		});
+	});
+
+	if (CFG.listenTlsPort && SSL.key && SSL.cert) {
+		const secure = tls.createServer(
+			{ key: SSL.key, cert: SSL.cert, minVersion: "TLSv1.2" },
+			sock => inboundConnection(sock, true)
+		);
+		secure.on("error", e => log("error", { msg: "tls_server_error", err: String(e) }));
+		secure.listen(CFG.listenTlsPort, CFG.listenHost, () => {
+			log("info", { msg: "listening_tls", host: CFG.listenHost, port: CFG.listenTlsPort });
+		});
+	}
+
+	setInterval(() => log("info", Object.assign({ msg: "metrics" }, metrics)), 300000).unref();
+}
+
+/* ------------------------------------------------------------------ *
+ * Interactive setup (only when upstream is unconfigured)
+ * ------------------------------------------------------------------ */
+
+function ask(question) {
+	return new Promise(resolve => {
+		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+		rl.question(question, answer => { rl.close(); resolve(answer.trim()); });
+	});
+}
+
+function askHidden(prompt) {
+	return new Promise(resolve => {
+		process.stdout.write(prompt);
+		const stdin = process.stdin;
+		stdin.resume();
+		if (stdin.setRawMode) stdin.setRawMode(true);
+		let buf = "";
+		const onData = ch => {
+			const s = ch.toString("utf8");
+			if (s === "\n" || s === "\r") {
+				if (stdin.setRawMode) stdin.setRawMode(false);
+				stdin.removeListener("data", onData);
+				stdin.pause();
+				process.stdout.write("\n");
+				return resolve(buf);
+			}
+			if (s === "\u0003") {
+				if (stdin.setRawMode) stdin.setRawMode(false);
+				process.stdout.write("\n");
+				process.exit(130);
+			}
+			if (s === "\u007f" || s === "\b") {
+				buf = buf.slice(0, -1);
+				return;
+			}
+			buf += s;
+		};
 		stdin.on("data", onData);
 	});
 }
 
-function _interactiveSetup() {
-	_interactiveSetup = _asyncToGenerator(function* () {
-		if (SMTP_HOST && process.env.SMTP_PASSWORD) return; // Already configured
+async function interactiveSetup() {
+	if (CFG.smtpHost && (CFG.smtpPass || !CFG.smtpUser)) return;
 
-		console.log("\n=== SMTP Relay Interactive Setup ===\n");
-		console.log("No SMTP upstream configured. Let's set it up.\n");
+	console.log("\n=== SMTP relay setup ===\n");
 
-		let host = yield ask("Upstream SMTP host (e.g. smtp.gmail.com:465): ");
-		let port = null;
+	let host = await ask("Upstream SMTP host (e.g. email-smtp.us-east-1.amazonaws.com:587): ");
+	let port;
+	if (host.includes(":")) {
+		const p = host.split(":");
+		host = p[0];
+		port = parseInt(p[1], 10);
+	} else {
+		const a = await ask("Port [587]: ");
+		port = a ? parseInt(a, 10) : 587;
+	}
 
-		if (host.includes(":")) {
-			const parts = host.split(":");
-			host = parts[0];
-			port = parseInt(parts[1], 10);
-		} else {
-			let auto = yield ask("No port provided. Use default 465 (SSL)? (Y/n): ");
-			port = !auto || auto.match(/^y(es)?$/i) ? 465 : 587;
-		}
+	const secure = port === 465;
+	const starttls = port !== 465;
 
-		// SSL/STARTTLS logic
-		let secure = false;
-		let starttls = false;
+	const user = await ask("SMTP username (blank for none): ");
+	const pass = user ? await askHidden("SMTP password: ") : "";
 
-		if (port === 465) {
-			secure = true;
-		} else if (port === 587) {
-			starttls = true;
-		} else {
-			let ans = yield ask("Enable SSL for port " + port + "? (y/N): ");
-			secure = !!ans.match(/^y(es)?$/i);
-		}
+	const wantCfg = await ask("SES configuration set for delivery logging (blank for none): ");
+	const listenPort = await ask("Local listen port [2525]: ");
 
-		let username = yield ask("SMTP username (blank for none): ");
-		let password = "";
+	const lines = [
+		"SMTP_HOST=" + host,
+		"SMTP_PORT=" + port,
+		"SMTP_SECURE=" + (secure ? "true" : "false"),
+		"SMTP_STARTTLS=" + (starttls ? "true" : "false"),
+		"SMTP_USER=" + user,
+		"SMTP_PASSWORD=" + pass,
+		"LISTEN_HOST=127.0.0.1",
+		"LISTEN_PORT=" + (listenPort || 2525)
+	];
+	if (wantCfg) lines.push("SES_CONFIG_SET=" + wantCfg);
 
-		if (username) {
-			// Secure hidden password entry
-			password = yield readPassword("SMTP password: ");
-		}
+	const save = await ask("Save to .env? (Y/n): ");
+	if (!save || /^y(es)?$/i.test(save)) {
+		fs.writeFileSync(".env", lines.join("\n") + "\n", { mode: 0o600 });
+		console.log("\nSaved to .env (mode 600)\n");
+	}
 
-    let enableConfigSet = yield ask("Enable SES delivery logging (X-SES-CONFIGURATION-SET)? (y/N): ");
-    let configSetName = "";
-    if (enableConfigSet.match(/^y(es)?$/i)) {
-      configSetName = yield ask("Enter SES Configuration Set name: ");
-    }
-
-		let save = yield ask("Save to .env for future runs? (Y/n): ");
-		if (!save || save.match(/^y(es)?$/i)) {
-			let lines = [
-				"SMTP_HOST=" + host,
-				"SMTP_PORT=" + port,
-				"SMTP_SECURE=" + (secure ? "true" : "false"),
-				"SMTP_STARTTLS=" + (starttls ? "true" : "false"),
-				"SMTP_USER=" + username,
-				"SMTP_PASSWORD=" + password,
-				"LISTEN_PORT=" + LISTEN_PORT
-			].join("\n");
-      if (configSetName) {
-        lines += "\nSES_CONFIG_SET=" + configSetName;
-      }
-
-			fs.writeFileSync(".env", lines);
-			console.log("\nSaved to .env\n");
-		}
-
-		// Override environment for current run
-		process.env.SMTP_HOST = host;
-		process.env.SMTP_PORT = port;
-		process.env.SMTP_SECURE = secure;
-		process.env.SMTP_STARTTLS = username ? starttls : "false";
-		process.env.SMTP_USER = username;
-		process.env.SMTP_PASSWORD = password;
-    process.env.SES_CONFIG_SET = configSetName || "";
-	});
-
-	return _interactiveSetup.apply(this, arguments);
+	CFG.smtpHost = host;
+	CFG.smtpPort = port;
+	CFG.smtpSecure = secure;
+	CFG.smtpStartTls = starttls;
+	CFG.smtpUser = user || null;
+	CFG.smtpPass = pass || null;
+	CFG.sesConfigSet = wantCfg || null;
+	if (listenPort) CFG.listenPort = parseInt(listenPort, 10);
 }
-_asyncToGenerator(function* () {
-  yield interactiveSetup();
 
-  // Re-bind config values after interactive setup:
-  global.SMTP_HOST = process.env.SMTP_HOST;
-  global.SMTP_PORT = parseInt(process.env.SMTP_PORT || 587, 10);
-  global.SMTP_USER = process.env.SMTP_USER;
-  global.SMTP_PASSWORD = process.env.SMTP_PASSWORD;
-
-  // SSL vs STARTTLS options
-  global.SMTP_SECURE = process.env.SMTP_SECURE === "true"; // port 465
-  global.SMTP_STARTTLS = process.env.SMTP_STARTTLS === "true"; // port 587
-
-  // Expose upstream port for smtpDeliver()
-  global.SMTP_PORT = global.SMTP_PORT;
-
-  // Define TLS listener port (if you want inbound SMTPS)
-  global.LISTEN_PORT_TLS = parseInt(process.env.LISTEN_PORT_TLS || 465, 10);
-
-  // Continue boot…
-  startRelay();
+(async () => {
+	try {
+		await interactiveSetup();
+		if (!CFG.smtpHost) {
+			console.error("No upstream SMTP host configured. Set SMTP_HOST or run interactively.");
+			process.exit(1);
+		}
+		openLog();
+		loadTLSMaterial();
+		startRelay();
+	} catch (err) {
+		console.error("Startup failed:", err);
+		process.exit(1);
+	}
 })();
 
-/********************************************************************
- * END PART 4
- ********************************************************************/
+/*
+ * WHAT CHANGED FROM THE PREVIOUS VERSION
+ * --------------------------------------
+ * 1. flushDigest() reset the digest under the wrong key (`rcpt` instead of
+ *    `rcpt|mailFrom`), so accumulated parts were never cleared and every
+ *    flush re-sent everything plus whatever had arrived since. Unbounded
+ *    amplification. Fixed: one key helper, used everywhere.
+ * 2. The outbound client hung all its work off sock.once("secureConnect"),
+ *    which never fires on a plain socket -- so the STARTTLS path (port 587)
+ *    was dead code. Rewritten as a small client class that handles plain,
+ *    implicit-TLS, and STARTTLS.
+ * 3. AUTH parsing called an undefined bare toUpperCase(), throwing on a bare
+ *    "AUTH"; the mechanism was never case-folded either.
+ * 4. LISTEN_HOST defaulted to 0.0.0.0 with auth optional -- an open relay if
+ *    the port was reachable. Now defaults to 127.0.0.1 and refuses to bind a
+ *    non-loopback address without auth configured.
+ * 5. RCPT rejected a second recipient with 452. Now accepts up to
+ *    MAX_RECIPIENTS.
+ * 6. Digesting is now OFF by default (DIGEST=true to enable). Digesting
+ *    delays and batches mail, which is right for notification fan-out and
+ *    wrong for password resets and login codes.
+ * 7. Added: token-bucket rate limit, hourly circuit breaker, per-message
+ *    logging (from / to / subject / message-id / bytes / outcome), bounded
+ *    retry, session-count guard, quoted-printable header no longer claimed
+ *    for content that isn't encoded.
+ */

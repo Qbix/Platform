@@ -13996,11 +13996,16 @@ Q.Socket.onEvent = Q.Event.factory(
 		});
 		event.onEmpty().set(function () {
 			// Every handler was removed from the event
-			Q.each(Q.Socket.get(ns, url), function (url, qs) {
-				if (qs) { // remove listeners on sockets which are already constructed
-					qs.socket.off(name, event.handle);
+			for (var ns in _qsockets) {
+				for (var u in _qsockets[ns]) {
+					if (u === url || url === '') {
+						var qs = _qsockets[ns][u];
+						if (qs && qs.socket && qs.socket.off) {
+							qs.socket.off(name, event.handle);
+						}
+					}
 				}
-			});
+			}
 	    	Q.each(_socketRegister, function (i, item) {
 				// remove pending listeners on sockets that may be constructed later
 				if (item[0] === name && item[1] === ns) {
