@@ -8,6 +8,30 @@
  * Listens on localhost, relays to an upstream SMTP server (e.g. SES),
  * logs every message, and enforces rate limits.
  *
+ * WHAT CHANGED FROM THE PREVIOUS VERSION
+ * --------------------------------------
+ * 1. flushDigest() reset the digest under the wrong key (`rcpt` instead of
+ *    `rcpt|mailFrom`), so accumulated parts were never cleared and every
+ *    flush re-sent everything plus whatever had arrived since. Unbounded
+ *    amplification. Fixed: one key helper, used everywhere.
+ * 2. The outbound client hung all its work off sock.once("secureConnect"),
+ *    which never fires on a plain socket -- so the STARTTLS path (port 587)
+ *    was dead code. Rewritten as a small client class that handles plain,
+ *    implicit-TLS, and STARTTLS.
+ * 3. AUTH parsing called an undefined bare toUpperCase(), throwing on a bare
+ *    "AUTH"; the mechanism was never case-folded either.
+ * 4. LISTEN_HOST defaulted to 0.0.0.0 with auth optional -- an open relay if
+ *    the port was reachable. Now defaults to 127.0.0.1 and refuses to bind a
+ *    non-loopback address without auth configured.
+ * 5. RCPT rejected a second recipient with 452. Now accepts up to
+ *    MAX_RECIPIENTS.
+ * 6. Digesting is now OFF by default (DIGEST=true to enable). Digesting
+ *    delays and batches mail, which is right for notification fan-out and
+ *    wrong for password resets and login codes.
+ * 7. Added: token-bucket rate limit, hourly circuit breaker, per-message
+ *    logging (from / to / subject / message-id / bytes / outcome), bounded
+ *    retry, session-count guard, quoted-printable header no longer claimed
+ *    for content that isn't encoded.
  *
  * CONFIG (env or .env; CLI --flags override)
  * ------------------------------------------
@@ -54,6 +78,10 @@ loadEnv(ARGS.env || ".env");
 function str(name, flag, dflt) {
 	const v = ARGS[flag] !== undefined ? ARGS[flag] : process.env[name];
 	return v === undefined || v === "" ? dflt : String(v);
+}
+function strAllowEmpty(name, flag, dflt) {
+	const v = (flag && ARGS[flag] !== undefined) ? ARGS[flag] : process.env[name];
+	return v === undefined ? dflt : String(v);
 }
 function num(name, flag, dflt) {
 	const v = str(name, flag, null);
@@ -109,8 +137,18 @@ const CFG = {
 	digestCooldownMin: num("COOLDOWN_MINUTES", "cooldown-minutes", 30),
 	digestSubject: str("SUBJECT_TEMPLATE", "subject", "{{count}} Updates"),
 	digestBypassHeader: str("DIGEST_BYPASS_HEADER", null, "x-no-digest"),
-	sepText: str("SEPARATOR_TEXT", "separator-text", "\n\n---\n\n"),
-	sepHtml: str("SEPARATOR_HTML", "separator-html", "<br><br>---<br><br>"),
+	digestAscending: bool("DIGEST_TIME_ASCENDING", "digest-ascending", true),
+
+	// Templates, not plain strings. See renderSeparator().
+	sepText: strAllowEmpty("SEPARATOR_TEXT", "separator-text",
+		"\n\n----- {{subject}} \u00b7 {{datetime}} -----\n\n"),
+	sepHtml: strAllowEmpty("SEPARATOR_HTML", "separator-html",
+		'<div style="margin:24px 0 8px;padding:6px 0;border-top:1px solid #ddd;' +
+		'font:12px/1.4 -apple-system,Segoe UI,Roboto,sans-serif;color:#666">' +
+		'<strong style="color:#333">{{subject}}</strong><br>{{datetime}}</div>'),
+	sepFirst: bool("SEPARATOR_FIRST", "separator-first", true),
+	locale: str("LOCALE", "locale", "en-US"),
+	timezone: str("TZ_DISPLAY", "timezone", null),
 	maxAttachSize: num("MAX_ATTACHMENT_SIZE", "max-attachment-size", 5 * 1024 * 1024),
 	maxTotalAttach: num("MAX_TOTAL_ATTACH", "max-total-attachments", 10 * 1024 * 1024),
 	globalMemoryCap: num("GLOBAL_MEMORY_CAP", "global-memory-cap", 100 * 1024 * 1024),
@@ -476,6 +514,58 @@ function sanitizeHTML(html, droppedInline) {
 }
 
 /* ------------------------------------------------------------------ *
+ * Separator rendering
+ * ------------------------------------------------------------------ */
+
+function escapeHtml(s) {
+	return String(s == null ? "" : s)
+		.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// CFG.timezone is an IANA name such as "America/New_York"; unset means the
+// host's own zone. Falls back to ISO if the runtime lacks full ICU data,
+// which some minimal Node builds do.
+function formatWhen(date) {
+	const opts = CFG.timezone ? { timeZone: CFG.timezone } : {};
+	try {
+		return {
+			date: date.toLocaleDateString(CFG.locale, Object.assign({
+				year: "numeric", month: "short", day: "numeric"
+			}, opts)),
+			time: date.toLocaleTimeString(CFG.locale, Object.assign({
+				hour: "numeric", minute: "2-digit"
+			}, opts)),
+			datetime: date.toLocaleString(CFG.locale, Object.assign({
+				year: "numeric", month: "short", day: "numeric",
+				hour: "numeric", minute: "2-digit"
+			}, opts))
+		};
+	} catch (e) {
+		const iso = date.toISOString();
+		return {
+			date: iso.slice(0, 10),
+			time: iso.slice(11, 16),
+			datetime: iso.replace("T", " ").slice(0, 16)
+		};
+	}
+}
+
+// `html` selects escaping: subjects arrive from the wire and can contain markup.
+function renderSeparator(template, entry, index, html) {
+	if (!template) return "";
+	const w = formatWhen(entry.at);
+	const esc = v => (html ? escapeHtml(v) : String(v == null ? "" : v));
+	return template
+		.replace(/\{\{subject\}\}/g, esc(entry.subject || "(no subject)"))
+		.replace(/\{\{from\}\}/g, esc(entry.from || ""))
+		.replace(/\{\{datetime\}\}/g, esc(w.datetime))
+		.replace(/\{\{date\}\}/g, esc(w.date))
+		.replace(/\{\{time\}\}/g, esc(w.time))
+		.replace(/\{\{n\}\}/g, String(index + 1));
+}
+
+/* ------------------------------------------------------------------ *
  * Digest store
  *
  * Key is recipient + envelope sender. The previous version built this key in
@@ -503,8 +593,7 @@ function newDigest(mailFrom) {
 		nextDelay: CFG.digestFirstDelay,
 		timer: null,
 		lastReceived: Date.now(),
-		textParts: [],
-		htmlParts: [],
+		entries: [],          // { subject, from, at, text, html }
 		attachments: [],
 		attachBytes: 0,
 		msgCount: 0,
@@ -516,8 +605,10 @@ function estimateDigestMemory() {
 	let total = 0;
 	for (const d of DIGESTS.values()) {
 		for (const a of d.attachments) total += a.size;
-		for (const t of d.textParts) total += Buffer.byteLength(t, "utf8");
-		for (const h of d.htmlParts) total += Buffer.byteLength(h, "utf8");
+		for (const e of d.entries) {
+			total += Buffer.byteLength(e.text || "", "utf8");
+			total += Buffer.byteLength(e.html || "", "utf8");
+		}
 	}
 	return total;
 }
@@ -536,6 +627,20 @@ function addToDigest(rcpt, mailFrom, raw) {
 	}
 	d.lastReceived = now;
 	if (!d.mailFrom) d.mailFrom = mailFrom;
+
+	const split = splitHeaderBody(raw);
+	const headers = parseHeaders(split.headersRaw);
+	const subject = headerValue(headers, "subject");
+	const from = headerValue(headers, "from") || mailFrom;
+
+	// Prefer the message's own Date header. In a digest that batches over an
+	// hour, when it was sent beats when the relay got round to it.
+	let at = new Date();
+	const dateHeader = headerValue(headers, "date");
+	if (dateHeader) {
+		const parsedDate = new Date(dateHeader);
+		if (!isNaN(parsedDate.getTime())) at = parsedDate;
+	}
 
 	const parsed = parseFullMIME(raw);
 
@@ -558,9 +663,6 @@ function addToDigest(rcpt, mailFrom, raw) {
 		return;
 	}
 
-	for (const t of parsed.text) d.textParts.push(t);
-	for (const h of parsed.html) d.htmlParts.push(h);
-
 	const droppedInline = [];
 	for (const a of parsed.attachments) {
 		if (a.size > CFG.maxAttachSize || d.attachBytes + a.size > CFG.maxTotalAttach) {
@@ -575,9 +677,16 @@ function addToDigest(rcpt, mailFrom, raw) {
 		metrics.attach_forwarded++;
 	}
 
-	if (droppedInline.length && d.htmlParts.length) {
-		d.htmlParts = [sanitizeHTML(d.htmlParts.join(CFG.sepHtml), droppedInline)];
-	}
+	let html = parsed.html.join("");
+	if (droppedInline.length && html) html = sanitizeHTML(html, droppedInline);
+
+	d.entries.push({
+		subject: subject,
+		from: from,
+		at: at,
+		text: parsed.text.join("\n"),
+		html: html
+	});
 
 	d.msgCount++;
 	DIGESTS.set(key, d);
@@ -615,8 +724,29 @@ function flushDigest(rcpt, mailFrom) {
 }
 
 function buildDigestMIME(rcpt, d) {
-	let text = d.textParts.join(CFG.sepText);
-	let html = d.htmlParts.join(CFG.sepHtml);
+	const entries = d.entries.slice();
+	if (CFG.digestAscending) entries.sort((a, b) => a.at - b.at);
+
+	const textChunks = [];
+	const htmlChunks = [];
+
+	entries.forEach((e, i) => {
+		const showSep = (i > 0) || CFG.sepFirst;
+		const sepT = showSep ? renderSeparator(CFG.sepText, e, i, false) : "";
+		const sepH = showSep ? renderSeparator(CFG.sepHtml, e, i, true) : "";
+
+		if (e.text) textChunks.push(sepT + e.text);
+		if (e.html) htmlChunks.push(sepH + e.html);
+
+		// A message with neither part still deserves a line in the digest.
+		if (!e.text && !e.html) {
+			if (sepT) textChunks.push(sepT);
+			if (sepH) htmlChunks.push(sepH);
+		}
+	});
+
+	let text = textChunks.join("");
+	let html = htmlChunks.join("");
 
 	if (d.omitMeta.count > 0) {
 		const note = CFG.omitFormat
@@ -624,7 +754,7 @@ function buildDigestMIME(rcpt, d) {
 			.replace("{{A}}", d.omitMeta.attachCount)
 			.replace("{{S}}", d.omitMeta.attachBytes);
 		if (text) text += "\n\n" + note;
-		if (html) html += "<br><br>" + note;
+		if (html) html += "<br><br>" + escapeHtml(note);
 		if (!text && !html) text = note;
 	}
 
@@ -1480,30 +1610,3 @@ async function interactiveSetup() {
 		process.exit(1);
 	}
 })();
-
-/*
- * WHAT CHANGED FROM THE PREVIOUS VERSION
- * --------------------------------------
- * 1. flushDigest() reset the digest under the wrong key (`rcpt` instead of
- *    `rcpt|mailFrom`), so accumulated parts were never cleared and every
- *    flush re-sent everything plus whatever had arrived since. Unbounded
- *    amplification. Fixed: one key helper, used everywhere.
- * 2. The outbound client hung all its work off sock.once("secureConnect"),
- *    which never fires on a plain socket -- so the STARTTLS path (port 587)
- *    was dead code. Rewritten as a small client class that handles plain,
- *    implicit-TLS, and STARTTLS.
- * 3. AUTH parsing called an undefined bare toUpperCase(), throwing on a bare
- *    "AUTH"; the mechanism was never case-folded either.
- * 4. LISTEN_HOST defaulted to 0.0.0.0 with auth optional -- an open relay if
- *    the port was reachable. Now defaults to 127.0.0.1 and refuses to bind a
- *    non-loopback address without auth configured.
- * 5. RCPT rejected a second recipient with 452. Now accepts up to
- *    MAX_RECIPIENTS.
- * 6. Digesting is now OFF by default (DIGEST=true to enable). Digesting
- *    delays and batches mail, which is right for notification fan-out and
- *    wrong for password resets and login codes.
- * 7. Added: token-bucket rate limit, hourly circuit breaker, per-message
- *    logging (from / to / subject / message-id / bytes / outcome), bounded
- *    retry, session-count guard, quoted-printable header no longer claimed
- *    for content that isn't encoded.
- */
