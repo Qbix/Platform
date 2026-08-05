@@ -300,8 +300,9 @@ function _request(method, uri, data, userAgent, header, callback) {
 
 	var urlModule = require('url');
 	var parts = urlModule.parse(url);
-	var host = parts.host;
-	if (!ip) ip = host;
+	var host = parts.host;            // includes the port, e.g. "127.0.0.1:8740"
+
+	if (!ip) ip = parts.hostname;
 
 	var request_uri = parts.pathname;
 	var port = parts.port ? ":" + parts.port : '';
@@ -528,12 +529,20 @@ Utils.sendToPHP = function(path, data, options) {
         url = baseUrl + '/action.php/' + path;
     }
 
-    var payload = Object.assign({}, data, { Q_method: method });
+    // Callers may override this by passing options.slotNames.
+    var payload = Object.assign({}, data, {
+        Q_method: method,
+        Q_slotNames: (options.slotNames || data.Q_slotNames || 'data'),
+        Q_ajax: (options.ajax || data.Q_ajax || 'json')
+    });
     var signed  = Utils.sign(payload, options.fieldKeys);
 
     return _request(method, url, signed, options.userAgent || 'Node/Q.Utils')
     .then(function(body) {
         var parsed;
+        if (typeof body === 'string') {
+            body = body.replace(/^[\u0000\uFEFF\s]+/, '');
+        }
         try { parsed = JSON.parse(body); } catch(e) {
             throw new Error('Q.Utils.sendToPHP: invalid JSON response from ' + path + ': ' + body);
         }

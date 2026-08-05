@@ -317,8 +317,11 @@ class Q_Request
 				throw new Exception('Cannot infer host: neither HTTP_HOST nor SERVER_NAME is set');
 			}
 
+			// Only append if $server_name does not already contain a port.
 			$port = '';
-			if (isset($_SERVER['SERVER_PORT']) && !in_array($_SERVER['SERVER_PORT'], array(80, 443))) {
+			if (strpos($server_name, ':') === false
+			&& isset($_SERVER['SERVER_PORT'])
+			&& !in_array($_SERVER['SERVER_PORT'], array(80, 443))) {
 				$port = ':' . $_SERVER['SERVER_PORT'];
 			}
 
@@ -400,6 +403,17 @@ class Q_Request
 	 $returnInvalidUrls = false)
 	{
 		if (!isset($url)) {
+			// When the request came in through a front controller with extra path
+			// (e.g. action.php/Safebox/workload), PATH_INFO *is* the tail — that is
+			// exactly what it means. Trusting it avoids depending on
+			// Q/web/controllerSuffix being configured to match whatever script the
+			// caller used. Q.Utils.sendToPHP hardcodes ".../action.php/<path>",
+			// while controllerSuffix defaults to '' — so without this the tail kept
+			// the leading "action.php/" and no route ever matched, which is why
+			// every Node->PHP call resolved to the app's notFound page.
+			if (!empty($_SERVER['PATH_INFO'])) {
+				return ltrim($_SERVER['PATH_INFO'], '/');
+			}
 			$url = self::url();
 		} else if (!Q_Valid::url($url)){
 			return $returnInvalidUrls ? $url : null;
@@ -1616,7 +1630,9 @@ class Q_Request
 				$port = ':' . $_SERVER['SERVER_PORT'];
 			}
 		} else {
-			if (isset($_SERVER['SERVER_PORT'])) {
+			// Only append if $server_name does not already contain a port.
+			if (isset($_SERVER['SERVER_PORT'])
+			&& strpos($server_name, ':') === false) {
 				$port = ':' . $_SERVER['SERVER_PORT'];
 			}
 		}
@@ -1678,7 +1694,9 @@ class Q_Request
 				$port = ':' . $_SERVER['SERVER_PORT'];
 			}
 		} else {
-			if (isset($_SERVER['SERVER_PORT'])) {
+			// Only append if $server_name does not already contain a port.
+			if (isset($_SERVER['SERVER_PORT'])
+			&& strpos($server_name, ':') === false) {
 				$port = ':' . $_SERVER['SERVER_PORT'];
 			}
 		}
@@ -1754,6 +1772,7 @@ class Q_Request
 	 * @type string
 	 */
 	static protected $url = null;
+
 	/**
 	 * @property $uri
 	 * @static

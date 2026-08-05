@@ -354,7 +354,6 @@ class Q_Session
 					self::savePath();
 				}
 				if (Q_Request::isInternal()) {
-					echo "\0";
 					@session_start();
 				} else {
 					session_start();

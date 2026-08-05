@@ -2362,7 +2362,7 @@ class Q_Response
 	 *
 	 * If called, sendCacheControlHeaders() will use these directives
 	 * instead of computing them automatically from session state.
-	 * Supports s-maxage for Q_WebServer_Cache (server-side TTL).
+	 * Supports s-maxage for various webserver caching (server-side TTL).
 	 *
 	 * Usage:
 	 *   // Public community page, server caches 5 min:
