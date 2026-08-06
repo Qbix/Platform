@@ -42,7 +42,7 @@
 			"*": {
 				"dsn": "mysql:host=127.0.0.1;dbname=MyApp",
 				"username": "MyApp",
-				"password": "somepassword",
+				"password": "TODO: CHANGE TO A STRONG PASSWORD",
 				"driver_options": { "3": 2 }	
 			},
 			"Users": { "prefix": "users_" },
