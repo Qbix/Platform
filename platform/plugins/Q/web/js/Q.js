@@ -16446,11 +16446,23 @@ Q.Dialogs = {
 		bottomMargin: '5%' // or in absolute pixel values
 	},
 
-	onPush: new Q.Event(),
-    onPop: new Q.Event(),
-	
+	/**
+	 * Occurs when a dialog has been opened and put on the stack.
+	 * Handlers receive (dialog).
+	 * @event onOpen
+	 */
+	onOpen: new Q.Event(),
+	/**
+	 * Occurs when a dialog has actually closed and left the stack.
+	 * Does not fire for a close that beforeClose cancelled, nor for
+	 * Q.Dialogs.pop(true), which detaches without closing.
+	 * Handlers receive (dialog, options).
+	 * @event onClose
+	 */
+	onClose: new Q.Event(),
+
 	dialogs: [], // stack of dialogs that is currently being shown
-	
+
 	/**
 	 * Shows the dialog and pushes it on top of internal dialog stack.
 	 * @static
@@ -16507,6 +16519,9 @@ Q.Dialogs = {
 	 *   called when dialog is closed and hidden and probably 
 	 *   removed from DOM (if 'removeOnClose' is 'true').
 	 * @return {HTMLElement} The HTML element of the dialog that was just pushed.
+	 *   NOTE: if options.template or options.stylesheet is used and no options.dialog
+	 *   was provided, the element is created asynchronously and undefined is returned.
+	 *   Listen to Q.Dialogs.onOpen, or use options.onActivate, in that case.
 	 */
 	push: function(options) {
 		document.activeElement && document.activeElement.blur();
@@ -16526,7 +16541,6 @@ Q.Dialogs = {
 		} else {
 			_proceed1(o.content);
 		}
-		Q.handle(Q.Dialogs.onPush, Q.Dialogs, [dialog]);
 		return dialog;
 		function _proceed1(content) {
 			if (o.stylesheet) {
@@ -16569,7 +16583,7 @@ Q.Dialogs = {
 				}
 			}
 			if (content) {
-				if (typeof o.title === 'string') {
+				if (typeof content === 'string') {
 					$(contentElement).html(content);
 				} else {
 					$(contentElement).empty().append(content);
@@ -16578,15 +16592,33 @@ Q.Dialogs = {
 			}
 			dialog.style.display = 'none';
 			(o.appendTo || document.body).append(dialog);
-			var _onClose = o.onClose;
-			o.onClose = new Q.Event(function(dialog, options) {
-				if (!Q.Dialogs.dontPopOnClose) {
-					Q.Dialogs.pop(true);
+
+			// If beforeClose cancels the close, put the dialog back where it was.
+			// Q.Dialogs.close() detaches synchronously, but the plugin only asks
+			// beforeClose a tick later, so a cancelled close has to be undone.
+			var _beforeClose = o.beforeClose;
+			o.beforeClose = new Q.Event(function (element) {
+				if (false === Q.handle(o.beforeClose.original, dialog, [dialog])) {
+					Q.Dialogs.attach(dialog);
+					return false;
 				}
-				Q.Dialogs.dontPopOnClose = false;
+			}, 'Q.Dialogs');
+			o.beforeClose.original = _beforeClose;
+
+			// However this dialog ends up being closed -- Q.Dialogs.pop(),
+			// Q.Dialogs.close(), the close button, the Esc key, closeOnMask,
+			// closeAfterDelay, or a tool calling close() on itself -- it leaves
+			// the stack. detach() is by identity and idempotent, so it does not
+			// matter whether close() already detached it first.
+			var _onClose = o.onClose;
+			o.onClose = new Q.Event(function (element, options) {
+				Q.Dialogs.detach(dialog);
+				dialog.Q_hidDialog = null;
+				Q.handle(Q.Dialogs.onClose, Q.Dialogs, [dialog, options]);
 				Q.handle(o.onClose.original, dialog, [dialog, options]);
 			}, 'Q.Dialogs');
 			o.onClose.original = _onClose;
+
 			var topDialog = null;
 			var dialogs = Q.Dialogs.dialogs;
 			dialog.isFullscreen = o.fullscreen;
@@ -16597,11 +16629,13 @@ Q.Dialogs = {
 				dialogs.push(dialog);
 				if (o.hidePrevious && topDialog) {
 					topDialog.addClass('Q_behind');
+					dialog.Q_hidDialog = topDialog;
 				}
 			}
+			Q.handle(Q.Dialogs.onOpen, Q.Dialogs, [dialog]);
 			if (o.closeAfterDelay) {
 				setTimeout(function () {
-					$dialog.close();
+					Q.Dialogs.close(dialog);
 				}, o.closeAfterDelay);
 			}
 			try {
@@ -16613,51 +16647,48 @@ Q.Dialogs = {
 				return;
 			}
 			Q.Dialogs.interval = setInterval(function () {
-				// just in case, hide the mask when the last dialog is hidden
+				// just in case, hide the mask when the last dialog is hidden.
+				// NOTE: htmlClass is NOT removed here -- Q/overlay refcounts it,
+				// and this closure would otherwise remove the class belonging to
+				// whichever dialog happened to start the interval.
 				var e1 = document.querySelector('.Q_overlay_open');
 				if ((!e1 || !e1.getBoundingClientRect().width)) {
 					Q.Masks.hide('Q.dialog.mask');
-					o.htmlClass && document.documentElement.removeClass(o.htmlClass);
 					clearInterval(Q.Dialogs.interval);
 					Q.Dialogs.interval = null;
 				}
 			}, 300);
 		}
 	},
-	
+
 	/**
-	 * Closes dialog and removes it from top of internal dialog stack.
+	 * Closes the dialog on top of the stack, and removes it from the stack.
 	 * @static
      * @method pop
-	 * @param {boolean} dontTriggerClose is for internal use only, prevents closing the dialog
-	 * @param {Object} options any options to send to onClose handlers
-	 * @return {HTMLElement} The HTML element of the dialog that was just popped.
+	 * @param {boolean} [dontTriggerClose=false] pass true if you are closing the
+	 *   dialog yourself, and only want it detached from the stack. In that case
+	 *   Q.Dialogs.onClose does not fire here -- it fires when the dialog
+	 *   actually closes.
+	 * @param {Object} [options] any options to send to onClose handlers
+	 * @return {HTMLElement|null} The HTML element of the dialog that was just popped.
 	 */
 	pop: function(dontTriggerClose, options) {
-		if (dontTriggerClose === undefined) {
-			dontTriggerClose = false;
+		var dialog = Q.Dialogs.element();
+		if (!dialog) {
+			return null;
 		}
-
-		var dialog = this.dialogs.pop();
-		var $dialog = $(dialog);
-
-		if (this.dialogs.length) {
-			this.dialogs[this.dialogs.length - 1].removeClass('Q_behind');
+		if (dontTriggerClose) {
+			Q.Dialogs.detach(dialog);
+			return dialog;
 		}
-		if (!dontTriggerClose && $dialog) {
-			Q.Dialogs.dontPopOnClose = true;
-			if ($dialog.data('Q/overlay')) {
-				$dialog.data('Q/overlay').close(null, options);
-			} else if ($dialog.data('Q/dialog')) {
-				$dialog.data('Q/dialog').close(null, options);
-			}
-		}
-		Q.handle(Q.Dialogs.onPop, Q.Dialogs, [dialog, options]);
-		return $dialog[0];
+		return Q.Dialogs.close(dialog, options);
 	},
 
 	/**
-	 * Closes a specific dialog and removes it from top of internal dialog stack.
+	 * Closes a specific dialog, wherever it is in the stack.
+	 * The dialog is detached from the stack synchronously, so the stack is
+	 * already correct when this returns, even though the dialog is still
+	 * fading out. If beforeClose cancels the close, it is re-attached.
 	 * @static
      * @method close
 	 * @param {Number|Element|jQuery} dialog You can pass an element here, or index in the dialog stack
@@ -16665,33 +16696,75 @@ Q.Dialogs = {
 	 * @return {HTMLElement|null} The HTML element of the dialog that was just closed, or null if not found.
 	 */
 	close: function(dialog, options) {
-		var index = -1;
 		if (Q.isInteger(dialog)) {
-			index = dialog;
-			dialog = this.dialogs[index];
+			dialog = this.dialogs[dialog];
 		}
 		if (dialog instanceof root.jQuery) {
 			dialog = dialog[0];
 		}
-		if (dialog instanceof Element) {
-			Q.each(this.dialogs, function (i, d) {
-				if (d === dialog) {
-					index = i;
-					return false;
-				}
-			});
+		if (!(dialog instanceof Element)) {
+			return null;
 		}
-		if (index >= 0) {
-			if (index < this.dialogs.length-1) {
-				Q.Dialogs.dontPopOnClose = true;
-				this.dialogs.splice(index, 1);
-			}
-			$(dialog).plugin('Q/dialog', 'close', options);
-			return dialog;
+		if (this.dialogs.indexOf(dialog) < 0) {
+			return null;
 		}
-		return null;
+		Q.Dialogs.detach(dialog);
+		$(dialog).plugin('Q/dialog', 'close', options);
+		return dialog;
 	},
-	
+
+	/**
+	 * Removes a dialog from the stack, by identity, without closing it.
+	 * Idempotent -- safe to call on a dialog that already left the stack.
+	 * Fires no events: it is a stack operation, and the dialog may still be
+	 * on screen (or may turn out not to close at all, if beforeClose says so).
+	 * @static
+     * @method detach
+	 * @param {HTMLElement} dialog
+	 * @return {boolean} whether the dialog was in the stack
+	 */
+	detach: function (dialog) {
+		var dialogs = Q.Dialogs.dialogs;
+		var index = dialogs.indexOf(dialog);
+		if (index < 0) {
+			return false;
+		}
+		dialog.Q_stackIndex = index; // so attach() can put it back here
+		dialogs.splice(index, 1);
+		if (dialog.Q_hidDialog) {
+			// reveal whichever dialog THIS one hid on the way in.
+			// Q_hidDialog itself is cleared by onClose, not here, so that
+			// a cancelled close can be undone by attach().
+			dialog.Q_hidDialog.removeClass('Q_behind');
+		}
+		return true;
+	},
+
+	/**
+	 * Puts a detached dialog back where it was in the stack. Used when
+	 * beforeClose cancels a close that was already detached. Fires no events --
+	 * from the outside, nothing opened or closed.
+	 * @static
+     * @method attach
+	 * @param {HTMLElement} dialog
+	 * @return {boolean} whether the dialog was re-attached
+	 */
+	attach: function (dialog) {
+		var dialogs = Q.Dialogs.dialogs;
+		if (dialogs.indexOf(dialog) >= 0) {
+			return false;
+		}
+		var index = dialog.Q_stackIndex;
+		if (index == null || index > dialogs.length) {
+			index = dialogs.length;
+		}
+		dialogs.splice(index, 0, dialog);
+		if (dialog.Q_hidDialog) {
+			dialog.Q_hidDialog.addClass('Q_behind');
+		}
+		return true;
+	},
+
 	/**
 	 * Returns the HTML element of the dialog on top of the stack, if any
 	 * @static
@@ -16707,6 +16780,14 @@ Q.Dialogs = {
 
 Q.info.useFullscreen = Q.info.isMobile && Q.info.isAndroid(1000)
 	&& Q.info.isAndroidStock && Q.info.browserMainVersion < 11;
+
+/**
+ * @deprecated use Q.Dialogs.onOpen and Q.Dialogs.onClose instead.
+ * These are the same Q.Event objects, so .set() and .add() on them still work.
+ * Do not reassign them, or the alias breaks.
+ */
+Q.Dialogs.onPush = Q.Dialogs.onOpen;
+Q.Dialogs.onPop = Q.Dialogs.onClose;
 
 Q.Dialogs.push.options = {
 	dialog: null,

@@ -3,6 +3,45 @@
 var _htmlClassCount = {};
 
 /**
+ * Removes an element from the module-level dialogs stack, by identity.
+ * Safe to call with an element that isn't in the stack.
+ * @private
+ * @return {Boolean} whether the element was in the stack
+ */
+function _removeDialog(element) {
+	var index = dialogs.indexOf(element);
+	if (index < 0) {
+		return false;
+	}
+	dialogs.splice(index, 1);
+	return true;
+}
+
+/**
+ * Adds an element to the module-level dialogs stack, unless already there.
+ * @private
+ */
+function _addDialog(element) {
+	if (dialogs.indexOf(element) < 0) {
+		dialogs.push(element);
+	}
+}
+
+/**
+ * Sets the mask z-index just below the topmost remaining dialog.
+ * @private
+ */
+function _updateMaskZIndex() {
+	var $lastDialog = $(dialogs[dialogs.length-1]);
+	if ($lastDialog.length) {
+		var zIndex = parseInt($lastDialog.css('z-index'));
+		if (zIndex) {
+			Q.Masks.mask('Q.dialog.mask', {'zIndex': zIndex - 1});
+		}
+	}
+}
+
+/**
  * This plugin Makes an overlay to show some content above the page.
  * Suitable for showing dialogs, for example.
  * It does not automatically activate its contents, like Q/dialog does.
@@ -136,7 +175,7 @@ Q.Tool.jQuery('Q/overlay',
 				Q.handle(data.options.beforeLoad, $this[0], [$this[0]]);
 				calculatePosition($this);
 				$this.show();
-				dialogs.push($this[0]);
+				_addDialog($this[0]);
 				data.bodyStyle = {
 					left: $body.css('left'),
 					top: $body.css('top')
@@ -232,22 +271,25 @@ Q.Tool.jQuery('Q/overlay',
 				// defer one tick, in case close was called synchronously
 				// e.g. by a tool, while opening the dialog
 				setTimeout(function () {
+					var data = $this.data('Q/overlay');
+					// beforeClose can cancel the close, so ask it BEFORE
+					// touching the stack, the scroll position or the handlers
+					if (false === Q.handle(data.options.beforeClose, $this[0], [$this[0]])) {
+						return false;
+					}
 					Q.Visual.cancelClick();
 					Q.Visual.stopHints($this[0]);
-					dialogs.pop();
-					var data = $this.data('Q/overlay');
+					// remove THIS overlay from the stack, wherever it sits in it
+					_removeDialog($this[0]);
 					setTimeout(function () {
 						$body.removeClass('Q_preventScroll').css(data.bodyStyle);
 						window.scrollTo(data.windowParams.scrollLeft, data.windowParams.scrollTop);
 					}, 500);
 					if (!data.options.noClose) {
-						$(document).off('keydown', closeThisOverlayOnEsc);
+						$(document).off('keydown.Q_dialog', closeThisOverlayOnEsc);
 					}
 					$this.find('input, select, textarea').trigger('blur');
 
-					if (false === Q.handle(data.options.beforeClose, $this[0], [$this[0]])) {
-						return false;
-					}
 					$this.removeClass('Q_overlay_open');
 					if (data.options.fadeInOut
 					&& !document.documentElement.hasClass('Q_dialogs_animationFX')) {
@@ -321,6 +363,7 @@ Q.Tool.jQuery('Q/overlay',
 		remove: function () {
 			this.each(function() {
 				var $this = $(this);
+				_removeDialog(this);
 				$this.find('a.close').remove();
 				$this.removeClass('Q_overlay');
 				$this.removeData('Q/overlay');
@@ -425,13 +468,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 					},
 					"Q.Dialogs.updateMask": function () {
 						// set z-index of mask less than visible dialog element
-						var $lastDialog = $(dialogs[dialogs.length-1]);
-						if ($lastDialog.length) {
-							var zIndex = parseInt($lastDialog.css('z-index'));
-							if (zIndex) {
-								Q.Masks.mask('Q.dialog.mask', {'zIndex': zIndex - 1});
-							}
-						}
+						_updateMaskZIndex();
 					}
 				},
 				noCalculatePosition: o.noCalculatePosition,
@@ -463,19 +500,30 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 			$this.addClass('Q_fullscreen_dialog');
 			o.className && $this.addClass(o.className);
 			$this.css({
-				'width': '100dw',
+				'width': '100dvw',
 				'height': '100dvh'
 			});
 
 			$this.hide();
+
+			var _onEsc = function (e) {
+				if (e.which !== 27) {
+					return;
+				}
+				var topDialog = dialogs[dialogs.length - 1];
+				if (topDialog && topDialog !== $this[0]) {
+					return; // this dialog isn't the topmost one
+				}
+				dialogData.close(e);
+			};
 
 			var dialogData = {
 				load: function() {
 					if ($this.hasClass('Q_overlay_open')) {
 						return;
 					}
-					Q.Pointer.cancelClick();
-					dialogs.push($this[0]);
+					Q.Visual.cancelClick();
+					_addDialog($this[0]);
 					var topZ = Q.zIndexTopmost();
 					$this.css('z-index', topZ + 1);
 					$this.css({
@@ -503,28 +551,27 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 					if (false === Q.handle(o.beforeClose, $this[0], [$this[0]])) {
 						return false;
 					}
-					Q.Pointer.cancelClick();
+					Q.Visual.cancelClick();
 					for (var i = 0; i < hiddenChildren.length; i++) {
 						hiddenChildren[i].removeClass('Q_hide');
 					}
 					var data = $this.data('Q/dialog');
 					window.scrollTo(data.windowParams.scrollLeft, data.windowParams.scrollTop);
 
+					if (o.closeOnEsc) {
+						$(document).off('keydown.Q_dialog', _onEsc);
+					}
+
 					if (o.removeOnClose) {
 						Q.removeElement($this[0], true);
 					} else {
 						$this.hide();
 					}
-					dialogs.pop();
+					// remove THIS dialog from the stack, wherever it sits in it
+					_removeDialog($this[0]);
 
 					// set z-index of mask less than visible dialog element
-					var $lastDialog = $(dialogs[dialogs.length-1]);
-					if ($lastDialog.length) {
-						var zIndex = parseInt($lastDialog.css('z-index'));
-						if (zIndex) {
-							Q.Masks.mask('Q.dialog.mask', {'zIndex': zIndex - 1});
-						}
-					}
+					_updateMaskZIndex();
 
 					Q.handle(o.onClose, $this[0], [$this[0], options || {}]);
 					if (e) e.preventDefault();
@@ -539,11 +586,7 @@ Q.Tool.jQuery('Q/dialog', function _Q_dialog (o) {
 			}
 
 			if (o.closeOnEsc) {
-				$(document).on('keydown.Q_dialog', function(e) {
-					if (e.which === 27) {
-						dialogData.close(e);
-					}
-				});
+				$(document).on('keydown.Q_dialog', _onEsc);
 			}
 
 			$this.data('Q/dialog', dialogData);

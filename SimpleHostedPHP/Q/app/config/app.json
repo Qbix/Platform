@@ -97,8 +97,8 @@
 				"email": {
 					"*": ["MyApp/email"]
 				},
-				"sms": {
-					"*": ["MyApp/sms"]
+				"mobile": {
+					"*": ["MyApp/mobile"]
 				},
 				"dialogs": {
 					"*": ["MyApp/dialogs"]
