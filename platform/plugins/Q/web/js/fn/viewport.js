@@ -209,15 +209,23 @@ function _Q_viewport(options) {
 				return;
 			}
 
-			// single-finger / mouse pan
+			// single-finger / mouse pan.
+			// Check e.buttons, not Q.Pointer.which(e): under pointer events the spec
+			// sets button to -1 on a move with no button change, and Q.Pointer.which
+			// does (button & 1 ? 1 : ...), so -1 reads as LEFT and a buttonless
+			// pointermove would look like a held-down drag. e.buttons is a bitmask of
+			// what is actually down right now, and is undefined on touch events.
+			if (!Q.info.isTouchscreen
+			&& e.buttons !== undefined && !(e.buttons & 1)) {
+				// nothing is pressed anymore: stop following the pointer, and drop the
+				// listeners in case we somehow outlived our own end event
+				_teardown();
+				return;
+			}
 			if (gesture.mode !== 'pan' || !gesture.grab) {
 				// first move, or dropped back from a pinch to one finger:
 				// re-anchor so the content doesn't jump
 				_beginPan(e);
-				return;
-			}
-			if (!Q.info.isTouchscreen
-			&& Q.Pointer.which(e) !== Q.Pointer.which.LEFT) {
 				return;
 			}
 			var f = useZoom ? state.scale : 1;
@@ -261,9 +269,16 @@ function _Q_viewport(options) {
 			gesture.mode = null;
 			gesture.grab = gesture.pos = null;
 			gesture.pinchDistance = 0;
-			Q.removeEventListener(container[0], Q.Pointer.move, _moveHandler, {passive: false});
-			Q.removeEventListener(window, Q.Pointer.end, _endHandler, {passive: false});
-			Q.removeEventListener(window, Q.Pointer.cancel, _cancelHandler, {passive: false});
+			// Pass false, not {passive: false}, as the fourth argument here.
+			// Q.addEventListener normalizes a plain object (so {passive: false}
+			// registers in the bubble phase), but Q.removeEventListener does
+			// element.removeEventListener(eventName, handler, !!useCapture) --
+			// and !!{passive: false} is true, i.e. "remove the capture-phase
+			// listener", which never matches and silently removes nothing.
+			// passive isn't part of the removal match; only capture is.
+			Q.removeEventListener(container[0], Q.Pointer.move, _moveHandler, false);
+			Q.removeEventListener(window, Q.Pointer.end, _endHandler, false);
+			Q.removeEventListener(window, Q.Pointer.cancel, _cancelHandler, false);
 		}
 
 		container.on('dragstart', function () {

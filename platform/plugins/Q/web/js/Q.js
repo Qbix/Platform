@@ -9508,6 +9508,9 @@ Q.removeEventListener = function _Q_removeEventListener(element, eventName, even
 	}
 
 	useCapture = useCapture || false;
+	if (Q.isPlainObject(useCapture)) {
+		useCapture = !!useCapture.capture;
+	}
 	var handler = (eventHandler.typename === "Q.Event"
 		? eventHandler.eventListener
 		: eventHandler);
