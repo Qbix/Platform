@@ -18205,7 +18205,17 @@ Q.Camera = {
 			},
 			dialog: {
 				title: Q.text.Q.scan.QR
-			}
+			},
+			video: {
+				// asked for as "ideal", so an unmet constraint degrades
+				// instead of throwing OverconstrainedError
+				width: 1920,
+				height: 1080,
+				facingMode: "environment"
+			},
+			// fraction of the shorter viewfinder side to scan
+			qrboxRatio: 0.8,
+			fps: 10
 		},
 		/**
 		 * Starts QR scanning interface, until the user stops it.
@@ -18290,6 +18300,47 @@ Q.Camera = {
 				return Q.handle(onResult, Q.Camera.Scan.animatedQR, [result]);
 			}, options);
 		},
+		/**
+		 * Builds the config object passed to html5-qrcode.
+		 * Kept separate so both the Html5QrcodeScanner branch and the
+		 * Q/scanQR tool branch below get exactly the same settings.
+		 * @method config
+		 * @static
+		 * @param {Object} [options] as passed to Q.Camera.Scan.QR
+		 * @return {Object}
+		 */
+		config: function (options) {
+			var o = Q.extend({}, Q.Camera.Scan.options, options);
+			var ratio = o.qrboxRatio || 0.8;
+			var config = {
+				fps: o.fps || 10,
+				qrbox: function (viewfinderWidth, viewfinderHeight) {
+					// computed against the real frame, so it can't go
+					// negative or exceed the video
+					var side = Math.floor(
+						Math.min(viewfinderWidth, viewfinderHeight) * ratio
+					);
+					return { width: side, height: side };
+				},
+				videoConstraints: {
+					facingMode: { ideal: o.video.facingMode },
+					width: { ideal: o.video.width },
+					height: { ideal: o.video.height }
+				}
+			};
+			// only present in newer builds of html5-qrcode
+			if (root.Html5QrcodeSupportedFormats) {
+				config.formatsToSupport = [
+					root.Html5QrcodeSupportedFormats.QR_CODE
+				];
+			} else {
+				console.warn("Q.Camera.Scan: html5-qrcode has no "
+					+ "Html5QrcodeSupportedFormats — it is too old to "
+					+ "restrict formats, and 1D readers will starve the "
+					+ "QR reader. Update Q/js/qrcode/html5-qrcode.min.js");
+			}
+			return config;
+		},
 		adapters: {
 			/**
 			 * Using to scan QR codes using QRScanner Cordova plugin
@@ -18362,7 +18413,7 @@ Q.Camera = {
 			},
 			/**
 			 * Using to scan QR code with first camera found on device
-			 * (using Instascan library dynamically loaded)
+			 * (using html5-qrcode library dynamically loaded)
 			 * @method instascan
 			 * @static
 			 * @param {Q.Audio} audio Q.Audio with loaded audio file to play when QR code found
@@ -18391,34 +18442,27 @@ Q.Camera = {
 					// set max height
 					$element.height(dialog.offsetHeight - $title.height());
 
-					var elementHeight = $element.height();
-					var elementWidth = $element.width();
-
 					var elementId = "Q_instascan_" + Date.now();
 					$element.prop("id", elementId);
 
+					var config = Q.Camera.Scan.config(options);
+
 					if (Q.getObject("instascan.mode", options) === "scanQR") {
-						return $element.tool("Q/scanQR", {
-							audio,
-							fps: 5,
-							qrbox: {
-								width: elementWidth-50,
-								height: elementHeight-50
-							}
-						}).activate(function () {
+						return $element.tool("Q/scanQR", Q.extend({
+							audio: audio
+						}, config)).activate(function () {
 							this.state.onSuccess.set(callback);
 							this.state.onFailure.set(function (error) {
-								//console.warn(`Code scan error = ${error}`);
+								// fires on every frame with no code in it
 							});
 						});
 					}
 
-					var html5QrcodeScanner = new root.Html5QrcodeScanner(elementId, { fps: 5, qrbox: {width: elementWidth-50, height: elementHeight-50}},
-						/* verbose= */ false);
+					var html5QrcodeScanner = new root.Html5QrcodeScanner(
+						elementId, config, /* verbose= */ true
+					);
 
 					html5QrcodeScanner.render(function onScanSuccess(decodedText, decodedResult) {
-						//console.log(`Scan result: ${decodedText}`, decodedResult);
-
 						if (scannedText.includes(decodedText)) {
 							return;
 						}
@@ -18427,7 +18471,7 @@ Q.Camera = {
 						audio.play();
 						Q.handle(callback, null, [decodedText]);
 					}, function onScanFailure (error) {
-						//console.warn(`Code scan error = ${error}`);
+						// fires on every frame with no code in it
 					});
 
 					$("button", $element).add(".html5-qrcode-element", $element).addClass("Q_button");
