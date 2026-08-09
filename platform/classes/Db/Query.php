@@ -1059,18 +1059,21 @@ abstract class Db_Query extends Db_Expression
 	 *  cache everything. The default is null, which caches everything except empty results.
 	 * @param {integer} [$duration=null] Pass a number of seconds here to also write the
 	 *  results through to Q_Cache, so that subsequent requests reuse them for that long.
-	 *  Ignored unless Q_Cache is connected. Only SELECT queries outside a transaction
-	 *  are ever persisted this way. Nothing invalidates these entries before the
-	 *  duration expires, so only opt in for results you're willing to see stale.
+	 *  Ignored unless Q_Cache is connected. Only SELECT queries running outside any
+	 *  transaction on this connection are ever persisted this way. Nothing invalidates
+	 *  these entries before the duration expires, so only opt in for results you're
+	 *  willing to see stale.
+	 *
+	 *  Each call states the whole caching policy: the duration is not remembered from
+	 *  an earlier call, so caching(true) after caching(true, 60) leaves no duration.
+	 *  caching(false) suppresses both reading and writing, in both tiers.
 	 * @return {Db_Query}
 	 * @chainable
 	 */
 	function caching($mode = null, $duration = null)
 	{
 		$this->caching = $mode;
-		if (isset($duration)) {
-			$this->cacheDuration = $duration;
-		}
+		$this->cacheDuration = $duration;
 		return $this;
 	}
 
@@ -1139,7 +1142,7 @@ abstract class Db_Query extends Db_Expression
 	protected function cacheGet($key, &$found = null)
 	{
 		$found = false;
-		if ($this->ignoreCache) {
+		if ($this->ignoreCache or $this->caching === false) {
 			return null;
 		}
 		if (array_key_exists($key, self::$cache)) {
@@ -1195,7 +1198,8 @@ abstract class Db_Query extends Db_Expression
 	 */
 	protected function canCachePersistently()
 	{
-		if (empty($this->cacheDuration)
+		if ($this->caching === false
+		or empty($this->cacheDuration)
 		or $this->type !== Db_Query::TYPE_SELECT) {
 			return false;
 		}
@@ -1204,7 +1208,39 @@ abstract class Db_Query extends Db_Expression
 				return false;
 			}
 		}
+		// An ordinary SELECT can still be running inside a transaction that some
+		// earlier query began on this connection. Reading a cross-request value
+		// there would hide the transaction's own writes, and writing one there
+		// could publish data that is about to be rolled back.
+		if (self::inTransaction($this->db->connectionName())) {
+			return false;
+		}
 		return class_exists('Q_Cache') and Q_Cache::connected();
+	}
+
+	/**
+	 * Whether any transaction begun with ->begin() is currently open, optionally
+	 * narrowed to one connection. Transactions live on the connection, not on the
+	 * query object, so a query has to ask this rather than look at its own clauses.
+	 * @method inTransaction
+	 * @static
+	 * @param {string} [$connectionName=null] Pass a connection name to ask only
+	 *  about that connection. Omit it to ask whether any transaction is open at all.
+	 * @return {boolean}
+	 */
+	static function inTransaction($connectionName = null)
+	{
+		foreach (self::$nestedTransactions as $t) {
+			if (empty($t['count'])) {
+				continue;
+			}
+			if (!isset($connectionName)
+			or empty($t['connections'])
+			or in_array($connectionName, $t['connections'])) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -2495,6 +2531,9 @@ abstract class Db_Query extends Db_Expression
 	 * @param {string|array} [$by_field=null] A field name to index the result by.
 	 *  Pass an array containing the field name as its only item to accumulate
 	 *  arrays of rows per field instead.
+	 * @param {boolean} [$callAfterFetch=true] Pass false to skip the afterFetch
+	 *  callback on each row. Db_Result::fetchDbRow() has never fired it, and
+	 *  passes false here to keep that behavior.
 	 * @return {array}
 	 * @throws {Exception} If $class_name doesn't extend Db_Row
 	 */
@@ -2503,7 +2542,8 @@ abstract class Db_Query extends Db_Expression
 		Db_Result $result,
 		$class_name = null,
 		$fields_prefix = '',
-		$by_field = null)
+		$by_field = null,
+		$callAfterFetch = true)
 	{
 		if (empty($fields_prefix)) {
 			$fields_prefix = '';
@@ -2544,9 +2584,11 @@ abstract class Db_Query extends Db_Expression
 			if (!$wasSetByField) {
 				$rows[] = $row;
 			}
-			$callback = array($row, "afterFetch");
-			if (is_callable($callback)) {
-				$row->afterFetch($result);
+			if ($callAfterFetch) {
+				$callback = array($row, "afterFetch");
+				if (is_callable($callback)) {
+					$row->afterFetch($result);
+				}
 			}
 		}
 
@@ -3044,8 +3086,11 @@ abstract class Db_Query extends Db_Expression
 			$query->db->setTimezone();
 		}
 
-		if (!isset(self::$nestedTransactions[$dsn])) {
-			self::$nestedTransactions[$dsn] = array(
+		// every other method keys this by spl_object_hash($pdo), not by dsn,
+		// so initialize the entry they will actually use
+		$key = spl_object_hash($pdo);
+		if (!isset(self::$nestedTransactions[$key])) {
+			self::$nestedTransactions[$key] = array(
 				'count' => 0,
 				'keys' => array(),
 				'connections' => array(),
@@ -4010,6 +4055,10 @@ abstract class Db_Query extends Db_Expression
 	 * invalidates them before the duration expires.
 	 *
 	 * Use Db_Query::clearCache() to flush it.
+	 *
+	 * If some plugin or application code out there still reads or resets this
+	 * directly, change `private static` back to `static` here; nothing else in
+	 * this class depends on the visibility.
 	 *
 	 * @property $cache
 	 * @private
