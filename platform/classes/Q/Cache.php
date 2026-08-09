@@ -16,14 +16,15 @@ class Q_Cache
 	static function init() {
 		self::$namespace = defined('APP_DIR') ? APP_DIR : '';
 		self::$apc = extension_loaded('apc');
-		self::$apcu = extension_loaded('apcu')
-			|| (is_callable('apcu_enabled') ? apcu_enabled() : false);
+		self::$apcu = is_callable('apcu_enabled')
+			? apcu_enabled()
+			: extension_loaded('apcu');
 		self::$stores[self::$namespace] = array();
 		self::$durations[self::$namespace] = array();
 		self::$expires[self::$namespace] = array();
 		self::$changed[self::$namespace] = array();
 	}
-	
+
 	/**
 	 * Check if Q_Cache is connected to some PHP cache engine (currently APC)
 	 * @method connected
@@ -33,7 +34,7 @@ class Q_Cache
 	static function connected() {
 		return self::$apc or self::$apcu;
 	}
-	
+
 	/**
 	 * Can be used to ignore the cache for a while, to re-populate it
 	 * @method ignore
@@ -92,7 +93,7 @@ class Q_Cache
 		// In-process hit (respect TTL)
 		if (array_key_exists($key, $store)) {
 			if (isset(self::$expires[self::$namespace][$key])
-			&& self::$expires[self::$namespace][$key] < time()) {
+			and self::$expires[self::$namespace][$key] < time()) {
 				unset($store[$key]);
 				unset(self::$expires[self::$namespace][$key]);
 				return false;
@@ -100,17 +101,14 @@ class Q_Cache
 			return true;
 		}
 
-		// APC/APCu hit
-		$name = "Q_Cache\t" . self::$namespace . "\t" . $key;
-		if (is_callable('apcu_fetch')) {
-			apcu_fetch($name, $found);
-		} else if (is_callable('apc_fetch')) {
-			apc_fetch($name, $found);
-		} else {
-			$found = false;
+		// The key isn't in the store, but this process changed it,
+		// which means it was cleared. Don't resurrect it from the engine.
+		if (!empty(self::$changed[self::$namespace][$key])) {
+			return false;
 		}
 
-		return $found;
+		self::engineFetch(self::engineName($key), $found);
+		return (boolean)$found;
 	}
 
 	/**
@@ -132,7 +130,7 @@ class Q_Cache
 		if (array_key_exists($key, $store)) {
 			// TTL eviction for in-process cache
 			if (isset(self::$expires[self::$namespace][$key])
-			&& self::$expires[self::$namespace][$key] < time()) {
+			and self::$expires[self::$namespace][$key] < time()) {
 				unset($store[$key]);
 				unset(self::$expires[self::$namespace][$key]);
 				$found = false;
@@ -142,43 +140,46 @@ class Q_Cache
 			return $store[$key];
 		}
 
-		// APC/APCu fetch
-		$name = "Q_Cache\t" . self::$namespace . "\t" . $key;
-		if (is_callable('apcu_fetch')) {
-			$value = apcu_fetch($name, $found);
-		} else if (is_callable('apc_fetch')) {
-			$value = apc_fetch($name, $found);
-		} else {
+		// The key isn't in the store, but this process changed it,
+		// which means it was cleared. Don't resurrect it from the engine.
+		if (!empty(self::$changed[self::$namespace][$key])) {
 			$found = false;
+			return $default;
 		}
+
+		$name = self::engineName($key);
+		$value = self::engineFetch($name, $found);
 		if ($found) {
 			$store[$key] = $value;
-			// Track in-process expiration
+			// Track in-process expiration, but never past the engine's own TTL
 			$duration = Q::ifset(
-				self::$durations[self::$namespace],
+				self::$durations,
+				self::$namespace,
 				$key,
 				Q_Config::get('Q', 'cache', 'duration', 600)
 			);
-			self::$expires[self::$namespace][$key] = time() + $duration;
+			self::$expires[self::$namespace][$key]
+				= time() + self::engineTTL($name, $duration);
 			return $value;
 		}
 		return $default;
 	}
 
-
 	/**
 	 * Clear Q_Cache entry
 	 * @method clear
 	 * @static
-	 * @param {string|true} $key The key of cache entry. Skip this to clear all the keys.
-	 *   Pass true to also clear the entire cache, for all namespaces / apps.
+	 * @param {string|true} [$key=null] The key of cache entry. Skip this to clear all the keys
+	 *   in the current namespace. Pass true to also clear the entire cache,
+	 *   for all namespaces / apps, and reset the opcode cache.
 	 * @param {boolean} [$prefix=false] Whether to clear all keys for which $key is a prefix
 	 * @return {boolean} Whether an apc cache was fetched.
 	 */
-	static function clear($key, $prefix = false)
+	static function clear($key = null, $prefix = false)
 	{
 		$namespace = self::$namespace;
 		$store = &self::fetchStore($fetched);
+
 		if (!isset($key) or $key === true) {
 			if ($key === true) {
 				if (is_callable('apcu_clear_cache')) {
@@ -186,27 +187,46 @@ class Q_Cache
 				} else if (is_callable('apc_clear_cache')) {
 					apc_clear_cache('user');
 				}
-			}
-			$store = array();
-			if (is_callable('opcode_reset')) {
-				opcache_reset(); // also reset all the PHP cached files
-			}
-			self::$changed = array();
-			return $fetched;
-		}
-		if (array_key_exists($key, $store)) {
-			if ($prefix) {
-				$len = strlen($key);
-				foreach ($store as $k => $v) {
-					if (substr($k, 0, $len) === $key) {
-						unset($store[$k]);
-					}
+				self::$stores = array($namespace => array());
+				self::$expires = array($namespace => array());
+				self::$durations = array($namespace => array());
+				self::$changed = array($namespace => array());
+				if (is_callable('opcache_reset')) {
+					opcache_reset(); // also reset all the PHP cached files
 				}
 			} else {
-				unset($store[$key]);
+				// clear this namespace only, in the engine as well as in memory
+				foreach ($store as $k => $v) {
+					self::$changed[$namespace][$k] = true;
+				}
+				self::clearEngineByPrefix(self::engineName('', $namespace));
+				$store = array();
+				self::$expires[$namespace] = array();
 			}
-			self::$changed[$namespace][$key] = true; // it will be saved at shutdown
+			return $fetched;
 		}
+
+		$keys = array();
+		if ($prefix) {
+			$len = strlen($key);
+			foreach ($store as $k => $v) {
+				if (substr($k, 0, $len) === $key) {
+					$keys[] = $k;
+				}
+			}
+			// keys living only in the engine can't be seen from the store,
+			// so enumerate them directly when that's possible
+			self::clearEngineByPrefix(self::engineName($key));
+		} else {
+			$keys[] = $key;
+		}
+
+		foreach ($keys as $k) {
+			unset($store[$k]);
+			unset(self::$expires[$namespace][$k]);
+			self::$changed[$namespace][$k] = true; // it will be deleted at shutdown
+		}
+
 		return $fetched;
 	}
 
@@ -222,21 +242,153 @@ class Q_Cache
 	protected static function &fetchStore(&$fetched = null)
 	{
 		static $gcCounter = 0;
-		if ((++$gcCounter % 100) === 0 && isset(self::$expires[self::$namespace])) {
+		$namespace = self::$namespace;
+		if ((++$gcCounter % 100) === 0 and isset(self::$expires[$namespace])) {
 			$now = time();
-			foreach (self::$expires[self::$namespace] as $k => $exp) {
+			foreach (self::$expires[$namespace] as $k => $exp) {
 				if ($exp < $now) {
-					unset(self::$stores[self::$namespace][$k]);
-					unset(self::$expires[self::$namespace][$k]);
+					unset(self::$stores[$namespace][$k]);
+					unset(self::$expires[$namespace][$k]);
 				}
 			}
 		}
-		if (!isset(self::$stores[self::$namespace])) {
+		if (!isset(self::$stores[$namespace])) {
+			self::$stores[$namespace] = array();
+			self::$expires[$namespace] = array();
+			self::$durations[$namespace] = array();
+			self::$changed[$namespace] = array();
 			$fetched = false;
-			return self::$stores[self::$namespace] = array();
+			return self::$stores[$namespace];
 		}
 		$fetched = true;
-		return self::$stores[self::$namespace];
+		return self::$stores[$namespace];
+	}
+
+	/**
+	 * Deletes every entry in the cache engine whose name starts with the given
+	 * prefix. Entries that were never read during this request don't appear in
+	 * the in-process store, so they can only be found by enumerating the engine.
+	 * Best effort: does nothing if the engine can't be enumerated.
+	 * @method clearEngineByPrefix
+	 * @protected
+	 * @static
+	 * @param {string} $namePrefix An engine name prefix, as built by engineName()
+	 */
+	protected static function clearEngineByPrefix($namePrefix)
+	{
+		if (!self::$apcu or !class_exists('APCUIterator')) {
+			return;
+		}
+		$pattern = '/^' . preg_quote($namePrefix, '/') . '/';
+		foreach (new APCUIterator($pattern) as $item) {
+			self::engineDelete($item['key']);
+		}
+	}
+
+	/**
+	 * The name under which a key is stored in the cache engine
+	 * @method engineName
+	 * @protected
+	 * @static
+	 * @param {string} $key
+	 * @param {string} [$namespace=null] Defaults to the current namespace
+	 * @return {string}
+	 */
+	protected static function engineName($key, $namespace = null)
+	{
+		if (!isset($namespace)) {
+			$namespace = self::$namespace;
+		}
+		return "Q_Cache\t$namespace\t$key";
+	}
+
+	/**
+	 * @method engineFetch
+	 * @protected
+	 * @static
+	 * @param {string} $name
+	 * @param {boolean} [&$found]
+	 * @return {mixed}
+	 */
+	protected static function engineFetch($name, &$found = null)
+	{
+		if (is_callable('apcu_fetch')) {
+			return apcu_fetch($name, $found);
+		}
+		if (is_callable('apc_fetch')) {
+			return apc_fetch($name, $found);
+		}
+		$found = false;
+		return null;
+	}
+
+	/**
+	 * @method engineStore
+	 * @protected
+	 * @static
+	 * @param {string} $name
+	 * @param {mixed} $value
+	 * @param {integer} $duration
+	 * @return {boolean}
+	 */
+	protected static function engineStore($name, $value, $duration)
+	{
+		if (is_callable('apcu_store')) {
+			return apcu_store($name, $value, $duration);
+		}
+		if (is_callable('apc_store')) {
+			return apc_store($name, $value, $duration);
+		}
+		return false;
+	}
+
+	/**
+	 * @method engineDelete
+	 * @protected
+	 * @static
+	 * @param {string} $name
+	 * @return {boolean}
+	 */
+	protected static function engineDelete($name)
+	{
+		if (is_callable('apcu_delete')) {
+			return apcu_delete($name);
+		}
+		if (is_callable('apc_delete')) {
+			return apc_delete($name);
+		}
+		return false;
+	}
+
+	/**
+	 * How many seconds an entry has left in the cache engine, if we can find out.
+	 * @method engineTTL
+	 * @protected
+	 * @static
+	 * @param {string} $name
+	 * @param {integer} $default Returned when the engine can't tell us
+	 * @return {integer}
+	 */
+	protected static function engineTTL($name, $default)
+	{
+		if (!is_callable('apcu_key_info')) {
+			return $default;
+		}
+		$info = @apcu_key_info($name);
+		if (!is_array($info) or empty($info['ttl'])) {
+			return $default; // unknown, or stored without expiration
+		}
+		$since = null;
+		if (isset($info['creation_time'])) {
+			$since = $info['creation_time'];
+		} else if (isset($info['mtime'])) {
+			$since = $info['mtime'];
+		}
+		if (!isset($since)) {
+			return $default;
+		}
+		$remaining = $since + $info['ttl'] - time();
+		return $remaining > 0 ? $remaining : 0;
 	}
 
 	/**
@@ -249,32 +401,27 @@ class Q_Cache
 	static function save()
 	{
 		if (!self::$apc and !self::$apcu) {
+			self::$changed = array();
 			return;
 		}
 		$d = Q_Config::get('Q', 'cache', 'duration', 0);
 		foreach (self::$changed as $namespace => $changed) {
-			foreach (self::$changed[$namespace] as $key => $value) {
-				$name = "Q_Cache\t$namespace\t$key";
-				$duration = Q::ifset(self::$durations[self::$namespace], $key, $d);
-				$store = self::$stores[$namespace];
+			$store = isset(self::$stores[$namespace])
+				? self::$stores[$namespace]
+				: array();
+			foreach ($changed as $key => $value) {
+				$name = self::engineName($key, $namespace);
 				if (array_key_exists($key, $store)) {
-					if (is_callable('apcu_store')) {
-						apcu_store($name, $store[$key], $duration);
-					} else if (is_callable('apc_store')) {
-						apc_store($name, $store[$key], $duration);
-					}
+					$duration = Q::ifset(self::$durations, $namespace, $key, $d);
+					self::engineStore($name, $store[$key], $duration);
 				} else {
-					if (is_callable('apcu_delete')) {
-						apcu_delete($name);
-					} else if (is_callable('apc_delete')) {
-						apc_delete($name);
-					}
+					self::engineDelete($name);
 				}
 			}
 		}
 		self::$changed = array();
 	}
-	
+
 	/**
 	 * @method shutdownFunction
 	 * @static
@@ -291,17 +438,11 @@ class Q_Cache
 	 */
 	protected static $ignore = false;
 	/**
-	 * @property $store
+	 * @property $stores
 	 * @protected
 	 * @type array
 	 */
 	protected static $stores = array();
-	/**
-	 * @property $found
-	 * @protected
-	 * @type array
-	 */
-	protected static $found = array();
 	/**
 	 * @property $durations
 	 * @protected
