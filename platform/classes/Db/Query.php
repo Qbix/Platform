@@ -1067,6 +1067,49 @@ abstract class Db_Query extends Db_Expression
 	 *  Each call states the whole caching policy: the duration is not remembered from
 	 *  an earlier call, so caching(true) after caching(true, 60) leaves no duration.
 	 *  caching(false) suppresses both reading and writing, in both tiers.
+	 *
+	 *  WARNING - READ THIS BEFORE PASSING A DURATION. Treat it as sugar for caching
+	 *  a result in Q_Cache by hand: it saves you writing the key and the get/set,
+	 *  and it inherits every consequence of doing that. Which SELECTs can stand it
+	 *  is your judgement to make; this class doesn't second-guess you, and nothing
+	 *  here invalidates an entry before its duration runs out.
+	 *
+	 *  Without a duration the cache is shared-nothing - it lives and dies with the
+	 *  script, exactly as it always has. With one, concurrent scripts on the same
+	 *  machine share the result, which changes what other requests can observe:
+	 *
+	 *  * Read-your-own-writes stops holding ACROSS requests. A user who saves
+	 *    something and reloads can be served a copy persisted before their write,
+	 *    for up to the duration. A write made through this class does not clear
+	 *    it; only the TTL does, or an explicit Db_Query::clearCache().
+	 *  * APCu is per process pool, so two workers can disagree. The same URL can
+	 *    return fresh data on one request and stale data on the next, which is
+	 *    harder to diagnose than being uniformly stale, and separate servers never
+	 *    share entries at all.
+	 *  * Q_Cache writes at shutdown, so a value read early in a request lands late
+	 *    in it - even if this same script has since updated the rows it came from,
+	 *    in which case what gets published is already out of date. Call
+	 *    Db_Query::clearCache() before the script ends if that matters.
+	 *
+	 *  A ROLLBACK in another process is NOT a hazard here, as long as the database
+	 *  isolation level forbids dirty reads, which it does by default. That script
+	 *  never reads uncommitted rows, so it can never persist rows that a rollback
+	 *  erases. Under READ UNCOMMITTED that guarantee is gone and rolled back data
+	 *  could be published for the whole duration, so don't combine a duration with
+	 *  that isolation level. Within one script it is handled for you: a SELECT
+	 *  running inside a transaction on its own connection is never persisted,
+	 *  since its rows may still be rolled back.
+	 *
+	 *  The per-script tier is deliberately not so careful, and never has been. A
+	 *  SELECT you run after your own UPDATE, in the same request, can still be
+	 *  answered from an entry cached before it, and a SELECT run inside a
+	 *  transaction stays cached for the rest of the request even if you roll back.
+	 *  Call ignoreCache() on the queries where that matters.
+	 *
+	 *  So: a duration earns its keep on results that cost real work to produce and
+	 *  can stand being a little behind - reference tables, category lists,
+	 *  aggregates, big joins. Leave it off for anything a user expects to change
+	 *  the moment they act on it.
 	 * @return {Db_Query}
 	 * @chainable
 	 */
@@ -1198,7 +1241,8 @@ abstract class Db_Query extends Db_Expression
 	 */
 	protected function canCachePersistently()
 	{
-		if ($this->caching === false
+		if ($this->ignoreCache
+		or $this->caching === false
 		or empty($this->cacheDuration)
 		or $this->type !== Db_Query::TYPE_SELECT) {
 			return false;
@@ -1208,15 +1252,15 @@ abstract class Db_Query extends Db_Expression
 				return false;
 			}
 		}
-		// An ordinary SELECT can still be running inside a transaction that some
-		// earlier query began on this connection. Reading a cross-request value
-		// there would hide the transaction's own writes, and writing one there
-		// could publish data that is about to be rolled back.
+		// An ordinary SELECT can still be running inside a transaction that an
+		// earlier query began on this connection. Rows it reads there may yet be
+		// rolled back, so they must never be published to other requests.
 		if (self::inTransaction($this->db->connectionName())) {
 			return false;
 		}
 		return class_exists('Q_Cache') and Q_Cache::connected();
 	}
+
 
 	/**
 	 * Whether any transaction begun with ->begin() is currently open, optionally
@@ -4056,17 +4100,16 @@ abstract class Db_Query extends Db_Expression
 	 *
 	 * Use Db_Query::clearCache() to flush it.
 	 *
-	 * If some plugin or application code out there still reads or resets this
-	 * directly, change `private static` back to `static` here; nothing else in
-	 * this class depends on the visibility.
+	 * Prefer Db_Query::clearCache() over assigning to this directly; it is public
+	 * only because it always has been, and code outside this class shouldn't have
+	 * to know how the keys are built.
 	 *
 	 * @property $cache
-	 * @private
 	 * @static
 	 * @type array
 	 * @default array()
 	 */
-	private static $cache = array();
+	protected static $cache = array();
 
 	/**
 	 * Cache keys longer than this many characters get replaced by the connection
