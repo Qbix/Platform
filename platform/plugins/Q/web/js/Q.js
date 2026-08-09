@@ -16466,20 +16466,20 @@ Q.Dialogs = {
 
 	dialogs: [], // stack of dialogs that is currently being shown
 
-	/**
+/**
 	 * Shows the dialog and pushes it on top of internal dialog stack.
 	 * @static
-     * @method push
+	 * @method push
 	 * @param {Object} options A hash of options. For more options see Q/dialog tool.
-     * @param {boolean} [options.apply] Optional. Set to true if the dialog 
+	 * @param {boolean} [options.apply] Optional. Set to true if the dialog
 	 *  should show the "apply" style button to close dialog
-	 * @param {Element|jQuery} [options.dialog] If provided, may be Element or 
+	 * @param {Element|jQuery} [options.dialog] If provided, may be Element or
 	 *   jQuery object containing already prepared dialog html
-	 *	 structure with 'Q_title_slot', 'Q_dialog_slot' and appropriate content in them. 
+	 *	 structure with 'Q_title_slot', 'Q_dialog_slot' and appropriate content in them.
 	 *   If the 'title', 'content' or 'template' options are provided, they will be used to
 	 *   replace the content in this element.
-	 *	@param {String} [options.url] Optional. If provided, this url will be used 
-	 *   to fetch the "title" and "dialog" slots, to display in the dialog. 
+	 *	@param {String} [options.url] Optional. If provided, this url will be used
+	 *   to fetch the "title" and "dialog" slots, to display in the dialog.
 	 *   Thus the default content provided by 'title' and 'content' options
 	 *   given below will be replaced after the response comes back.
 	 *	@param {String|Element} [options.title='Dialog'] initial dialog title.
@@ -16490,26 +16490,25 @@ Q.Dialogs = {
 	 *  @param {String} [options.template.name] names a template to render into the initial dialog content.
 	 *  @param {String} [options.template.fields] fields to pass to the template, if any
 	 *  @param {String} [options.elementId] an ID to set for dialog element, just use className if you aren't sure it's unique
-	 *  @param {String} [options.className] a CSS class name or 
+	 *  @param {String} [options.className] a CSS class name or
 	 *   space-separated list of classes to append to the dialog element.
 	 *  @param {String} [options.htmlClass] Any class to add to the html element while the overlay is open
 	 *  @param {String|Boolean} [options.mask] Default is true unless fullscreen option is true. If true, adds a mask to cover the screen behind the dialog. If a string, this is passed as the className of the mask.
-     * @param {String|Array} [options.stylesheet] Any stylesheets to load before dialog, to prevent Flash of Unstyled Content.
-	 *  should show the "apply" style button to close dialog
+	 * @param {String|Array} [options.stylesheet] Any stylesheets to load before dialog, to prevent Flash of Unstyled Content.
 	 *	@param {boolean} [options.fullscreen] Defaults to true only on Android
-	 *   and false on all other platforms. 
-	 *   If true, dialog will be shown not as overlay but instead will be 
-	 *   prepended to document.body and all other child elements of the body 
-	 *   will be hidden. Thus dialog will occupy all window space, but still 
+	 *   and false on all other platforms.
+	 *   If true, dialog will be shown not as overlay but instead will be
+	 *   prepended to document.body and all other child elements of the body
+	 *   will be hidden. Thus dialog will occupy all window space, but still
 	 *   will behave like regular dialog, i.e. it can be closed
 	 *   by clicking / tapping close icon.
 	 *  @param {boolean} [options.hidePrevious=false] Whether to hide the current topmost dialog, and show it again when this newly displayed dialog will be closed
-	 *	@param {HTMLElement, jQuery} [options.appendTo] Can be DOM element, jQuery object 
+	 *	@param {HTMLElement, jQuery} [options.appendTo] Can be DOM element, jQuery object
 	 *    or jQuery selector matching element where dialog should be appended.
-	 *    Moreover, dialog is centered relatively to this element. 
+	 *    Moreover, dialog is centered relatively to this element.
 	 *    By default it's document body.
-	 *  @param {boolean} [options.alignByParent=false] if true, the dialog will be 
-	 *    aligned to the center of not the entire window, but to the center 
+	 *  @param {boolean} [options.alignByParent=false] if true, the dialog will be
+	 *    aligned to the center of not the entire window, but to the center
 	 *    of containing element instead.
 	 *  @param {boolean} [options.noClose=false] if true, overlay close button will not appear and overlay won't be closed by pressing 'Esc' key.
 	 *  @param {boolean} [options.closeOnEsc=true] indicates whether to close overlay on 'Esc' key press. Has sense only if 'noClose' is false.
@@ -16518,84 +16517,101 @@ Q.Dialogs = {
 	 *  @param {Q.Event} [options.beforeLoad]  Q.Event or function which is called before dialog is loaded.
 	 *  @param {Q.Event} [options.onActivate] Q.Event or function which is called when dialog is activated (all inner tools, if any, are activated and dialog is fully loaded and shown).
 	 *  @param {Q.Event} [options.beforeClose] beforeClose Q.Event or function which is called when overlay closing was initiated and it's still visible. Can return false to cancel closing.
-	 *  @param {Q.Event} [options.onClose] Optional. Q.Event or function which is 
-	 *   called when dialog is closed and hidden and probably 
+	 *  @param {Q.Event} [options.onClose] Optional. Q.Event or function which is
+	 *   called when dialog is closed and hidden and probably
 	 *   removed from DOM (if 'removeOnClose' is 'true').
-	 * @return {HTMLElement} The HTML element of the dialog that was just pushed.
-	 *   NOTE: if options.template or options.stylesheet is used and no options.dialog
-	 *   was provided, the element is created asynchronously and undefined is returned.
-	 *   Listen to Q.Dialogs.onOpen, or use options.onActivate, in that case.
+	 * @return {HTMLElement} The dialog element. This is ALWAYS returned synchronously,
+	 *   and is always already on Q.Dialogs.dialogs and in the DOM (hidden), even when
+	 *   options.template or options.stylesheet make the rest of the work asynchronous.
+	 *   In that case the content is filled in, and the Q/dialog plugin applied, later:
+	 *   until then the element has empty slots and its inner tools are NOT activated,
+	 *   so listen to Q.Dialogs.onOpen or options.onActivate before reaching into it.
 	 */
-	push: function(options) {
+	push: function (options) {
 		document.activeElement && document.activeElement.blur();
 		var o = Q.extend(
-			{mask: true}, 
-			Q.Dialogs.options, 
-			Q.Dialogs.push.options, 
+			{mask: true},
+			Q.Dialogs.options,
+			Q.Dialogs.push.options,
 			options
 		);
-		var dialog = (o.dialog && o.dialog[0]) || o.dialog;
+
+		//
+		// Everything from here down to "return dialog" runs synchronously,
+		// so the caller always gets back a real, stacked element.
+		//
+		var dialog = (o.dialog && o.dialog[0]) || o.dialog || _createDialog();
+		var h2 = dialog.querySelector('.Q_dialog_title');
+		var contentSlot = dialog.querySelector('.Q_dialog_slot');
+		if (!contentSlot) {
+			console.warn("Q.Dialogs.push: dialog element has no .Q_dialog_slot");
+		}
+		dialog.addClass('Q_dialog'); // in addition to Q_overlay or Q_fullscreen_dialog
+		contentSlot && contentSlot.addClass('Q_content_container');
+		if (o.elementId) {
+			// set it here too, so the caller can find the element right away
+			dialog.setAttribute('id', o.elementId);
+		}
+		// only the content can be deferred, the title is always known by now
+		_fill(h2, o.title);
+		dialog.style.display = 'none';
+		(o.appendTo || document.body).append(dialog);
+		_wrapEvents();
+		_addToStack();
+
+		// Load stylesheets and render the template in parallel -- neither
+		// depends on the other, and both have to finish before we open.
+		var pipe = new Q.Pipe(['stylesheets', 'content'], function (params) {
+			_open(params.content[0]);
+		});
+		if (o.stylesheet) {
+			Q.addStylesheet(o.stylesheet, pipe.fill('stylesheets'));
+		} else {
+			pipe.fill('stylesheets')();
+		}
 		if (o.template) {
 			Q.Template.render(o.template.name, o.template.fields, function (err, html) {
-				if (!err) {
-					_proceed1(html);
+				if (err) {
+					// don't strand the element we already returned and appended:
+					// open with whatever content was passed alongside the template
+					console.warn(err);
 				}
+				pipe.fill('content')(err ? o.content : html);
 			});
 		} else {
-			_proceed1(o.content);
+			pipe.fill('content')(o.content);
 		}
+
 		return dialog;
-		function _proceed1(content) {
-			if (o.stylesheet) {
-				Q.addStylesheet(o.stylesheet, function () { _proceed2(content); })
+
+		function _createDialog() {
+			var h2 = Q.element('h2', {"class": "Q_dialog_title"});
+			var title = Q.element('div', {"class": "Q_title_slot"}, [h2]);
+			var content = Q.element('div', {
+				"class": "Q_dialog_slot Q_dialog_content Q_overflow"
+			});
+			var element = Q.element('div', {}, [title, content]);
+			if (o.apply) {
+				element.addClass('Q_overlay_apply');
+			}
+			if (o.removeOnClose !== false) {
+				o.removeOnClose = true;
+			}
+			return element;
+		}
+
+		function _fill(element, content) {
+			if (!element || !content) {
+				return;
+			}
+			if (typeof content === 'string') {
+				$(element).html(content);
 			} else {
-				_proceed2(content);
+				$(element).empty().append(content);
 			}
 		}
-		function _proceed2(content) {
-			if (document.activeElement !== document.body) {
-				document.activeElement.blur();
-			}
-			var h2, title, contentElement;
-			if (!dialog) {
-				// create this dialog element
-				h2 = Q.element('h2', {"class": "Q_dialog_title"});
-				title = Q.element('div', {"class": "Q_title_slot"}, [h2]);
-				contentElement = Q.element('div', {"class": "Q_dialog_slot Q_dialog_content Q_overflow"});
-				dialog = Q.element('div', {}, [title, contentElement]);
-				if (o.apply) {
-					dialog.addClass('Q_overlay_apply');
-				}
-				if (o.removeOnClose !== false) {
-					o.removeOnClose = true;
-				}
-			} else {
-				h2 = dialog.querySelector('.Q_dialog_title');
-				title = dialog.querySelector('.Q_title_slot');
-				contentElement = dialog.querySelector('.Q_dialog_slot');
-			}
-			dialog.addClass('Q_dialog'); // in addition to Q_overlay or Q_fullscreen_dialog
-			contentElement.addClass('Q_content_container');
-			var $dialog = $(dialog);
-			if (o.title) {
-				if (typeof o.title === 'string') {
-					$(h2).html(o.title);
-				} else {
-					$(h2).empty().append(o.title);
 
-				}
-			}
-			if (content) {
-				if (typeof content === 'string') {
-					$(contentElement).html(content);
-				} else {
-					$(contentElement).empty().append(content);
-
-				}
-			}
-			dialog.style.display = 'none';
-			(o.appendTo || document.body).append(dialog);
-
+		function _wrapEvents() {
 			// If beforeClose cancels the close, put the dialog back where it was.
 			// Q.Dialogs.close() detaches synchronously, but the plugin only asks
 			// beforeClose a tick later, so a cancelled close has to be undone.
@@ -16621,19 +16637,41 @@ Q.Dialogs = {
 				Q.handle(o.onClose.original, dialog, [dialog, options]);
 			}, 'Q.Dialogs');
 			o.onClose.original = _onClose;
+		}
 
-			var topDialog = null;
+		function _addToStack() {
 			var dialogs = Q.Dialogs.dialogs;
+			var topDialog = dialogs.length ? dialogs[dialogs.length - 1] : null;
 			dialog.isFullscreen = o.fullscreen;
-			if (dialogs.length) {
-				topDialog = dialogs[dialogs.length - 1];
+			if (topDialog === dialog) {
+				return;
 			}
-			if (!topDialog || topDialog !== dialog) {
-				dialogs.push(dialog);
-				if (o.hidePrevious && topDialog) {
-					topDialog.addClass('Q_behind');
-					dialog.Q_hidDialog = topDialog;
+			dialogs.push(dialog);
+			if (o.hidePrevious && topDialog) {
+				// remember it now, so the stack reflects the order push() was
+				// called in, but only add the class in _open() -- otherwise the
+				// previous dialog would disappear while this one is still loading
+				dialog.Q_hidDialog = topDialog;
+			}
+		}
+
+		function _open(content) {
+			if (Q.Dialogs.dialogs.indexOf(dialog) < 0) {
+				// closed before we ever got to open it: Q.Dialogs.close()
+				// detaches synchronously, so absence from the stack is the signal
+				if (o.removeOnClose) {
+					Q.removeElement(dialog, true);
 				}
+				Q.handle(o.onClose, dialog, [dialog, {}]);
+				return;
+			}
+			var da = document.activeElement;
+			if (da && da !== document.body) {
+				da.blur();
+			}
+			_fill(contentSlot, content);
+			if (dialog.Q_hidDialog) {
+				dialog.Q_hidDialog.addClass('Q_behind');
 			}
 			Q.handle(Q.Dialogs.onOpen, Q.Dialogs, [dialog]);
 			if (o.closeAfterDelay) {
@@ -16642,10 +16680,14 @@ Q.Dialogs = {
 				}, o.closeAfterDelay);
 			}
 			try {
-				$dialog.plugin('Q/dialog', o);
+				$(dialog).plugin('Q/dialog', o);
 			} catch (e) {
 				console.warn(e);
 			}
+			_startMaskInterval();
+		}
+
+		function _startMaskInterval() {
 			if (Q.Dialogs.interval) {
 				return;
 			}
