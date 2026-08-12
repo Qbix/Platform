@@ -2801,6 +2801,27 @@ class Q_Response
 	}
 
 	/**
+	 * Set a response header. Drop-in replacement for PHP's header().
+	 * Under Qbix Server (CLI SAPI), native header() is silently discarded.
+	 * This method delegates to Q_WebServer_State when running under the
+	 * webserver, and falls back to native header() under nginx/fpm.
+	 * @method header
+	 * @static
+	 * @param {string} $header The header string, e.g. "Content-Type: text/html"
+	 *  or "HTTP/1.1 404 Not Found" for status lines
+	 * @param {boolean} [$replace=true] Whether to replace a previous header
+	 * @param {integer} [$code=0] HTTP status code (optional)
+	 */
+	static function header($header, $replace = true, $code = 0)
+	{
+		if (class_exists('Q_WebServer_State', false)) {
+			Q_WebServer_State::header($header, $replace, $code);
+		} else {
+			\header($header, $replace, $code ?: 0);
+		}
+	}
+
+	/**
 	 * @method setIgnoreUserAbort
 	 * @static
 	 * @param {boolean} [$value=null]
