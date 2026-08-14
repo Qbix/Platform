@@ -562,6 +562,15 @@ class Q_Response
 		}
 		$params['content'] = preg_replace("/\r|\n/", " ", strip_tags($params['content']));
 
+		$key = $params['name'].':'.$params['value'];
+		self::$metas[$key] = $params;
+
+		// Now, for the slot
+		if (!isset($slotName)) {
+			$slotName = isset(self::$slotName) ? self::$slotName : '';
+		}
+		self::$metasForSlot[$slotName][$key] = $params;
+
 		if ($params['value'] == 'og:image') {
 			$filename = Q_Uri::filenameFromUrl($params['content']);
 			$size = $filename ? @getimagesize($filename) : null;
@@ -580,15 +589,6 @@ class Q_Response
 				));
 			}
 		}
-
-		$key = $params['name'].':'.$params['value'];
-		self::$metas[$key] = $params;
-
-		// Now, for the slot
-		if (!isset($slotName)) {
-			$slotName = isset(self::$slotName) ? self::$slotName : '';
-		}
-		self::$metasForSlot[$slotName][$key] = $params;
 	}
 
 	/**
