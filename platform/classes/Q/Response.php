@@ -592,7 +592,11 @@ class Q_Response
 	}
 
 	/**
-	 * Sets some common metas like "title", "description", etc
+	 * Sets some common metas like "title", "description", etc.
+	 *
+	 * Values passed in $metas take precedence over anything configured under
+	 * Q/web/metas; the config supplies defaults for keys the page didn't set.
+	 *
 	 * @method setCommonMetas
 	 * @static
 	 * @param {array} $metas
@@ -601,39 +605,128 @@ class Q_Response
 	 * @param {string} [$metas.keywords] Keywords for indexing
 	 * @param {string} [$metas.image] The image to use for the summary
 	 * @param {string} [$metas.url] The canonical URL of the page
-	 * @param {string} [$metas.twitter:card] Used by Twitter, Telegram etc, defaults to "summary_large_image"
+	 * @param {string} [$metas.type] Open Graph object type, defaults to "website".
+	 *   Use "profile" for user profiles, "article" for posts, "video.other" for video.
+	 * @param {string} [$metas.site_name] Name of the overall site, e.g. the community name
+	 * @param {string} [$metas.locale] Open Graph locale, e.g. "en_US"
+	 * @param {string|integer} [$metas.image:width] Width of the image in pixels
+	 * @param {string|integer} [$metas.image:height] Height of the image in pixels
+	 * @param {string} [$metas.image:alt] Alt text for the image
+	 * @param {string} [$metas.image:type] MIME type of the image. Only set this if
+	 *   you are certain the bytes actually served match — a CDN that transcodes
+	 *   (Cloudflare Polish, for instance, turning PNG into JPEG) will make a
+	 *   declared type contradict the response Content-Type, and some crawlers
+	 *   drop the image over it. Leaving this unset is safe; the tag is optional.
+	 * @param {string} [$metas.twitter:card] Card style. Defaults to
+	 *   "summary_large_image" when an image is present, "summary" otherwise.
+	 *   Note that summary_large_image wants roughly 2:1 artwork — for a square
+	 *   avatar, plain "summary" usually looks better.
 	 * @param {boolean} [$skipConfigMetas=false] If true, doesn't use default metas from config
 	 */
 	static function setCommonMetas($metas, $skipConfigMetas = false)
 	{
-		$keys = array('title', 'description', 'keywords', 'image', 'url');
-		$cm = Q_config::get('Q', 'web', 'metas', array());
-		$keys2 = array_unique(array_merge($keys, array_keys($cm)));
+		// keys that get an og: counterpart, mapped to their property name
+		$ogKeys = array(
+			'title' => 'og:title',
+			'description' => 'og:description',
+			'image' => 'og:image',
+			'url' => 'og:url',
+			'type' => 'og:type',
+			'site_name' => 'og:site_name',
+			'locale' => 'og:locale',
+			'image:width' => 'og:image:width',
+			'image:height' => 'og:image:height',
+			'image:alt' => 'og:image:alt',
+			'image:type' => 'og:image:type'
+		);
+	
+		// keys that get a twitter: counterpart, emitted with name=
+		$twitterKeys = array(
+			'title' => 'twitter:title',
+			'description' => 'twitter:description',
+			'image' => 'twitter:image',
+			'image:alt' => 'twitter:image:alt'
+		);
+	
+		// keys handled explicitly below, so the generic name= loop skips them
+		$handled = array(
+			'url' => true,
+			'type' => true,
+			'site_name' => true,
+			'locale' => true,
+			'image:width' => true,
+			'image:height' => true,
+			'image:alt' => true,
+			'image:type' => true,
+			'twitter:card' => true
+		);
+	
+		$cm = Q_Config::get('Q', 'web', 'metas', array());
 		if (!$skipConfigMetas) {
-			$metas = array_merge($metas, $cm);
+			// page metas win; config fills in what the page left out
+			$metas = array_merge($cm, $metas);
 		}
-		foreach ($keys2 as $k) {
+	
+		if (!isset($metas['type'])) {
+			$metas['type'] = 'website';
+		}
+	
+		// emit plain <meta name="..."> for the simple keys, plus anything
+		// else the config contributed (robots, format-detection, author, ...)
+		$nameKeys = array_unique(array_merge(
+			array('title', 'description', 'keywords', 'image'),
+			array_keys($cm)
+		));
+		foreach ($nameKeys as $k) {
+			if (!isset($metas[$k]) or isset($handled[$k])) {
+				continue;
+			}
+			Q_Response::setMeta(array(
+				'name' => 'name', 'value' => $k, 'content' => $metas[$k]
+			));
+		}
+	
+		if (isset($metas['url'])) {
+			Q_Response::addLink('canonical', $metas['url']);
+		}
+	
+		foreach ($ogKeys as $k => $property) {
 			if (!isset($metas[$k])) {
 				continue;
 			}
-			$v = $metas[$k];
-			$arr = array();
-			if ($k === 'url') {
-				Q_Response::addLink('canonical', $v);
-			} else {
-				Q_Response::setMeta(array('name' => 'name', 'value' => $k, 'content' => $v));
-			}
-			if (in_array($k, $keys)) {
-				Q_Response::setMeta(array('name' => 'property', 'value' => "og:$k", 'content' => $v));
-				Q_Response::setMeta(array('name' => 'property', 'value' => "twitter:$k", 'content' => $v));
-			}
-		}
-		if (isset($metas['image'])) {;
-			$card = Q::ifset($metas, 'twitter:card', Q_Config::get(
-				'Q', 'metas', 'twitter:card', 'summary'
+			Q_Response::setMeta(array(
+				'name' => 'property', 'value' => $property, 'content' => $metas[$k]
 			));
-			Q_Response::setMeta(array('name' => 'name', 'value' => 'twitter:card', 'content' => $card));
 		}
+	
+		foreach ($twitterKeys as $k => $name) {
+			if (!isset($metas[$k])) {
+				continue;
+			}
+			Q_Response::setMeta(array(
+				'name' => 'name', 'value' => $name, 'content' => $metas[$k]
+			));
+		}
+	
+		if (isset($metas['image'])) {
+			// https images get a secure_url as well, unless one was passed
+			if (!isset($metas['image:secure_url'])
+			and strpos($metas['image'], 'https://') === 0) {
+				Q_Response::setMeta(array(
+					'name' => 'property',
+					'value' => 'og:image:secure_url',
+					'content' => $metas['image']
+				));
+			}
+			$card = Q::ifset($metas, 'twitter:card', Q_Config::get(
+				'Q', 'web', 'metas', 'twitter:card', 'summary_large_image'
+			));
+		} else {
+			$card = Q::ifset($metas, 'twitter:card', 'summary');
+		}
+		Q_Response::setMeta(array(
+			'name' => 'name', 'value' => 'twitter:card', 'content' => $card
+		));
 	}
 
 	/**
@@ -1906,6 +1999,14 @@ class Q_Response
 	
 	/**
 	 * Returns the string containing all the html attributes
+	 *
+	 * The RDFa prefix declaration is fixed here: the original wrote
+	 * prefix="og:http://ogp.me/ns# ..." with no space after "og:", which is not
+	 * valid CURIE prefix syntax — each mapping needs "prefix: URI". Parsers that
+	 * validate the declaration will discard the whole thing. The profile and
+	 * article namespaces are declared too, so og:type="profile" pages can use
+	 * profile:first_name and friends.
+	 *
 	 * @method htmlAttributes
 	 * @param {string} [$separator="\n"]
 	 *  You can override the separator to be a space, for example
@@ -1930,6 +2031,12 @@ class Q_Response
 			$attributes[] = Q_Html::text("$k").'="'.Q_Html::text("$v").'"';
 		}
 		$language = self::language();
+		$prefix = 'og: https://ogp.me/ns#'
+			. ' object: https://ogp.me/ns/object#'
+			. ' website: https://ogp.me/ns/website#'
+			. ' profile: https://ogp.me/ns/profile#'
+			. ' article: https://ogp.me/ns/article#'
+			. ' fb: https://ogp.me/ns/fb#';
 		Q::event('Q/Response/htmlAttributes', array(
 			'touchscreen' => &$touchscreen,
 			'mobile' => &$mobile,
@@ -1940,11 +2047,12 @@ class Q_Response
 			'uri' => &$uri,
 			'classes' => &$classes,
 			'attributes' => &$attributes,
-			'language' => &$language
+			'language' => &$language,
+			'prefix' => &$prefix
 		), 'before');
 		$defaults = array(
 			'lang="' . $language . '"',
-			'prefix="og:http://ogp.me/ns# object:http://ogp.me/ns/object# website:http://ogp.me/ns/website# fb:http://ogp.me/ns/fb#"',
+			'prefix="' . $prefix . '"',
 			'itemscope itemtype="https://schema.org/WebPage"',
 			"class='$classes $touchscreen $mobile $cordova $platform $ie $ie8'"
 		);
