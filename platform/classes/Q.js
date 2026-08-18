@@ -2751,6 +2751,17 @@ Q.listen = function _Q_listen(options, callback) {
 		return server;
 	}
 
+	// The address to actually bind. In containerized deployments the
+	// configured host is a DNS name whose resolution is ambiguous whenever
+	// several stacks share a network (compose aliases the service name on
+	// every attached network) - node can resolve ANOTHER container IP and
+	// either crash with EADDRNOTAVAIL or bind an interface its clients
+	// never connect to. Set Q/nodeInternal/bindHost (e.g. "0.0.0.0") to
+	// decouple the bind address from the name clients connect to.
+	var bindHost = options.bindHost
+		|| Q.Config.get(['Q', 'nodeInternal', 'bindHost'], null)
+		|| host;
+
 	// EADDRNOTAVAIL happens on fresh container boots: DNS resolves the
 	// configured host to an interface address that is not assignable yet,
 	// so the very first listen() throws and the process dies for nothing -
@@ -2760,20 +2771,22 @@ Q.listen = function _Q_listen(options, callback) {
 	server.on('error', function (err) {
 		if (err && err.code === 'EADDRNOTAVAIL' && _listenAttempts < 20) {
 			++_listenAttempts;
-			console.log.Q('listen ' + host + ':' + port
+			console.log.Q('listen ' + bindHost + ':' + port
 				+ ' EADDRNOTAVAIL; retry ' + _listenAttempts + ' in 500ms');
 			setTimeout(function () {
-				server.listen(port, host);
+				server.listen(port, bindHost);
 			}, 500);
 			return;
 		}
 		throw err;
 	});
 	server.on('listening', function () {
-		console.log.Q('listening at ' + host + ':' + port + server.internalString);
+		console.log.Q('listening at ' + bindHost + ':' + port
+			+ (bindHost !== host ? ' (as ' + host + ')' : '')
+			+ server.internalString);
 		callback && callback(server.address());
 	});
-	server.listen(port, host);
+	server.listen(port, bindHost);
 
 	if (!Q.servers[port]) {
 		Q.servers[port] = {};
