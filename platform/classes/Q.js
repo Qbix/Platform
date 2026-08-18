@@ -2751,10 +2751,29 @@ Q.listen = function _Q_listen(options, callback) {
 		return server;
 	}
 
-	server.listen(port, host, function () {
+	// EADDRNOTAVAIL happens on fresh container boots: DNS resolves the
+	// configured host to an interface address that is not assignable yet,
+	// so the very first listen() throws and the process dies for nothing -
+	// the supervisor's restart then binds fine. Retry the transient error
+	// with backoff instead of crashing; anything else still throws.
+	var _listenAttempts = 0;
+	server.on('error', function (err) {
+		if (err && err.code === 'EADDRNOTAVAIL' && _listenAttempts < 20) {
+			++_listenAttempts;
+			console.log.Q('listen ' + host + ':' + port
+				+ ' EADDRNOTAVAIL; retry ' + _listenAttempts + ' in 500ms');
+			setTimeout(function () {
+				server.listen(port, host);
+			}, 500);
+			return;
+		}
+		throw err;
+	});
+	server.on('listening', function () {
 		console.log.Q('listening at ' + host + ':' + port + server.internalString);
 		callback && callback(server.address());
 	});
+	server.listen(port, host);
 
 	if (!Q.servers[port]) {
 		Q.servers[port] = {};
