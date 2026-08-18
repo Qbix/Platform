@@ -218,7 +218,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 	var R = [];   // resolved renderers, parallel to items
 	var RP = [];  // in-flight ensure promises, parallel to items
 	var tm = null, scheduledAt = 0, scheduledDelay = 0, remainingDelay = null;
-	var pendingGoNext = null, resumePending = null, pendingTimers = [];
+	var pendingGoNext = null, resumePending = null, pendingTimers = [], idleHandles = [];
 	var domObserver = null, domRemovalTimer = null;
 	var animTransition, animInterval, animPreviousInterval;
 	var crossfading = false, destroyed = false;
@@ -260,12 +260,71 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 
 		// WAAPI Animation reference for an active kenburns pan.
 		var _wapiAnim = null;
+		// Cached transform base for the pan, plus the raw nodes the
+		// crossfade writes to (so the per-frame path allocates nothing).
+		var _base = null, _els = null, _shown = false, _staged = false, _decoded = false;
+		var _kf = null;   // cached keyframes, keyed by base + duration + ease
+
+		// Hand the JPEG/PNG to the decoder as soon as the bytes are in, rather
+		// than letting the first paint trigger a synchronous decode. On a large
+		// photo that decode lands exactly on the transition frame.
+		function decodeAhead() {
+			if (_decoded || !$img || !$img[0]) return;
+			_decoded = true;
+			var el = $img[0];
+			if (typeof el.decode !== 'function') return;   // older Safari/Firefox
+			try {
+				var pr = el.decode();
+				if (pr && pr.catch) pr.catch(function () {});
+			} catch (e) {}
+		}
+
+		function els() {
+			if (!_els) {
+				_els = [$img && $img[0]];
+				if ($cap && $cap.length) _els.push($cap[0]);
+				_els = _els.filter(Boolean);
+			}
+			return _els;
+		}
+
+		// Fix the element at a single size for the whole pan and drive the pan
+		// with transform alone. width/height are layout properties: animating
+		// them forces style recalc + layout + paint + a fresh raster of the
+		// full-size bitmap on every frame, on the main thread, which is what
+		// made the pan sputter. A fixed size plus translate3d+scale is
+		// compositor-only. The base is the larger of the two endpoints, so the
+		// scale never exceeds 1 and the texture is never upscaled.
+		function ensureBase(interval) {
+			if (!$img || !$img[0]) return null;
+			var el = $img[0];
+			var iw = el.naturalWidth || 1, ih = el.naturalHeight || 1;
+			var cw = $this.width(), ch = $this.height();
+			var f = interval.from, t = interval.to;
+			var sig = [f.left, f.top, f.width, f.height,
+			           t.left, t.top, t.width, t.height].join(',');
+			if (_base && _base.iw === iw && _base.ih === ih
+			&& _base.cw === cw && _base.ch === ch && _base.sig === sig) {
+				return _base;
+			}
+			var b = kenburnsSetupBase(iw, ih, cw, ch, f, t);
+			_base = { baseW: b.baseW, baseH: b.baseH,
+			          iw: iw, ih: ih, cw: cw, ch: ch, sig: sig };
+			// the one and only layout write for this pan
+			el.style.transformOrigin = '0 0';
+			el.style.width  = b.baseW + 'px';
+			el.style.height = b.baseH + 'px';
+			el.style.willChange = 'transform, opacity';
+			el.style.backfaceVisibility = 'hidden';
+			return _base;
+		}
 
 		function createCaption(html, style, customPos, name) {
 			var capCss = Q.extend({ visibility: 'hidden' }, style || {});
 			$cap = $('<div class="Q_gallery_caption" />').css(capCss).html(html).appendTo($this);
 			if (!customPos) $cap.addClass('Q_gallery_caption_centered');
 			if (name) $cap.addClass('Q_gallery_caption_' + name);
+			_els = null;
 		}
 
 		var r = {
@@ -285,10 +344,12 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 					alt: image.caption || ('image ' + index),
 					src: Q.url(image.src)
 				}).css({
-					visibility: 'hidden', position: 'absolute', top: '0px', left: '0px'
+					visibility: 'hidden', position: 'absolute', top: '0px', left: '0px',
+					pointerEvents: 'none'
 				}).appendTo($this);
 
 				function finalize() {
+					decodeAhead();
 					Q.handle(state.onLoad, $this, [$img, mediaList(), state]);
 					$img.on(Q.Pointer.click, function () {
 						Q.handle(state.onInvoke, $this, [$img, r.index, mediaList()]);
@@ -307,57 +368,97 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				return ready;
 			},
 			prewarm: function () { return r.ensure(); },
+			/**
+			 * Put the item in front of the compositor before it is needed:
+			 * primed at the start of its pan, painted, but fully transparent
+			 * and inert. The frame that reveals it then costs an opacity
+			 * change rather than a decode plus a first raster of a full-size
+			 * photo, which is where the residual stutter was landing.
+			 */
+			stage: function () {
+				if (!$img || !$img[0] || _shown || _staged) return;
+				decodeAhead();
+				var interval = deepMerge(state.interval, item.interval);
+				if ((interval.type || "") === 'kenburns') r.kenburns(0, interval);
+				var e = els();
+				for (var i = 0; i < e.length; i++) {
+					e[i].style.opacity = 0;
+					e[i].style.display = 'block';
+					e[i].style.visibility = 'visible';
+				}
+				// stays click-through until show() takes the pointer back,
+				// so a staged item cannot swallow taps meant for the
+				// current one and fire onInvoke with the wrong index
+				$img[0].style.pointerEvents = 'none';
+				$img[0].style.willChange = 'transform, opacity';
+				_staged = true;
+			},
 			enter: function () {},
 			exit: function () {},
+			// Runs on every frame of a crossfade. Touch opacity and nothing
+			// else: display/visibility are hoisted into show(), and writing
+			// through raw style avoids rebuilding a jQuery set per frame.
+			// Opacity on a promoted layer is a compositor property, so this
+			// costs no paint.
 			setLevel: function (level) {
 				if (!$img) return;
-				var $els = $img.add($cap && $cap.length ? $cap : $([]));
-				if (level > 0) $els.css({ display: 'block', visibility: 'visible', opacity: level });
-				else $els.css({ opacity: 0 });
+				var e = els();
+				for (var i = 0; i < e.length; i++) e[i].style.opacity = level;
+				if (level > 0 && !_shown) r.show();
 			},
 			setAudioLevel: null, // images carry no audio
+			// Q.Animation fallback path, and the priming call at z=0. The
+			// container size is read once in ensureBase rather than on every
+			// frame: reading $this.width() straight after writing styles
+			// forced a synchronous layout per frame.
 			kenburns: function (z, interval) {
 				if (!$img || !$img[0]) return;
 				interval = interval || deepMerge(state.interval, item.interval);
 				if ((interval.type || "") !== 'kenburns') return;
-				var geom = kenburnsGeometry(
-					$img[0].naturalWidth, $img[0].naturalHeight,
-					$this.width(), $this.height(),
-					interval.from, interval.to, z
-				);
-				// Width/height from the geometry — identical to the original.
-				// Position via translate3d instead of CSS left/top —
-				// compositor-only, no layout trigger for the pan.
-				$img.css({ width: geom.width, height: geom.height, visibility: 'visible' });
-				$img[0].style.transform =
-					'translate3d(' + geom.left + ',' + geom.top + ',0)';
-				if ($cap && $cap.length) $cap.css('visibility', 'visible');
+				var b = ensureBase(interval);
+				if (!b) return;
+				var geom = kenburnsGeometry(b.iw, b.ih, b.cw, b.ch,
+					interval.from, interval.to, z);
+				$img[0].style.transform = kenburnsTransformStr(geom, b.baseW);
 			},
 			/**
-			 * WAAPI kenburns: width/height/translate3d in keyframes.
+			 * WAAPI kenburns. Every keyframe carries `transform` and nothing
+			 * else, which is what lets the compositor run the pan on its own
+			 * thread. The ease is baked into sampled offsets, so the keyframe
+			 * count has to be dense enough that the linear segments between
+			 * samples stay below the perceptual threshold — a fixed 24 samples
+			 * put them 100ms apart on a typical interval, which reads as a
+			 * stepped pan. One sample per ~40ms tracks any of the Q eases.
 			 */
 			createKenburnsAnimation: function (interval, durationMs, easeFn) {
 				if (!$img || !$img[0]) return null;
 				if ((interval.type || "") !== 'kenburns') return null;
 				if (typeof $img[0].animate !== 'function') return null;
+				var b = ensureBase(interval);
+				if (!b) return null;
 
-				var iw = $img[0].naturalWidth || 1;
-				var ih = $img[0].naturalHeight || 1;
-				var cw = $this.width(), ch = $this.height();
-				var N = 24;
-				var keyframes = [];
-				for (var i = 0; i <= N; i++) {
-					var t = i / N;
-					var z = easeFn(t);
-					var geom = kenburnsGeometry(iw, ih, cw, ch,
-						interval.from, interval.to, z);
-					keyframes.push({
-						offset: t,
-						width: geom.width,
-						height: geom.height,
-						transform:
-							'translate3d(' + geom.left + ',' + geom.top + ',0)'
-					});
+				var N = Math.max(24, Math.min(150, Math.round(durationMs / 40)));
+				// A looping gallery revisits the same item with the same
+				// geometry every pass, so sample the ease once and reuse it.
+				// This runs synchronously on the transition frame, which is
+				// the worst possible moment to be doing arithmetic.
+				var key = b.baseW + '/' + b.cw + '/' + b.ch + '/' + b.sig
+					+ '/' + N + '/' + durationMs;
+				var keyframes;
+				if (_kf && _kf.key === key) {
+					keyframes = _kf.frames;
+				} else {
+					keyframes = [];
+					for (var i = 0; i <= N; i++) {
+						var t = i / N;
+						var geom = kenburnsGeometry(b.iw, b.ih, b.cw, b.ch,
+							interval.from, interval.to, easeFn(t));
+						keyframes.push({
+							offset: t,
+							transform: kenburnsTransformStr(geom, b.baseW)
+						});
+					}
+					_kf = { key: key, frames: keyframes };
 				}
 
 				if (_wapiAnim) { _wapiAnim.cancel(); _wapiAnim = null; }
@@ -369,13 +470,28 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				});
 				return _wapiAnim;
 			},
-			show: function () { if ($img) $img.add($cap && $cap.length ? $cap : $([])).css({ display: 'block', visibility: 'visible' }); },
+			show: function () {
+				if (!$img) return;
+				var e = els();
+				for (var i = 0; i < e.length; i++) {
+					e[i].style.display = 'block';
+					e[i].style.visibility = 'visible';
+				}
+				$img[0].style.willChange = 'transform, opacity';
+				$img[0].style.pointerEvents = '';
+				_shown = true; _staged = false;
+			},
 			hide: function () {
 				if (_wapiAnim) { _wapiAnim.cancel(); _wapiAnim = null; }
 				if ($img) {
 					$img[0].style.transform = '';
-					$img.add($cap && $cap.length ? $cap : $([])).css({ display: 'none' });
+					// stop paying for a compositor layer while off-screen
+					$img[0].style.willChange = 'auto';
+					$img[0].style.pointerEvents = 'none';
+					var e = els();
+					for (var i = 0; i < e.length; i++) e[i].style.display = 'none';
 				}
+				_shown = false; _staged = false;
 			},
 			setCaption: function (html, style, centered) {
 				item.caption = html;
@@ -394,12 +510,14 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			removeCaption: function () {
 				delete item.caption; delete item.style; delete item.customCaptionPosition;
 				if ($cap && $cap.length) { $cap.remove(); $cap = $([]); }
+				_els = null;
 			},
 			destroy: function () {
 				if (_wapiAnim) { _wapiAnim.cancel(); _wapiAnim = null; }
 				if ($img) $img.remove();
 				if ($cap && $cap.length) $cap.remove();
 				$img = $cap = null;
+				_els = null; _base = null; _kf = null; _shown = _staged = _decoded = false;
 			}
 		};
 		return r;
@@ -486,6 +604,41 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		}
 	}
 
+	// Paint the upcoming items while nothing is animating. Called after a
+	// crossfade settles, because hideOthers() has just torn every non-current
+	// item back out of the paint tree. Deferred to idle time so the staging
+	// raster does not pile onto the frame that just revealed the current item;
+	// the timeout keeps it bounded for short intervals, and it is only ever an
+	// optimisation, so arriving late costs nothing but the head start.
+	function stageAhead(fromIndex) {
+		if (typeof requestIdleCallback === 'function') {
+			var h = requestIdleCallback(function () {
+				idleHandles = idleHandles.filter(function (x) { return x !== h; });
+				if (!destroyed) stageNow(fromIndex);
+			}, { timeout: 400 });
+			idleHandles.push(h);
+			return;
+		}
+		var st = setTimeout(function () {
+			pendingTimers = pendingTimers.filter(function (id) { return id !== st; });
+			if (!destroyed) stageNow(fromIndex);
+		}, 0);
+		pendingTimers.push(st);
+	}
+
+	function stageNow(fromIndex) {
+		for (var d = 1; d <= preloadAhead; d++) {
+			var idx = fromIndex + d;
+			if (idx >= items.length) {
+				if (!state.loop) break;
+				idx = idx % items.length;
+			}
+			if (idx === fromIndex) break;
+			var r = R[idx];
+			if (r && r.stage) { try { r.stage(); } catch (e) {} }
+		}
+	}
+
 	function hideOthers(keepIndex) {
 		for (var i = 0; i < R.length; i++) {
 			if (i === keepIndex || !R[i]) continue;
@@ -514,6 +667,10 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		clearTimeout(tm); tm = null;
 		for (var i = 0; i < pendingTimers.length; i++) clearTimeout(pendingTimers[i]);
 		pendingTimers = [];
+		if (typeof cancelIdleCallback === 'function') {
+			for (var k = 0; k < idleHandles.length; k++) cancelIdleCallback(idleHandles[k]);
+		}
+		idleHandles = [];
 		clearTimeout(domRemovalTimer); domRemovalTimer = null;
 	}
 
@@ -575,14 +732,23 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		var item = items[idx];
 		var t = deepMerge(state.transition, item.transition);
 		var prevR = (prevIdx >= 0) ? R[prevIdx] : null;
+		var interval = deepMerge(state.interval, item.interval);
 
 		Q.handle(state.onTransition, $this, [idx, mediaList(), state]);
 
+		crossfading = !!(state.transitionToFirst || prevIdx !== -1);
+
+		// Order matters. show() used to run before anything set the incoming
+		// item's opacity or geometry, so one frame was painted with it fully
+		// opaque and untransformed, on top of the outgoing item — a hard cut,
+		// followed by a fade in from nothing once the ramp's first rAF tick
+		// landed. Prime the start of the pan and the start of the fade first,
+		// then reveal.
+		curR.kenburns(0, interval);
+		curR.setLevel(crossfading ? 0 : 1);
 		curR.show();
 		curR.enter(true); // fresh entry: start the clip at its beginning
 		if (curR.type === 'video') applyAudio(curR, idx);
-
-		crossfading = !!(state.transitionToFirst || prevIdx !== -1);
 		function ramp(x, y) {
 			curR.setLevel(y);
 			if (prevR) prevR.setLevel(1 - y);
@@ -594,18 +760,16 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				hideOthers(idx);
 				animPreviousInterval && animPreviousInterval.pause();
 				crossfading = false;
+				stageAhead(idx);
 			}
 		}
 
-		if (!state.transitionToFirst && prevIdx === -1) {
-			// Start the kenburns animation BEFORE making the image visible
-			// so the first painted frame already has the animation's
-			// geometry applied. kenburns(0) primes inline styles as a
-			// fallback; beginInterval creates the actual animation
-			// (WAAPI or Q.Animation) which overrides them.
-			curR.kenburns(0, deepMerge(state.interval, item.interval));
+		if (!crossfading) {
+			// first item, shown outright: it is already primed and at full
+			// opacity, so all that is left is to start the pan
 			beginInterval(idx, prevIdx, curR, t, keepGoing);
-			curR.setLevel(1);
+			// no ramp will fire here, so stage the next item directly
+			stageAhead(idx);
 			return;
 		}
 		animTransition = Q.Animation.play(ramp, t.duration, t.ease);
