@@ -1638,11 +1638,19 @@ class Db
 			}
 		}
 		$dsn_array = Db::parseDsnString($conn_info['dsn']);
-		$class_name = 'Db_' . ucfirst($dsn_array['dbms']);
+		// Map DSN driver names to adapter class names
+		$dbmsMap = array(
+			'pgsql' => 'Postgres',
+			'mysql' => 'Mysql',
+			'sqlite' => 'Sqlite'
+		);
+		$dbms = $dsn_array['dbms'];
+		$adapterName = isset($dbmsMap[$dbms]) ? $dbmsMap[$dbms] : ucfirst($dbms);
+		$class_name = 'Db_' . $adapterName;
 		if (!class_exists($class_name)) {
 			$filename_to_include = dirname(__FILE__) 
 			. DS . 'Db' 
-			. DS . ucfirst($dsn_array['dbms']) . '.php';
+			. DS . $adapterName . '.php';
 			if (file_exists($filename_to_include)) {
 				include ($filename_to_include);
 			}
@@ -1696,7 +1704,10 @@ class Db
 				}
 			}
 			if (!$alreadySetCharset && !isset($driver_options['exec'])) {
-				$driver_options['exec'] = 'set names utf8mb4';
+				list($dsnDriver) = explode(':', $dsn);
+				if ($dsnDriver === 'mysql') {
+					$driver_options['exec'] = 'set names utf8mb4';
+				}
 			}
 			if (!empty($driver_options['exec'])) {
 				self::$pdo_array[$key]->exec($driver_options['exec']);

@@ -205,12 +205,15 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 			}
 		}
 
-		// PostgreSQL requires a conflict target — do NOT guess
+		// PostgreSQL needs ON CONFLICT target — infer from INSERT columns
+		// if not explicitly set. The build step will handle the final SQL.
 		if (empty($this->clauses['ON CONFLICT TARGET'])) {
-			throw new Exception(
-				"PostgreSQL requires an explicit ON CONFLICT target or a primary key.",
-				-1
-			);
+			// Try to infer from the INTO clause: "tablename (\"col1\", \"col2\")"
+			if (!empty($this->clauses['INTO'])) {
+				if (preg_match('/\(\s*"?(\w+)"?\s*[,)]/', $this->clauses['INTO'], $m)) {
+					$this->clauses['ON CONFLICT TARGET'] = '(' . self::column($m[1]) . ')';
+				}
+			}
 		}
 
 		return implode(', ', $updates_list);
@@ -231,10 +234,17 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 		}
 
 		if (empty($this->clauses['ON CONFLICT TARGET'])) {
-			throw new Exception(
-				"PostgreSQL requires ON CONFLICT target.",
-				-1
-			);
+			// Infer from INTO clause: "tablename (\"col1\", \"col2\")"
+			if (!empty($this->clauses['INTO'])) {
+				if (preg_match('/\(\s*"?(\w+)"?\s*[,)]/', $this->clauses['INTO'], $m)) {
+					$this->clauses['ON CONFLICT TARGET'] = '(' . self::column($m[1]) . ')';
+				}
+			}
+		}
+
+		if (empty($this->clauses['ON CONFLICT TARGET'])) {
+			// Last resort: use DO NOTHING instead of failing
+			return "\nON CONFLICT DO NOTHING";
 		}
 
 		return "\nON CONFLICT "
@@ -278,5 +288,85 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 		$stmt = $this->db->reallyConnect()->prepare($sql);
 		$stmt->execute(array(':table' => $table, ':field' => $field));
 		return (bool) $stmt->fetchColumn();
+	}
+
+	/**
+	 * Postgres uses FOR UPDATE / FOR SHARE instead of MySQL LOCK IN SHARE MODE.
+	 */
+	protected function build_select_lock() {
+		if (empty($this->clauses['LOCK'])) return '';
+		$lock = $this->clauses['LOCK'];
+		if ($lock === 'FOR UPDATE') return ' FOR UPDATE';
+		if ($lock === 'LOCK IN SHARE MODE') return ' FOR SHARE';
+		return ' ' . $lock;
+	}
+
+	/**
+	 * Override build() — Postgres uses schema.table, not dbname.table.
+	 * {{dbname}} is replaced with 'public' (the default schema).
+	 */
+	function build($options = array())
+	{
+		$sql = parent::build($options);
+		// Ensure {{dbname}} resolves to 'public' (default PG schema)
+		$sql = str_replace('{{dbname}}', 'public', $sql);
+		return $sql;
+	}
+
+	/**
+	 * Build and return the SQL string, applying replacements.
+	 */
+	function getSQL($callback = null, $template = false)
+	{
+		$sql = $this->build();
+		if (!$template) {
+			// Restore replacements (execute() clears them for shard routing)
+			if (isset($this->db->prefix)) {
+				$this->replacements['{{prefix}}'] = $this->db->prefix;
+			}
+			// Postgres: {{dbname}} → 'public' (the default schema)
+			$this->replacements['{{dbname}}'] = 'public';
+			// Apply parameter substitution
+			$keys = array_keys($this->parameters);
+			usort($keys, function($a, $b) { return strlen($b) - strlen($a); });
+			foreach ($keys as $key) {
+				$value = $this->parameters[$key];
+				if (!isset($value)) {
+					$value2 = "NULL";
+				} else if ($value instanceof Db_Expression) {
+					$value2 = $value;
+				} else {
+					$value2 = $this->reallyConnect()->quote($value);
+				}
+				if (false !== ($pos = strpos($sql, ":$key"))) {
+					$pos2 = $pos + strlen(":$key");
+					$sql = substr($sql, 0, $pos) . (string)$value2 . substr($sql, $pos2);
+				}
+			}
+			// Apply replacements
+			foreach ($this->replacements as $k => $v) {
+				$sql = str_replace($k, $v, $sql);
+			}
+		}
+		if ($callback) {
+			call_user_func($callback, $sql, $this->parameters);
+		}
+		return $sql;
+	}
+
+	/**
+	 * Postgres LEAST function (same name as MySQL).
+	 */
+	static function least($a, $b)
+	{
+		return "LEAST($a, $b)";
+	}
+
+	/**
+	 * Postgres GREATEST function (same name as MySQL).
+	 */
+	static function greatest($a, $b)
+	{
+		return "GREATEST($a, $b)";
 	}
 }

@@ -421,9 +421,9 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 					}
 					conditionList.push(pieces.join(' OR '));
 				} else {
-					conditionList = criteria_internal(this, {
-						expr: new Db_Expression(value)
-					}, {});
+					conditionList.push(criteria_internal(this, {
+						expr: new (Db.Expression)(value)
+					}, {}));
 				}
 			}
 			condition = conditionList.join(' AND ' );

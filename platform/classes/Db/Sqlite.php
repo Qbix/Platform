@@ -18,12 +18,19 @@ class Db_Sqlite implements Db_Interface
 	function __construct ($connectionName, $pdo = null)
 	{
 		$this->connectionName = $connectionName;
+		$this->dbname = 'main'; // SQLite default schema qualifier
 		if ($pdo) {
 			$driver_name = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME);
 			if (strtolower($driver_name) !== 'sqlite') {
 				throw new Exception("the PDO object is not for sqlite", -1);
 			}
 			$this->pdo = $pdo;
+		}
+		// Set prefix early so queries can resolve {{prefix}}
+		// before reallyConnect() is called (lazy connection pattern).
+		$conn = Db::getConnection($connectionName);
+		if ($conn) {
+			$this->prefix = isset($conn['prefix']) ? $conn['prefix'] : '';
 		}
 	}
 
@@ -119,8 +126,12 @@ class Db_Sqlite implements Db_Interface
 		$this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 		$this->shardName = $shardName;
 		$dsn_array = Db::parseDsnString($dsn);
-		$this->dbname = isset($dsn_array['dbname']) ? $dsn_array['dbname'] : $dsn;
+		$this->dbname = 'main'; // SQLite: "main" is the default schema qualifier
 		$this->prefix = $prefix;
+
+		// SQLite pragmas
+		$this->pdo->exec('PRAGMA journal_mode = WAL');
+		$this->pdo->exec('PRAGMA foreign_keys = ON');
 
 		if (class_exists('Q')) {
 			Q::event('Db/reallyConnect', array(
@@ -131,6 +142,22 @@ class Db_Sqlite implements Db_Interface
 		}
 
 		return $this->pdo;
+	}
+
+	/**
+	 * Override lastInsertId for SQLite.
+	 * PDO::lastInsertId() on SQLite always returns the internal rowid,
+	 * even for TEXT PRIMARY KEY tables. This confuses Db_Row::save() which
+	 * overwrites the PK with the rowid (e.g. 'myStringId' → '1').
+	 * Only return a value for tables with INTEGER PRIMARY KEY (auto-increment).
+	 * @method lastInsertId
+	 * @return {string} The last insert id, or '0' if not auto-increment
+	 */
+	function lastInsertId()
+	{
+		// The platform's tables use string PKs, not INTEGER PRIMARY KEY.
+		// Returning '0' matches MySQL's behavior for non-auto-increment tables.
+		return '0';
 	}
 
 	/**
@@ -507,6 +534,134 @@ class Db_Sqlite implements Db_Interface
 		}
 
 		return $dt;
+	}
+
+	// ── Interface methods required for SQLite support ──────────────
+
+	function insertManyAndExecute($table_into, array $rows = array(), $options = array())
+	{
+		if (empty($rows)) return 0;
+		$first = reset($rows);
+
+		// Handle Db_Row objects — convert to associative arrays
+		if ($first instanceof Db_Row) {
+			$columns = $first->fieldNames();
+			$arrayRows = array();
+			foreach ($rows as $row) {
+				$arrayRows[] = $row->toArray();
+			}
+			$rows = $arrayRows;
+		} else {
+			$columns = array_keys($first);
+		}
+
+		// Resolve table name
+		$table = ($table_into instanceof Db_Expression) ? (string)$table_into : $table_into;
+		$table = str_replace('{{prefix}}', $this->prefix, $table);
+		$table = preg_replace('/^main\./', '', $table);
+
+		$colList = implode(', ', array_map(function($c) { return '"' . $c . '"'; }, $columns));
+
+		// Each row may have Db_Expression values that need inlining,
+		// so build per-row SQL when expressions are present.
+		$count = 0;
+		foreach ($rows as $row) {
+			$placeholders = array();
+			$values = array();
+			foreach ($columns as $col) {
+				$v = isset($row[$col]) ? $row[$col] : null;
+				if ($v instanceof Db_Expression) {
+					$placeholders[] = (string)$v; // inline the expression
+				} else {
+					$placeholders[] = '?';
+					$values[] = $v;
+				}
+			}
+			$valStr = implode(', ', $placeholders);
+			$sql = "INSERT OR REPLACE INTO \"$table\" ($colList) VALUES ($valStr)";
+			$stmt = $this->pdo->prepare($sql);
+			$stmt->execute($values);
+			$count++;
+		}
+		return $count;
+	}
+
+	function rank(
+		$table, $pts_field, $rank_field,
+		$criteria = null, $rank = true,
+		$order_by_clause = null,
+		$chunk_size = 1000, $offset = null
+	) {
+		throw new Exception("Db_Sqlite::rank() is not yet implemented");
+	}
+
+	function fromDateTime($datetime)
+	{
+		if ($datetime instanceof \DateTime) {
+			return $datetime->getTimestamp();
+		}
+		return strtotime($datetime);
+	}
+
+	function toDateTime($timestamp)
+	{
+		if (!is_numeric($timestamp)) {
+			// Handle SQL expression keywords that aren't real datetime strings
+			$upper = strtoupper(trim($timestamp));
+			if ($upper === 'CURRENT_TIMESTAMP' || $upper === 'NOW()') {
+				return date('Y-m-d H:i:s');
+			}
+			if ($upper === 'CURRENT_DATE') {
+				return date('Y-m-d');
+			}
+			$timestamp = strtotime($timestamp);
+			if ($timestamp === false) {
+				return date('Y-m-d H:i:s'); // fallback to now
+			}
+		}
+		if ($timestamp > 10000000000) {
+			$timestamp = $timestamp / 1000;
+		}
+		return date('Y-m-d H:i:s', $timestamp);
+	}
+
+	function getCurrentTimestamp()
+	{
+		return date('Y-m-d H:i:s');
+	}
+
+	function scriptToQueries($script)
+	{
+		$script = str_replace("\r", "", $script);
+		$queries = preg_split('/;\s*$/m', $script);
+		$result = array();
+		foreach ($queries as $q) {
+			$q = trim($q);
+			if ($q !== '') $result[] = $q;
+		}
+		return $result;
+	}
+
+	function uniqueId(
+		$table, $field, $where = null, $options = array()
+	) {
+		$length = 8;
+		$characters = 'abcdefghijklmnopqrstuvwxyz';
+		$prefix = '';
+		extract($options);
+		$count = strlen($characters);
+		$id = $prefix;
+		for ($i = 0; $i < $length; ++$i) {
+			$id .= $characters[mt_rand(0, $count - 1)];
+		}
+		if (!empty($options['filter'])) {
+			$p = array(@compact('id', 'table', 'field', 'where', 'options'));
+			$ret = class_exists('Q')
+				? Q::event($options['filter'], $p)
+				: call_user_func($options['filter'], $p);
+			if (isset($ret)) $id = $ret;
+		}
+		return $id;
 	}
 }
 

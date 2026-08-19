@@ -25,6 +25,16 @@ class Db_Postgres implements Db_Interface
 			}
 			$this->pdo = $pdo;
 		}
+		// Set prefix and dbname early so queries can resolve {{prefix}}
+		// before reallyConnect() is called (lazy connection pattern).
+		$conn = Db::getConnection($connectionName);
+		if ($conn) {
+			$this->prefix = isset($conn['prefix']) ? $conn['prefix'] : '';
+			if (!empty($conn['dsn'])) {
+				$dsn_array = Db::parseDsnString($conn['dsn']);
+				$this->dbname = 'public'; // Postgres uses schema.table; 'public' is the default schema
+			}
+		}
 	}
 
 	/** @var PDO */
@@ -109,7 +119,7 @@ class Db_Postgres implements Db_Interface
 		$this->pdo = Db::pdo($dsn, $username, $password, $driver_options, $connectionName, $shardName);
 		$this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 		$this->shardName = $shardName;
-		$this->dbname = isset($dsn_array['dbname']) ? $dsn_array['dbname'] : null;
+		$this->dbname = 'public'; // Postgres uses schema.table; 'public' is the default schema
 		$this->prefix = $prefix;
 
 		if (class_exists('Q')) {
@@ -218,10 +228,9 @@ class Db_Postgres implements Db_Interface
 	 */
 	function dbName()
 	{
-		$dsn = $this->dsn();
-		if (empty($dsn))
-			return null;
-		return $dsn['dbname'];
+		// Postgres uses schema.table notation (not dbname.table like MySQL).
+		// 'public' is the default schema where all tables are created.
+		return 'public';
 	}
 
 	/**
@@ -598,6 +607,160 @@ class Db_Postgres implements Db_Interface
 		}
 
 		return $d;
+	}
+
+	/**
+	 * Generate a unique 8-char lowercase alpha ID.
+	 * Same algorithm as Db_Sqlite::uniqueId and Db_Mysql::uniqueId.
+	 */
+	function uniqueId(
+		$table, $field, $where = null, $options = array()
+	) {
+		$length = 8;
+		$characters = 'abcdefghijklmnopqrstuvwxyz';
+		$prefix = '';
+		extract($options);
+		$count = strlen($characters);
+		$id = $prefix;
+		for ($i = 0; $i < $length; ++$i) {
+			$id .= $characters[mt_rand(0, $count - 1)];
+		}
+		if (!empty($options['filter'])) {
+			$p = array(@compact('id', 'table', 'field', 'where', 'options'));
+			$ret = class_exists('Q')
+				? Q::event('Db/uniqueId', $p, 'filter', false, $id)
+				: $id;
+			$id = $ret;
+		}
+		return $id;
+	}
+
+	/**
+	 * Convert a DateTime string to a Postgres-compatible format.
+	 */
+	function fromDateTime($datetime)
+	{
+		if ($datetime instanceof DateTime) {
+			return $datetime->format('Y-m-d H:i:s');
+		}
+		return is_numeric($datetime) ? date('Y-m-d H:i:s', $datetime) : $datetime;
+	}
+
+	/**
+	 * Convert a Postgres timestamp to a Unix timestamp.
+	 */
+	function toDateTime($timestamp)
+	{
+		if ($timestamp instanceof DateTime) {
+			return $timestamp->format('Y-m-d\TH:i:s.u');
+		}
+		if (is_numeric($timestamp)) {
+			$date = new DateTime();
+			$date->setTimestamp($timestamp);
+			return $date->format('Y-m-d\TH:i:s.u');
+		}
+		if (is_string($timestamp)) {
+			try {
+				$date = new DateTime($timestamp);
+				return $date->format('Y-m-d\TH:i:s.u');
+			} catch (\Exception $e) {
+				return $timestamp;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Get the current timestamp expression for Postgres.
+	 */
+	function getCurrentTimestamp()
+	{
+		return "NOW()";
+	}
+
+	/**
+	 * Get the last insert ID via Postgres sequence.
+	 */
+	function lastInsertId()
+	{
+		$pdo = $this->reallyConnect();
+		return $pdo->lastInsertId();
+	}
+
+	/**
+	 * Insert many rows efficiently using Postgres multi-value INSERT.
+	 */
+	function insertManyAndExecute($table_into, array $rows = array(), $options = array())
+	{
+		if (empty($rows)) return 0;
+
+		$chunkSize = isset($options['chunkSize']) ? $options['chunkSize'] : 100;
+		$onDuplicateKeyUpdate = isset($options['onDuplicateKeyUpdate'])
+			? $options['onDuplicateKeyUpdate'] : null;
+
+		$columns = array_keys($rows[0]);
+		$quotedCols = array_map(function($c) { return '"' . $c . '"'; }, $columns);
+		$colStr = implode(', ', $quotedCols);
+		$pdo = $this->reallyConnect();
+		$count = 0;
+		$prefix = $this->prefix ?: '';
+
+		foreach (array_chunk($rows, $chunkSize) as $chunk) {
+			$valueSets = array();
+			$params = array();
+			foreach ($chunk as $row) {
+				$placeholders = array();
+				foreach ($columns as $col) {
+					$placeholders[] = '?';
+					$params[] = isset($row[$col]) ? $row[$col] : null;
+				}
+				$valueSets[] = '(' . implode(', ', $placeholders) . ')';
+			}
+			$table = str_replace('{{prefix}}', $prefix, $table_into);
+			$sql = "INSERT INTO \"$table\" ($colStr) VALUES "
+				. implode(', ', $valueSets);
+			if ($onDuplicateKeyUpdate) {
+				$updates = array();
+				foreach ($onDuplicateKeyUpdate as $col => $val) {
+					$updates[] = "\"$col\" = EXCLUDED.\"$col\"";
+				}
+				$pk = is_string($onDuplicateKeyUpdate) ? $onDuplicateKeyUpdate : $columns[0];
+				$sql .= " ON CONFLICT (\"$pk\") DO UPDATE SET " . implode(', ', $updates);
+			}
+			$stmt = $pdo->prepare($sql);
+			$stmt->execute($params);
+			$count += $stmt->rowCount();
+		}
+		return $count;
+	}
+
+	/**
+	 * Split a SQL script into individual queries.
+	 */
+	function scriptToQueries($script)
+	{
+		$queries = array();
+		$script = preg_replace('/--[^\n]*/', '', $script);
+		$parts = preg_split('/;\s*$/m', $script);
+		foreach ($parts as $part) {
+			$part = trim($part);
+			if (!empty($part)) {
+				$queries[] = $part;
+			}
+		}
+		return $queries;
+	}
+
+	/**
+	 * Not yet implemented for Postgres.
+	 */
+	function rank(
+		$table, $pts_field, $rank_field,
+		$criteria = null, $rank = true,
+		$order_by_clause = null,
+		$chunk_size = 1000, $offset = null
+	) {
+		throw new Exception("Db_Postgres::rank() is not yet implemented");
 	}
 }
 

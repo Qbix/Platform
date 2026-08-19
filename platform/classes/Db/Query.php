@@ -396,15 +396,6 @@ abstract class Db_Query extends Db_Expression
 	const HASH_LEN = 7;
 
 	/**
-	 * The prefix under which query results are stored in Q_Cache,
-	 * when a query opts into caching for longer than the current script.
-	 * @property CACHE_PREFIX
-	 * @type string
-	 * @final
-	 */
-	const CACHE_PREFIX = "Db_Query\t";
-
-	/**
 	 * The object implementing Db_Interface that this query uses
 	 * @property $db
 	 * @type Db
@@ -524,17 +515,6 @@ abstract class Db_Query extends Db_Expression
 	 * @default false
 	 */
 	protected $caching = null;
-
-	/**
-	 * How many seconds to keep this query's results in Q_Cache, so that
-	 * subsequent requests can reuse them. Null means don't persist them at all,
-	 * which is the default. See {{#crossLink "Db_Query/caching"}}{{/crossLink}}.
-	 * @property $cacheDuration
-	 * @type integer
-	 * @protected
-	 * @default null
-	 */
-	protected $cacheDuration = null;
 
 	/**
 	 * The time when execution of this query started.
@@ -1051,260 +1031,15 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
-	 * Controls caching of the results of fetchAll(), fetchArray(), fetchDbRows()
-	 * and fetchDbRow(). By default, everything except empty results is cached for
-	 * the duration of the script.
+	 * Turn off automatic caching on fetchAll and fetchDbRows.
 	 * @method caching
-	 * @param {boolean} [$mode=null] Pass false to suppress all caching. Pass true to
-	 *  cache everything. The default is null, which caches everything except empty results.
-	 * @param {integer} [$duration=null] Pass a number of seconds here to also write the
-	 *  results through to Q_Cache, so that subsequent requests reuse them for that long.
-	 *  Ignored unless Q_Cache is connected. Only SELECT queries running outside any
-	 *  transaction on this connection are ever persisted this way. Nothing invalidates
-	 *  these entries before the duration expires, so only opt in for results you're
-	 *  willing to see stale.
-	 *
-	 *  Each call states the whole caching policy: the duration is not remembered from
-	 *  an earlier call, so caching(true) after caching(true, 60) leaves no duration.
-	 *  caching(false) suppresses both reading and writing, in both tiers.
-	 *
-	 *  WARNING - READ THIS BEFORE PASSING A DURATION. Treat it as sugar for caching
-	 *  a result in Q_Cache by hand: it saves you writing the key and the get/set,
-	 *  and it inherits every consequence of doing that. Which SELECTs can stand it
-	 *  is your judgement to make; this class doesn't second-guess you, and nothing
-	 *  here invalidates an entry before its duration runs out.
-	 *
-	 *  Without a duration the cache is shared-nothing - it lives and dies with the
-	 *  script, exactly as it always has. With one, concurrent scripts on the same
-	 *  machine share the result, which changes what other requests can observe:
-	 *
-	 *  * Read-your-own-writes stops holding ACROSS requests. A user who saves
-	 *    something and reloads can be served a copy persisted before their write,
-	 *    for up to the duration. A write made through this class does not clear
-	 *    it; only the TTL does, or an explicit Db_Query::clearCache().
-	 *  * APCu is per process pool, so two workers can disagree. The same URL can
-	 *    return fresh data on one request and stale data on the next, which is
-	 *    harder to diagnose than being uniformly stale, and separate servers never
-	 *    share entries at all.
-	 *  * Q_Cache writes at shutdown, so a value read early in a request lands late
-	 *    in it - even if this same script has since updated the rows it came from,
-	 *    in which case what gets published is already out of date. Call
-	 *    Db_Query::clearCache() before the script ends if that matters.
-	 *
-	 *  A ROLLBACK in another process is NOT a hazard here, as long as the database
-	 *  isolation level forbids dirty reads, which it does by default. That script
-	 *  never reads uncommitted rows, so it can never persist rows that a rollback
-	 *  erases. Under READ UNCOMMITTED that guarantee is gone and rolled back data
-	 *  could be published for the whole duration, so don't combine a duration with
-	 *  that isolation level. Within one script it is handled for you: a SELECT
-	 *  running inside a transaction on its own connection is never persisted,
-	 *  since its rows may still be rolled back.
-	 *
-	 *  The per-script tier is deliberately not so careful, and never has been. A
-	 *  SELECT you run after your own UPDATE, in the same request, can still be
-	 *  answered from an entry cached before it, and a SELECT run inside a
-	 *  transaction stays cached for the rest of the request even if you roll back.
-	 *  Call ignoreCache() on the queries where that matters.
-	 *
-	 *  So: a duration earns its keep on results that cost real work to produce and
-	 *  can stand being a little behind - reference tables, category lists,
-	 *  aggregates, big joins. Leave it off for anything a user expects to change
-	 *  the moment they act on it.
+	 * @param {boolean} [$mode=null] Pass false to suppress all caching. Pass true to cache everything. The default is null, which caches everything except empty results.
 	 * @return {Db_Query}
-	 * @chainable
 	 */
-	function caching($mode = null, $duration = null)
+	function caching($mode = null)
 	{
 		$this->caching = $mode;
-		$this->cacheDuration = $duration;
 		return $this;
-	}
-
-	/**
-	 * Empties the query result cache, both for this script and, if Q_Cache is
-	 * connected, the entries this class persisted there.
-	 * @method clearCache
-	 * @static
-	 * @param {string} [$connectionName=null] Pass this to clear only the entries
-	 *  belonging to one connection.
-	 */
-	static function clearCache($connectionName = null)
-	{
-		if (!isset($connectionName)) {
-			self::$cache = array();
-		} else {
-			$prefix = $connectionName . "\t";
-			$len = strlen($prefix);
-			foreach (self::$cache as $k => $v) {
-				if (strncmp($k, $prefix, $len) === 0) {
-					unset(self::$cache[$k]);
-				}
-			}
-		}
-		if (class_exists('Q_Cache')) {
-			Q_Cache::clear(
-				self::CACHE_PREFIX
-					. (isset($connectionName) ? $connectionName . "\t" : ''),
-				true
-			);
-		}
-	}
-
-	/**
-	 * Builds the cache key under which a result of this query is stored.
-	 * The connection name and method are left in the clear even when the rest of
-	 * the key is hashed, so that clearCache() can clear entries by prefix.
-	 * @method cacheKey
-	 * @protected
-	 * @param {string} $method Which kind of result this is, e.g. "rows" or "fetchAll"
-	 * @param {array} [$args=array()] Any arguments that change the shape of the result
-	 * @return {string}
-	 */
-	protected function cacheKey($method, array $args = array())
-	{
-		$connection = $this->db->connectionName();
-		if (empty($connection)) {
-			$connection = 'empty connection name';
-		}
-		$head = $connection . "\t" . $method . "\t";
-		$key = $head . serialize($args) . "\t" . $this->getSQL();
-		return strlen($key) > self::$cacheKeyMaxLength
-			? $head . md5($key)
-			: $key;
-	}
-
-	/**
-	 * Looks up a cached result: first in this script's cache, and then, if this
-	 * query opted into a duration, in Q_Cache.
-	 * @method cacheGet
-	 * @protected
-	 * @param {string} $key
-	 * @param {boolean} [&$found] Filled with whether anything was found
-	 * @return {mixed}
-	 */
-	protected function cacheGet($key, &$found = null)
-	{
-		$found = false;
-		if ($this->ignoreCache or $this->caching === false) {
-			return null;
-		}
-		if (array_key_exists($key, self::$cache)) {
-			$found = true;
-			return self::$cache[$key];
-		}
-		if (!$this->canCachePersistently()) {
-			return null;
-		}
-		$value = Q_Cache::get(self::CACHE_PREFIX . $key, null, $found);
-		if ($found) {
-			self::$cache[$key] = $value;
-		}
-		return $value;
-	}
-
-	/**
-	 * Stores a result in this script's cache, and in Q_Cache if this query
-	 * opted into a duration.
-	 * @method cacheSet
-	 * @protected
-	 * @param {string} $key
-	 * @param {mixed} $value Should be an array. Db_Row objects are never stored.
-	 * @param {boolean} [$persist=true] Pass false for results that shouldn't outlive
-	 *  the script, such as fetch styles that produce objects.
-	 */
-	protected function cacheSet($key, $value, $persist = true)
-	{
-		if ($this->caching === false) {
-			return;
-		}
-		if ($this->caching === null and empty($value)) {
-			return; // by default, don't cache empty results
-		}
-		if (!class_exists('Db') or !Db::allowCaching()) {
-			return;
-		}
-		if (count(self::$cache) >= self::$cacheMaxEntries) {
-			array_shift(self::$cache);
-		}
-		self::$cache[$key] = $value;
-		if ($persist and $this->canCachePersistently()) {
-			Q_Cache::set(self::CACHE_PREFIX . $key, $value, $this->cacheDuration);
-		}
-	}
-
-	/**
-	 * Whether the results of this query may be shared with other requests.
-	 * Only SELECT queries that aren't part of a transaction qualify.
-	 * @method canCachePersistently
-	 * @protected
-	 * @return {boolean}
-	 */
-	protected function canCachePersistently()
-	{
-		if ($this->ignoreCache
-		or $this->caching === false
-		or empty($this->cacheDuration)
-		or $this->type !== Db_Query::TYPE_SELECT) {
-			return false;
-		}
-		foreach (array('BEGIN', 'COMMIT', 'ROLLBACK', 'LOCK') as $clause) {
-			if (!empty($this->clauses[$clause])) {
-				return false;
-			}
-		}
-		// An ordinary SELECT can still be running inside a transaction that an
-		// earlier query began on this connection. Rows it reads there may yet be
-		// rolled back, so they must never be published to other requests.
-		if (self::inTransaction($this->db->connectionName())) {
-			return false;
-		}
-		return class_exists('Q_Cache') and Q_Cache::connected();
-	}
-
-
-	/**
-	 * Whether any transaction begun with ->begin() is currently open, optionally
-	 * narrowed to one connection. Transactions live on the connection, not on the
-	 * query object, so a query has to ask this rather than look at its own clauses.
-	 * @method inTransaction
-	 * @static
-	 * @param {string} [$connectionName=null] Pass a connection name to ask only
-	 *  about that connection. Omit it to ask whether any transaction is open at all.
-	 * @return {boolean}
-	 */
-	static function inTransaction($connectionName = null)
-	{
-		foreach (self::$nestedTransactions as $t) {
-			if (empty($t['count'])) {
-				continue;
-			}
-			if (!isset($connectionName)
-			or empty($t['connections'])
-			or in_array($connectionName, $t['connections'])) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	/**
-	 * Whether a PDO fetch style produces plain arrays, and is therefore safe to
-	 * hand to Q_Cache. Anything else is cached for this script only.
-	 * @method isPersistableFetchStyle
-	 * @protected
-	 * @static
-	 * @param {integer} $fetch_style
-	 * @return {boolean}
-	 */
-	protected static function isPersistableFetchStyle($fetch_style)
-	{
-		return in_array($fetch_style, array(
-			PDO::FETCH_ASSOC,
-			PDO::FETCH_NUM,
-			PDO::FETCH_BOTH,
-			PDO::FETCH_COLUMN,
-			PDO::FETCH_KEY_PAIR
-		), true);
 	}
 	
 	/**
@@ -2380,40 +2115,19 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	/**
-	 * Fetches the rows matching the query as plain associative arrays, and caches
-	 * them. This is the one and only place a SELECT's rows enter the cache: every
-	 * other fetch method below derives its return value from these arrays, which
-	 * is why Db_Row objects never have to be stored or serialized anywhere.
-	 * @method fetchAssocRows
-	 * @protected
-	 * @param {Db_Result} [&$result] Filled with the Db_Result, if the query had to
-	 *  actually be executed. Left null on a cache hit.
-	 * @return {array}
-	 */
-	protected function fetchAssocRows(&$result = null)
-	{
-		$key = $this->cacheKey('rows');
-		$rows = $this->cacheGet($key, $found);
-		if ($found) {
-			return $rows;
-		}
-		$result = $this->execute();
-		$rows = $result->fetchAll(PDO::FETCH_ASSOC);
-		$this->cacheSet($key, $rows);
-		return $rows;
-	}
-
-	/**
 	 * Fetches an array of database rows matching the query.
-	 * If this exact query, with these exact arguments, was already fetched during
-	 * this script then the cached value is returned, unless ->ignoreCache() was
-	 * called. See {{#crossLink "Db_Query/caching"}}{{/crossLink}}.
+	 * If this exact query has already been executed and
+	 * fetchAll() has been called on the Db_Query, and
+	 * the return value was cached by the Db_Query class, then
+	 * that cached value is returned, unless $this->ignoreCache is true.
+	 * Otherwise, the query is executed and fetchAll()
+	 * is called on the result.
 	 *
 	 * See [PDO documentation](http://us2.php.net/manual/en/pdostatement.fetchall.php)
 	 * @method fetchAll
 	 * @param {enum} $fetch_style=PDO::FETCH_BOTH
-	 * @param {enum} $fetch_argument=null
-	 * @param {array} $ctor_args=array()
+	 * @param {enum} $column_index=null
+	 * @param {array} $ctor_args=null
 	 * @return {array}
 	 */
 	function fetchAll(
@@ -2421,30 +2135,38 @@ abstract class Db_Query extends Db_Expression
 		$fetch_argument = null,
 		array $ctor_args = array())
 	{
-		if ($fetch_style === PDO::FETCH_ASSOC
-		and !isset($fetch_argument) and empty($ctor_args)) {
-			// share the cache entry with fetchArray() and fetchDbRows()
-			return $this->fetchAssocRows();
+		$conn_name = $this->db->connectionName();
+
+		if (empty($conn_name)) {
+			$conn_name = 'empty connection name';
 		}
-		$key = $this->cacheKey('fetchAll', array(
-			$fetch_style, $fetch_argument, $ctor_args
-		));
-		$ret = $this->cacheGet($key, $found);
-		if ($found) {
-			return $ret;
+		$sql = $this->getSQL();
+
+		if (isset(Db_Query::$cache[$conn_name][$sql]['fetchAll'])
+		and !$this->ignoreCache) {
+			return Db_Query::$cache[$conn_name][$sql]['fetchAll'];
 		}
 		$result = $this->execute();
-		$ret = call_user_func_array(array($result, 'fetchAll'), func_get_args());
-		$this->cacheSet($key, $ret, self::isPersistableFetchStyle($fetch_style));
+		$arguments = func_get_args();
+		$ret = call_user_func_array(array($result, 'fetchAll'), $arguments);
+
+		if ($this->caching === true
+		or ($this->caching === null and !empty($ret))) {
+			if (Db::allowCaching()) {
+				// cache the result of executing this particular SQL on this db connection
+				Db_Query::$cache[$conn_name][$sql]['fetchAll'] = $ret;
+			}
+		}
 		return $ret;
 	}
 
 	/**
-	 * Fetches an array of database rows matching the query, as plain arrays.
-	 * If this exact query was already fetched during this script then the cached
-	 * rows are reused, unless ->ignoreCache() was called.
-	 * See {{#crossLink "Db_Query/caching"}}{{/crossLink}}.
-	 * @method fetchArray
+	 * Fetches an array of database rows matching the query.
+	 * If this exact query has already been executed and
+	 * fetchAll() has been called on the Db_Query, and
+	 * the return value was cached by the Db_Query class, then
+	 * that cached value is returned, unless $this->ignoreCache is true.
+	 * Otherwise, the query is executed and fetchAll() is called on the result.
 	 * @param {string} [$fields_prefix=''] This is the prefix, if any, to strip out when fetching the rows.
 	 * @param {string} [$by_field=null] A field name to index the array by.
 	 *  If the field's value is NULL in a given row, that row is just appended
@@ -2455,27 +2177,45 @@ abstract class Db_Query extends Db_Expression
 		$fields_prefix = '',
 		$by_field = null)
 	{
-		return self::arrangeArrayRows(
-			$this->fetchAssocRows(), $fields_prefix, $by_field
-		);
+		$conn_name = $this->db->connectionName();
+
+		if (empty($conn_name)) {
+			$conn_name = 'empty connection name';
+		}
+		$sql = $this->getSQL();
+
+		if (isset(Db_Query::$cache[$conn_name][$sql]['fetchArray'][$by_field])
+		and !$this->ignoreCache) {
+			return Db_Query::$cache[$conn_name][$sql]['fetchArray'][$by_field];
+		}
+		$result = $this->execute();
+		$arguments = func_get_args();
+		$ret = call_user_func_array(array($result, 'fetchArray'), $arguments);
+
+		if ($this->caching === true
+		or ($this->caching === null and !empty($ret))) {
+			if (Db::allowCaching()) {
+				// cache the result of executing this particular SQL on this db connection
+				Db_Query::$cache[$conn_name][$sql]['fetchArray'][$by_field] = $ret;
+			}
+		}
+		return $ret;
 	}
 
 	/**
 	 * Fetches an array of Db_Row objects (possibly extended).
-	 * What gets cached are the underlying associative arrays, not the objects, so
-	 * every call returns freshly hydrated rows that no other caller holds a
-	 * reference to. The cache is consulted unless ->ignoreCache() was called.
-	 * See {{#crossLink "Db_Query/caching"}}{{/crossLink}}.
+	 * If this exact query has already been executed and
+	 * fetchAll() has been called on the Db_Query, and
+	 * the return value was cached by the Db_Query class, then
+	 * that cached value is returned.
+	 * Otherwise, the query is executed and fetchDbRows() is called on the result.
 	 * @method fetchDbRows
-	 * @param {string} [$class_name=null] The name of the class to instantiate and fill objects from.
-	 *  Must extend Db_Row. Defaults to $this->className, unless the query has a JOIN.
+	 * @param {string} [$class_name=null]  The name of the class to instantiate and fill objects from.
+	 * Must extend Db_Row. Defaults to $this->className
 	 * @param {string} [$fields_prefix=''] This is the prefix, if any, to strip out when fetching the rows.
-	 * @param {string|array} [$by_field=null] A field name to index the array by.
-	 *  You can also pass an array containing the field name as its only item,
-	 *  in order to accumulate arrays of rows per field, if your query might return
-	 *  multiple rows with the same field value.
-	 *  If the field's value is NULL in a given row, that row is just appended
-	 *  in the usual way to the array.
+	 * @param {string} [$by_field=null] A field name to index the array by.
+	 * If the field's value is NULL in a given row, that row is just appended
+	 * in the usual way to the array.
 	 * @return {array}
 	 */
 	function fetchDbRows(
@@ -2483,19 +2223,27 @@ abstract class Db_Query extends Db_Expression
 		$fields_prefix = '',
 		$by_field = null)
 	{
-		if (empty($class_name) and !$this->getClause('JOIN')) {
-			$class_name = $this->className;
+		if (empty($conn_name)) {
+			$conn_name = $this->db->connectionName();
 		}
-		$result = null;
-		$rows = $this->fetchAssocRows($result);
-		if (!isset($result)) {
-			// the rows came from the cache, so there's no statement behind them,
-			// but Db_Row::init() and afterFetch() still want a Db_Result
-			$result = new Db_Result(null, $this);
+		if (empty($conn_name)) {
+			$conn_name = 'empty connection name';
 		}
-		return self::hydrateDbRows(
-			$rows, $result, $class_name, $fields_prefix, $by_field
-		);
+		$sql = $this->getSQL();
+		$key = $by_field . $fields_prefix;
+		if (isset(Db_Query::$cache[$conn_name][$sql]['fetchDbRows'][$key])
+		and !$this->ignoreCache) {
+			return Db_Query::$cache[$conn_name][$sql]['fetchDbRows'][$key];
+		}
+		$ret = $this->execute()->fetchDbRows($class_name, $fields_prefix, $by_field);
+		if ($this->caching === true
+		or ($this->caching === null and !empty($ret))) {
+			if (Db::allowCaching()) {
+				// cache the result of executing this particular SQL on this db connection
+				Db_Query::$cache[$conn_name][$sql]['fetchDbRows'][$key] = $ret;
+			}
+		}
+		return $ret;
 	}
 
 	/**
@@ -2506,7 +2254,7 @@ abstract class Db_Query extends Db_Expression
 	 * @param {string} [$class_name=null] The name of the class to instantiate and fill objects from.
 	 * Must extend Db_Row. Defaults to $this->query->className
 	 * @param {string} [$fields_prefix=''] This is the prefix, if any, to strip out when fetching the rows.
-	 * @return {DbRow|null} Returns null if no row, otherwise returns an object of type $class_name
+	 * @return {DbRow|boolean} Returns false if no row, otherwise returns an object of type $class_name
 	 */
 	function fetchDbRow(
 		$class_name = null,
@@ -2517,126 +2265,6 @@ abstract class Db_Query extends Db_Expression
 			return null;
 		}
 		return reset($rows);
-	}
-
-	/**
-	 * Strips a prefix from the field names of some associative rows, and optionally
-	 * indexes them by one of the fields. This is the array counterpart of
-	 * hydrateDbRows() below.
-	 * @method arrangeArrayRows
-	 * @static
-	 * @param {array} $arrs Associative arrays, as from PDO::FETCH_ASSOC
-	 * @param {string} [$fields_prefix=''] The prefix, if any, to strip out
-	 * @param {string} [$by_field=null] A field name to index the result by
-	 * @return {array}
-	 */
-	static function arrangeArrayRows(
-		array $arrs,
-		$fields_prefix = '',
-		$by_field = null)
-	{
-		if (empty($fields_prefix)) {
-			$fields_prefix = '';
-		} else {
-			$prefix_len = strlen($fields_prefix);
-		}
-		$result = array();
-		foreach ($arrs as $row) {
-			if (!empty($fields_prefix)) {
-				$row2 = array();
-				foreach ($row as $key => $value) {
-					if (strncmp($key, $fields_prefix, $prefix_len) != 0) {
-						continue;
-					}
-					$row2[substr($key, $prefix_len)] = $value;
-				}
-				$row = $row2;
-			}
-			if ($by_field and isset($row[$by_field])) {
-				$result[$row[$by_field]] = $row;
-			} else {
-				$result[] = $row;
-			}
-		}
-		return $result;
-	}
-
-	/**
-	 * Builds Db_Row objects out of associative arrays, whether they came straight
-	 * from the database or out of the cache. Always returns new objects, so no two
-	 * callers can end up sharing, and modifying, the same row.
-	 * @method hydrateDbRows
-	 * @static
-	 * @param {array} $arrs Associative arrays, as from PDO::FETCH_ASSOC
-	 * @param {Db_Result} $result Passed to Db_Row::init() and afterFetch()
-	 * @param {string} [$class_name=null] The class to instantiate. Must extend Db_Row.
-	 *  Defaults to 'Db_Row'.
-	 * @param {string} [$fields_prefix=''] The prefix, if any, to strip out
-	 * @param {string|array} [$by_field=null] A field name to index the result by.
-	 *  Pass an array containing the field name as its only item to accumulate
-	 *  arrays of rows per field instead.
-	 * @param {boolean} [$callAfterFetch=true] Pass false to skip the afterFetch
-	 *  callback on each row. Db_Result::fetchDbRow() has never fired it, and
-	 *  passes false here to keep that behavior.
-	 * @return {array}
-	 * @throws {Exception} If $class_name doesn't extend Db_Row
-	 */
-	static function hydrateDbRows(
-		array $arrs,
-		Db_Result $result,
-		$class_name = null,
-		$fields_prefix = '',
-		$by_field = null,
-		$callAfterFetch = true)
-	{
-		if (empty($fields_prefix)) {
-			$fields_prefix = '';
-		}
-		if (empty($class_name)) {
-			$class_name = 'Db_Row';
-		}
-		if ($class_name != 'Db_Row') {
-			$parent_classes = class_parents($class_name);
-			if (! in_array('Db_Row', $parent_classes)) {
-				throw new Exception("Class $class_name does not extend Db_Row");
-			}
-		}
-
-		$rows = array();
-		foreach ($arrs as $arr) {
-			$method = array($class_name, 'newRow');
-			if (is_callable($method)) {
-				$row = call_user_func($method, $arr, $fields_prefix);
-			} else {
-				$row = new $class_name(array(), false);
-				$row->copyFrom($arr, $fields_prefix, false, false);
-			}
-			$row->init($result);
-			$wasSetByField = false;
-			if ($by_field) {
-				if (is_string($by_field) and isset($row->$by_field)) {
-					$rows[$row->$by_field] = $row;
-					$wasSetByField = true;
-				} else if (is_array($by_field)) {
-					$byField = reset($by_field);
-					if (isset($row->$byField)) {
-						$rows[$row->$byField][] = $row;
-						$wasSetByField = true;
-					}
-				}
-			}
-			if (!$wasSetByField) {
-				$rows[] = $row;
-			}
-			if ($callAfterFetch) {
-				$callback = array($row, "afterFetch");
-				if (is_callable($callback)) {
-					$row->afterFetch($result);
-				}
-			}
-		}
-
-		return $rows;
 	}
 
 	/**
@@ -2717,6 +2345,34 @@ abstract class Db_Query extends Db_Expression
 
 	static function quoted($identifier) {
 		return '"' . str_replace('"', '""', $identifier) . '"'; // ANSI default, override per adapter
+	}
+
+	/**
+	 * Return a Db_Expression for the lesser of two values.
+	 * MySQL uses LEAST(); SQLite uses MIN() — adapters override this.
+	 * @method least
+	 * @static
+	 * @param {string|Db_Expression} $a
+	 * @param {string|Db_Expression} $b
+	 * @return {Db_Expression}
+	 */
+	static function least($a, $b)
+	{
+		return new Db_Expression("LEAST($a, $b)");
+	}
+
+	/**
+	 * Return a Db_Expression for the greater of two values.
+	 * MySQL uses GREATEST(); SQLite uses MAX() — adapters override this.
+	 * @method greatest
+	 * @static
+	 * @param {string|Db_Expression} $a
+	 * @param {string|Db_Expression} $b
+	 * @return {Db_Expression}
+	 */
+	static function greatest($a, $b)
+	{
+		return new Db_Expression("GREATEST($a, $b)");
 	}
 
 	/**
@@ -3130,11 +2786,8 @@ abstract class Db_Query extends Db_Expression
 			$query->db->setTimezone();
 		}
 
-		// every other method keys this by spl_object_hash($pdo), not by dsn,
-		// so initialize the entry they will actually use
-		$key = spl_object_hash($pdo);
-		if (!isset(self::$nestedTransactions[$key])) {
-			self::$nestedTransactions[$key] = array(
+		if (!isset(self::$nestedTransactions[$dsn])) {
+			self::$nestedTransactions[$dsn] = array(
 				'count' => 0,
 				'keys' => array(),
 				'connections' => array(),
@@ -4081,57 +3734,13 @@ abstract class Db_Query extends Db_Expression
 	 * @protected
 	 */
 	static protected $mapping = null;
-
 	/**
-	 * Results of fetchAll(), fetchArray(), fetchDbRows() and fetchDbRow(), cached
-	 * for the duration of the script. The keys are built by cacheKey() out of the
-	 * connection name, the kind of result, the generated SQL, and whatever
-	 * arguments change the shape of that result.
-	 *
-	 * Only plain arrays are stored here. Db_Row objects are mutable, so handing
-	 * the same instance to two callers would let one caller's changes show up in
-	 * the other's supposedly fresh fetch; instead the raw associative rows are
-	 * cached and new objects are hydrated on every call. That is also what makes
-	 * the entries safe to serialize.
-	 *
-	 * When a query opts into a duration via caching($mode, $duration), the same
-	 * arrays are written through to Q_Cache and reused by later requests. Nothing
-	 * invalidates them before the duration expires.
-	 *
-	 * Use Db_Query::clearCache() to flush it.
-	 *
-	 * Prefer Db_Query::clearCache() over assigning to this directly; it is public
-	 * only because it always has been, and code outside this class shouldn't have
-	 * to know how the keys are built.
-	 *
+	 * Class cache
 	 * @property $cache
-	 * @static
 	 * @type array
-	 * @default array()
 	 */
-	protected static $cache = array();
-
-	/**
-	 * Cache keys longer than this many characters get replaced by the connection
-	 * name, the kind of result, and an md5 of the whole key, so that they stay
-	 * usable as Q_Cache keys.
-	 * @property $cacheKeyMaxLength
-	 * @static
-	 * @type integer
-	 * @default 200
-	 */
-	static $cacheKeyMaxLength = 200;
-
-	/**
-	 * How many entries the per-script cache holds before the oldest ones are
-	 * dropped. Mostly matters in long-running CLI processes.
-	 * @property $cacheMaxEntries
-	 * @static
-	 * @type integer
-	 * @default 1000
-	 */
-	static $cacheMaxEntries = 1000;
-
+	static $cache = array();
+	
 	public $cachedShardIndex = null;
 
 	public $lastChunkValue = null;

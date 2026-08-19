@@ -78,12 +78,17 @@ class Q_Plugin
 			throw new Exception("Could not connect to DB connection '$conn_name': " . $e->getMessage(), $e->getCode(), $e);
 		}
 
-		$db->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+		if ($db->dbms() === 'mysql') {
+			$db->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+		}
 		$conn = $db->connection();
 
 		$tableName = "{{prefix}}Q_{$type}";
 		$prefix = empty($conn['prefix']) ? '' : $conn['prefix'];
 		$tn = str_replace('{{prefix}}', $prefix, $tableName);
+		if ($db->dbms() === 'postgres') {
+			$tn = strtolower($tn);
+		}
 
 		if ($db->dbms() === 'mysql') {
 			$cols = false;
@@ -109,8 +114,31 @@ class Q_Plugin
 				if (!$found) {
 					echo "Adding 'extra' column to '$tn'" . PHP_EOL;
 					$db->rawQuery("ALTER TABLE `$tableName` 
-						ADD COLUMN `extra` VARCHAR (2047) DEFAULT '{}' COMMENT 'json encoded';")
+						ADD COLUMN `extra` VARCHAR (2047) DEFAULT '{}';")
 						->execute();
+				}
+			}
+		} else {
+			if ($db->dbms() === 'sqlite') {
+				$cols = $db->rawQuery("PRAGMA table_info(\"$tn\")")
+					->execute()->fetchAll(PDO::FETCH_ASSOC);
+				$colKey = 'name';
+			} else {
+				// Postgres
+				$cols = $db->rawQuery(
+					"SELECT column_name as name FROM information_schema.columns "
+					. "WHERE table_name = '$tn'"
+				)->execute()->fetchAll(PDO::FETCH_ASSOC);
+				$colKey = 'name';
+			}
+			if (!empty($cols)) {
+				$found = false;
+				foreach ($cols as $col) {
+					if ($col[$colKey] === 'extra') { $found = true; break; }
+				}
+				if (!$found) {
+					echo "Adding 'extra' column to '$tn'" . PHP_EOL;
+					$db->rawQuery("ALTER TABLE \"$tn\" ADD COLUMN extra TEXT DEFAULT '{}'")->execute();
 				}
 			}
 		}
@@ -312,41 +340,108 @@ class Q_Plugin
 				$db = Db::connect($tempname);
 				$pdo = $db->reallyConnect($shard);
 				list($dbms) = explode(':', $shard_data['dsn']);
+				// Map DSN driver names to adapter/schema names
+				$dbmsSchemaMap = array('pgsql' => 'postgres');
+				if (isset($dbmsSchemaMap[$dbms])) {
+					$dbms = $dbmsSchemaMap[$dbms];
+				}
 				$prefix = $shard_data['prefix'];
 			} catch (Exception $e) {
 				throw new Exception("Could not connect to DB connection '$conn_name'$shard_text: " . $e->getMessage(), $e->getCode(), $e);
 			}
 
-			$db->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
-
 			if ($db->dbms() === 'mysql') {
-				// Do we already have $name installed?
-				// Checking SCHEMA plugin version in the DB.
-				$tableName = "{{prefix}}Q_{$type}";
-				$cols = false;
+				$db->setAttribute(PDO::MYSQL_ATTR_USE_BUFFERED_QUERY, true);
+			}
+
+			// Do we already have $name installed?
+			// Checking SCHEMA plugin version in the DB.
+			$tableName = "{{prefix}}Q_{$type}";
+			if ($dbms === 'postgres') {
+				// Postgres lowercases unquoted identifiers
+				$tableName = strtolower($tableName);
+			}
+			$cols = false;
+			if ($db->dbms() === 'mysql') {
 				try {
 					$cols = $db->rawQuery("SHOW COLUMNS FROM $tableName")
 						->execute()->fetchAll(PDO::FETCH_ASSOC);
 				} catch (Exception $e) {
 					$db->rawQuery("CREATE TABLE IF NOT EXISTS `$tableName` (
 						`{$type}` VARCHAR(63) NOT NULL,
-						`version` VARCHAR( 255 ) NOT NULL,
-						`versionPHP` VARCHAR (255) NOT NULL,
-						PRIMARY KEY (`{$type}`)) ENGINE = InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+						`version` VARCHAR(255) NOT NULL,
+						`versionPHP` VARCHAR(255) NOT NULL,
+						`extra` VARCHAR(2047) DEFAULT '{}',
+						PRIMARY KEY (`{$type}`)) ENGINE = InnoDB DEFAULT CHARSET=utf8mb4;
 					")->execute();
 				}
 				if ($cols) {
+					$fieldKey = 'Field';
 					$found = false;
 					foreach ($cols as $col) {
-						if ($col['Field'] === 'versionPHP') {
-							$found = true;
-							break;
-						}
+						if ($col[$fieldKey] === 'versionPHP') { $found = true; break; }
 					}
 					if (!$found) {
 						$db->rawQuery("ALTER TABLE `$tableName`
-							ADD COLUMN `versionPHP` VARCHAR (255) NOT NULL AFTER `version`;
-						")->execute();
+							ADD COLUMN `versionPHP` VARCHAR(255) NOT NULL AFTER `version`;"
+						)->execute();
+						$db->update($tableName)->set(array(
+							'versionPHP' => new Db_Expression('version')
+						))->execute();
+					}
+				}
+			} else {
+				// SQLite / Postgres
+				$tn2 = str_replace('{{prefix}}', $prefix, $tableName);
+				if ($db->dbms() === 'postgres') {
+					$tn2 = strtolower($tn2);
+				}
+				if ($db->dbms() === 'sqlite') {
+					$cols = $db->rawQuery("PRAGMA table_info(\"$tn2\")")
+						->execute()->fetchAll(PDO::FETCH_ASSOC);
+					$colKey = 'name';
+				} else {
+					// Postgres
+					$cols = $db->rawQuery(
+						"SELECT column_name as name FROM information_schema.columns "
+						. "WHERE table_name = '$tn2'"
+					)->execute()->fetchAll(PDO::FETCH_ASSOC);
+					$colKey = 'name';
+				}
+				if (empty($cols)) {
+					if ($db->dbms() === 'postgres') {
+						$db->rawQuery("CREATE TABLE IF NOT EXISTS $tn2 (
+							$type TEXT NOT NULL,
+							version TEXT NOT NULL,
+							versionphp TEXT NOT NULL,
+							extra TEXT DEFAULT '{}',
+							PRIMARY KEY ($type))"
+						)->execute();
+					} else {
+						$db->rawQuery("CREATE TABLE IF NOT EXISTS \"$tn2\" (
+							\"{$type}\" TEXT NOT NULL,
+							\"version\" TEXT NOT NULL,
+							\"versionPHP\" TEXT NOT NULL,
+							\"extra\" TEXT DEFAULT '{}',
+							PRIMARY KEY (\"{$type}\"))"
+						)->execute();
+					}
+				} else {
+					$found = false;
+					$phpColName = ($db->dbms() === 'postgres') ? 'versionphp' : 'versionPHP';
+					foreach ($cols as $col) {
+						if ($col[$colKey] === $phpColName) { $found = true; break; }
+					}
+					if (!$found) {
+						if ($db->dbms() === 'postgres') {
+							$db->rawQuery("ALTER TABLE $tn2
+								ADD COLUMN versionphp TEXT NOT NULL DEFAULT ''"
+							)->execute();
+						} else {
+							$db->rawQuery("ALTER TABLE \"$tn2\"
+								ADD COLUMN \"versionPHP\" TEXT NOT NULL DEFAULT ''"
+							)->execute();
+						}
 						$db->update($tableName)->set(array(
 							'versionPHP' => new Db_Expression('version')
 						))->execute();
@@ -354,14 +449,19 @@ class Q_Plugin
 				}
 			}
 
-			$res = $db->select('version, versionPHP', "{{prefix}}Q_{$type}")
+			$versionCols = ($dbms === 'postgres') ? 'version, versionphp' : 'version, versionPHP';
+			$versionTable = ($dbms === 'postgres')
+				? strtolower("{{prefix}}Q_{$type}")
+				: "{{prefix}}Q_{$type}";
+			$res = $db->select($versionCols, $versionTable)
 				->where(array($type => $name))
 				->fetchAll(PDO::FETCH_ASSOC);
 
 			// If we have version in the db then this is upgrade
 			if (!empty($res)) {
 				$current_version = $res[0]['version'];
-				$current_versionPHP = $res[0]['versionPHP'];
+				$phpKey = ($dbms === 'postgres') ? 'versionphp' : 'versionPHP';
+				$current_versionPHP = $res[0][$phpKey];
 				echo ucfirst($type)." '$name' schema on '$conn_name'$shard_text (SQL $current_version, PHP $current_versionPHP) is already installed" . PHP_EOL;
 				if (Q::compareVersion($current_version, $version) < 0
 					or Q::compareVersion($current_versionPHP, $version) < 0) {
@@ -388,7 +488,8 @@ class Q_Plugin
 				if (count($parts) < 2) continue;
 				list($sqlver, $tail) = $parts;
 				if ($tail !== "$conn_name.$dbms"
-				and $tail !== "$conn_name.$dbms.php") {
+				and $tail !== "$conn_name.$dbms.php"
+				and $tail !== "$conn_name.sql.php") {
 					continue; // not schema file or php script
 				}
 
@@ -404,6 +505,12 @@ class Q_Plugin
 					$scriptsSQL["$sqlver"] = $entry;
 				} else if ($tail === "$conn_name.$dbms.php"
 					and Q::compareVersion($sqlver, $current_versionPHP) > 0) {
+					$scriptsPHP["$sqlver"] = $entry;
+				} else if ($tail === "$conn_name.sql.php"
+					and Q::compareVersion($sqlver, $current_versionPHP) > 0
+					and !isset($scriptsPHP["$sqlver"])) {
+					// Generic .sql.php runs on all engines.
+					// DBMS-specific .mysql.php / .postgres.php / .sqlite.php take priority.
 					$scriptsPHP["$sqlver"] = $entry;
 				}
 			}
@@ -486,6 +593,7 @@ class Q_Plugin
 					$queries = $db->scriptToQueries($sqltext);
 					// Process each query
 					foreach ($queries as $q) {
+						$q = str_replace('{{prefix}}', $prefix, $q);
 						$db->rawQuery($q)->execute();
 						echo ".";
 					}
@@ -500,6 +608,21 @@ class Q_Plugin
 						$db->insert("{{prefix}}Q_{$type}", $fields)
 							->onDuplicateKeyUpdate(array('version' => $new_version))
 							->execute();
+						$current_version = $new_version;
+					} else if ($dbms === 'sqlite') {
+						$tn2 = str_replace('{{prefix}}', $prefix, "{{prefix}}Q_{$type}");
+						$db->rawQuery("INSERT OR REPLACE INTO \"$tn2\" "
+							. "(\"$type\", \"version\", \"versionPHP\") "
+							. "VALUES ('$name', '$new_version', '0')"
+						)->execute();
+						$current_version = $new_version;
+					} else if ($dbms === 'postgres') {
+						$tn2 = strtolower(str_replace('{{prefix}}', $prefix, "{{prefix}}Q_{$type}"));
+						$db->rawQuery("INSERT INTO $tn2 "
+							. "($type, version, versionphp) "
+							. "VALUES ('$name', '$new_version', '0') "
+							. "ON CONFLICT ($type) DO UPDATE SET version = '$new_version'"
+						)->execute();
 						$current_version = $new_version;
 					}
 					echo PHP_EOL;
@@ -533,14 +656,30 @@ class Q_Plugin
 				if (Q::compareVersion($version, $current_version) > 0
 					or Q::compareVersion($version, $current_versionPHP) > 0) {
 					echo '+ ' . ucfirst($type) . " '$name' schema on '$conn_name'$shard_text (v. $original_version -> $version) installed".PHP_EOL;
-					$db->insert("{{prefix}}Q_{$type}", array(
-						$type => $name,
-						'version' => $version,
-						'versionPHP' => $version
-					))->onDuplicateKeyUpdate(array(
-						'version' => $version,
-						'versionPHP' => $version
-					))->execute();
+					if ($dbms === 'sqlite') {
+						$tn2 = str_replace('{{prefix}}', $prefix, "{{prefix}}Q_{$type}");
+						$db->rawQuery("INSERT OR REPLACE INTO \"$tn2\" "
+							. "(\"$type\", \"version\", \"versionPHP\") "
+							. "VALUES ('$name', '$version', '$version')"
+						)->execute();
+					} else if ($dbms === 'postgres') {
+						$tn2 = strtolower(str_replace('{{prefix}}', $prefix, "{{prefix}}Q_{$type}"));
+						$db->rawQuery("INSERT INTO $tn2 "
+							. "($type, version, versionphp) "
+							. "VALUES ('$name', '$version', '$version') "
+							. "ON CONFLICT ($type) DO UPDATE SET "
+							. "version = '$version', versionphp = '$version'"
+						)->execute();
+					} else {
+						$db->insert("{{prefix}}Q_{$type}", array(
+							$type => $name,
+							'version' => $version,
+							'versionPHP' => $version
+						))->onDuplicateKeyUpdate(array(
+							'version' => $version,
+							'versionPHP' => $version
+						))->execute();
+					}
 				}
 			} catch (Exception $e) {
 				if ($pdo->errorCode() != '00000') {
@@ -953,7 +1092,12 @@ EOT;
 		 * @param {string} $plugin_name the name of the plugin
 		 * @param {array} $options options passed to the installPlugin method
 		 */
-		Q::event("Q/Plugin/install", @compact('app_dir', 'plugin_name', 'options'), 'after');
+		try {
+			Q::event("Q/Plugin/install", @compact('app_dir', 'plugin_name', 'options'), 'after');
+		} catch (Exception $e) {
+			echo Q_Utils::colored("Warning: post-install hook error for '$plugin_name': " 
+				. $e->getMessage() . PHP_EOL, 'yellow');
+		}
 
 		echo Q_Utils::colored("Plugin '$plugin_name' $plugin_version successfully installed".PHP_EOL, 'green');
 	}

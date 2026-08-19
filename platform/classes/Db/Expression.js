@@ -15,7 +15,8 @@ function Expression(chain, chain2) {
 	this.typename = "Db.Expression";
 	this.parameters = {};
 	var pieces = [];
-	for (j = 0; j < arguments.length; ++j) {
+	var i = 0, j, k, str;
+	for (var j = 0; j < arguments.length; ++j) {
 		var arg = arguments[j];
 		if (arg === null || arg === undefined) {
 			pieces.push("NULL"); 
@@ -37,6 +38,7 @@ function Expression(chain, chain2) {
 				} else {
 					str = ":_dbExpr_"+i;
 					this.parameters["_dbExpr_"+i] = value;
+					i++;
 				}
 				if (/\W/.test(expr.slice(-1))) {
 					expr_list.push("(" + expr + str + ")");

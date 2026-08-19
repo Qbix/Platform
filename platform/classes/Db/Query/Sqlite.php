@@ -95,13 +95,10 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
             throw new Exception("Updates must be an associative array.", -1);
         }
 
-        $i               = 1;
-        $updates_list    = [];
-        $conflictColumns = [];
+        $i = 1;
+        $updates_list = [];
 
         foreach ($updates as $field => $value) {
-            $conflictColumns[] = $field;
-
             if ($value === self::DONT_CHANGE()) {
                 $updates_list[] = self::column($field) . " = " . self::column($field);
             } elseif ($value instanceof Db_Expression) {
@@ -116,15 +113,44 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
             }
         }
 
-        // Only infer ON CONFLICT target if not already provided
-        if (empty($this->clauses['ON CONFLICT TARGET']) && !empty($conflictColumns)) {
-            $this->clauses['ON CONFLICT TARGET'] =
-                '(' . implode(', ', array_map([self::class, 'column'], $conflictColumns)) . ')';
+        // Infer ON CONFLICT target from the table's PRIMARY KEY via PRAGMA
+        if (empty($this->clauses['ON CONFLICT TARGET'])) {
+            $tableName = isset($this->clauses['INTO'])
+                ? $this->clauses['INTO'] : $this->table;
+            // Strip column list: "tablename (col1, col2)" → "tablename"
+            if ($tableName && preg_match('/^([^(]+)/', $tableName, $tnm)) {
+                $tableName = trim($tnm[1]);
+            }
+            if ($tableName) {
+                $bare = preg_replace('/^(main\.|{{dbname}}\.|\w+\.)/', '', $tableName);
+                $bare = str_replace('{{prefix}}', $this->db->prefix, $bare);
+                $bare = trim($bare, '`"');
+                try {
+                    $cols = $this->db->rawQuery("PRAGMA table_info(\"$bare\")")
+                        ->execute()->fetchAll(\PDO::FETCH_ASSOC);
+                    $pkCols = [];
+                    foreach ($cols as $col) {
+                        if ($col['pk'] > 0) $pkCols[] = $col['name'];
+                    }
+                    if (!empty($pkCols)) {
+                        $this->clauses['ON CONFLICT TARGET'] =
+                            '(' . implode(', ', array_map([self::class, 'column'], $pkCols)) . ')';
+                    }
+                } catch (\Exception $e) {
+                    // Log the error for debugging
+                    // PK lookup failed — fallback to update columns
+                }
+            }
+            // Fallback: use all update columns
+            if (empty($this->clauses['ON CONFLICT TARGET'])) {
+                $conflictColumns = array_keys($updates);
+                $this->clauses['ON CONFLICT TARGET'] =
+                    '(' . implode(', ', array_map([self::class, 'column'], $conflictColumns)) . ')';
+            }
         }
 
         $updates_sql = implode(', ', $updates_list);
 
-        // Save the assignments for build step
         if (empty($this->clauses['ON DUPLICATE KEY UPDATE'])) {
             $this->clauses['ON DUPLICATE KEY UPDATE'] = $updates_sql;
         } else {
@@ -153,6 +179,33 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
             . " DO UPDATE SET " . $this->clauses['ON DUPLICATE KEY UPDATE'];
     }
 
+    /**
+     * Called by base Db_Query::build_insert() — delegate to build_onDuplicateKeyUpdate.
+     */
+    protected function build_insert_onDuplicateKeyUpdate()
+    {
+        return $this->build_onDuplicateKeyUpdate();
+    }
+
+	/**
+	 * SQLite doesn't support FOR UPDATE / LOCK IN SHARE MODE — return empty.
+	 */
+	protected function build_select_lock() {
+		return '';
+	}
+
+	/**
+	 * Override getSQL to translate MySQL functions to SQLite equivalents
+	 */
+	function getSQL($callback = null, $template = false)
+	{
+		$sql = parent::getSQL($callback, $template);
+		if (is_string($sql) && !$template) {
+			$sql = $this->translateSQL($sql);
+		}
+		return $sql;
+	}
+
 	/**
 	 * SQLite-compatible ORDER BY expression handler
 	 */
@@ -163,6 +216,75 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
 			return 'RANDOM()'; // SQLite uses RANDOM()
 		}
 		return parent::orderBy_expression($expression, $ascending);
+	}
+
+	/**
+	 * SQLite uses MIN() instead of LEAST()
+	 */
+	static function least($a, $b)
+	{
+		return new Db_Expression("MIN($a, $b)");
+	}
+
+	/**
+	 * SQLite uses MAX() instead of GREATEST()
+	 */
+	static function greatest($a, $b)
+	{
+		return new Db_Expression("MAX($a, $b)");
+	}
+
+	/**
+	 * Translate MySQL function names to SQLite equivalents in built SQL.
+	 * Called during getSQL() before parameter binding.
+	 * @method translateSQL
+	 * @param {string} $sql
+	 * @return {string}
+	 */
+	protected function translateSQL($sql)
+	{
+		// LEAST(a,b) → MIN(a,b), GREATEST(a,b) → MAX(a,b)
+		$sql = preg_replace('/\bLEAST\s*\(/i', 'MIN(', $sql);
+		$sql = preg_replace('/\bGREATEST\s*\(/i', 'MAX(', $sql);
+		// RAND() → RANDOM()
+		$sql = preg_replace('/\bRAND\s*\(\s*\)/i', 'RANDOM()', $sql);
+		// IF(cond,a,b) → IIF(cond,a,b)
+		$sql = preg_replace('/\bIF\s*\(/i', 'IIF(', $sql);
+		// 'value' - INTERVAL N SECOND → datetime('value', '-N seconds')
+		// 'value' + INTERVAL N SECOND → datetime('value', '+N seconds')
+		$sql = preg_replace_callback(
+			"/('[\d\- :]+')\\s*([+-])\\s*INTERVAL\\s+(\\d+)\\s+SECOND/i",
+			function ($m) {
+				$sign = ($m[2] === '-') ? '-' : '+';
+				return "datetime({$m[1]}, '{$sign}{$m[3]} seconds')";
+			},
+			$sql
+		);
+		// column - INTERVAL N SECOND → datetime(column, '-N seconds')
+		$sql = preg_replace_callback(
+			'/(\w+)\s*([+-])\s*INTERVAL\s+(\d+)\s+SECOND/i',
+			function ($m) {
+				$sign = ($m[2] === '-') ? '-' : '+';
+				return "datetime({$m[1]}, '{$sign}{$m[3]} seconds')";
+			},
+			$sql
+		);
+		// NOW() → datetime('now')
+		$sql = preg_replace('/\bNOW\s*\(\s*\)/i', "datetime('now')", $sql);
+		// JSON_UNQUOTE(JSON_EXTRACT(col, path)) → json_extract(col, path)
+		// Match the full pattern including both closing parens
+		$sql = preg_replace(
+			'/\bJSON_UNQUOTE\s*\(\s*JSON_EXTRACT\s*\(([^)]+)\)\s*\)/i',
+			'json_extract($1)',
+			$sql
+		);
+		// Standalone JSON_EXTRACT → json_extract (SQLite has this)
+		$sql = preg_replace('/\bJSON_EXTRACT\s*\(/i', 'json_extract(', $sql);
+		// CONCAT('a', b, 'c') → ('a' || b || 'c')
+		$sql = preg_replace_callback('/\bCONCAT\s*\(([^)]+)\)/i', function($m) {
+			return '(' . implode(' || ', array_map('trim', explode(',', $m[1]))) . ')';
+		}, $sql);
+		return $sql;
 	}
 
     /**

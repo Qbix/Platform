@@ -110,13 +110,23 @@ Db.getShard = function(connName, shardName) {
  */
 Db.parseDsnString = function(dsn) {
 	var parts = dsn.split(':');
-	var parts2 = parts[1].split(';');
+	var dbms = parts[0].toLowerCase();
+	var parts2 = parts.slice(1).join(':').split(';');
 	var result = {};
 	for (var k in parts2) {
 		var parts3 = parts2[k].split('=');
-		result[ parts3[0] ] = parts3[1];
+		if (parts3.length >= 2) {
+			result[ parts3[0] ] = parts3.slice(1).join('=');
+		} else {
+			// SQLite: the path is the value, not a key=value pair
+			result['host'] = parts3[0];
+		}
 	}
-	result['dbms'] = parts[0].toLowerCase();
+	result['dbms'] = dbms;
+	// SQLite uses 'main' as default schema qualifier
+	if (dbms === 'sqlite' && !result['dbname']) {
+		result['dbname'] = 'main';
+	}
 	return result;
 };
 
