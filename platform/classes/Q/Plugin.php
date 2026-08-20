@@ -497,6 +497,7 @@ class Q_Plugin
 				if (Q::compareVersion($sqlver, $version) > 0) {
 					continue;
 				}
+				echo $entry . "\n";
 
 				// we shall install this script!
 				if ($tail === "$conn_name.$dbms"

@@ -3339,6 +3339,78 @@ abstract class Db_Query extends Db_Expression
 
 
 	/**
+	 * Hydrate an array of associative-array rows into Db_Row objects.
+	 * Called from Db_Result::fetchDbRows and fetchDbRow.
+	 * @method hydrateDbRows
+	 * @static
+	 * @param {array} $arrs Array of associative arrays (from PDO fetchAll)
+	 * @param {Db_Result|Db_Query_Interface} $result The result or query for init()
+	 * @param {string} [$class_name=null] Row class name (must extend Db_Row)
+	 * @param {string} [$fields_prefix=''] Prefix to strip from field names
+	 * @param {string|array} [$by_field=null] Field name to index results by.
+	 *  Pass an array with one element to accumulate arrays of rows per field value.
+	 * @param {boolean} [$afterFetch=true] Whether to call afterFetch on each row
+	 * @return {array} Array of Db_Row objects (or subclass)
+	 */
+	static function hydrateDbRows(
+		$arrs,
+		$result,
+		$class_name = null,
+		$fields_prefix = '',
+		$by_field = null,
+		$afterFetch = true)
+	{
+		if (empty($fields_prefix)) {
+			$fields_prefix = '';
+		}
+		if (empty($class_name)) {
+			$class_name = 'Db_Row';
+		}
+		if ($class_name != 'Db_Row') {
+			$parent_classes = class_parents($class_name);
+			if (!in_array('Db_Row', $parent_classes)) {
+				throw new Exception("Class $class_name does not extend Db_Row");
+			}
+		}
+
+		$rows = array();
+		foreach ($arrs as $arr) {
+			$method = array($class_name, 'newRow');
+			if (is_callable($method)) {
+				$row = call_user_func($method, $arr, $fields_prefix);
+			} else {
+				$row = new $class_name(array(), false);
+				$row->copyFrom($arr, $fields_prefix, false, false);
+			}
+			$row->init($result);
+			$wasSetByField = false;
+			if ($by_field) {
+				if (is_string($by_field) and isset($row->$by_field)) {
+					$rows[$row->$by_field] = $row;
+					$wasSetByField = true;
+				} else if (is_array($by_field)) {
+					$byField = reset($by_field);
+					if (isset($row->$byField)) {
+						$rows[$row->$byField][] = $row;
+						$wasSetByField = true;
+					}
+				}
+			}
+			if (!$wasSetByField) {
+				$rows[] = $row;
+			}
+			if ($afterFetch) {
+				$callback = array($row, "afterFetch");
+				if (is_callable($callback)) {
+					$row->afterFetch($result);
+				}
+			}
+		}
+
+		return $rows;
+	}
+
+	/**
 	 * Returns an array of field names that are "magic" when used
 	 * @return {array}
 	 */
