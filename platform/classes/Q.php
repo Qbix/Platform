@@ -1338,10 +1338,14 @@ class Q
 		return call_user_func_array($function_name, $args);
 	}
 
-	/**
+/**
 	 * Executes a particular event handler remotely, if configured via Q_Config.
 	 * This method is called internally by Q::handle when a handler is marked for remote execution
 	 * in the 'Q/handlersUsingRemote/$eventName' configuration path.
+	 *
+	 * Supports Unix domain sockets for the chokepoint microservices pattern:
+	 * set $remote['socket'] to a UDS path (e.g. "/run/qbix/authority.sock")
+	 * and the call goes over the socket instead of TCP — no network surface.
 	 *
 	 * @method handleUsingRemote
 	 * @static
@@ -1352,6 +1356,9 @@ class Q
 	 *  Parameters to pass to the handler remotely.
 	 * @param {array} $remote
 	 * @param {string} [$remote.baseUrl] Defaults to Q_Request::baseUrl()
+	 * @param {string} [$remote.socket] Optional Unix domain socket path.
+	 *  When set, the HTTP request is sent over this UDS instead of TCP.
+	 *  The baseUrl is still used for the Host header and URL path.
 	 * @param {string} [$remote.returnType] Can be "bool", "int", "array", "object", "raw",
 	 *  or the name of a class to instantiate, in all cases receives result[data]
 	 * @param {&mixed} $result=null
@@ -1391,7 +1398,7 @@ class Q
 		$url = rtrim($remote['baseUrl'], '/') . '/' . $remoteController;
 	
 		$ch = curl_init($url);
-		curl_setopt_array($ch, array(
+		$curlOpts = array(
 			CURLOPT_RETURNTRANSFER => true,
 			CURLOPT_POST => true,
 			CURLOPT_HTTPHEADER => array(
@@ -1399,12 +1406,24 @@ class Q
 				'X-Q-HMAC: ' . $hmac
 			),
 			CURLOPT_POSTFIELDS => $payload,
-			CURLOPT_TIMEOUT => 5
-		));
+			CURLOPT_TIMEOUT => Q::ifset($remote, 'timeout', 5)
+		);
+
+		// Unix domain socket: route the HTTP request over a UDS instead of TCP.
+		// The baseUrl is still used for Host header resolution and URL path;
+		// curl sends the HTTP request over the socket file instead of connecting
+		// to the host:port in the URL.
+		if (!empty($remote['socket'])) {
+			$curlOpts[CURLOPT_UNIX_SOCKET_PATH] = $remote['socket'];
+		}
+
+		curl_setopt_array($ch, $curlOpts);
 	
 		$response = curl_exec($ch);
 		if ($response === false) {
-			throw new Exception("Remote handler call failed: " . curl_error($ch));
+			$err = curl_error($ch);
+			curl_close($ch);
+			throw new Exception("Remote handler call failed: " . $err);
 		}
 		curl_close($ch);
 	
