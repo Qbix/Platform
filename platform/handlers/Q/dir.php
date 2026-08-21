@@ -5,9 +5,9 @@
  * Just displays a simple directory listing,
  * and prevents further processing by returning true.
  */
-function Q_dir()
+function Q_dir($params)
 {
-	$filename = Q_Request::filename();
+	$filename = Q::ifset($params, 'filename', Q_Request::filename());
 
 	// TODO: show directory listing
 	echo Q::view('Q/dir.php', @compact('filename'));
