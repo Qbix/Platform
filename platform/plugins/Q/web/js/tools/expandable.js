@@ -266,7 +266,40 @@ Q.Tool.define('Q/expandable', function (options) {
             tool.stateChanged("expanded");
 
             if (!options || !options.dontScrollIntoView) {
-                tool.element.scrollIntoView({behavior: "smooth"});
+                // Deliberately not Element.prototype.scrollIntoView(): that
+                // scrolls every scrollable ancestor, including ones whose
+                // overflow is hidden. Such an element still scrolls from
+                // script, but offers the user no scrollbar and no touch
+                // gesture to scroll it back, so whatever it shifts stays
+                // shifted. Inside a Q/columns column that is exactly what
+                // happens -- the column's slot is the intended scroller while
+                // <body> above it carries Q_overflowHidden -- and collapsing
+                // an expandable there shears the column title permanently off
+                // the top of the viewport. Scroll the tool's own scrolling
+                // parent instead; scrollable() already skips overflow: hidden
+                // when it picks one, and expand() scrolls the same element.
+                var $scrollable = tool.scrollable();
+                if ($scrollable.length) {
+                    var s = $scrollable[0];
+                    var isBody = ["BODY", "HTML"]
+                        .indexOf(s.tagName.toUpperCase()) >= 0;
+                    // For the document scroller the visible band is the
+                    // viewport, not the element's own rect (whose top is
+                    // -scrollTop).
+                    var sr = s.getBoundingClientRect();
+                    var visibleTop = isBody ? 0 : sr.top;
+                    var visibleBottom = isBody
+                        ? (window.innerHeight || document.documentElement.clientHeight)
+                        : sr.bottom;
+                    var er = tool.element.getBoundingClientRect();
+                    if (er.top < visibleTop) {
+                        s.scrollTop += er.top - visibleTop;
+                    } else if (er.bottom > visibleBottom) {
+                        s.scrollTop += Math.min(
+                            er.top - visibleTop, er.bottom - visibleBottom
+                        );
+                    }
+                }
             }
 
             Q.handle(callback, tool, []);
