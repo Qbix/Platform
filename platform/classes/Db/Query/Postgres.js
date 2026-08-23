@@ -74,7 +74,34 @@ var Query_Postgres = function (pg, type, clauses, parameters, table) {
 					err.sql = processedSql;
 					callback(err, null, null);
 				} else {
-					callback(null, result.rows || [], result.fields || null);
+					// Mysql and Sqlite hand back Db.Row instances (or {fields: row}
+					// wrappers); this adapter was returning raw pg rows, so any code
+					// written against the row.fields contract broke on Postgres, and
+					// className models were never constructed.
+					var rows = result.rows || [];
+					var isSelect = mq.type === Db.Query.TYPE_SELECT
+						|| (mq.type === Db.Query.TYPE_RAW && /^\s*SELECT/i.test(processedSql));
+					if (!isSelect) {
+						return callback(null, rows, result.fields || null);
+					}
+					var results2 = [], ri, rowClass = null;
+					if (mq.className) {
+						try {
+							rowClass = Q.require(mq.className.split('_').join('/'));
+						} catch (rcErr) {
+							rowClass = null;
+						}
+					}
+					for (ri = 0; ri < rows.length; ++ri) {
+						if (rowClass) {
+							results2.push(rowClass.newRow
+								? rowClass.newRow(rows[ri], true)
+								: new rowClass(rows[ri], true));
+						} else {
+							results2.push({ fields: rows[ri] });
+						}
+					}
+					callback(null, results2, result.fields || null);
 				}
 			}
 		});

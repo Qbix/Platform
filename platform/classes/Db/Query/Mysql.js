@@ -92,7 +92,7 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 		} else if (Q.isArrayLike(shards)) {
 			var shards2 = {};
 			for (var i=0, l=shards.length; i<l; ++i) {
-				shards[ shards[i] ] = mq;
+				shards2[ shards[i] ] = mq;
 			}
 			shards = shards2;
 		}
@@ -280,9 +280,6 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 		function _queryConnection (query, sql, connection, cb) {
 			if (!sql) return cb(null);
 			Db.emit('query', query, sql, connection);
-			if (sql.indexOf('(,') >= 0) {
-				debugger;
-			}
 			connection.query(sql, function(err, rows, fields) {
 				if (err) {
 					err.message += "\nQuery was:\n"+mq;
@@ -399,13 +396,16 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 			case Db.Query.TYPE_UPDATE:
 				break;
 			case Db.Query.TYPE_DELETE:
-				if (!this.after['FROM']) break;
+				if (!mq.afterClauses['FROM']) break;
 			default:
 				throw new Q.Exception("the JOIN clause does not belong in this context.");
 		}
 
 		var expr, value;
-		if (typeof condition === 'object') {
+		if (condition && condition.typename === "Db.Expression") {
+			Q.extend(this.parameters, condition.parameters);
+			condition = condition.toString();
+		} else if (typeof condition === 'object') {
 			var conditionList = [];
 			for (var expr in condition) {
 				var i, l, value = condition[expr];
@@ -922,50 +922,50 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 			case Db.Query.TYPE_SELECT:
 				// SELECT
 				select = this.clauses['SELECT'] || '*';
-				if (this.after['SELECT']) {
-					select += " " + this.after['SELECT'];
+				if (mq.afterClauses['SELECT']) {
+					select += " " + mq.afterClauses['SELECT'];
 				}
 				// FROM
 				from = (this.clauses['FROM'] || []).join(', ');
 				// if (!from)
 				// 	throw new Q.Exception("missing FROM clause in DB query.");
-				if (this.after['FROM']) {
-					from += " " + this.after['FROM'];
+				if (mq.afterClauses['FROM']) {
+					from += " " + mq.afterClauses['FROM'];
 				}
 				// JOIN
 				join = this.clauses['JOIN'] || '';
-				if (this.after['JOIN']) {
-					join += " " + this.after['JOIN'];
+				if (mq.afterClauses['JOIN']) {
+					join += " " + mq.afterClauses['JOIN'];
 				}
 				// WHERE
 				where = this.clauses['WHERE'] ? 'WHERE ' + this.clauses['WHERE'] : '';
-				if (this.after['WHERE']) {
-					where += " " + this.after['WHERE'];
+				if (mq.afterClauses['WHERE']) {
+					where += " " + mq.afterClauses['WHERE'];
 				}
 				// GROUP BY
 				groupBy = this.clauses['GROUP BY'] ? "GROUP BY " + this.clauses['GROUP BY'] : '';
-				if (this.after['GROUP BY']) {
-					groupBy += " " + this.after['GROUP BY'];
+				if (mq.afterClauses['GROUP BY']) {
+					groupBy += " " + mq.afterClauses['GROUP BY'];
 				}
 				// HAVING
 				having = this.clauses['HAVING'] ? "HAVING " + this.clauses['HAVING'] : '';
-				if (this.after['HAVING']) {
-					having += " " + this.after['HAVING'];
+				if (mq.afterClauses['HAVING']) {
+					having += " " + mq.afterClauses['HAVING'];
 				}
 				// ORDER BY
 				orderBy = this.clauses['ORDER BY'] ? "ORDER BY " + this.clauses['ORDER BY'] : '';
-				if (this.after['ORDER BY']) {
-					orderBy += " " + this.after['ORDER BY'];
+				if (mq.afterClauses['ORDER BY']) {
+					orderBy += " " + mq.afterClauses['ORDER BY'];
 				}
 				// LIMIT
 				limit = this.clauses['LIMIT'] || '';
-				if (this.after['LIMIT']) {
-					limit += " " + this.after['LIMIT'];
+				if (mq.afterClauses['LIMIT']) {
+					limit += " " + mq.afterClauses['LIMIT'];
 				}
 				// LOCK
 				lock = this.clauses['LOCK'] || '';
-				if (this.after['LOCK']) {
-					lock +=  " " + this.after['LOCK'];
+				if (mq.afterClauses['LOCK']) {
+					lock +=  " " + mq.afterClauses['LOCK'];
 				}
 				sql = "SELECT " + select +
 					(from ? "\nFROM " + from : '') +
@@ -988,11 +988,11 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 					}
 					into += '(' + this.clauses['FIELDS'] + ')';
 				}
-				if (this.after['INTO']) {
-					into += " " + this.after['INTO'];
+				if (mq.afterClauses['INTO']) {
+					into += " " + mq.afterClauses['INTO'];
 				}
 				values = this.clauses['VALUES'] || '';
-				afterValues = this.after['VALUES'] || '';
+				afterValues = mq.afterClauses['VALUES'] || '';
 				onDuplicateKeyUpdate = this.clauses['ON DUPLICATE KEY UPDATE'] ?
 					'ON DUPLICATE KEY UPDATE '  + this.clauses['ON DUPLICATE KEY UPDATE'] : '';
 				sql = "INSERT INTO " + into +
@@ -1007,28 +1007,28 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 				if (!this.clauses['SET'])
 					throw new Q.Exception("missing SET clause in DB query.");
 				update = this.clauses['UPDATE'] || '';
-				if (this.after['UPDATE']) {
-					update += " " + this.after['UPDATE'];
+				if (mq.afterClauses['UPDATE']) {
+					update += " " + mq.afterClauses['UPDATE'];
 				}
 				// JOIN
 				join = this.clauses['JOIN'] || '';
-				if (this.after['JOIN']) {
-					join += " " + this.after['JOIN'];
+				if (mq.afterClauses['JOIN']) {
+					join += " " + mq.afterClauses['JOIN'];
 				}
 				// SET
 				set = this.clauses['SET'] || '';
-				if (this.after['SET']) {
-					set += " " + this.after['SET'];
+				if (mq.afterClauses['SET']) {
+					set += " " + mq.afterClauses['SET'];
 				}
 				// WHERE
 				where = this.clauses['WHERE'] ? 'WHERE ' + this.clauses['WHERE'] : 'WHERE 1';
-				if (this.after['WHERE']) {
-					where += " " + this.after['WHERE'];
+				if (mq.afterClauses['WHERE']) {
+					where += " " + mq.afterClauses['WHERE'];
 				}
 				// LIMIT
 				limit = this.clauses['LIMIT'] || '';
-				if (this.after['LIMIT']) {
-					limit += " " + this.after['LIMIT'];
+				if (mq.afterClauses['LIMIT']) {
+					limit += " " + mq.afterClauses['LIMIT'];
 				}
 				sql = "UPDATE " + update +
 					"\n" + join +
@@ -1041,23 +1041,23 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 				if (!this.clauses['FROM'])
 					throw new Q.Exception("missing FROM clause in DB query.");
 				from = this.clauses['FROM'] || '';
-				if (this.after['FROM']) {
-					from += " " + this.after['FROM'];
+				if (mq.afterClauses['FROM']) {
+					from += " " + mq.afterClauses['FROM'];
 				}
 				// JOIN
 				join = this.clauses['JOIN'] || '';
-				if (this.after['JOIN']) {
-					join += " " + this.after['JOIN'];
+				if (mq.afterClauses['JOIN']) {
+					join += " " + mq.afterClauses['JOIN'];
 				}
 				// WHERE
 				where = this.clauses['WHERE'] ? 'WHERE ' + this.clauses['WHERE'] : 'WHERE 1';
-				if (this.after['WHERE']) {
-					where += " " + this.after['WHERE'];
+				if (mq.afterClauses['WHERE']) {
+					where += " " + mq.afterClauses['WHERE'];
 				}
 				// LIMIT
 				limit = this.clauses['LIMIT'] || '';
-				if (this.after['LIMIT']) {
-					limit += " " + this.after['LIMIT'];
+				if (mq.afterClauses['LIMIT']) {
+					limit += " " + mq.afterClauses['LIMIT'];
 				}
 				sql = "DELETE FROM " + from +
 					"\n" + join +
@@ -1110,9 +1110,11 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 	 * @return {Db.Query.Mysql} The resulting Db.Query object
 	 * @chainable
 	 */
-	mq.after = function(after, clause) {
+	mq.setAfter = mq.after = function(after, clause) {
 		if (clause) {
-			this.after = this.after[after] ? this.after + ' ' + clause : clause;
+			mq.afterClauses[after] = mq.afterClauses[after]
+				? mq.afterClauses[after] + ' ' + clause
+				: clause;
 		}
 		return this;
 	};
@@ -1130,7 +1132,7 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 		if (!with_after) {
 			return clause;
 		}
-		var after = this.after[clause_name] || '';
+		var after = mq.afterClauses[clause_name] || '';
 		return [clause, after];
 	};
 
@@ -1222,6 +1224,10 @@ function replaceKeysCompare(a, b) {
 function criteria_internal (query, criteria, fillCriteria) {
 	var criteria_list, expr, parts, columns, value, values, v, i, j, k, vl, vl2, pl;
 	var fillCriteria = query.criteria;
+	if (criteria && criteria.typename === "Db.Expression") {
+		Q.extend(query.parameters, criteria.parameters);
+		return criteria.toString();
+	}
 	if (typeof criteria === 'object') {
 		criteria_list = [];
 		for (expr in criteria) {
@@ -1265,7 +1271,7 @@ function criteria_internal (query, criteria, fillCriteria) {
 						vector.push(":_criteria_" + _valueCounter);
 						query.parameters["_criteria_" + _valueCounter] = value[j][k];
 						_valueCounter = (_valueCounter + 1) % 1000000;
-						fillCriteria[column].push(value[j][k]); // sharding heuristics
+						fillCriteria[parts[k]].push(value[j][k]); // sharding heuristics
 					}
 					list.push('(' + vector.join(',') + ')');
 				}
@@ -1279,7 +1285,7 @@ function criteria_internal (query, criteria, fillCriteria) {
 			} else if (value === undefined) {
 				// do not add this value to criteria
 			} else if (value == null) {
-				criteria_list.push( "ISNULL(" + expr + ")");
+				criteria_list.push( Query_Mysql.column(expr) + " IS NULL");
 			} else if (value && value.typename === "Db.Expression") {
 				Q.extend(query.parameters, value.parameters);
 				if (/\W/.test(expr.slice(-1))) {
@@ -1347,9 +1353,9 @@ function set_internal (query, updates) {
 			var value = updates[field];
 			if (value && value.typename === "Db.Expression") {
 				Q.extend(query.parameters, value.parameters);
-				updates_list.push(field + " = " + value);
+				updates_list.push(Query_Mysql.column(field) + " = " + value);
 			} else {
-				updates_list.push(field + " = :_set_"+_valueCounter);
+				updates_list.push(Query_Mysql.column(field) + " = :_set_"+_valueCounter);
 				query.parameters["_set_"+_valueCounter] = value;
 				_valueCounter = (_valueCounter + 1) % 1000000;
 			}

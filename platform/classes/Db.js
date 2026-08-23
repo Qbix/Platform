@@ -152,7 +152,18 @@ Db.connect = function(name) {
 
 	var dsn = Db.parseDsnString(info['dsn']);
 	var dbms = dsn['dbms'];
-	var moduleName =  dbms.charAt(0).toUpperCase() + dbms.substring(1);
+	// Map DSN driver names to adapter class names, mirroring $dbmsMap in Db.php.
+	// Without this, a "pgsql:" DSN resolves to Db/Pgsql, which does not exist —
+	// the Postgres adapter (Db/Postgres.js) was unreachable.
+	var dbmsMap = {
+		'pgsql': 'Postgres',
+		'postgres': 'Postgres',
+		'postgresql': 'Postgres',
+		'mysql': 'Mysql',
+		'sqlite': 'Sqlite',
+		'sqlite3': 'Sqlite'
+	};
+	var moduleName = dbmsMap[dbms] || (dbms.charAt(0).toUpperCase() + dbms.substring(1));
 	Db[moduleName] = Q.require('Db/' + moduleName);
 
 	return dbs[name] = new Db[moduleName](name, dsn);
