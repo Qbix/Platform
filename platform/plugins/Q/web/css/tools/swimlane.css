@@ -1,0 +1,820 @@
+/**
+ * Q/swimlane
+ *
+ * Visual grammar borrowed from Lamport space-time diagrams: continuous
+ * process spines with events attached, messages as arrows between them.
+ * Ordinals are set in tabular mono because they are clock values.
+ *
+ * Every colour comes from the host app's CSS variable contract, with
+ * fallbacks so the tool still looks deliberate in an app that defines none.
+ * The identity here lives in structure, spacing and motion.
+ *
+ * Motion rule: only transform and opacity are animated. Anything that
+ * animates width or top drops frames during a filter transition, which is
+ * the one moment that has to be perfect.
+ */
+
+.Q_swimlane {
+	--sw-pad: 14px;
+	--sw-radius: 10px;
+	--sw-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+	--sw-bg: var(--color-bg-primary, #fbfbfc);
+	--sw-surface: var(--color-bg-secondary, #ffffff);
+	--sw-recessed: var(--color-bg-tertiary, #f2f3f5);
+	--sw-ink: var(--color-text-primary, #14161a);
+	--sw-ink-2: var(--color-text-secondary, #4a5058);
+	--sw-ink-3: var(--color-text-tertiary, #8b929c);
+	--sw-line: var(--color-border-light, #e7e9ed);
+	--sw-line-strong: var(--color-border, #d3d7dd);
+	--sw-lane-tint: color-mix(in srgb, var(--lane, #5b6ee1) 8%, transparent);
+
+	/* One scale, two curves. Eleven ad-hoc durations and three easings read
+	   as eleven unrelated things happening; a shared scale reads as one
+	   interface responding. */
+	--sw-t-fast: 140ms;   /* state flips: hover, press, dim */
+	--sw-t-base: 260ms;   /* things appearing and disappearing */
+	--sw-t-slow: 420ms;   /* things travelling across the layout */
+	--sw-ease: cubic-bezier(.22, .8, .3, 1);        /* decelerate — arrivals */
+	--sw-ease-move: cubic-bezier(.5, 0, .18, 1);    /* both ends — travel */
+	--sw-stagger: 45ms;
+
+	position: relative;
+	background: var(--sw-bg);
+	color: var(--sw-ink);
+	-webkit-tap-highlight-color: transparent;
+}
+
+/* ---- avatar strip -------------------------------------------------- */
+
+.Q_swimlane_strip {
+	z-index: 4;
+	background: color-mix(in srgb, var(--sw-bg) 88%, transparent);
+	backdrop-filter: saturate(1.4) blur(10px);
+	-webkit-backdrop-filter: saturate(1.4) blur(10px);
+	border-bottom: 1px solid var(--sw-line);
+}
+.Q_swimlane_sticky { position: sticky; top: 0; }
+.Q_swimlane_strip_bottom { border-bottom: 0; border-top: 1px solid var(--sw-line); }
+
+.Q_swimlane_strip_inner {
+	display: flex;
+	gap: 4px;
+	align-items: flex-start;
+	overflow-x: auto;
+	scrollbar-width: none;
+	padding: 10px var(--sw-pad);
+}
+.Q_swimlane_strip_inner::-webkit-scrollbar { display: none; }
+
+.Q_swimlane_avatar {
+	flex: 0 0 auto;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 5px;
+	width: 62px;
+	padding: 2px 0 4px;
+	border: 0;
+	background: none;
+	cursor: pointer;
+	font: inherit;
+	color: var(--sw-ink-2);
+	border-radius: 8px;
+	transition: opacity var(--sw-t-base) var(--sw-ease), transform var(--sw-t-base) var(--sw-ease);
+}
+.Q_swimlane_avatar:focus-visible {
+	outline: 2px solid var(--lane);
+	outline-offset: 2px;
+}
+
+.Q_swimlane_ring {
+	position: relative;
+	display: grid;
+	place-items: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	background: var(--lane);
+	color: #fff;
+	font: 600 12px/1 var(--sw-mono);
+	letter-spacing: .02em;
+	/* The ring is a separate box-shadow rather than a border, so toggling
+	   it off animates opacity instead of reflowing the strip. */
+	box-shadow: 0 0 0 2px var(--sw-bg), 0 0 0 3.5px var(--lane);
+	transition: box-shadow var(--sw-t-base) var(--sw-ease), transform var(--sw-t-base) var(--sw-ease);
+}
+.Q_swimlane_ring img {
+	width: 100%; height: 100%;
+	border-radius: 50%;
+	object-fit: cover;
+	display: block;
+}
+
+.Q_swimlane_who {
+	font-size: 10.5px;
+	line-height: 1.1;
+	letter-spacing: .01em;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.Q_swimlane_off { opacity: .32; }
+.Q_swimlane_off .Q_swimlane_ring {
+	background: var(--sw-recessed);
+	color: var(--sw-ink-3);
+	box-shadow: 0 0 0 2px var(--sw-bg), 0 0 0 3.5px var(--sw-line-strong);
+}
+.Q_swimlane_avatar:not(.Q_swimlane_off):active .Q_swimlane_ring { transform: scale(.92); }
+
+.Q_swimlane_reset {
+	flex: 0 0 auto;
+	align-self: center;
+	margin-inline-start: 4px;
+	padding: 6px 11px;
+	border: 1px solid var(--sw-line-strong);
+	border-radius: 999px;
+	background: var(--sw-surface);
+	color: var(--sw-ink-2);
+	font: 500 11px/1 inherit;
+	cursor: pointer;
+}
+
+/* ---- layers -------------------------------------------------------- */
+
+.Q_swimlane_body { position: relative; }
+
+.Q_swimlane_spines {
+	position: absolute;
+	inset: 0;
+	z-index: 0;
+	pointer-events: none;
+	overflow: visible;
+}
+.Q_swimlane_flow { position: relative; z-index: 1; }
+
+/* ---- segments ------------------------------------------------------ */
+
+.Q_swimlane_segment {
+	position: relative;
+	padding: 16px var(--sw-pad) 2px;
+}
+.Q_swimlane_segment + .Q_swimlane_segment::before {
+	content: "";
+	position: absolute;
+	inset-inline: var(--sw-pad);
+	top: 0;
+	height: 1px;
+	background: var(--sw-line);
+	opacity: .7;
+}
+
+.Q_swimlane_row {
+	display: flex;
+	gap: var(--gutter, 18px);
+	align-items: flex-start;
+	justify-content: center;
+	margin-bottom: 22px;
+}
+
+.Q_swimlane_stack { margin-bottom: 22px; }
+.Q_swimlane_stack > .Q_swimlane_node { margin-inline: auto; }
+
+.Q_swimlane_gap {
+	margin: 0 0 14px;
+	text-align: center;
+	font: 500 10px/1 var(--sw-mono);
+	letter-spacing: .08em;
+	text-transform: uppercase;
+	color: var(--sw-ink-3);
+}
+
+/* ---- barrier ------------------------------------------------------- */
+
+.Q_swimlane_barrier {
+	position: relative;
+	margin: 6px 0 24px;
+	height: 1px;
+	background: repeating-linear-gradient(
+		to right,
+		var(--sw-line-strong) 0 5px,
+		transparent 5px 10px
+	);
+}
+.Q_swimlane_barrier_label {
+	position: absolute;
+	right: 0;
+	top: 50%;
+	transform: translateY(-50%);
+	padding: 3px 9px;
+	background: var(--sw-bg);
+	color: var(--sw-ink-3);
+	font: 600 9.5px/1 var(--sw-mono);
+	letter-spacing: .12em;
+	text-transform: uppercase;
+}
+
+/* ---- node ---------------------------------------------------------- */
+
+.Q_swimlane_node {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	gap: 7px;
+	cursor: pointer;
+	border-radius: var(--sw-radius);
+	/* Scale on hover is a transform, so it composites and never reflows
+	   the neighbouring columns. */
+	transition: transform var(--sw-t-fast) var(--sw-ease);
+}
+.Q_swimlane_node:focus-visible {
+	outline: 2px solid var(--lane);
+	outline-offset: 4px;
+	border-radius: var(--sw-radius);
+}
+
+.Q_swimlane_node_head {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	padding-inline-start: 2px;
+	min-height: 13px;
+}
+.Q_swimlane_ordinal {
+	font: 600 9.5px/1 var(--sw-mono);
+	font-variant-numeric: tabular-nums;
+	letter-spacing: .06em;
+	color: var(--lane);
+	opacity: .85;
+}
+.Q_swimlane_node_who {
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: .01em;
+	color: var(--sw-ink-2);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.Q_swimlane_screen {
+	position: relative;
+	overflow: hidden;
+	border-radius: var(--sw-radius);
+	background: var(--sw-surface);
+	border: 1px solid var(--sw-line);
+	/* One ring, three intensities: resting, primary, attended. Hover, focus
+	   and the narrated moment all move --ring rather than each inventing
+	   their own shadow. */
+	--ring: 3px;
+	--ring-a: 8%;
+	--lift: 0px;
+	box-shadow:
+		0 1px 2px rgba(16, 18, 22, .05),
+		0 0 0 var(--ring) color-mix(in srgb, var(--lane) var(--ring-a), transparent);
+	transition: box-shadow var(--sw-t-base) var(--sw-ease);
+}
+.Q_swimlane_screen > svg,
+.Q_swimlane_screen > img {
+	display: block;
+	width: 100%;
+	height: auto;
+}
+
+.Q_swimlane_primary .Q_swimlane_screen {
+	border-color: color-mix(in srgb, var(--lane) 34%, var(--sw-line));
+	--ring-a: 16%;
+	box-shadow:
+		0 2px 10px rgba(16, 18, 22, .07),
+		0 0 0 var(--ring) color-mix(in srgb, var(--lane) var(--ring-a), transparent);
+}
+
+.Q_swimlane_caption {
+	padding-inline-start: 2px;
+	font-size: 11.5px;
+	line-height: 1.35;
+	color: var(--sw-ink-2);
+}
+
+.Q_swimlane_empty,
+.Q_swimlane_locked {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 7px;
+	min-height: 0;
+	padding: 26px 12px;
+	color: var(--sw-ink-3);
+	font-size: 11px;
+	text-align: center;
+}
+.Q_swimlane_locked { color: color-mix(in srgb, var(--lane) 55%, var(--sw-ink-3)); }
+
+/* A denied lane is a feature, not an error state — it shows access control
+   from the inside. It should read as deliberate. */
+.Q_swimlane_denied .Q_swimlane_screen {
+	background:
+		repeating-linear-gradient(
+			-45deg,
+			transparent 0 7px,
+			var(--sw-lane-tint) 7px 8px
+		),
+		var(--sw-recessed);
+	border-style: dashed;
+	box-shadow: none;
+}
+.Q_swimlane_idle .Q_swimlane_screen {
+	background: var(--sw-recessed);
+	box-shadow: none;
+}
+.Q_swimlane_idle { opacity: .7; }
+.Q_swimlane_denied .Q_swimlane_screen,
+.Q_swimlane_idle .Q_swimlane_screen { min-height: 96px; }
+
+.Q_swimlane_more {
+	align-self: center;
+	padding: 7px 12px;
+	border: 1px dashed var(--sw-line-strong);
+	border-radius: 999px;
+	background: none;
+	color: var(--sw-ink-3);
+	font: 500 11px/1 inherit;
+	cursor: pointer;
+}
+
+/* ---- expandables --------------------------------------------------- */
+
+.Q_swimlane_others {
+	margin: 12px auto 0;
+	max-width: var(--sw-max, 480px);
+	border-radius: var(--sw-radius);
+	overflow: hidden;
+	border: 1px solid var(--sw-line);
+	background: var(--sw-surface);
+}
+.Q_swimlane_expandable + .Q_swimlane_expandable {
+	border-top: 1px solid var(--sw-line);
+}
+
+.Q_swimlane .Q_expandable_title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	padding: 11px 13px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--sw-ink-2);
+	background: none;
+	border: 0;
+}
+.Q_swimlane_exp_dot {
+	flex: 0 0 auto;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--lane);
+}
+.Q_swimlane_exp_name { font-weight: 600; color: var(--sw-ink); }
+.Q_swimlane_exp_label {
+	color: var(--sw-ink-3);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.Q_swimlane_exp_content { padding: 0 12px 14px; }
+
+/* ---- lightbox ------------------------------------------------------ */
+
+.Q_swimlane_lightbox {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	display: grid;
+	place-items: center;
+	padding: 20px;
+	background: rgba(12, 14, 18, .5);
+	backdrop-filter: blur(3px);
+	-webkit-backdrop-filter: blur(3px);
+	opacity: 0;
+	transition: opacity var(--sw-t-base) var(--sw-ease);
+}
+.Q_swimlane_lightbox.Q_swimlane_open { opacity: 1; }
+
+.Q_swimlane_lightbox_inner {
+	width: min(600px, 100%);
+	max-height: 90vh;
+	overflow: auto;
+	border-radius: 14px;
+	background: var(--color-bg-primary, #fff);
+	box-shadow: 0 24px 60px rgba(10, 12, 16, .3);
+	transform: translateY(10px) scale(.985);
+	transition: transform var(--sw-t-base) var(--sw-ease);
+}
+.Q_swimlane_open .Q_swimlane_lightbox_inner { transform: none; }
+
+.Q_swimlane_lightbox header {
+	position: sticky;
+	top: 0;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 14px 16px;
+	background: inherit;
+	border-bottom: 1px solid var(--color-border-light, #e7e9ed);
+	font-size: 12.5px;
+	color: var(--color-text-secondary, #4a5058);
+}
+.Q_swimlane_lightbox header strong { color: var(--color-text-primary, #14161a); }
+.Q_swimlane_close {
+	margin-inline-start: auto;
+	width: 28px; height: 28px;
+	border: 0;
+	border-radius: 7px;
+	background: var(--color-bg-tertiary, #f2f3f5);
+	color: var(--color-text-secondary, #4a5058);
+	font-size: 17px;
+	line-height: 1;
+	cursor: pointer;
+}
+.Q_swimlane_stage { padding: 16px; }
+.Q_swimlane_stage > svg { width: 100%; height: auto; }
+
+/* ---- states -------------------------------------------------------- */
+
+.Q_swimlane_blank {
+	padding: 44px 20px;
+	text-align: center;
+	color: var(--sw-ink-3);
+	font-size: 12.5px;
+}
+
+.Q_swimlane_loading .Q_swimlane_flow { opacity: .4; }
+
+/* The filter crossfade. Columns rearrange rather than the page reloading. */
+.Q_swimlane_flow,
+.Q_swimlane_spines {
+	transition: opacity var(--sw-t-base) ease;
+}
+.Q_swimlane_shifting .Q_swimlane_flow,
+.Q_swimlane_shifting .Q_swimlane_spines {
+	opacity: 0;
+}
+
+.Q_swimlane_ready .Q_swimlane_node {
+	opacity: 0;
+	transform: translateY(8px);
+	transition:
+		opacity var(--sw-t-base) var(--sw-ease) calc(var(--i, 0) * var(--sw-stagger)),
+		transform var(--sw-t-base) var(--sw-ease) calc(var(--i, 0) * var(--sw-stagger));
+}
+.Q_swimlane_ready .Q_swimlane_node.Q_swimlane_near {
+	opacity: 1;
+	transform: none;
+}
+
+/* Nodes travelling to a new column during a filter change or a rebuild.
+   The inverse transform is applied by JS, then removed — so this transition
+   is what actually carries the movement. */
+.Q_swimlane_flip {
+	transition: transform var(--sw-t-slow) var(--sw-ease-move) !important;
+	will-change: transform;
+}
+.Q_swimlane_flip_start { transition: none !important; }
+
+/* Ghosts of nodes a filter removed. Without them a column simply blinks out
+   and the eye has nothing to follow. */
+.Q_swimlane_ghost {
+	position: absolute;
+	margin: 0;
+	pointer-events: none;
+	opacity: 1;
+	transition: opacity var(--sw-t-base) var(--sw-ease),
+		transform var(--sw-t-base) var(--sw-ease);
+}
+.Q_swimlane_ghost_out { opacity: 0; transform: scale(.96); }
+
+@media (hover: hover) {
+	.Q_swimlane_node:hover { transform: translateY(-2px); }
+	.Q_swimlane_node:hover .Q_swimlane_screen {
+		--ring: 4px;
+		--ring-a: 22%;
+		box-shadow:
+			0 6px 18px rgba(16, 18, 22, .1),
+			0 0 0 var(--ring) color-mix(in srgb, var(--lane) var(--ring-a), transparent);
+	}
+	.Q_swimlane_avatar:hover:not(.Q_swimlane_off) .Q_swimlane_ring {
+		transform: scale(1.06);
+	}
+}
+
+/* Reduced motion is a demo requirement as much as an accessibility one —
+   you will sometimes present on someone else's machine. Everything below
+   degrades to instant and still reads as deliberate. */
+@media (prefers-reduced-motion: reduce) {
+	.Q_swimlane *,
+	.Q_swimlane_lightbox,
+	.Q_swimlane_lightbox_inner {
+		transition-duration: 1ms !important;
+		animation-duration: 1ms !important;
+		animation-iteration-count: 1 !important;
+	}
+	.Q_swimlane_ready .Q_swimlane_node { opacity: 1; transform: none; }
+	.Q_swimlane_node:hover { transform: none; }
+}
+
+@media print {
+	.Q_swimlane_strip { display: none; }
+	.Q_swimlane_node { break-inside: avoid; }
+	.Q_swimlane_segment { break-inside: avoid-page; }
+}
+
+/* Expandable open/close. Height animation is unavoidable here — it is the
+   one place the content genuinely changes size — but it is scoped to the
+   accordion and never runs during a filter transition. */
+.Q_swimlane .Q_expandable_container {
+	display: grid;
+	grid-template-rows: 0fr;
+	transition: grid-template-rows var(--sw-t-base) var(--sw-ease-move);
+}
+.Q_swimlane .Q_expandable_container.Q_expanded { grid-template-rows: 1fr; }
+.Q_swimlane .Q_expandable_content { overflow: hidden; min-height: 0; }
+.Q_swimlane .Q_expandable_title {
+	cursor: pointer;
+	user-select: none;
+	transition: background var(--sw-t-fast) var(--sw-ease);
+}
+.Q_swimlane .Q_expandable_title::after {
+	content: "";
+	margin-inline-start: auto;
+	width: 6px; height: 6px;
+	border-right: 1.5px solid currentColor;
+	border-bottom: 1.5px solid currentColor;
+	opacity: .45;
+	transform: rotate(45deg) translate(-2px, -2px);
+	transition: transform var(--sw-t-base) var(--sw-ease);
+}
+.Q_swimlane .Q_expandable_title.Q_expanded::after {
+	transform: rotate(225deg) translate(-2px, -2px);
+}
+.Q_swimlane .Q_expandable_title:hover {
+	background: color-mix(in srgb, var(--lane) 5%, transparent);
+}
+.Q_swimlane .Q_expandable_title:focus-visible {
+	outline: 2px solid var(--lane);
+	outline-offset: -2px;
+}
+
+/* ---- narration bar --------------------------------------------------- */
+
+.Q_swimlane_narration {
+	position: sticky;
+	bottom: 0;
+	z-index: 5;
+	display: flex;
+	align-items: center;
+	gap: 11px;
+	padding: 10px var(--sw-pad);
+	background: color-mix(in srgb, var(--sw-bg) 92%, transparent);
+	backdrop-filter: saturate(1.4) blur(10px);
+	-webkit-backdrop-filter: saturate(1.4) blur(10px);
+	border-top: 1px solid var(--sw-line);
+}
+
+.Q_swimlane_play {
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	width: 30px; height: 30px;
+	border: 0;
+	border-radius: 50%;
+	background: var(--sw-ink);
+	color: var(--sw-bg);
+	cursor: pointer;
+	transition: transform var(--sw-t-fast) var(--sw-ease);
+}
+.Q_swimlane_play:active { transform: scale(.9); }
+.Q_swimlane_play:focus-visible {
+	outline: 2px solid var(--sw-ink); outline-offset: 2px;
+}
+
+/* The scrubber is a census: each dot carries the colours of whoever is
+   present at that moment, so the shape of the cast is legible before you
+   scroll anywhere. */
+.Q_swimlane_scrubber {
+	flex: 1 1 auto;
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	overflow-x: auto;
+	scrollbar-width: none;
+	padding: 4px 0;
+}
+.Q_swimlane_scrubber::-webkit-scrollbar { display: none; }
+
+.Q_swimlane_dot {
+	flex: 0 0 auto;
+	width: 9px; height: 9px;
+	padding: 0;
+	border: 0;
+	border-radius: 50%;
+	cursor: pointer;
+	opacity: .4;
+	transition: opacity var(--sw-t-fast) var(--sw-ease), transform var(--sw-t-fast) var(--sw-ease);
+}
+.Q_swimlane_dot:hover { opacity: .75; }
+.Q_swimlane_dot.Q_swimlane_at {
+	opacity: 1;
+	transform: scale(1.5);
+	box-shadow: 0 0 0 2px var(--sw-bg), 0 0 0 3px currentColor;
+}
+.Q_swimlane_dot:focus-visible { outline: 2px solid var(--sw-ink); outline-offset: 2px; }
+
+/* A fork is worth signalling before the viewer reaches it. */
+.Q_swimlane_fork {
+	border-radius: 2px;
+	transform: rotate(45deg);
+}
+.Q_swimlane_fork.Q_swimlane_at { transform: rotate(45deg) scale(1.5); }
+
+.Q_swimlane_narration_text {
+	flex: 0 1 auto;
+	max-width: 42%;
+	font-size: 11.5px;
+	line-height: 1.35;
+	color: var(--sw-ink-2);
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+@media (max-width: 560px) {
+	.Q_swimlane_narration { flex-wrap: wrap; }
+	.Q_swimlane_narration_text { max-width: 100%; flex-basis: 100%; order: 3; }
+}
+
+/* The moment being narrated. A ring rather than a background change, so the
+   mockup underneath keeps its own colours. */
+.Q_swimlane_current .Q_swimlane_screen {
+	--ring: 5px;
+	--ring-a: 30%;
+	box-shadow:
+		0 3px 14px rgba(16, 18, 22, .1),
+		0 0 0 var(--ring) color-mix(in srgb, var(--lane) var(--ring-a), transparent);
+}
+.Q_swimlane_playing .Q_swimlane_node:not(.Q_swimlane_current) { opacity: .55; }
+.Q_swimlane_playing .Q_swimlane_node { transition: opacity var(--sw-t-base) var(--sw-ease); }
+
+/* ---- branching ------------------------------------------------------- */
+
+.Q_swimlane_branches {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 9px;
+	justify-content: center;
+	margin: 4px 0 26px;
+}
+.Q_swimlane_branch {
+	padding: 9px 15px;
+	border: 1px solid var(--sw-line-strong);
+	border-radius: 999px;
+	background: var(--sw-surface);
+	color: var(--sw-ink);
+	font: 500 12px/1 inherit;
+	cursor: pointer;
+	transition: border-color var(--sw-t-fast) var(--sw-ease), transform var(--sw-t-fast) var(--sw-ease);
+}
+.Q_swimlane_branch:hover {
+	border-color: var(--sw-ink);
+	transform: translateY(-1px);
+}
+.Q_swimlane_branch:focus-visible { outline: 2px solid var(--sw-ink); outline-offset: 2px; }
+
+/* ---- disclaimer ------------------------------------------------------ */
+
+/* These are mockups shown during a sales conversation. The caveat sits with
+   the artifact rather than in a footer somewhere, and exportSvg composes it
+   into the file for the same reason. */
+.Q_swimlane_disclaimer {
+	margin: 0;
+	padding: 12px var(--sw-pad) 16px;
+	border-top: 1px solid var(--sw-line);
+	font-size: 10.5px;
+	line-height: 1.45;
+	color: var(--sw-ink-3);
+	text-align: center;
+}
+
+@media print {
+	.Q_swimlane_narration { display: none; }
+	.Q_swimlane_disclaimer { display: block; }
+	.Q_swimlane .Q_expandable_container { grid-template-rows: 1fr !important; }
+	.Q_swimlane_playing .Q_swimlane_node { opacity: 1; }
+}
+
+/* A dropped screen keeps its exact height, so the document never shifts under
+   a scrolling reader. The faint fill is only visible during a fast fling,
+   which is the one time a plain white gap would look like a rendering fault. */
+.Q_swimlane_screen:empty {
+	background: var(--sw-recessed);
+	border-color: transparent;
+	box-shadow: none;
+}
+
+/* Parallax layers get their own compositor layer so a scroll never repaints
+   the nodes underneath. will-change only while it is actually enabled. */
+.Q_swimlane_parallax .Q_swimlane_spines { will-change: transform; }
+@media (prefers-reduced-motion: reduce) {
+	.Q_swimlane_spines { transform: none !important; }
+}
+
+/* ---- arrival mark ---------------------------------------------------- */
+
+/* Replaces the arrow layer. An ordered timeline already says that a moment
+   follows the one above it, so a line saying so is redundant. What position
+   cannot say is whose action landed here — so that sits on the affected
+   screen, where the change actually happened. */
+.Q_swimlane_cause {
+	margin-inline-start: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	max-width: 60%;
+	padding: 1px 6px 1px 1px;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--lane) 11%, transparent);
+	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane) 22%, transparent);
+	pointer-events: none;
+}
+
+.Q_swimlane_cause_who {
+	flex: 0 0 auto;
+	display: grid;
+	place-items: center;
+	width: 14px; height: 14px;
+	border-radius: 50%;
+	overflow: hidden;
+	background: var(--lane);
+	color: #fff;
+	font: 600 8px/1 var(--sw-mono);
+}
+.Q_swimlane_cause_who img {
+	width: 100%; height: 100%; object-fit: cover; display: block;
+}
+
+.Q_swimlane_cause_type {
+	font: 600 9px/1 var(--sw-mono);
+	letter-spacing: .02em;
+	color: color-mix(in srgb, var(--lane) 62%, var(--sw-ink));
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* At three columns on a phone a label would be three truncated characters,
+   which is worse than no label. The avatar alone still answers "from whom". */
+.Q_swimlane_cause_tight { padding: 2px; }
+.Q_swimlane_cause_tight .Q_swimlane_cause_type { display: none; }
+
+/* During playback the mark on the current moment reads as arriving. */
+.Q_swimlane_current .Q_swimlane_cause {
+	animation: Q_swimlane_arrive var(--sw-t-slow) var(--sw-ease) both;
+}
+@keyframes Q_swimlane_arrive {
+	from { opacity: 0; transform: translateY(-5px) scale(.9); }
+	to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+	.Q_swimlane_current .Q_swimlane_cause { animation: none; }
+}
+
+/* Spines are drawn, not blinked. pathLength="1" normalises every path, so a
+   short connector and a long one take the same time and the whole layer
+   resolves together instead of raggedly. */
+.Q_swimlane_spines path[data-draw] {
+	stroke-dasharray: 1;
+	stroke-dashoffset: 1;
+	animation: Q_swimlane_draw var(--sw-t-slow) var(--sw-ease-move) forwards;
+}
+@keyframes Q_swimlane_draw { to { stroke-dashoffset: 0; } }
+
+.Q_swimlane_spines circle[data-tick] {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: Q_swimlane_tick var(--sw-t-base) var(--sw-ease) both;
+}
+@keyframes Q_swimlane_tick {
+	from { transform: scale(0); }
+	to   { transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.Q_swimlane_spines path[data-draw],
+	.Q_swimlane_spines circle[data-tick],
+	.Q_swimlane_ghost { animation: none !important; stroke-dashoffset: 0; }
+	.Q_swimlane_flip { transition: none !important; }
+}
