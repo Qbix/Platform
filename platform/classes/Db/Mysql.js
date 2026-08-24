@@ -141,6 +141,10 @@ function Db_Mysql(connName, dsn) {
 		    ).toTimeString();
 		    var tz = (offset < 0 ? '-' : '+') + dt.substring(0,2) + ':' + dt.substring(3,5);
 			connection.query('SET NAMES UTF8; SET time_zone = "'+tz+'"');
+			// Capture the server version from the handshake packet. Connections
+			// live in a module-level cache rather than on dbm, so grab it here
+			// while we have the connection in hand.
+			dbm._connection = connection;
 
 			function _Db_Mysql_onConnectionError(err, mq) {
 				if (err.code === "PROTOCOL_CONNECTION_LOST" && !dontReconnect) {
@@ -209,6 +213,9 @@ function Db_Mysql(connName, dsn) {
 			_setUpConnection();
 			dbm.connected = true;
 		}
+		// Keep a handle so serverVersion() can read the handshake packet later.
+		// Connections live in a module-level cache, not on dbm.
+		dbm._connection = connection;
 		callback && callback(connection);
 		return connection;
 	};
@@ -217,6 +224,163 @@ function Db_Mysql(connName, dsn) {
 	 * @method prefix
 	 * @return {string}
 	 */
+	// Whether this server can do vector search.
+	//
+	// This reads the server version straight out of the MySQL handshake packet,
+	// which is available synchronously the moment the socket is up and costs no
+	// round trip. An earlier version of this ran "SELECT VERSION()" instead,
+	// which is async -- and since vectorsSupported() is called synchronously from
+	// vectorNearestTo(), it had to fail OPEN while the probe was outstanding. That
+	// silently defeated the whole check: on MariaDB 10.11 it answered true.
+	// Reading the handshake lets it fail CLOSED and still always be right.
+	//
+	// MySQL 9 has a VECTOR column type, but DISTANCE() ships only with HeatWave
+	// and MySQL AI, so in practice this means "MariaDB 11.7 or later".
+	dbm._connection = null;
+	dbm.serverVersion = function () {
+		// Read lazily: _setUpConnection runs before the handshake completes,
+		// so the packet is not there yet at connect time.
+		var c = dbm._connection;
+		if (!c) { return null; }
+		var p = c._protocol && c._protocol._handshakeInitializationPacket;
+		return (p && p.serverVersion)
+			|| (c._handshakePacket && c._handshakePacket.serverVersion)
+			|| null;
+	};
+
+	dbm.vectorsSupported = function () {
+		return dbm.vectorsSupportedInVersion(dbm.serverVersion());
+	};
+
+	/**
+	 * Kept for callers that want an explicit async check. Resolves immediately
+	 * from the handshake; connects first if necessary.
+	 */
+	dbm.vectorSupportCheck = function (callback) {
+		callback = callback || function () {};
+		function _answer() {
+			if (dbm.serverVersion()) {
+				return callback(null, dbm.vectorsSupported());
+			}
+			// Handshake not readable (e.g. a driver that hides it): fall back
+			// to asking the server, which is authoritative either way.
+			dbm.rawQuery("SELECT VERSION() AS v").execute(function (params) {
+				var err = params[''] && params[''][0];
+				if (err) { return callback(err); }
+				var rows = params[''][1], r = rows && rows[0];
+				var v = r && (r.v || (r.fields && r.fields.v));
+				callback(null, dbm.vectorsSupportedInVersion(v));
+			});
+		}
+		return dbm._connection ? _answer() : dbm.reallyConnect(_answer, '');
+	};
+
+	/**
+	 * Whether a given MySQL/MariaDB version string can do vector search.
+	 * @method vectorsSupportedInVersion
+	 */
+	dbm.vectorsSupportedInVersion = function (v) {
+		if (!v || String(v).toLowerCase().indexOf('mariadb') < 0) {
+			return false; // community MySQL: DISTANCE() is HeatWave / MySQL AI only
+		}
+		// MariaDB fronts its version with a "5.5.5-" compatibility prefix
+		var m = String(v).replace(/^5\.5\.5-/, '').match(/^(\d+)\.(\d+)/);
+		if (!m) { return false; }
+		var major = parseInt(m[1]), minor = parseInt(m[2]);
+		return major > 11 || (major === 11 && minor >= 7);
+	};
+
+	/**
+	 * Adds a vector index to a column, so vectorNearestTo() can use it.
+	 *
+	 * Exists on every adapter so schema code is portable. MariaDB stores the
+	 * vector on the row and indexes it in place; the metric is an index option
+	 * rather than part of the column type.
+	 *
+	 * @method vectorIndexCreate
+	 * @param {String} table
+	 * @param {String} column
+	 * @param {Number} dimensions Unused here -- the column already declares it.
+	 *   Accepted so the call is identical across adapters.
+	 * @param {Object} [options]
+	 * @param {String} [options.metric='cosine'] 'cosine' or 'euclidean'
+	 * @param {Number} [options.M=8] HNSW connectivity, 3..200
+	 * @param {Function} [callback]
+	 */
+	dbm.vectorIndexCreate = function (table, column, dimensions, options, callback) {
+		options = options || {};
+		var metric = (options.metric || 'cosine').toLowerCase();
+		if (metric !== 'cosine' && metric !== 'euclidean') {
+			throw new Q.Exception(
+				"Db.Mysql.vectorIndexCreate: metric must be cosine or euclidean"
+			);
+		}
+		var m = parseInt(options.M || 8);
+		var sql = 'ALTER TABLE ' + Db.Query.Mysql.column(table)
+			+ ' ADD VECTOR INDEX (' + Db.Query.Mysql.column(column) + ')'
+			+ ' M=' + m + ' DISTANCE=' + metric;
+		// Idempotent, for the same reasons as the PHP twin: migrations re-run,
+		// and a schema .sql may already declare the index inline.
+		return dbm.vectorIndexMetric(table, column, function (err, existing) {
+			if (err) { return callback && callback(err); }
+			if (existing === metric) { return callback && callback(null); }
+			function _create() {
+				dbm.rawQuery(sql).execute(function (params) {
+					var e = params[''] && params[''][0];
+					callback && callback(e || null);
+				});
+			}
+			if (existing) { return dbm.vectorIndexDrop(table, column, _create); }
+			_create();
+		});
+	};
+
+	dbm.vectorIndexDrop = function (table, column, callback) {
+		// MariaDB names the index after the column unless told otherwise
+		var sql = 'ALTER TABLE ' + Db.Query.Mysql.column(table)
+			+ ' DROP INDEX ' + Db.Query.Mysql.column(column);
+		return dbm.rawQuery(sql).execute(function (params) {
+			var err = params[''] && params[''][0];
+			callback && callback(err || null);
+		});
+	};
+
+	/**
+	 * The metric a vector index was built with, or null. MariaDB records it in
+	 * the table DDL. Note it silently falls back to a full scan when queried
+	 * with a different metric rather than erroring, so this is worth checking.
+	 * @method vectorIndexMetric
+	 */
+	dbm.vectorIndexMetric = function (table, column, callback) {
+		return dbm.rawQuery(
+			'SHOW CREATE TABLE ' + Db.Query.Mysql.column(table)
+		).execute(function (params) {
+			var err = params[''] && params[''][0];
+			if (err) { return callback && callback(err); }
+			var rows = params[''][1], r = rows && rows[0];
+			var ddl = r && (r['Create Table'] || (r.fields && r.fields['Create Table']));
+			if (!ddl) { return callback && callback(null, null); }
+			// Build the pattern without embedded escapes: [^\n] in a RegExp
+			// built from a string needs a single backslash, and getting that
+			// wrong silently matched "not backslash or n" -- which stopped
+			// before DISTANCE and made every index look euclidean.
+			var line = null;
+			var lines = String(ddl).split('\n');
+			for (var li = 0; li < lines.length; ++li) {
+				if (/VECTOR KEY/i.test(lines[li])
+				&& lines[li].indexOf('`' + column + '`') >= 0) {
+					line = [lines[li]];
+					break;
+				}
+			}
+			if (!line) { return callback && callback(null, null); }
+			// MariaDB writes the option back with backticks:
+			//   VECTOR KEY `v` (`v`) `M`=8 `DISTANCE`=cosine
+			var mm = /`?DISTANCE`?\s*=\s*`?(\w+)/i.exec(line[0]);
+			callback && callback(null, mm ? mm[1].toLowerCase() : 'euclidean');
+		});
+	};
+
 	dbm.prefix = function() {
 		return info.prefix;
 	};

@@ -3,6 +3,7 @@
  */
 var Q = require('Q');
 var Db = Q.require('Db');
+var _vectorMetrics = {};
 
 var _dbs = {};
 
@@ -60,6 +61,196 @@ function Db_Sqlite(connName, dsn) {
 		}
 		callback && callback();
 		return dbm;
+	};
+
+	// True once the sqlite-vec extension has been loaded into this connection.
+	dbm.vectorsSupported = function () {
+		if (!dbm.connection) { return false; }
+		try {
+			dbm.connection.prepare('SELECT vec_version()').get();
+			return true;
+		} catch (e) {
+			return false;
+		}
+	};
+
+	/**
+	 * Loads the sqlite-vec extension into this connection.
+	 * Call once after connecting, before any vectorNearestTo() query.
+	 */
+	/**
+	 * Callback-shaped twin of vectorsSupported(), for parity with the other
+	 * adapters (Postgres genuinely needs to ask the server).
+	 * @method vectorSupportCheck
+	 */
+	dbm.vectorSupportCheck = function (callback) {
+		var ok = dbm.vectorsSupported();
+		callback && callback(null, ok);
+		return ok;
+	};
+
+	dbm.vectorExtensionLoad = function () {
+		if (!dbm.connection) { dbm.reallyConnect(); }
+		try {
+			require('sqlite-vec').load(dbm.connection);
+			return true;
+		} catch (e) {
+			Q.log('Db.Sqlite: could not load sqlite-vec: ' + e.message, 'warn');
+			return false;
+		}
+	};
+
+	/**
+	 * Creates the vec0 sidecar table for a vector column, plus triggers that
+	 * keep it in step with the base table.
+	 *
+	 * SQLite cannot store vectors on the row, so they live in a separate
+	 * virtual table joined on rowid. Rather than asking callers to mirror every
+	 * write, the base table keeps the packed float32 BLOB as the source of
+	 * truth and SQLite itself maintains the sidecar. Drift then becomes
+	 * impossible: the triggers fire for raw SQL just as they do for Db_Row.
+	 *
+	 * @method vectorIndexCreate
+	 * @param {String} table The base table, which must have a BLOB column
+	 * @param {String} column The column holding packed float32 vectors
+	 * @param {Number} dimensions
+	 * @param {Object} [options]
+	 * @param {String} [options.metric='cosine'] 'cosine' or 'euclidean'. vec0
+	 *   bakes the metric into the column declaration, and unlike MariaDB it does
+	 *   NOT fall back to a scan when you query with a different one -- it just
+	 *   returns the metric it was built with. vectorNearestTo() therefore refuses a
+	 *   mismatch rather than silently answering in the wrong units.
+	 * @param {Boolean} [options.backfill=true] Populate from existing rows
+	 */
+	dbm.vectorIndexCreate = function (table, column, dimensions, options, callback) {
+		options = options || {};
+		var metric = (options.metric || 'cosine').toLowerCase();
+		if (metric !== 'cosine' && metric !== 'euclidean') {
+			throw new Q.Exception(
+				"Db.Sqlite.vectorIndexCreate: metric must be cosine or euclidean, got '"
+				+ metric + "'"
+			);
+		}
+		// vec0 spells L2 'l2', not 'euclidean'
+		var vecMetric = (metric === 'euclidean') ? 'l2' : 'cosine';
+		if (!dbm.connection) { dbm.reallyConnect(); }
+		if (!dbm.vectorsSupported()) {
+			dbm.vectorExtensionLoad();
+		}
+		var c = dbm.connection;
+		var t = String(table).replace(/^\w+\./, '').replace(/["`]/g, '');
+		var col = String(column).replace(/["`]/g, '');
+		var vec = t + '_vec';
+		var q = function (n) { return '"' + n + '"'; };
+
+		// vec0's declaration parser does not accept a quoted column name --
+		// CREATE VIRTUAL TABLE x USING vec0("embedding" float[768]) fails with
+		// "Could not parse". The name goes in bare; it is validated above.
+		if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(col)) {
+			throw new Q.Exception(
+				"Db.Sqlite.vectorIndexCreate: unsupported column name '" + col + "'"
+			);
+		}
+		// IF NOT EXISTS would silently keep a sidecar built for a DIFFERENT
+		// metric, so changing metric became a no-op that returned the old
+		// distances. Drop and rebuild when the metric differs.
+		delete _vectorMetrics[t];
+		var existing = dbm.vectorIndexMetric(t);
+		if (existing && existing !== metric) {
+			c.exec('DROP TABLE IF EXISTS ' + q(vec) + ';');
+		}
+		c.exec('CREATE VIRTUAL TABLE IF NOT EXISTS ' + q(vec)
+			+ ' USING vec0(' + col + ' float[' + parseInt(dimensions) + ']'
+			+ ' distance_metric=' + vecMetric + ');');
+		_vectorMetrics[t] = metric;
+
+		// AFTER INSERT / DELETE / UPDATE, mirroring the BLOB into the sidecar.
+		// The WHEN guard lets rows exist without a vector yet.
+		c.exec('DROP TRIGGER IF EXISTS ' + q(vec + '_ai') + ';');
+		c.exec('CREATE TRIGGER ' + q(vec + '_ai') + ' AFTER INSERT ON ' + q(t)
+			+ ' WHEN NEW.' + q(col) + ' IS NOT NULL BEGIN'
+			+ ' INSERT INTO ' + q(vec) + '(rowid, ' + q(col) + ')'
+			+ ' VALUES (NEW.rowid, NEW.' + q(col) + '); END;');
+
+		c.exec('DROP TRIGGER IF EXISTS ' + q(vec + '_ad') + ';');
+		c.exec('CREATE TRIGGER ' + q(vec + '_ad') + ' AFTER DELETE ON ' + q(t)
+			+ ' BEGIN DELETE FROM ' + q(vec) + ' WHERE rowid = OLD.rowid; END;');
+
+		c.exec('DROP TRIGGER IF EXISTS ' + q(vec + '_au') + ';');
+		c.exec('CREATE TRIGGER ' + q(vec + '_au') + ' AFTER UPDATE ON ' + q(t)
+			+ ' BEGIN DELETE FROM ' + q(vec) + ' WHERE rowid = OLD.rowid;'
+			+ ' INSERT INTO ' + q(vec) + '(rowid, ' + q(col) + ')'
+			+ ' SELECT NEW.rowid, NEW.' + q(col)
+			+ ' WHERE NEW.' + q(col) + ' IS NOT NULL; END;');
+
+		if (options.backfill !== false) {
+			c.exec('DELETE FROM ' + q(vec) + ';');
+			c.exec('INSERT INTO ' + q(vec) + '(rowid, ' + q(col) + ')'
+				+ ' SELECT rowid, ' + q(col) + ' FROM ' + q(t)
+				+ ' WHERE ' + q(col) + ' IS NOT NULL;');
+		}
+		callback && callback(null);
+		return dbm;
+	};
+
+	/**
+	 * Removes the sidecar table and its triggers.
+	 * @method vectorIndexDrop
+	 */
+	/**
+	 * The metric a sidecar index was built with, or null if unknown.
+	 * @method vectorIndexMetric
+	 */
+	dbm.vectorIndexMetric = function (table, column, callback) {
+		var t = String(table).replace(/^\w+\./, '').replace(/["`]/g, '');
+		function _done(v) { callback && callback(null, v); return v; }
+		if (_vectorMetrics[t]) { return _done(_vectorMetrics[t]); }
+		if (!dbm.connection) { return _done(null); }
+		try {
+			var row = dbm.connection.prepare(
+				"SELECT sql FROM sqlite_master WHERE name = ?"
+			).get(t + '_vec');
+			if (!row || !row.sql) { return _done(null); }
+			var m = /distance_metric\s*=\s*(\w+)/i.exec(row.sql);
+			if (!m) { return _done('euclidean'); }  // vec0 default is L2
+			return _done(_vectorMetrics[t] =
+				(m[1].toLowerCase() === 'cosine') ? 'cosine' : 'euclidean');
+		} catch (e) {
+			return _done(null);
+		}
+	};
+
+	dbm.vectorIndexDrop = function (table, column, callback) {
+		if (!dbm.connection) { dbm.reallyConnect(); }
+		var t = String(table).replace(/^\w+\./, '').replace(/["`]/g, '');
+		var vec = t + '_vec';
+		['_ai', '_ad', '_au'].forEach(function (sfx) {
+			dbm.connection.exec('DROP TRIGGER IF EXISTS "' + vec + sfx + '";');
+		});
+		dbm.connection.exec('DROP TABLE IF EXISTS "' + vec + '";');
+		delete _vectorMetrics[t];
+		callback && callback(null);
+		return dbm;
+	};
+
+	/**
+	 * Reports whether the sidecar has drifted from the base table.
+	 * Should always be zero once vectorIndexCreate has run; useful as a
+	 * migration check after importing data with triggers disabled.
+	 * @method vectorIndexDrift
+	 * @return {Object} {base, sidecar, drift}
+	 */
+	dbm.vectorIndexDrift = function (table, column) {
+		if (!dbm.connection) { dbm.reallyConnect(); }
+		var t = String(table).replace(/^\w+\./, '').replace(/["`]/g, '');
+		var col = String(column).replace(/["`]/g, '');
+		var base = dbm.connection.prepare(
+			'SELECT COUNT(1) n FROM "' + t + '" WHERE "' + col + '" IS NOT NULL'
+		).get().n;
+		var side = dbm.connection.prepare(
+			'SELECT COUNT(1) n FROM "' + t + '_vec"'
+		).get().n;
+		return {base: base, sidecar: side, drift: base - side};
 	};
 
 	dbm.prefix = function () { return info.prefix || ''; };

@@ -976,6 +976,233 @@ Query.prototype._criteria_expression = function(criteria) {
 };
 
 
+
+// ── adapter hooks ──
+// These are the DBMS-specific seams. The base class builds every query and
+// calls down into these; each adapter overrides only what actually differs.
+// This mirrors how Db_Query_Mysql / _Postgres / _Sqlite override
+// orderBy_expression, least, greatest, quoted and friends in PHP.
+
+/**
+ * Quotes an identifier. Adapters override the static `quoted` on their class.
+ * @method _quoted
+ */
+Query.prototype._quoted = function (identifier) {
+	var ctor = this.constructor;
+	if (ctor && typeof ctor.quoted === 'function') {
+		return ctor.quoted(identifier);
+	}
+	return '"' + String(identifier).split('"').join('""') + '"';
+};
+
+/**
+ * Renders an ORDER BY term. MySQL/MariaDB spell random ordering RAND(),
+ * SQLite and Postgres spell it RANDOM().
+ * @method _orderBy_expression
+ */
+Query.prototype._orderBy_expression = function (expression, ascending) {
+	var e = String(expression).toUpperCase();
+	if (e === 'RANDOM' || e === 'RAND()' || e === 'RANDOM()') {
+		return this._randomExpression();
+	}
+	return this._column(expression) + (ascending ? '' : ' DESC');
+};
+
+Query.prototype._randomExpression = function () { return 'RANDOM()'; };
+Query.prototype._least = function () {
+	return 'LEAST(' + Array.prototype.slice.call(arguments).join(', ') + ')';
+};
+Query.prototype._greatest = function () {
+	return 'GREATEST(' + Array.prototype.slice.call(arguments).join(', ') + ')';
+};
+
+/**
+ * Last chance for an adapter to rewrite finished SQL before it is sent.
+ * @method _translateSQL
+ */
+Query.prototype._translateSQL = function (sql) { return sql; };
+
+// ── vector search ──
+
+/**
+ * Renders a Db.Vector as a literal this engine accepts as a column value.
+ * Adapters override. Returning a Db.Expression means the existing
+ * expression-parameter handling carries it through untouched.
+ * @method vectorLiteral
+ * @param {Db.Vector} vector
+ * @return {Db.Expression|String|Buffer}
+ */
+Query.prototype.vectorLiteral = function (vector) {
+	return vector.toText();
+};
+
+/**
+ * Converts any Db.Vector bound as a parameter value into the engine's wire
+ * form, just before the query runs.
+ *
+ * Without this, passing a vector as an ordinary column value --
+ * INSERT(table, {embedding: Db.vector([...])}) -- hands the driver an object,
+ * which it JSON-serializes, and the server rejects it as a malformed vector.
+ * Vectors have to work as values, not only inside vectorNearestTo().
+ * @method _vectorParametersPrepare
+ * @protected
+ */
+Query.prototype._vectorParametersPrepare = function () {
+	for (var k in this.parameters) {
+		var v = this.parameters[k];
+		if (v && v.typename === 'Db.Vector') {
+			this.parameters[k] = this.vectorLiteral(v);
+		}
+	}
+	return this;
+};
+
+
+
+/**
+ * Whether this adapter can search vectors at all. Adapters override.
+ * @method vectorsSupported
+ * @return {Boolean}
+ */
+Query.prototype.vectorsSupported = function () { return false; };
+
+/**
+ * Whether vectorsSupported() can be answered yet. Adapters whose capability is
+ * always determinable (Sqlite, Postgres once connected) leave this true.
+ * @method vectorSupportIsKnown
+ * @return {Boolean}
+ */
+Query.prototype.vectorSupportIsKnown = function () { return true; };
+
+/**
+ * Throws if the query vector's dimension count disagrees with the column's,
+ * as declared by the generated model's maxDimensions_<column>(). Silent when
+ * the query isn't tied to a model, since the column width isn't knowable then.
+ * @method _vectorCheckDimensions
+ * @private
+ */
+Query.prototype._vectorCheckDimensions = function (column, vector) {
+	if (!this.className) { return; }
+	var rowClass;
+	try {
+		rowClass = Q.require(this.className.split('_').join('/'));
+	} catch (e) {
+		return;
+	}
+	var m = 'maxDimensions_' + String(column).replace(/[^A-Za-z0-9_]/g, '');
+	var proto = rowClass && rowClass.prototype;
+	if (!proto || typeof proto[m] !== 'function') { return; }
+	var expected = proto[m].call(Object.create(proto));
+	if (!expected) { return; }
+	if (vector.dimensions() !== expected) {
+		throw new Q.Exception(
+			"Db.Query.vectorNearestTo: " + this.className + "." + column
+			+ " holds " + expected + "-dimensional vectors, but the query vector has "
+			+ vector.dimensions() + ". The engine would return every row with a"
+			+ " NULL distance in arbitrary order rather than erroring."
+		);
+	}
+};
+
+/**
+ * Which distance metrics this engine can actually compute. Adapters override.
+ * Callers can ask before building a query rather than discovering it from an
+ * exception; vectorNearestTo() checks it so the refusal is worded the same
+ * everywhere instead of each adapter inventing its own message.
+ * @method vectorMetricsSupported
+ * @return {Array}
+ */
+Query.prototype.vectorMetricsSupported = function () { return []; };
+
+/**
+ * Builds the SQL expression that yields the distance between a stored vector
+ * column and a query vector. Adapters override this; it is the single point
+ * where MariaDB's VEC_DISTANCE_COSINE(), pgvector's <=> operator and
+ * sqlite-vec's separate virtual table diverge.
+ * @method _vectorDistance_expression
+ * @param {String} column
+ * @param {Db.Vector} vector
+ * @return {String}
+ */
+Query.prototype._vectorDistance_expression = function (column, vector) {
+	throw new Q.Exception(
+		"Db.Query: " + (this.typename || 'this adapter')
+		+ " does not support vector search"
+	);
+};
+
+/**
+ * Orders the query by similarity to a vector, nearest first.
+ *
+ * The same call works on every adapter that supports vectors:
+ *
+ *     Streams.Stream.SELECT('*')
+ *         .where({publisherId: 'Hebrews'})
+ *         .vectorNearestTo('embedding', Db.vector(embedding), {limit: 10})
+ *
+ * Each adapter renders it in its own dialect. SQLite is the structural
+ * outlier -- its vectors live in a separate vec0 virtual table, so its
+ * override joins against a KNN subquery rather than adding an ORDER BY.
+ *
+ * @method vectorNearestTo
+ * @param {String} column The column holding the stored vectors
+ * @param {Db.Vector} vector The query vector
+ * @param {Object} [options]
+ * @param {Number} [options.limit] Applied as LIMIT; strongly recommended,
+ *   since without it the engine ranks every row in the table
+ * @param {String} [options.distanceAs] Alias to also select the distance under
+ * @chainable
+ */
+Query.prototype.vectorNearestTo = function (column, vector, options) {
+	options = options || {};
+	if (!vector || vector.typename !== 'Db.Vector') {
+		vector = new (Db().Vector)(vector, options.metric);
+	}
+	// Refuse only when capability is KNOWN and the answer is no. Queries are
+	// built before the connection exists, so a cold adapter reports "unknown"
+	// -- refusing there would reject valid queries against a good MariaDB
+	// 11.8. When unknown, build the SQL and let the server answer.
+	if (this.vectorSupportIsKnown() && !this.vectorsSupported()) {
+		throw new Q.Exception(
+			"Db.Query.vectorNearestTo: " + (this.typename || 'this adapter')
+			+ " does not support vector search here"
+		);
+	}
+	// A dimension mismatch is the worst failure mode these engines have: MariaDB
+	// returns every row with distance = NULL, in arbitrary order, and does not
+	// error. Catch it here when the model knows its own dimension count.
+	this._vectorCheckDimensions(column, vector);
+
+	var metrics = this.vectorMetricsSupported();
+	if (metrics.length && metrics.indexOf(vector.metric) < 0) {
+		throw new Q.Exception(
+			"Db.Query.vectorNearestTo: " + (this.typename || 'this adapter')
+			+ " supports " + metrics.join(' and ') + " distance, not '"
+			+ vector.metric + "'"
+		);
+	}
+	var expression = this._vectorDistance_expression(column, vector);
+	this.clauses['ORDER BY'] = this.clauses['ORDER BY']
+		? this.clauses['ORDER BY'] + ', ' + expression
+		: expression;
+	if (options.distanceAs) {
+		// Build a SECOND expression with its own parameter rather than reusing
+		// the ORDER BY one. The adapters substitute named parameters
+		// positionally, so a name appearing twice leaves the second occurrence
+		// unsubstituted and the server rejects the statement. The ORDER BY copy
+		// stays a literal VEC_DISTANCE_*/operator expression so the vector
+		// index is still eligible.
+		var selectExpr = this._vectorDistance_expression(column, vector);
+		var select = this.clauses['SELECT'] || '*';
+		this.clauses['SELECT'] = select + ', ' + selectExpr
+			+ ' AS ' + this._column(options.distanceAs);
+	}
+	if (options.limit !== undefined && options.limit !== null) {
+		this.limit(options.limit, options.offset);
+	}
+	return this;
+};
+
 // ── copy / shard ──
 
 /**
@@ -1279,6 +1506,13 @@ Query.adapterClass = function(db) {
 Query.prototype._buildLock = function() {
 	if (!this.clauses['LOCK']) return '';
 	return ' ' + this.clauses['LOCK'];
+};
+
+// Alias: vectorNearestTo() is the canonical name (every vector method starts
+// with "vector" so they group in autocomplete), but nearestTo reads better in
+// a fluent chain beside where/orderBy/limit. Delete this line to drop it.
+Query.prototype.nearestTo = function () {
+	return this.vectorNearestTo.apply(this, arguments);
 };
 
 module.exports = Query;

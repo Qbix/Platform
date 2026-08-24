@@ -663,6 +663,187 @@ class Db_Sqlite implements Db_Interface
 		}
 		return $id;
 	}
+
+	/**
+	 * Whether the sqlite-vec extension is loaded into this connection.
+	 * @method vectorsSupported
+	 * @return {boolean}
+	 */
+	function vectorsSupported()
+	{
+		try {
+			$this->rawQuery("SELECT vec_version()")->fetchAll(PDO::FETCH_ASSOC);
+			return true;
+		} catch (Exception $e) {
+			return false;
+		}
+	}
+
+	/**
+	 * Loads the sqlite-vec extension into this connection.
+	 * Call once after connecting, before any vectorNearestTo() query.
+	 * @method vectorExtensionLoad
+	 * @param {string} [$path] Path to the loadable extension
+	 */
+	function vectorExtensionLoad($path = null)
+	{
+		$path = $path ? $path : Q_Config::get('Db', 'sqlite', 'vecExtension', null);
+		if (!$path) {
+			throw new Exception(
+				"Db_Sqlite::vectorExtensionLoad: set Db/sqlite/vecExtension"
+				. " to the path of the sqlite-vec loadable extension"
+			);
+		}
+		$pdo = $this->reallyConnect();
+		$pdo->sqliteLoadExtension($path);
+		return true;
+	}
+
+
+	/**
+	 * Creates the vec0 sidecar table for a vector column, plus triggers that
+	 * keep it in step with the base table.
+	 *
+	 * SQLite cannot store vectors on the row, so they live in a separate
+	 * virtual table joined on rowid. Rather than asking callers to mirror every
+	 * write, the base table keeps the packed float32 BLOB as the source of
+	 * truth and SQLite itself maintains the sidecar -- so drift is impossible
+	 * even for raw SQL that bypasses Db_Row.
+	 *
+	 * @method vectorIndexCreate
+	 * @param {string} $table Base table, which must have a BLOB column
+	 * @param {string} $column Column holding packed float32 vectors
+	 * @param {integer} $dimensions
+	 * @param {array} [$options=array()]
+	 * @param {boolean} [$options.backfill=true] Populate from existing rows
+	 */
+	function vectorIndexCreate($table, $column, $dimensions, $options = array())
+	{
+		$pdo = $this->reallyConnect();
+		$metric = isset($options['metric']) ? strtolower($options['metric']) : 'cosine';
+		if ($metric !== 'cosine' and $metric !== 'euclidean') {
+			throw new Exception(
+				"Db_Sqlite::vectorIndexCreate: metric must be cosine or euclidean, got '$metric'"
+			);
+		}
+		// vec0 spells L2 'l2', not 'euclidean'
+		$vecMetric = ($metric === 'euclidean') ? 'l2' : 'cosine';
+		$t = str_replace(array('"', '`'), '', preg_replace('/^\w+\./', '', $table));
+		$col = str_replace(array('"', '`'), '', $column);
+		$vec = $t . '_vec';
+		$d = (int)$dimensions;
+
+		// vec0's declaration parser rejects a quoted column name, so it goes in
+		// bare -- validated first, since it cannot then be escaped.
+		if (!preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $col)) {
+			throw new Exception(
+				"Db_Sqlite::vectorIndexCreate: unsupported column name '$col'"
+			);
+		}
+		// IF NOT EXISTS would silently keep a sidecar built for a different
+		// metric, making a metric change a no-op that returns old distances.
+		$existing = $this->vectorIndexMetric($t);
+		if ($existing and $existing !== $metric) {
+			$pdo->exec("DROP TABLE IF EXISTS \"$vec\";");
+		}
+		$pdo->exec("CREATE VIRTUAL TABLE IF NOT EXISTS \"$vec\""
+			. " USING vec0($col float[$d] distance_metric=$vecMetric);");
+
+		$pdo->exec("DROP TRIGGER IF EXISTS \"{$vec}_ai\";");
+		$pdo->exec("CREATE TRIGGER \"{$vec}_ai\" AFTER INSERT ON \"$t\""
+			. " WHEN NEW.\"$col\" IS NOT NULL BEGIN"
+			. " INSERT INTO \"$vec\"(rowid, \"$col\")"
+			. " VALUES (NEW.rowid, NEW.\"$col\"); END;");
+
+		$pdo->exec("DROP TRIGGER IF EXISTS \"{$vec}_ad\";");
+		$pdo->exec("CREATE TRIGGER \"{$vec}_ad\" AFTER DELETE ON \"$t\""
+			. " BEGIN DELETE FROM \"$vec\" WHERE rowid = OLD.rowid; END;");
+
+		$pdo->exec("DROP TRIGGER IF EXISTS \"{$vec}_au\";");
+		$pdo->exec("CREATE TRIGGER \"{$vec}_au\" AFTER UPDATE ON \"$t\""
+			. " BEGIN DELETE FROM \"$vec\" WHERE rowid = OLD.rowid;"
+			. " INSERT INTO \"$vec\"(rowid, \"$col\")"
+			. " SELECT NEW.rowid, NEW.\"$col\""
+			. " WHERE NEW.\"$col\" IS NOT NULL; END;");
+
+		if (!isset($options['backfill']) or $options['backfill'] !== false) {
+			$pdo->exec("DELETE FROM \"$vec\";");
+			$pdo->exec("INSERT INTO \"$vec\"(rowid, \"$col\")"
+				. " SELECT rowid, \"$col\" FROM \"$t\" WHERE \"$col\" IS NOT NULL;");
+		}
+		return $this;
+	}
+
+	/**
+	 * Removes the sidecar table and its triggers.
+	 * @method vectorIndexDrop
+	 */
+	/**
+	 * The metric a sidecar index was built with, or null if unknown.
+	 * @method vectorIndexMetric
+	 */
+	function vectorIndexMetric($table, $column = null)
+	{
+		$t = str_replace(array('"', '`'), '', preg_replace('/^\w+\./', '', $table));
+		try {
+			$pdo = $this->reallyConnect();
+			$st = $pdo->prepare("SELECT sql FROM sqlite_master WHERE name = ?");
+			$st->execute(array($t . '_vec'));
+			$sql = $st->fetchColumn();
+			if (!$sql) { return null; }
+			if (!preg_match('/distance_metric\s*=\s*(\w+)/i', $sql, $m)) {
+				return 'euclidean'; // vec0 default is L2
+			}
+			return (strtolower($m[1]) === 'cosine') ? 'cosine' : 'euclidean';
+		} catch (Exception $e) {
+			return null;
+		}
+	}
+
+	function vectorIndexDrop($table, $column = null)
+	{
+		$pdo = $this->reallyConnect();
+		$t = str_replace(array('"', '`'), '', preg_replace('/^\w+\./', '', $table));
+		$vec = $t . '_vec';
+		foreach (array('_ai', '_ad', '_au') as $sfx) {
+			$pdo->exec("DROP TRIGGER IF EXISTS \"{$vec}{$sfx}\";");
+		}
+		$pdo->exec("DROP TABLE IF EXISTS \"$vec\";");
+		return $this;
+	}
+
+	/**
+	 * Reports whether the sidecar has drifted from the base table.
+	 * Always zero once vectorIndexCreate has run; useful after a bulk import.
+	 * @method vectorIndexDrift
+	 * @return {array} base, sidecar, drift
+	 */
+	function vectorIndexDrift($table, $column)
+	{
+		$pdo = $this->reallyConnect();
+		$t = str_replace(array('"', '`'), '', preg_replace('/^\w+\./', '', $table));
+		$col = str_replace(array('"', '`'), '', $column);
+		$base = (int)$pdo->query(
+			"SELECT COUNT(1) FROM \"$t\" WHERE \"$col\" IS NOT NULL"
+		)->fetchColumn();
+		$side = (int)$pdo->query("SELECT COUNT(1) FROM \"{$t}_vec\"")->fetchColumn();
+		return array('base' => $base, 'sidecar' => $side, 'drift' => $base - $side);
+	}
+
+
+	/**
+	 * Async-shaped twin of vectorsSupported(), for parity with the JS adapter.
+	 * @method vectorSupportCheck
+	 * @param {callable} [$callback] called with (null, bool)
+	 * @return {boolean}
+	 */
+	function vectorSupportCheck($callback = null)
+	{
+		$ok = $this->vectorsSupported();
+		if ($callback) { call_user_func($callback, null, $ok); }
+		return $ok;
+	}
+
 }
 
 include_once(dirname(__FILE__).'/Query/Sqlite.php');

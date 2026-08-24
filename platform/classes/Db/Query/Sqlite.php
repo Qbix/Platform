@@ -347,4 +347,113 @@ class Db_Query_Sqlite extends Db_Query implements Db_Query_Interface
         return false;
     }
 
+
+	function vectorMetricsSupported()
+	{
+		return array('cosine', 'euclidean');
+	}
+
+	function vectorsSupported()
+	{
+		$db = $this->db;
+		return $db and method_exists($db, 'vectorsSupported')
+			? $db->vectorsSupported() : false;
+	}
+
+	/**
+	 * By convention the sidecar vec0 table is "<table>_vec", and its rowid
+	 * matches the base table's rowid.
+	 * @method vectorTableFor
+	 */
+	function vectorTableFor($table)
+	{
+		$bare = preg_replace('/^\w+\./', '', $table);
+		return str_replace(array('"', '`'), '', $bare) . '_vec';
+	}
+
+	/**
+	 * SQLite is the structural outlier: vectors live in a separate vec0
+	 * virtual table, so this cannot be an ORDER BY on the current table.
+	 * It joins against a KNN subquery instead.
+	 * @method vectorNearestTo
+	 * @chainable
+	 */
+	function nearestTo($column, $vector, $options = array())
+	{
+		return $this->vectorNearestTo($column, $vector, $options);
+	}
+
+	function vectorNearestTo($column, $vector, $options = array())
+	{
+		if (!($vector instanceof Db_Vector)) {
+			$metric = isset($options['metric']) ? $options['metric'] : 'cosine';
+			$vector = new Db_Vector($vector, $metric);
+		}
+		if (!$this->vectorsSupported()) {
+			throw new Exception(
+				"Db_Query_Sqlite::vectorNearestTo: the sqlite-vec extension is not loaded"
+			);
+		}
+		$metrics = $this->vectorMetricsSupported();
+		if (!in_array($vector->metric, $metrics)) {
+			throw new Exception(
+				"Db_Query_Sqlite::vectorNearestTo: this adapter supports "
+				. implode(' and ', $metrics) . " distance, not '{$vector->metric}'"
+			);
+		}
+		// vec0 requires k; without a limit there is no sensible default, so
+		// bound it rather than scanning the whole table.
+		$k = isset($options['limit']) ? (int)$options['limit'] : 100;
+		$from = isset($this->clauses['FROM']) ? $this->clauses['FROM'] : $this->table;
+		if (is_array($from)) {
+			$from = reset($from);
+		}
+		$vecTable = $this->vectorTableFor($from);
+		// The metric is baked into the vec0 declaration; querying with another
+		// does not re-rank, it silently answers in the built-in units.
+		$db = $this->db;
+		if ($db and method_exists($db, 'vectorIndexMetric')) {
+			$built = $db->vectorIndexMetric($from);
+			if ($built and $built !== $vector->metric) {
+				throw new Exception(
+					"Db_Query_Sqlite::vectorNearestTo: $vecTable was built for $built"
+					. " distance, but this query asks for {$vector->metric}."
+				);
+			}
+		}
+		$alias = '_vec' . (++self::$vectorCounter);
+		$name = '_vec_' . self::$vectorCounter;
+		$this->parameters[$name] = $vector->toBinary();
+
+		$join = 'JOIN (SELECT rowid AS _rid, distance FROM '
+			. self::quoted($vecTable)
+			. ' WHERE ' . self::quoted($column) . ' MATCH :' . $name
+			. ' AND k = ' . $k . ') ' . $alias
+			. ' ON ' . $alias . '._rid = ' . self::quoted($from) . '.rowid';
+		$this->clauses['JOIN'] = empty($this->clauses['JOIN'])
+			? $join : $this->clauses['JOIN'] . "\n" . $join;
+
+		$distance = $alias . '.distance';
+		$this->clauses['ORDER BY'] = empty($this->clauses['ORDER BY'])
+			? $distance : $this->clauses['ORDER BY'] . ', ' . $distance;
+		if (!empty($options['distanceAs'])) {
+			$select = empty($this->clauses['SELECT']) ? '*' : $this->clauses['SELECT'];
+			$this->clauses['SELECT'] = $select . ', ' . $distance
+				. ' AS ' . self::column($options['distanceAs']);
+		}
+		if (isset($options['limit'])) {
+			$offset = isset($options['offset']) ? $options['offset'] : null;
+			$this->limit($options['limit'], $offset);
+		}
+		return $this;
+	}
+
+	protected static $vectorCounter = 0;
+
+
+	function vectorLiteral(Db_Vector $vector)
+	{
+		return $vector->toBinary(); // sqlite-vec wants packed little-endian float32
+	}
+
 }

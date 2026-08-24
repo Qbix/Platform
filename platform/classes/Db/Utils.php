@@ -1464,6 +1464,75 @@ EOT;
 					$defaultsAlreadyInDB[] = isset($table_col['Default']);
 					break;
 				
+				case 'vector':
+					// MariaDB 11.7+ VECTOR(n) / pgvector vector(n). Held as an
+					// array of floats in PHP and JS; Db_Vector renders it into
+					// the engine's wire form on the way to the database.
+					$dims = $type_display_range ? $type_display_range : 0;
+					$properties[] = "array|Db_Vector $field_name";
+					$js_properties[] = "Array|Db.Vector $field_name";
+					$functions["maxDimensions_$field_name_safe"]['comment'] = <<<EOT
+	$dc
+	 * Returns the number of dimensions the $field_name vector column holds
+	 * @return {integer}
+	 */
+EOT;
+					$js_functions["maxDimensions_$field_name_safe"]['comment'] = <<<EOT
+$dc
+ * Returns the number of dimensions the $field_name vector column holds
+ * @return {integer}
+ */
+EOT;
+					$js_functions["maxDimensions_$field_name_safe"]['args'] = '';
+					$js_functions["maxDimensions_$field_name_safe"]['return_statement'] = <<<EOT
+		return $dims;
+EOT;
+					$functions["maxDimensions_$field_name_safe"]['args'] = '';
+					$functions["maxDimensions_$field_name_safe"]['return_statement'] = <<<EOT
+		return $dims;
+EOT;
+					$functions["beforeSet_$field_name_safe"][] = <<<EOT
+		{$null_check}{$null_fix}{$dbe_check}if (is_array(\$value)) {
+			\$value = new Db_Vector(\$value);
+		} else if (is_string(\$value)) {
+			// Also accept what the engine hands back when hydrating a row:
+			// bracketed text (pgvector) or packed little-endian float32
+			// (MariaDB VECTOR, sqlite-vec). Without this, retrieving a saved
+			// row throws before the caller ever sees it.
+			\$value = (strlen(\$value) and \$value[0] === '[')
+				? new Db_Vector(\$value)
+				: Db_Vector::fromBinary(\$value);
+		}
+		if (!(\$value instanceof Db_Vector)) {
+			throw new Exception('Must pass an array or Db_Vector to '.\$this->getTable().".$field_name");
+		}
+		if ($dims and \$value->dimensions() !== $dims) {
+			throw new Exception('Expected $dims dimensions for '.\$this->getTable().".$field_name".', got '.\$value->dimensions());
+		}
+
+EOT;
+					$functions["beforeSet_$field_name_safe"]['comment'] = <<<EOT
+	$dc
+	 * Method is called before setting the field and normalizes the value to a
+	 * Db_Vector, checking the dimension count against the column definition.
+	 * @method beforeSet_$field_name
+	 * @param {array|Db_Vector|string} \$value An array, a Db_Vector, or the
+	 *  engine's wire form (bracketed text or packed float32)
+	 * @return {array} An array of field name and value
+	 * @throws {Exception} if the value is not a vector, or has the wrong number of dimensions
+	 */
+EOT;
+					// Every type case must contribute a defaults entry, or the
+					// $defaults / $js_defaults arrays fall out of step with the
+					// field list and the generated beforeSave emits
+					// `value["col"] = ;` -- a syntax error in the model.
+					$default = isset($table_col['Default'])
+						? $table_col['Default']
+						: null;
+					$js_defaults[] = $defaults[] = json_encode($default);
+					$defaultsAlreadyInDB[] = isset($table_col['Default']);
+					break;
+
 				case 'char':
 				case 'varchar':
 				case 'binary':

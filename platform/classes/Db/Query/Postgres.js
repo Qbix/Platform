@@ -3,6 +3,7 @@
  */
 var Q = require('Q');
 var Db = Q.require('Db');
+var _pgVecCounter = 0;
 
 /**
  * PostgreSQL query class for Node.js.
@@ -13,8 +14,11 @@ var Db = Q.require('Db');
  * @constructor
  */
 var Query_Postgres = function (pg, type, clauses, parameters, table) {
-	// Inherit all builder methods from Db.Query.Mysql
-	Db.Query.Mysql.call(this, pg, type, clauses, parameters, table);
+	// Inherits query building from the Db.Query base class, the same way
+	// Db_Query_Postgres extends Db_Query in PHP. It used to call
+	// Db.Query.Mysql.call() here, which transplanted MySQL's instance methods
+	// (and MySQL's backtick quoting) onto every Postgres query.
+	Db.Query.call(this, pg, type, clauses, parameters, table);
 	this.typename = 'Db.Query.Postgres';
 
 	var mq = this;
@@ -34,6 +38,7 @@ var Query_Postgres = function (pg, type, clauses, parameters, table) {
 			throw err;
 		}
 
+		mq._vectorParametersPrepare();
 		var sql = mq.build();
 		for (var k in mq.replacements) {
 			sql = sql.split(k).join(mq.replacements[k]);
@@ -108,17 +113,20 @@ var Query_Postgres = function (pg, type, clauses, parameters, table) {
 		return mq;
 	};
 
-	// Override onDuplicateKeyUpdate to use Postgres ON CONFLICT syntax
-	var _originalODKU = mq.onDuplicateKeyUpdate;
-	mq.onDuplicateKeyUpdate = function (updates) {
-		mq._pgConflictUpdates = updates;
-		return mq;
-	};
+	// onDuplicateKeyUpdate / build overrides now live on the prototype,
+	// below, since the base class supplies them.
+	void 0;
+};
 
-	// Override build to inject ON CONFLICT for upserts
-	var _originalBuild = mq.build;
-	mq.build = function (options) {
-		var sql = _originalBuild.call(mq, options);
+Query_Postgres.prototype.onDuplicateKeyUpdate = function (updates) {
+	this._pgConflictUpdates = updates;
+	return this;
+};
+
+Query_Postgres.prototype.build = function (options) {
+	var mq = this;
+	{
+		var sql = Db.Query.prototype.build.call(mq, options);
 		if (mq._pgConflictUpdates && mq.type === Db.Query.TYPE_INSERT) {
 			var setParts = [];
 			var updates = mq._pgConflictUpdates;
@@ -149,7 +157,14 @@ var Query_Postgres = function (pg, type, clauses, parameters, table) {
 			}
 		}
 		return sql;
-	};
+	}
+};
+
+Query_Postgres.prototype._randomExpression = function () { return 'RANDOM()'; };
+
+Query_Postgres.prototype.vectorLiteral = function (vector) {
+	// pgvector parses the bracketed text form directly for a vector column
+	return vector.toText();
 };
 
 /**
@@ -174,6 +189,44 @@ Query_Postgres.column = function _column(column) {
 Query_Postgres.quoted = function _quoted(identifier) {
 	return '"' + identifier.replace(/"/g, '""') + '"';
 };
+
+
+// ── vector search (pgvector) ──
+
+Query_Postgres.prototype.vectorMetricsSupported = function () { return ['cosine', 'euclidean', 'dot']; };
+
+Query_Postgres.prototype.vectorsSupported = function () {
+	return this.db && typeof this.db.vectorsSupported === 'function'
+		? this.db.vectorsSupported()
+		: false;
+};
+
+Query_Postgres.prototype._vectorDistance_expression = function (column, vector) {
+	var op;
+	switch (vector.metric) {
+		case 'cosine':    op = '<=>'; break;
+		case 'euclidean': op = '<->'; break;
+		case 'dot':       op = '<#>'; break;
+		default:
+			throw new Q.Exception(
+				"Db.Query.Postgres: unsupported metric '" + vector.metric + "'"
+			);
+	}
+	var name = '_vec_' + (++_pgVecCounter);
+	this.parameters[name] = vector.toText();
+	// The ::vector cast is required: without it Postgres sees a text literal
+	// and the operator does not resolve.
+	return Query_Postgres.column(column) + ' ' + op + ' (:' + name + ')::vector';
+};
+
+// PHP defines __toString on each adapter class too (Db_Query_Postgres,
+// Db_Query_Sqlite); mirror that so String(query) builds SQL instead of
+// falling through to Object.prototype.toString.
+Query_Postgres.prototype.toString = function () {
+	try { return this.build(); }
+	catch (e) { return '*****' + (e && e.message); }
+};
+Query_Postgres.prototype.valueOf = function () { return this.toString(); };
 
 Q.mixin(Query_Postgres, Db.Query);
 

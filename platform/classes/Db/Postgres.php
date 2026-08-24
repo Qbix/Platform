@@ -762,6 +762,108 @@ class Db_Postgres implements Db_Interface
 	) {
 		throw new Exception("Db_Postgres::rank() is not yet implemented");
 	}
+
+	/**
+	 * Whether the pgvector extension is installed in this database.
+	 * @method vectorsSupported
+	 * @return {boolean}
+	 */
+	function vectorsSupported()
+	{
+		if (isset($this->_supportsVectors)) {
+			return $this->_supportsVectors;
+		}
+		try {
+			$rows = $this->rawQuery(
+				"SELECT 1 AS ok FROM pg_extension WHERE extname = 'vector'"
+			)->fetchAll(PDO::FETCH_ASSOC);
+			return $this->_supportsVectors = !empty($rows);
+		} catch (Exception $e) {
+			return $this->_supportsVectors = false;
+		}
+	}
+
+	protected $_supportsVectors = null;
+
+
+	/**
+	 * Adds an HNSW vector index. pgvector picks the operator class from the
+	 * metric, which is why the metric must be known at index time.
+	 * @method vectorIndexCreate
+	 */
+	function vectorIndexCreate($table, $column, $dimensions = null, $options = array())
+	{
+		$metric = isset($options['metric']) ? strtolower($options['metric']) : 'cosine';
+		$map = array(
+			'cosine' => 'vector_cosine_ops',
+			'euclidean' => 'vector_l2_ops',
+			'dot' => 'vector_ip_ops'
+		);
+		if (!isset($map[$metric])) {
+			throw new Exception(
+				"Db_Postgres::vectorIndexCreate: unsupported metric '$metric'"
+			);
+		}
+		$t = str_replace('"', '', $table);
+		$c = str_replace('"', '', $column);
+		$m = isset($options['M']) ? (int)$options['M'] : 16;
+		$name = $t . '_' . $c . '_hnsw';
+		$this->rawQuery(
+			"CREATE INDEX IF NOT EXISTS \"$name\" ON \"$t\""
+			. " USING hnsw (\"$c\" {$map[$metric]}) WITH (m = $m)"
+		)->execute();
+		return $this;
+	}
+
+	function vectorIndexDrop($table, $column)
+	{
+		$t = str_replace('"', '', $table);
+		$c = str_replace('"', '', $column);
+		$this->rawQuery("DROP INDEX IF EXISTS \"{$t}_{$c}_hnsw\"")->execute();
+		return $this;
+	}
+
+	/**
+	 * The metric a vector index was built with, read back from the operator
+	 * class in the index definition.
+	 * @method vectorIndexMetric
+	 */
+	function vectorIndexMetric($table, $column)
+	{
+		try {
+			$t = str_replace('"', '', $table);
+			$c = str_replace('"', '', $column);
+			// Not from the query cache -- see the note in Db_Mysql.
+			$rows = $this->rawQuery(
+				"SELECT indexdef FROM pg_indexes WHERE tablename = '$t'"
+				. " AND indexname = '{$t}_{$c}_hnsw'"
+			)->caching(false)->ignoreCache()->fetchAll(PDO::FETCH_ASSOC);
+			$def = isset($rows[0]['indexdef']) ? $rows[0]['indexdef'] : null;
+			if (!$def) { return null; }
+			if (strpos($def, 'vector_cosine_ops') !== false) { return 'cosine'; }
+			if (strpos($def, 'vector_ip_ops') !== false) { return 'dot'; }
+			return 'euclidean';
+		} catch (Exception $e) {
+			return null;
+		}
+	}
+
+
+	/**
+	 * Async-shaped twin of vectorsSupported(), for parity with the JS adapter.
+	 * PDO is synchronous so this just answers immediately; it exists so code
+	 * written against one language reads the same in the other.
+	 * @method vectorSupportCheck
+	 * @param {callable} [$callback] called with (null, bool)
+	 * @return {boolean}
+	 */
+	function vectorSupportCheck($callback = null)
+	{
+		$ok = $this->vectorsSupported();
+		if ($callback) { call_user_func($callback, null, $ok); }
+		return $ok;
+	}
+
 }
 
 include_once(dirname(__FILE__).'/Query/Postgres.php');

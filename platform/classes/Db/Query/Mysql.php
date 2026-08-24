@@ -271,4 +271,52 @@ class Db_Query_Mysql extends Db_Query implements Db_Query_Interface
 		return ($stmt->rowCount() > 0);
 	}
 
+
+	/**
+	 * Community MySQL 9 has a VECTOR column type, but DISTANCE() ships only
+	 * with HeatWave / MySQL AI -- so in practice vector search here means
+	 * MariaDB 11.7 or later. Ask the server rather than assuming.
+	 * @method vectorsSupported
+	 * @return {boolean}
+	 */
+	function vectorMetricsSupported()
+	{
+		return array('cosine', 'euclidean');
+	}
+
+	function vectorsSupported()
+	{
+		$db = $this->db;
+		return $db and method_exists($db, 'vectorsSupported')
+			? $db->vectorsSupported() : false;
+	}
+
+	protected function vectorDistance_expression($column, Db_Vector $vector)
+	{
+		switch ($vector->metric) {
+			case 'cosine':    $fn = 'VEC_DISTANCE_COSINE'; break;
+			case 'euclidean': $fn = 'VEC_DISTANCE_EUCLIDEAN'; break;
+			default:
+				throw new Exception(
+					"Db_Query_Mysql: MariaDB supports cosine and euclidean"
+					. " distance, not '{$vector->metric}'"
+				);
+		}
+		// Bind rather than inline: a 768-float literal in the SQL text defeats
+		// the statement cache and bloats the slow query log.
+		$name = '_vec_' . (++self::$vectorCounter);
+		$this->parameters[$name] = $vector->toText();
+		return $fn . '(' . self::column($column) . ', VEC_FromText(:' . $name . '))';
+	}
+
+	protected static $vectorCounter = 0;
+
+
+	function vectorLiteral(Db_Vector $vector)
+	{
+		// MariaDB needs the text form wrapped in VEC_FromText(); a bare string
+		// bound to a VECTOR column is rejected.
+		return new Db_Expression("VEC_FromText('" . $vector->toText() . "')");
+	}
+
 }

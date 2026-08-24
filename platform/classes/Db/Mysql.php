@@ -1544,6 +1544,155 @@ class Db_Mysql implements Db_Interface
 	}
 
 
+
+	/**
+	 * Whether this server can do vector search. MySQL 9 has a VECTOR type but
+	 * DISTANCE() ships only with HeatWave / MySQL AI, so this is effectively
+	 * "is this MariaDB 11.7 or later". Probed once per connection and cached.
+	 * @method vectorsSupported
+	 * @return {boolean}
+	 */
+	function vectorsSupported()
+	{
+		if (isset($this->_supportsVectors)) {
+			return $this->_supportsVectors;
+		}
+		try {
+			$rows = $this->rawQuery("SELECT VERSION() AS v")
+				->fetchAll(PDO::FETCH_ASSOC);
+			$v = isset($rows[0]['v']) ? $rows[0]['v'] : '';
+		} catch (Exception $e) {
+			return $this->_supportsVectors = false;
+		}
+		return $this->_supportsVectors = self::vectorsSupportedInVersion($v);
+	}
+
+	/**
+	 * Whether a given MySQL/MariaDB version string can do vector search.
+	 * Community MySQL 9 has a VECTOR type but DISTANCE() ships only with
+	 * HeatWave / MySQL AI, so this means "MariaDB 11.7 or later".
+	 *
+	 * NOTE the "5.5.5-" prefix: MariaDB fronts its version with it for client
+	 * compatibility (SELECT VERSION() omits it, the handshake packet does not).
+	 * Comparing without stripping it reads "5.5" and rejects MariaDB 11.8.
+	 * @method vectorsSupportedInVersion
+	 * @static
+	 * @param {string} $v
+	 * @return {boolean}
+	 */
+	static function vectorsSupportedInVersion($v)
+	{
+		if (!$v or stripos($v, 'mariadb') === false) {
+			return false;
+		}
+		$v = preg_replace('/^5\.5\.5-/', '', $v);
+		if (!preg_match('/^(\d+)\.(\d+)/', $v, $m)) {
+			return false;
+		}
+		$major = (int)$m[1]; $minor = (int)$m[2];
+		return $major > 11 or ($major === 11 and $minor >= 7);
+	}
+
+	protected $_supportsVectors = null;
+
+
+	/**
+	 * Adds a vector index to a column, so vectorNearestTo() can use it.
+	 * Exists on every adapter so schema code is portable. MariaDB stores the
+	 * vector on the row and indexes it in place.
+	 * @method vectorIndexCreate
+	 * @param {string} $table
+	 * @param {string} $column
+	 * @param {integer} $dimensions Unused here (the column already declares it);
+	 *   accepted so the call is identical across adapters.
+	 * @param {array} [$options] metric ('cosine'|'euclidean'), M (3..200)
+	 */
+	function vectorIndexCreate($table, $column, $dimensions = null, $options = array())
+	{
+		$metric = isset($options['metric']) ? strtolower($options['metric']) : 'cosine';
+		if ($metric !== 'cosine' and $metric !== 'euclidean') {
+			throw new Exception(
+				"Db_Mysql::vectorIndexCreate: metric must be cosine or euclidean"
+			);
+		}
+		$m = isset($options['M']) ? (int)$options['M'] : 8;
+		$t = Db_Query_Mysql::column($table);
+		$c = Db_Query_Mysql::column($column);
+		// Idempotent: migrations get re-run, and a schema .sql may already have
+		// declared the index inline. Same metric -> no-op; different metric ->
+		// rebuild, since MariaDB silently full-scans on a mismatch.
+		$existing = $this->vectorIndexMetric($table, $column);
+		if ($existing === $metric) {
+			return $this;
+		}
+		if ($existing !== null) {
+			$this->vectorIndexDrop($table, $column);
+		}
+		$this->rawQuery("ALTER TABLE $t ADD VECTOR INDEX ($c) M=$m DISTANCE=$metric")
+			->execute();
+		return $this;
+	}
+
+	function vectorIndexDrop($table, $column)
+	{
+		$t = Db_Query_Mysql::column($table);
+		$c = Db_Query_Mysql::column($column);
+		$this->rawQuery("ALTER TABLE $t DROP INDEX $c")->execute();
+		return $this;
+	}
+
+	/**
+	 * The metric a vector index was built with, or null.
+	 * MariaDB silently falls back to a full scan when queried with a different
+	 * metric rather than erroring, so this is worth checking.
+	 * @method vectorIndexMetric
+	 */
+	function vectorIndexMetric($table, $column)
+	{
+		try {
+			$t = Db_Query_Mysql::column($table);
+			// Schema introspection must not come from the query cache, or a
+			// vectorIndexCreate/vectorIndexDrop in the same process reads back
+			// the state from before the change.
+			$rows = $this->rawQuery("SHOW CREATE TABLE $t")
+				->caching(false)->ignoreCache()->fetchAll(PDO::FETCH_ASSOC);
+			$ddl = isset($rows[0]['Create Table']) ? $rows[0]['Create Table'] : null;
+			if (!$ddl) { return null; }
+			// Scan lines rather than one big pattern: the column name is
+			// interpolated, and an escaping slip here silently made every
+			// index look euclidean.
+			$line = null;
+			foreach (explode("\n", $ddl) as $l) {
+				if (stripos($l, 'VECTOR KEY') !== false
+				and strpos($l, '`' . $column . '`') !== false) {
+					$line = $l;
+					break;
+				}
+			}
+			if (!$line) { return null; }
+			// MariaDB writes the option back with backticks:
+			//   VECTOR KEY `v` (`v`) `M`=8 `DISTANCE`=cosine
+			return preg_match('/`?DISTANCE`?\s*=\s*`?(\w+)/i', $line, $m)
+				? strtolower($m[1]) : 'euclidean';
+		} catch (Exception $e) {
+			return null;
+		}
+	}
+
+
+	/**
+	 * Async-shaped twin of vectorsSupported(), for parity with the JS adapter.
+	 * @method vectorSupportCheck
+	 * @param {callable} [$callback] called with (null, bool)
+	 * @return {boolean}
+	 */
+	function vectorSupportCheck($callback = null)
+	{
+		$ok = $this->vectorsSupported();
+		if ($callback) { call_user_func($callback, null, $ok); }
+		return $ok;
+	}
+
 }
 
 include_once(dirname(__FILE__).'/Query/Mysql.php');

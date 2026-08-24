@@ -64,6 +64,86 @@ function Db_Postgres(connName, dsn) {
 		return dbm;
 	};
 
+	var _pgVectors = null;
+	// Unknown means "not yet probed", not "unsupported". Refusing before the
+	// async probe has answered made vectorNearestTo() fail on the first call of
+	// every process. If pgvector really is missing, Postgres itself raises a
+	// clear "operator does not exist" error.
+	dbm.vectorsSupported = function () { return _pgVectors !== false; };
+	/**
+	 * Checks whether the pgvector extension is installed in this database.
+	 */
+	dbm.vectorSupportCheck = function (callback) {
+		callback = callback || function () {};
+		if (_pgVectors !== null) { return callback(null, _pgVectors); }
+		dbm.rawQuery(
+			"SELECT 1 AS ok FROM pg_extension WHERE extname = 'vector'"
+		).execute(function (err, rows) {
+			if (err) { return callback(err); }
+			_pgVectors = !!(rows && rows.length);
+			callback(null, _pgVectors);
+		});
+	};
+
+	/**
+	 * Adds an HNSW vector index. pgvector picks the operator class from the
+	 * metric, which is why the metric has to be known at index time.
+	 * @method vectorIndexCreate
+	 */
+	dbm.vectorIndexCreate = function (table, column, dimensions, options, callback) {
+		options = options || {};
+		var metric = (options.metric || 'cosine').toLowerCase();
+		var ops = {
+			cosine: 'vector_cosine_ops',
+			euclidean: 'vector_l2_ops',
+			dot: 'vector_ip_ops'
+		}[metric];
+		if (!ops) {
+			throw new Q.Exception(
+				"Db.Postgres.vectorIndexCreate: unsupported metric '" + metric + "'"
+			);
+		}
+		var t = String(table).replace(/["]/g, '');
+		var c = String(column).replace(/["]/g, '');
+		var name = t + '_' + c + '_hnsw';
+		var m = parseInt(options.M || 16);
+		var sql = 'CREATE INDEX IF NOT EXISTS "' + name + '" ON "' + t
+			+ '" USING hnsw ("' + c + '" ' + ops + ') WITH (m = ' + m + ')';
+		return dbm.rawQuery(sql).execute(function (err) {
+			callback && callback(err || null);
+		});
+	};
+
+	dbm.vectorIndexDrop = function (table, column, callback) {
+		var t = String(table).replace(/["]/g, '');
+		var c = String(column).replace(/["]/g, '');
+		return dbm.rawQuery(
+			'DROP INDEX IF EXISTS "' + t + '_' + c + '_hnsw"'
+		).execute(function (err) { callback && callback(err || null); });
+	};
+
+	/**
+	 * The metric a vector index was built with, read back from the operator
+	 * class in the index definition.
+	 * @method vectorIndexMetric
+	 */
+	dbm.vectorIndexMetric = function (table, column, callback) {
+		var t = String(table).replace(/["]/g, '');
+		var c = String(column).replace(/["]/g, '');
+		return dbm.rawQuery(
+			"SELECT indexdef FROM pg_indexes WHERE tablename = '" + t
+			+ "' AND indexname = '" + t + '_' + c + "_hnsw'"
+		).execute(function (err, rows) {
+			if (err) { return callback && callback(err); }
+			var r = rows && rows[0];
+			var def = r && (r.indexdef || (r.fields && r.fields.indexdef));
+			if (!def) { return callback && callback(null, null); }
+			var metric = /vector_cosine_ops/.test(def) ? 'cosine'
+				: (/vector_ip_ops/.test(def) ? 'dot' : 'euclidean');
+			callback && callback(null, metric);
+		});
+	};
+
 	dbm.prefix = function () { return info.prefix || ''; };
 	dbm.dbname = function () { return dsn.dbname || info.dbname || connName; };
 

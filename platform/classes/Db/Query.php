@@ -132,7 +132,7 @@ interface Db_Query_Interface
 	 * you often need the "where" clauses to figure out which database to send it to,
 	 * if sharding is being used.
 	 * @method begin
-	 * @param {string} [$$lockType='FOR UPDATE'] Defaults to 'FOR UPDATE', but can also be 'LOCK IN SHARE MODE'
+	 * @param {string} [$lockType='FOR UPDATE'] Defaults to 'FOR UPDATE', but can also be 'LOCK IN SHARE MODE'
 	 * or set it to null to avoid adding a "LOCK" clause
 	 * @param {string} [$transactionKey=null] Passing a key here makes the system throw an
 	 *  exception if the script exits without a corresponding commit by a query with the
@@ -839,6 +839,12 @@ abstract class Db_Query extends Db_Expression
 		$repres = $this->build();
 		$keys = array_keys($this->parameters);
 		usort($keys, [get_called_class(), 'replaceKeysCompare']);
+		// Where the next '?' search may start. Without it, a value that itself
+		// contains '?' was rescanned, and the following parameter got spliced
+		// into the middle of that value's string literal:
+		//   SELECT ? AS a, ? AS b  with ['what? really','second']
+		//   -> SELECT 'what'second' really' AS a, ? AS b
+		$questionOffset = 0;
 		foreach ($keys as $key) {
 			$value = $this->parameters[$key];
 			if (!isset($value)) {
@@ -849,17 +855,27 @@ abstract class Db_Query extends Db_Expression
 				$value2 = $this->reallyConnect()->quote($value);
 			}
 			if (is_numeric($key) and intval($key) == $key) {
-				// replace one of the question marks
-				if (false !== ($pos = strpos($repres, '?'))) {
-					$repres = substr($repres, 0, $pos) . (string)$value2 . substr($repres, $pos+1);
+				// replace one of the question marks, never re-scanning text we
+				// have already substituted in
+				if (false !== ($pos = strpos($repres, '?', $questionOffset))) {
+					$v = (string)$value2;
+					$repres = substr($repres, 0, $pos) . $v . substr($repres, $pos+1);
+					$questionOffset = $pos + strlen($v);
 				}
 			} else {
-				// we don't use $repres = str_replace(":$key", "$value2", $repres);
-				// because we want to replace only one occurrence
-				if (false !== ($pos = strpos($repres, ":$key"))) {
-					$pos2 = $pos + strlen(":$key");
-					$repres = substr($repres, 0, $pos) . (string)$value2 . substr($repres, $pos2);
-				}
+				// Replace EVERY occurrence of :key, but only where the name ends
+				// there -- the negative lookahead stops :p1 from matching inside
+				// :p10. The previous code replaced just the first occurrence to
+				// dodge that collision, which meant a parameter used twice in one
+				// statement left the second :key unsubstituted (invalid SQL), and
+				// still mis-substituted when :p10 appeared before :p1.
+				$repres = preg_replace(
+					'/:' . preg_quote($key, '/') . '(?![A-Za-z0-9_])/',
+					// the value is already quoted/escaped above; protect $ and \\
+					// from preg_replace's backreference syntax
+					str_replace(array('\\', '$'), array('\\\\', '\\$'), (string)$value2),
+					$repres
+				);
 			}
 		}
 		foreach ($this->replacements as $k => $v) {
@@ -1869,6 +1885,158 @@ abstract class Db_Query extends Db_Expression
 	 * @throws {Exception} If ORDER BY clause does not belong to context
 	 * @chainable
 	 */
+
+	/**
+	 * Whether this adapter can search vectors. Adapters override.
+	 * @method vectorsSupported
+	 * @return {boolean}
+	 */
+	function vectorsSupported()
+	{
+		return false;
+	}
+
+	/**
+	 * Which distance metrics this engine can actually compute. Adapters
+	 * override. Callers can ask before building a query rather than
+	 * discovering it from an exception; vectorNearestTo() checks it so the refusal
+	 * reads the same on every adapter.
+	 * @method vectorMetricsSupported
+	 * @return {array}
+	 */
+	function vectorMetricsSupported()
+	{
+		return array();
+	}
+
+	/**
+	 * Throws if the query vector's dimension count disagrees with the column's,
+	 * as declared by the generated model's maxDimensions_<column>(). Silent when
+	 * the query isn't tied to a model, since the width isn't knowable then.
+	 * @method vectorCheckDimensions
+	 * @protected
+	 */
+	protected function vectorCheckDimensions($column, Db_Vector $vector)
+	{
+		$cls = $this->className;
+		if (!$cls or !class_exists($cls)) {
+			return;
+		}
+		$m = 'maxDimensions_' . preg_replace('/[^A-Za-z0-9_]/', '', $column);
+		if (!method_exists($cls, $m)) {
+			return;
+		}
+		$row = new $cls();
+		$expected = $row->$m();
+		if (!$expected) {
+			return;
+		}
+		if ($vector->dimensions() !== $expected) {
+			throw new Exception(
+				"Db_Query::vectorNearestTo: $cls.$column holds"
+				. " {$expected}-dimensional vectors, but the query vector has "
+				. $vector->dimensions() . ". The engine would return every row"
+				. " with a NULL distance in arbitrary order rather than erroring."
+			);
+		}
+	}
+
+	/**
+	 * Builds the SQL expression yielding the distance between a stored vector
+	 * column and a query vector. This is the single point where MariaDB's
+	 * VEC_DISTANCE_COSINE(), pgvector's <=> operator and sqlite-vec's separate
+	 * virtual table diverge. Adapters override it.
+	 * @method vectorDistance_expression
+	 * @protected
+	 * @param {string} $column
+	 * @param {Db_Vector} $vector
+	 * @return {string}
+	 */
+	protected function vectorDistance_expression($column, Db_Vector $vector)
+	{
+		throw new Exception(
+			get_class($this) . " does not support vector search"
+		);
+	}
+
+	/**
+	 * Orders the query by similarity to a vector, nearest first.
+	 *
+	 * The same call works on every adapter that supports vectors:
+	 *
+	 *   Streams_Stream::select()
+	 *       ->where(array('publisherId' => 'Hebrews'))
+	 *       ->vectorNearestTo('embedding', Db::vector($embedding), array('limit' => 10))
+	 *
+	 * Each adapter renders it in its own dialect. Db_Query_Sqlite is the
+	 * structural outlier: its vectors live in a separate vec0 virtual table,
+	 * so it joins against a KNN subquery instead of adding an ORDER BY.
+	 *
+	 * @method vectorNearestTo
+	 * @param {string} $column The column holding the stored vectors
+	 * @param {Db_Vector|array} $vector The query vector
+	 * @param {array} [$options=array()]
+	 * @param {integer} [$options.limit] Applied as LIMIT. Strongly recommended:
+	 *   without it the engine ranks every row in the table.
+	 * @param {string} [$options.distanceAs] Also select the distance under this alias
+	 * @chainable
+	 */
+	/**
+	 * Alias of vectorNearestTo(). The canonical name is prefixed so every
+	 * vector method groups together in autocomplete, but this reads better in
+	 * a fluent chain beside where/orderBy/limit. Remove if unwanted.
+	 * @method nearestTo
+	 * @chainable
+	 */
+	function nearestTo($column, $vector, $options = array())
+	{
+		return $this->vectorNearestTo($column, $vector, $options);
+	}
+
+	function vectorNearestTo($column, $vector, $options = array())
+	{
+		if (!($vector instanceof Db_Vector)) {
+			$metric = isset($options['metric']) ? $options['metric'] : 'cosine';
+			$vector = new Db_Vector($vector, $metric);
+		}
+		if (!$this->vectorsSupported()) {
+			throw new Exception(
+				get_class($this) . "::vectorNearestTo: vector search is not available"
+				. " on this connection"
+			);
+		}
+		// A dimension mismatch is the worst failure mode these engines have:
+		// MariaDB returns every row with distance = NULL, in arbitrary order,
+		// and does not error. Catch it when the model knows its dimension count.
+		$this->vectorCheckDimensions($column, $vector);
+
+		$metrics = $this->vectorMetricsSupported();
+		if ($metrics and !in_array($vector->metric, $metrics)) {
+			throw new Exception(
+				get_class($this) . "::vectorNearestTo: this adapter supports "
+				. implode(' and ', $metrics) . " distance, not '{$vector->metric}'"
+			);
+		}
+		$expression = $this->vectorDistance_expression($column, $vector);
+		$this->clauses['ORDER BY'] = empty($this->clauses['ORDER BY'])
+			? $expression
+			: $this->clauses['ORDER BY'] . ", " . $expression;
+		if (!empty($options['distanceAs'])) {
+			// A second expression with its own parameter, not a reuse of the
+			// ORDER BY one: parameters are substituted positionally, so a name
+			// appearing twice leaves the second occurrence unsubstituted.
+			$selectExpr = $this->vectorDistance_expression($column, $vector);
+			$select = empty($this->clauses['SELECT']) ? '*' : $this->clauses['SELECT'];
+			$this->clauses['SELECT'] = $select . ', ' . $selectExpr
+				. ' AS ' . $this->column($options['distanceAs']);
+		}
+		if (isset($options['limit'])) {
+			$offset = isset($options['offset']) ? $options['offset'] : null;
+			$this->limit($options['limit'], $offset);
+		}
+		return $this;
+	}
+
 	function orderBy($expression, $ascending = true)
 	{
 		switch ($this->type) {
@@ -2486,7 +2654,12 @@ abstract class Db_Query extends Db_Expression
 	}
 
 	protected function build_limit() {
-		$limit = empty($this->clauses['LIMIT']) ? '' : "\n LIMIT ".$this->clauses['LIMIT'];
+		// NOT empty(): the clause holds the string "0" for limit(0), and
+		// empty("0") is true in PHP -- so LIMIT 0 was dropped and the query
+		// returned every row instead of none. A computed limit that lands on
+		// zero would dump the whole table.
+		$limit = (!isset($this->clauses['LIMIT']) or $this->clauses['LIMIT'] === '')
+			? '' : "\n LIMIT ".$this->clauses['LIMIT'];
 		$limit .= !isset($this->after['LIMIT']) ? '' : "\n".$this->after['LIMIT'];
 		return $limit;
 	}
@@ -2601,7 +2774,12 @@ abstract class Db_Query extends Db_Expression
 		$join .= !isset($this->after['JOIN']) ? '' : "\n".$this->after['JOIN'];
 		$where = empty($this->clauses['WHERE']) ? '' : "\nWHERE ".$this->clauses['WHERE'];
 		$where .= !isset($this->after['WHERE']) ? '' : "\n".$this->after['WHERE'];
-		$limit = empty($this->clauses['LIMIT']) ? '' : "\n LIMIT ".$this->clauses['LIMIT'];
+		// NOT empty(): the clause holds the string "0" for limit(0), and
+		// empty("0") is true in PHP -- so LIMIT 0 was dropped and the query
+		// returned every row instead of none. A computed limit that lands on
+		// zero would dump the whole table.
+		$limit = (!isset($this->clauses['LIMIT']) or $this->clauses['LIMIT'] === '')
+			? '' : "\n LIMIT ".$this->clauses['LIMIT'];
 		$limit .= !isset($this->after['LIMIT']) ? '' : "\n".$this->after['LIMIT'];
 		return "UPDATE $update$join$set$where$limit";
 	}
@@ -2632,6 +2810,11 @@ abstract class Db_Query extends Db_Expression
 	 */
 	function execute($prepareStatement = false, $shards = null)
 	{
+		// Convert any Db_Vector bound as a column value into this engine's wire
+		// form before anything touches PDO. Db_Row::save() puts the Db_Vector
+		// straight into the query parameters, and without this MariaDB sees a
+		// plain '[0.1,...]' string and rejects it as an invalid vector value.
+		$this->vectorParametersPrepare();
 		if (class_exists('Q')) {
 			/**
 			 * @event Db/query/execute {before}
@@ -3816,5 +3999,37 @@ abstract class Db_Query extends Db_Expression
 	public $cachedShardIndex = null;
 
 	public $lastChunkValue = null;
+
+
+	/**
+	 * Renders a Db_Vector as a literal this engine accepts as a column value.
+	 * Adapters override.
+	 * @method vectorLiteral
+	 * @param {Db_Vector} $vector
+	 * @return {mixed}
+	 */
+	function vectorLiteral(Db_Vector $vector)
+	{
+		return $vector->toText();
+	}
+
+	/**
+	 * Converts any Db_Vector bound as a parameter into the engine's wire form.
+	 * Without this, passing a vector as an ordinary column value --
+	 * $db->insert($table, array('embedding' => Db::vector($e))) -- hands PDO an
+	 * object and the server rejects it as a malformed vector. Vectors have to
+	 * work as values, not only inside vectorNearestTo().
+	 * @method vectorParametersPrepare
+	 * @protected
+	 */
+	protected function vectorParametersPrepare()
+	{
+		foreach ($this->parameters as $k => $v) {
+			if ($v instanceof Db_Vector) {
+				$this->parameters[$k] = $this->vectorLiteral($v);
+			}
+		}
+		return $this;
+	}
 
 }

@@ -396,7 +396,7 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 			case Db.Query.TYPE_UPDATE:
 				break;
 			case Db.Query.TYPE_DELETE:
-				if (!mq.afterClauses['FROM']) break;
+				if (!this.afterClauses['FROM']) break;
 			default:
 				throw new Q.Exception("the JOIN clause does not belong in this context.");
 		}
@@ -922,50 +922,50 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 			case Db.Query.TYPE_SELECT:
 				// SELECT
 				select = this.clauses['SELECT'] || '*';
-				if (mq.afterClauses['SELECT']) {
-					select += " " + mq.afterClauses['SELECT'];
+				if (this.afterClauses['SELECT']) {
+					select += " " + this.afterClauses['SELECT'];
 				}
 				// FROM
 				from = (this.clauses['FROM'] || []).join(', ');
 				// if (!from)
 				// 	throw new Q.Exception("missing FROM clause in DB query.");
-				if (mq.afterClauses['FROM']) {
-					from += " " + mq.afterClauses['FROM'];
+				if (this.afterClauses['FROM']) {
+					from += " " + this.afterClauses['FROM'];
 				}
 				// JOIN
 				join = this.clauses['JOIN'] || '';
-				if (mq.afterClauses['JOIN']) {
-					join += " " + mq.afterClauses['JOIN'];
+				if (this.afterClauses['JOIN']) {
+					join += " " + this.afterClauses['JOIN'];
 				}
 				// WHERE
 				where = this.clauses['WHERE'] ? 'WHERE ' + this.clauses['WHERE'] : '';
-				if (mq.afterClauses['WHERE']) {
-					where += " " + mq.afterClauses['WHERE'];
+				if (this.afterClauses['WHERE']) {
+					where += " " + this.afterClauses['WHERE'];
 				}
 				// GROUP BY
 				groupBy = this.clauses['GROUP BY'] ? "GROUP BY " + this.clauses['GROUP BY'] : '';
-				if (mq.afterClauses['GROUP BY']) {
-					groupBy += " " + mq.afterClauses['GROUP BY'];
+				if (this.afterClauses['GROUP BY']) {
+					groupBy += " " + this.afterClauses['GROUP BY'];
 				}
 				// HAVING
 				having = this.clauses['HAVING'] ? "HAVING " + this.clauses['HAVING'] : '';
-				if (mq.afterClauses['HAVING']) {
-					having += " " + mq.afterClauses['HAVING'];
+				if (this.afterClauses['HAVING']) {
+					having += " " + this.afterClauses['HAVING'];
 				}
 				// ORDER BY
 				orderBy = this.clauses['ORDER BY'] ? "ORDER BY " + this.clauses['ORDER BY'] : '';
-				if (mq.afterClauses['ORDER BY']) {
-					orderBy += " " + mq.afterClauses['ORDER BY'];
+				if (this.afterClauses['ORDER BY']) {
+					orderBy += " " + this.afterClauses['ORDER BY'];
 				}
 				// LIMIT
 				limit = this.clauses['LIMIT'] || '';
-				if (mq.afterClauses['LIMIT']) {
-					limit += " " + mq.afterClauses['LIMIT'];
+				if (this.afterClauses['LIMIT']) {
+					limit += " " + this.afterClauses['LIMIT'];
 				}
 				// LOCK
 				lock = this.clauses['LOCK'] || '';
-				if (mq.afterClauses['LOCK']) {
-					lock +=  " " + mq.afterClauses['LOCK'];
+				if (this.afterClauses['LOCK']) {
+					lock +=  " " + this.afterClauses['LOCK'];
 				}
 				sql = "SELECT " + select +
 					(from ? "\nFROM " + from : '') +
@@ -988,11 +988,11 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 					}
 					into += '(' + this.clauses['FIELDS'] + ')';
 				}
-				if (mq.afterClauses['INTO']) {
-					into += " " + mq.afterClauses['INTO'];
+				if (this.afterClauses['INTO']) {
+					into += " " + this.afterClauses['INTO'];
 				}
 				values = this.clauses['VALUES'] || '';
-				afterValues = mq.afterClauses['VALUES'] || '';
+				afterValues = this.afterClauses['VALUES'] || '';
 				onDuplicateKeyUpdate = this.clauses['ON DUPLICATE KEY UPDATE'] ?
 					'ON DUPLICATE KEY UPDATE '  + this.clauses['ON DUPLICATE KEY UPDATE'] : '';
 				sql = "INSERT INTO " + into +
@@ -1007,28 +1007,28 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 				if (!this.clauses['SET'])
 					throw new Q.Exception("missing SET clause in DB query.");
 				update = this.clauses['UPDATE'] || '';
-				if (mq.afterClauses['UPDATE']) {
-					update += " " + mq.afterClauses['UPDATE'];
+				if (this.afterClauses['UPDATE']) {
+					update += " " + this.afterClauses['UPDATE'];
 				}
 				// JOIN
 				join = this.clauses['JOIN'] || '';
-				if (mq.afterClauses['JOIN']) {
-					join += " " + mq.afterClauses['JOIN'];
+				if (this.afterClauses['JOIN']) {
+					join += " " + this.afterClauses['JOIN'];
 				}
 				// SET
 				set = this.clauses['SET'] || '';
-				if (mq.afterClauses['SET']) {
-					set += " " + mq.afterClauses['SET'];
+				if (this.afterClauses['SET']) {
+					set += " " + this.afterClauses['SET'];
 				}
 				// WHERE
 				where = this.clauses['WHERE'] ? 'WHERE ' + this.clauses['WHERE'] : 'WHERE 1';
-				if (mq.afterClauses['WHERE']) {
-					where += " " + mq.afterClauses['WHERE'];
+				if (this.afterClauses['WHERE']) {
+					where += " " + this.afterClauses['WHERE'];
 				}
 				// LIMIT
 				limit = this.clauses['LIMIT'] || '';
-				if (mq.afterClauses['LIMIT']) {
-					limit += " " + mq.afterClauses['LIMIT'];
+				if (this.afterClauses['LIMIT']) {
+					limit += " " + this.afterClauses['LIMIT'];
 				}
 				sql = "UPDATE " + update +
 					"\n" + join +
@@ -1041,23 +1041,23 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 				if (!this.clauses['FROM'])
 					throw new Q.Exception("missing FROM clause in DB query.");
 				from = this.clauses['FROM'] || '';
-				if (mq.afterClauses['FROM']) {
-					from += " " + mq.afterClauses['FROM'];
+				if (this.afterClauses['FROM']) {
+					from += " " + this.afterClauses['FROM'];
 				}
 				// JOIN
 				join = this.clauses['JOIN'] || '';
-				if (mq.afterClauses['JOIN']) {
-					join += " " + mq.afterClauses['JOIN'];
+				if (this.afterClauses['JOIN']) {
+					join += " " + this.afterClauses['JOIN'];
 				}
 				// WHERE
 				where = this.clauses['WHERE'] ? 'WHERE ' + this.clauses['WHERE'] : 'WHERE 1';
-				if (mq.afterClauses['WHERE']) {
-					where += " " + mq.afterClauses['WHERE'];
+				if (this.afterClauses['WHERE']) {
+					where += " " + this.afterClauses['WHERE'];
 				}
 				// LIMIT
 				limit = this.clauses['LIMIT'] || '';
-				if (mq.afterClauses['LIMIT']) {
-					limit += " " + mq.afterClauses['LIMIT'];
+				if (this.afterClauses['LIMIT']) {
+					limit += " " + this.afterClauses['LIMIT'];
 				}
 				sql = "DELETE FROM " + from +
 					"\n" + join +
@@ -1112,8 +1112,8 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 	 */
 	mq.setAfter = mq.after = function(after, clause) {
 		if (clause) {
-			mq.afterClauses[after] = mq.afterClauses[after]
-				? mq.afterClauses[after] + ' ' + clause
+			this.afterClauses[after] = this.afterClauses[after]
+				? this.afterClauses[after] + ' ' + clause
 				: clause;
 		}
 		return this;
@@ -1132,7 +1132,7 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 		if (!with_after) {
 			return clause;
 		}
-		var after = mq.afterClauses[clause_name] || '';
+		var after = this.afterClauses[clause_name] || '';
 		return [clause, after];
 	};
 
@@ -1146,6 +1146,7 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 	 */
 	mq.getSQL = function (callback, shardName) {
 		var mq = this;
+		mq._vectorParametersPrepare();
 		delete mq.replacements['{{prefix}}'];
 		delete mq.replacements['{{dbname}}'];
 		var repres = mq.build();
@@ -1171,16 +1172,23 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 				if (Q.isInteger(key)) {
 					values3[key] = value2;
 				} else {
-					repres = repres.replace(":"+key, value2);
+					// Replace EVERY occurrence of :key, but only where the name
+					// ends there, so :p1 does not match inside :p10. Replacing
+					// just the first left a parameter used twice in one
+					// statement with an unsubstituted :key.
+					repres = repres.replace(
+						new RegExp(':' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+							+ '(?![A-Za-z0-9_])', 'g'),
+						function () { return value2; }   // function form: no $& expansion
+					);
 				}
 			}
 			var i = 0;
 			if (!Q.isEmpty(values3)) {
 				repres = repres.replace( /\?/g, function() {
 					var v = values3[i++];
-					if (v === undefined) {
-						console.log(repres, i);
-					}
+					// leave an unfilled ? alone rather than logging the SQL,
+					// which would put bound values into stdout
 					return v !== undefined ? v : '?';
 				});
 			}
@@ -1391,6 +1399,62 @@ Query_Mysql.column = function _column(column) {
 	}
 	return quoted.join('.') + (pos ? column.substring(pos) : '');
 }
+
+
+// ── vector search (MariaDB 11.7+) ──
+// Community MySQL 9 has a VECTOR column type but DISTANCE() ships only with
+// HeatWave / MySQL AI, so vector search is MariaDB-only in practice. The probe
+// asks the server rather than assuming, because the same code ships to people
+// running community MySQL.
+
+/**
+ * Whether we can answer vectorsSupported() at all yet. Queries get built before
+ * the connection exists, so a cold adapter has no server version and the
+ * answer is "unknown", not "unsupported" -- vectorNearestTo() must not refuse then.
+ * Pairs with vectorsSupported(): know first, then ask.
+ * @method vectorSupportIsKnown
+ * @return {Boolean}
+ */
+Query_Mysql.prototype.vectorSupportIsKnown = function () {
+	var db = this.db;
+	return !!(db && typeof db.serverVersion === 'function' && db.serverVersion());
+};
+
+Query_Mysql.prototype.vectorMetricsSupported = function () { return ['cosine', 'euclidean']; };
+
+Query_Mysql.prototype.vectorsSupported = function () {
+	return this.db && typeof this.db.vectorsSupported === 'function'
+		? this.db.vectorsSupported()
+		: false;
+};
+
+Query_Mysql.prototype._randomExpression = function () { return 'RAND()'; };
+
+Query_Mysql.prototype.vectorLiteral = function (vector) {
+	// MariaDB needs the text form wrapped in VEC_FromText(); a bare string
+	// bound to a VECTOR column is rejected.
+	return new Db.Expression(
+		"VEC_FromText('" + vector.toText() + "')"
+	);
+};
+
+Query_Mysql.prototype._vectorDistance_expression = function (column, vector) {
+	var fn;
+	switch (vector.metric) {
+		case 'cosine':    fn = 'VEC_DISTANCE_COSINE'; break;
+		case 'euclidean': fn = 'VEC_DISTANCE_EUCLIDEAN'; break;
+		default:
+			throw new Q.Exception(
+				"Db.Query.Mysql: MariaDB supports cosine and euclidean distance, not '"
+				+ vector.metric + "'"
+			);
+	}
+	// Bind the vector as a parameter rather than inlining it -- a 768-float
+	// literal in the SQL text defeats the statement cache and bloats logs.
+	var name = '_vec_' + (++_valueCounter);
+	this.parameters[name] = vector.toText();
+	return fn + '(' + Query_Mysql.column(column) + ', VEC_FromText(:' + name + '))';
+};
 
 Q.mixin(Query_Mysql, Db.Query);
 

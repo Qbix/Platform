@@ -369,4 +369,44 @@ class Db_Query_Postgres extends Db_Query implements Db_Query_Interface
 	{
 		return "GREATEST($a, $b)";
 	}
+
+	function vectorMetricsSupported()
+	{
+		return array('cosine', 'euclidean', 'dot');
+	}
+
+	function vectorsSupported()
+	{
+		$db = $this->db;
+		return $db and method_exists($db, 'vectorsSupported')
+			? $db->vectorsSupported() : false;
+	}
+
+	protected function vectorDistance_expression($column, Db_Vector $vector)
+	{
+		switch ($vector->metric) {
+			case 'cosine':    $op = '<=>'; break;
+			case 'euclidean': $op = '<->'; break;
+			case 'dot':       $op = '<#>'; break;
+			default:
+				throw new Exception(
+					"Db_Query_Postgres: unsupported metric '{$vector->metric}'"
+				);
+		}
+		$name = '_vec_' . (++self::$vectorCounter);
+		$this->parameters[$name] = $vector->toText();
+		// The ::vector cast is required -- without it Postgres sees text and
+		// the operator does not resolve.
+		return self::column($column) . ' ' . $op . ' (:' . $name . ')::vector';
+	}
+
+	protected static $vectorCounter = 0;
+
+
+	function vectorLiteral(Db_Vector $vector)
+	{
+		// pgvector parses the bracketed text form directly for a vector column
+		return $vector->toText();
+	}
+
 }

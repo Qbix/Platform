@@ -3,6 +3,7 @@
  */
 var Q = require('Q');
 var Db = Q.require('Db');
+var _sqliteVecCounter = 0;
 
 /**
  * PK cache so we don't hit PRAGMA on every upsert
@@ -12,13 +13,17 @@ var _pkCache = {};
 
 /**
  * SQLite query class for Node.js.
- * Inherits query-building from Query.Mysql, overrides execute() for better-sqlite3.
+ * Inherits query-building from Db.Query, overrides execute() for better-sqlite3.
  * @class Sqlite
  * @namespace Db.Query
  * @constructor
  */
 var Query_Sqlite = function (sqlite, type, clauses, parameters, table) {
-	Db.Query.Mysql.call(this, sqlite, type, clauses, parameters, table);
+	// Inherits query building from the Db.Query base class, mirroring how
+	// Db_Query_Sqlite extends Db_Query in PHP. Previously this called
+	// Db.Query.Mysql.call(), which meant every SQLite query was built as
+	// MySQL and then regex-rewritten on the way out.
+	Db.Query.call(this, sqlite, type, clauses, parameters, table);
 	this.typename = 'Db.Query.Sqlite';
 
 	var mq = this;
@@ -95,6 +100,7 @@ var Query_Sqlite = function (sqlite, type, clauses, parameters, table) {
 			throw err;
 		}
 
+		mq._vectorParametersPrepare();
 		var sql = mq.build();
 		// Apply replacements
 		for (var k in mq.replacements) {
@@ -215,6 +221,114 @@ Query_Sqlite.column = function _column(column) {
 		return column;
 	}
 	return '"' + column + '"';
+};
+
+
+Query_Sqlite.prototype._randomExpression = function () { return 'RANDOM()'; };
+
+Query_Sqlite.prototype.vectorLiteral = function (vector) {
+	return vector.toBuffer();   // sqlite-vec wants packed little-endian float32
+};
+
+Query_Sqlite.prototype._least = function () {
+	return 'MIN(' + Array.prototype.slice.call(arguments).join(', ') + ')';
+};
+Query_Sqlite.prototype._greatest = function () {
+	return 'MAX(' + Array.prototype.slice.call(arguments).join(', ') + ')';
+};
+
+// ── vector search (sqlite-vec) ──
+// SQLite is the structural outlier. Vectors live in a separate vec0 virtual
+// table, so this cannot be an ORDER BY on the current table -- it has to join
+// against a KNN subquery. By convention the sidecar table is "<table>_vec"
+// and its rowid matches the base table's rowid.
+
+Query_Sqlite.prototype.vectorMetricsSupported = function () { return ['cosine', 'euclidean']; };
+
+Query_Sqlite.prototype.vectorsSupported = function () {
+	return this.db && typeof this.db.vectorsSupported === 'function'
+		? this.db.vectorsSupported()
+		: false;
+};
+
+Query_Sqlite.prototype.vectorTableFor = function (table) {
+	return String(table).replace(/^\w+\./, '').replace(/["`]/g, '') + '_vec';
+};
+
+Query_Sqlite.prototype.vectorNearestTo = function (column, vector, options) {
+	options = options || {};
+	if (!vector || vector.typename !== 'Db.Vector') {
+		vector = new (Db.Vector)(vector, options.metric);
+	}
+	if (!this.vectorsSupported()) {
+		throw new Q.Exception(
+			"Db.Query.Sqlite.vectorNearestTo: the sqlite-vec extension is not loaded"
+		);
+	}
+	var metrics = this.vectorMetricsSupported();
+	if (metrics.indexOf(vector.metric) < 0) {
+		throw new Q.Exception(
+			"Db.Query.vectorNearestTo: " + this.typename + " supports "
+			+ metrics.join(' and ') + " distance, not '" + vector.metric + "'"
+		);
+	}
+	// k is required by vec0; without a limit there is no sensible default,
+	// so fall back to something bounded rather than scanning everything.
+	var k = (options.limit !== undefined && options.limit !== null)
+		? parseInt(options.limit) : 100;
+	var base = (this.clauses['FROM'] || [this.table])[0];
+	var vecTable = this.vectorTableFor(base);
+	// The metric is baked into the vec0 column declaration. Querying with a
+	// different one does NOT re-rank -- vec0 just returns the metric it was
+	// built with -- so a mismatch would silently produce distances in the
+	// wrong units. Refuse instead.
+	if (this.db && typeof this.db.vectorIndexMetric === 'function') {
+		var built = this.db.vectorIndexMetric(base);
+		if (built && built !== vector.metric) {
+			throw new Q.Exception(
+				"Db.Query.Sqlite.vectorNearestTo: " + vecTable + " was built for "
+				+ built + " distance, but this query asks for " + vector.metric
+				+ ". Rebuild the index with vectorIndexCreate(..., {metric: '"
+				+ vector.metric + "'}) or query with '" + built + "'."
+			);
+		}
+	}
+	var alias = '_vec' + (++_sqliteVecCounter);
+	var pName = '_vec_' + _sqliteVecCounter;
+	this.parameters[pName] = vector.toBuffer();
+
+	var join = 'JOIN (SELECT rowid AS _rid, distance FROM ' + this._quoted(vecTable)
+		+ ' WHERE ' + this._quoted(column) + ' MATCH :' + pName
+		+ ' AND k = ' + k + ') ' + alias
+		+ ' ON ' + alias + '._rid = ' + this._quoted(base) + '.rowid';
+	this.clauses['JOIN'] = this.clauses['JOIN']
+		? this.clauses['JOIN'] + '\n' + join : join;
+
+	var distanceExpr = alias + '.distance';
+	this.clauses['ORDER BY'] = this.clauses['ORDER BY']
+		? this.clauses['ORDER BY'] + ', ' + distanceExpr : distanceExpr;
+	if (options.distanceAs) {
+		var select = this.clauses['SELECT'] || '*';
+		this.clauses['SELECT'] = select + ', ' + distanceExpr
+			+ ' AS ' + this._column(options.distanceAs);
+	}
+	if (options.limit !== undefined && options.limit !== null) {
+		this.limit(options.limit, options.offset);
+	}
+	return this;
+};
+
+// PHP defines __toString on each adapter class too (Db_Query_Postgres,
+// Db_Query_Sqlite); mirror that so String(query) builds SQL instead of
+// falling through to Object.prototype.toString.
+Query_Sqlite.prototype.toString = function () {
+	try { return this.build(); }
+	catch (e) { return '*****' + (e && e.message); }
+};
+Query_Sqlite.prototype.valueOf = function () { return this.toString(); };
+
+Query_Sqlite.prototype.nearestTo = function () {
+	return this.vectorNearestTo.apply(this, arguments);
 };
 
 Q.mixin(Query_Sqlite, Db.Query);

@@ -108,6 +108,126 @@ Db.getShard = function(connName, shardName) {
  * @param {String} dsn The dsn string for the database
  * @return {Object} The data extracted from the DSN string
  */
+/**
+ * Constructs a Db.Vector, for use with Db.Query.vectorNearestTo().
+ * @method vector
+ * @static
+ * @param {Array|Float32Array|Buffer} values
+ * @param {String} [metric='cosine']
+ * @param {Object} [options] see Db.Vector
+ * @return {Db.Vector}
+ */
+Db.vector = function (values, metric, options) {
+	return new (Q.require('Db/Vector'))(values, metric, options);
+};
+
+/**
+ * Normalizes text into something safe to use as an identifier, matching
+ * Db::normalize() in PHP byte for byte.
+ *
+ * PHP lowercases and matches on BYTES, so this works on a UTF-8 Buffer rather
+ * than on JS characters -- otherwise the truncation branch would cut at a
+ * different point for non-ASCII input, and the two languages would derive
+ * different names for the same string.
+ *
+ * @method normalize
+ * @static
+ * @param {String} text
+ * @param {String} [replacement='_'] Replaces sequences of unmatched characters
+ * @param {String|RegExp} [characters] Defaults to /[^A-Za-z0-9]+/
+ * @param {Number} [numChars=233] Truncate longer text and append a hash
+ * @return {String|null}
+ */
+Db.normalize = function (text, replacement, characters, numChars) {
+	if (text === undefined || text === null) {
+		return null;
+	}
+	if (numChars === undefined || numChars === null) {
+		numChars = 233;
+	}
+	if (characters === undefined || characters === null) {
+		characters = /[^A-Za-z0-9]+/g;
+		if (Q.Config) {
+			var c = Q.Config.get(['Db', 'normalize', 'characters'], null);
+			if (c) {
+				characters = _regexpFromPHP(c);
+			}
+		}
+	} else if (typeof characters === 'string') {
+		characters = _regexpFromPHP(characters);
+	}
+	if (replacement === undefined || replacement === null) {
+		replacement = '_';
+		if (Q.Config) {
+			replacement = Q.Config.get(['Db', 'normalize', 'replacement'], '_');
+		}
+	}
+	text = String(text);
+	var result = text.toLowerCase().replace(characters, replacement);
+	// PHP compares and slices by byte length here
+	if (Buffer.byteLength(text, 'utf8') > numChars) {
+		var head = Buffer.from(text, 'utf8')
+			.slice(0, numChars - 33).toString('utf8');
+		var tail = Buffer.from(result, 'utf8')
+			.slice(numChars - 33).toString('utf8');
+		result = head + '_' + Db.hashCode(tail);
+	}
+	return result;
+};
+
+/**
+ * Turns a PHP preg pattern such as "/[^A-Za-z0-9]+/" into a global RegExp.
+ * @method _regexpFromPHP
+ * @private
+ */
+function _regexpFromPHP(pattern) {
+	if (pattern instanceof RegExp) {
+		return pattern.global ? pattern : new RegExp(pattern.source, pattern.flags + 'g');
+	}
+	var m = /^([^A-Za-z0-9\s])(.*)\1([a-zA-Z]*)$/.exec(String(pattern));
+	if (!m) {
+		return new RegExp(String(pattern), 'g');
+	}
+	var flags = m[3].replace(/[^gimsuy]/g, '');
+	if (flags.indexOf('g') < 0) {
+		flags += 'g';
+	}
+	return new RegExp(m[2], flags);
+}
+
+/**
+ * The same 32-bit string hash as Db::hashCode() in PHP.
+ * @method hashCode
+ * @static
+ * @param {String} text
+ * @return {Number}
+ */
+Db.hashCode = function (text) {
+	var hash = 0;
+	var buf = Buffer.from(String(text), 'utf8');
+	if (!buf.length) {
+		return hash;
+	}
+	for (var i = 0, l = buf.length; i < l; ++i) {
+		hash = hash % 16777216;
+		hash = ((hash << 5) - hash) + buf[i];
+		hash = hash & hash; // keep it a 32-bit integer, as PHP's comment intends
+	}
+	return hash;
+};
+
+/**
+ * Hashes text in a standard way, matching Db::hash() in PHP.
+ * @method hash
+ * @static
+ * @param {String} text
+ * @return {String}
+ */
+Db.hash = function (text) {
+	return require('crypto').createHash('md5')
+		.update(Db.normalize(text)).digest('hex');
+};
+
 Db.parseDsnString = function(dsn) {
 	var parts = dsn.split(':');
 	var dbms = parts[0].toLowerCase();
@@ -179,7 +299,12 @@ Db.fromDate = function(date) {
 	var year = date.substring(0, 4),
 	    month = date.substring(5, 7),
 	    day = date.substring(8, 10);
-	return (new Date(year, month, day).getTime());
+	// NOTE the month - 1: the Date constructor takes a 0-indexed month, so
+	// passing "11" for November produced December (and "12" rolled the year).
+	// Db.toDate already compensated with getMonth() + 1 on the way out; this
+	// side didn't. Returns milliseconds, as JS timestamps do -- PHP's mktime
+	// twin returns seconds.
+	return (new Date(year, month - 1, day).getTime());
 };
 
 /**
@@ -198,7 +323,8 @@ Db.fromDateTime = function(datetime) {
 	    hour = datetime.substring(11, 13),
 	    min = datetime.substring(14, 16),
 	    sec = datetime.substring(17, 19);
-	return (new Date(year, month, day, hour, min, sec, 0).getTime());
+	// month - 1: see the note in Db.fromDate. Returns milliseconds.
+	return (new Date(year, month - 1, day, hour, min, sec, 0).getTime());
 };
 
 /**

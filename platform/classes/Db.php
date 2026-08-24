@@ -1620,6 +1620,20 @@ class Db
 	 *  The name of the connection out of the connections added with Db::setConnection
 	 * @return {Db_Interface}
 	 */
+	/**
+	 * Constructs a Db_Vector, for use with Db_Query::vectorNearestTo().
+	 * @method vector
+	 * @static
+	 * @param {array|string} $values
+	 * @param {string} [$metric='cosine']
+	 * @param {array} [$options=array()] see Db_Vector
+	 * @return {Db_Vector}
+	 */
+	static function vector($values, $metric = 'cosine', $options = array())
+	{
+		return new Db_Vector($values, $metric, $options);
+	}
+
 	static function connect ($conn_name)
 	{
 		$conn_info = self::getConnection($conn_name);
