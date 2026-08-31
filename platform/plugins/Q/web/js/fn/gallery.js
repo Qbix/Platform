@@ -224,20 +224,6 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			var el = $img[0];
 			var iw = el.naturalWidth, ih = el.naturalHeight;
 			var cw = $this.width(), ch = $this.height();
-			try {
-				var L = (window.QGalleryDebug = window.QGalleryDebug || []);
-				L.push({ t: Math.round(performance.now()), index: r.index,
-					src: (el.getAttribute('src') || '').split('/').pop(),
-					naturalW: iw, naturalH: ih, containerW: cw, containerH: ch,
-					lazyPlaceholder: !!el.getAttribute('data-lazyload-src'),
-					cls: el.className,
-					willBail: !iw || !ih || !cw || !ch || !!el.getAttribute('data-lazyload-src'),
-					inlineW: el.style.width, inlineH: el.style.height,
-					computedW: getComputedStyle(el).width,
-					computedH: getComputedStyle(el).height,
-					maxW: getComputedStyle(el).maxWidth,
-					objectFit: getComputedStyle(el).objectFit });
-			} catch (e) {}
 			// Never compute — and above all never cache — a base from a size
 			// that is not real yet. A gallery built inside a display:none tab,
 			// or before its stylesheet lands, measures 0x0 here, and dividing
@@ -451,6 +437,28 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 				return _wapiAnim;
 			},
 			invalidateBase: function () { _base = null; _kf = null; },
+			/**
+			 * Whether this item's pan fills the container at every point along
+			 * its sweep. A `to` or `from` frame that reaches past the edge of
+			 * the image leaves the element smaller than the container, and the
+			 * gallery needs to know: it holds the outgoing item opaque beneath
+			 * the incoming one, which is only invisible while the incoming one
+			 * actually covers it.
+			 */
+			coversContainer: function (interval) {
+				if (!$img || !$img[0]) return false;
+				var b = ensureBase(interval);
+				if (!b) return false;
+				for (var i = 0; i <= 8; i++) {
+					var g = kenburnsGeometry(b.iw, b.ih, b.cw, b.ch,
+						interval.from, interval.to, i / 8);
+					var l = parseFloat(g.left), t = parseFloat(g.top);
+					var w = parseFloat(g.width), h = parseFloat(g.height);
+					if (l > 0.5 || t > 0.5
+					|| l + w < b.cw - 0.5 || t + h < b.ch - 0.5) return false;
+				}
+				return true;
+			},
 			// what container size the current base was measured against, so the
 			// gallery can tell whether it is still valid
 			baseSize: function () {
@@ -781,6 +789,10 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		if (destroyed || paused || !items.length) return;
 		clearTimeout(tm); tm = null;   // supersede any pending cycle timer
 		resumePending = null;          // a fresh advance invalidates a deferred one
+		// Stop any crossfade still in flight. Left running, it would reach its
+		// own completion later and hide every item except the one it was
+		// transitioning to — including the item now being faded in.
+		if (animTransition) { animTransition.pause(); animTransition = null; }
 		previous = current;
 		++current;
 		if (current >= items.length) {
@@ -824,10 +836,18 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 		// outgoing one opaque would hide it completely and the transition
 		// would land as a cut. A third-party renderer without setStack falls
 		// back to the old cross-dissolve.
+		// Holding the outgoing item opaque underneath keeps the background from
+		// bleeding through the middle of the fade, but it only works while the
+		// incoming item actually covers it. A pan whose frame reaches past the
+		// edge of the image leaves gaps, the outgoing item shows through them
+		// for the length of the fade, and hiding it at the end reads as a pop.
+		// Where the incoming item cannot cover, cross-dissolve instead.
 		var canStack = !!curR.setStack && (!prevR || !!prevR.setStack);
+		var underlay = canStack && !!curR.coversContainer
+			&& curR.coversContainer(interval);
 		if (prevR && canStack) {
 			prevR.setStack(1);
-			prevR.setLevel(1);   // in case a previous crossfade was interrupted
+			if (underlay) prevR.setLevel(1); // in case a fade was interrupted
 		}
 		if (canStack) curR.setStack(2);
 
@@ -849,7 +869,7 @@ Q.Tool.jQuery('Q/gallery', function _Q_gallery(state) {
 			//
 			// Audio does cross both ways, because sound levels really do add.
 			curR.setLevel(y);
-			if (!canStack && prevR) prevR.setLevel(1 - y);
+			if (!underlay && prevR) prevR.setLevel(1 - y);
 			if (soundOn) {
 				if (curR.setAudioLevel) curR.setAudioLevel(y);
 				if (prevR && prevR.setAudioLevel) prevR.setAudioLevel(1 - y);
