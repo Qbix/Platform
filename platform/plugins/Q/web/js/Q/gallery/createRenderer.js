@@ -24,6 +24,7 @@ Q.exports(function (Q, _) {
 		var ready = new Promise(function (r) { resolveReady = r; });
 		var $cap = null;
 		var soundEnabled = false, blocked = false;
+		var _kb = null; // cached kenburns transform base for this clip
 
 		function startMs() { return item.start || item.clipStart || 0; }
 
@@ -134,12 +135,25 @@ Q.exports(function (Q, _) {
 				try { videoTool.pause(); } catch (e) {}
 			},
 
+			// per-frame during a crossfade: opacity only. The old version
+			// read $container.css('display') back on every frame, which
+			// forced a synchronous style recalc each time.
+			// Which of two overlapping items is on top. The gallery fades the
+			// incoming item in over an opaque outgoing one, so the incoming
+			// element has to be the one in front; DOM order gets that wrong
+			// when the gallery wraps from the last item back to the first.
+			// Kept below the chrome's z-index of 10.
+			setStack: function (z) {
+				if ($container && $container[0]) $container[0].style.zIndex = z;
+				if ($cap && $cap.length) $cap[0].style.zIndex = z;
+			},
 			setLevel: function (level) {
 				if (!$container) return;
-				$container.css({ opacity: level, display: level > 0 ? 'block' : $container.css('display') });
+				$container[0].style.opacity = level;
+				if (level > 0) $container[0].style.display = 'block';
 				if ($cap && $cap.length) {
-					$cap.css({ opacity: level });
-					if (level > 0) $cap.css('visibility', 'visible');
+					$cap[0].style.opacity = level;
+					if (level > 0) $cap[0].style.visibility = 'visible';
 				}
 			},
 
@@ -172,12 +186,50 @@ Q.exports(function (Q, _) {
 				var target = kenburnsTarget();
 				if (!intrinsic || !target) return;       // iframe-only adapters: skip, fills box
 				if (!intrinsic.videoWidth) return;        // metadata not in yet
+				// Size the wrapper once, then pan by transform. Writing
+				// left/top/width/height per frame (the old path) forced a
+				// style recalc, layout and repaint of the whole player on
+				// every frame; transform stays on the compositor.
+				if (!_kb || _kb.vw !== intrinsic.videoWidth
+				|| _kb.vh !== intrinsic.videoHeight || _kb.target !== target) {
+					var g0 = gallery._kenburnsCss(intrinsic, $videoBox, interval.from, interval.to, 0);
+					var g1 = gallery._kenburnsCss(intrinsic, $videoBox, interval.from, interval.to, 1);
+					var w0 = parseFloat(g0.width), w1 = parseFloat(g1.width);
+					var baseW = (w0 > w1) ? w0 : w1;
+					var baseH = baseW * (parseFloat(g0.height) / w0);
+					_kb = { vw: intrinsic.videoWidth, vh: intrinsic.videoHeight,
+					        target: target, baseW: baseW };
+					target.style.position = 'absolute';
+					target.style.top = '0px';
+					target.style.left = '0px';
+					target.style.width = baseW + 'px';
+					target.style.height = baseH + 'px';
+					target.style.transformOrigin = '0 0';
+					target.style.willChange = 'transform';
+					target.style.backfaceVisibility = 'hidden';
+					// Site-wide rules such as `img,video { max-width: 100% }`
+					// clamp the explicit width the pan computes while leaving
+					// the height alone, which renders the frame squashed
+					// horizontally. Turn the constraints off on the element.
+					var ts = target.style;
+					ts.setProperty('max-width', 'none', 'important');
+					ts.setProperty('max-height', 'none', 'important');
+					ts.setProperty('min-width', '0', 'important');
+					ts.setProperty('min-height', '0', 'important');
+					ts.setProperty('box-sizing', 'content-box', 'important');
+					ts.setProperty('padding', '0', 'important');
+					ts.setProperty('border', '0', 'important');
+					ts.setProperty('object-fit', 'fill', 'important');
+				}
 				var geom = gallery._kenburnsCss(intrinsic, $videoBox, interval.from, interval.to, z);
-				if (geom) { geom.position = 'absolute'; $(target).css(geom); }
+				if (!geom) return;
+				var s = parseFloat(geom.width) / _kb.baseW;
+				target.style.transform = 'translate3d(' + geom.left + ','
+					+ geom.top + ',0) scale(' + s + ')';
 			},
 
 			show: function () { if ($container) $container.css({ display: 'block' }); },
-			hide: function () { if ($container) $container.css({ display: 'none' }); },
+			hide: function () { if ($container) $container.css({ display: 'none', zIndex: '' }); },
 
 			setCaption: function (html, style, centered) {
 				item.caption = html;
@@ -199,7 +251,7 @@ Q.exports(function (Q, _) {
 			destroy: function () {
 				try { if (videoTool) Q.Tool.remove(videoTool.element, true, true); } catch (e) {}
 				if ($container) $container.remove();
-				$videoBox = null; videoTool = null; $container = null;
+				$videoBox = null; videoTool = null; $container = null; _kb = null;
 			}
 		};
 
