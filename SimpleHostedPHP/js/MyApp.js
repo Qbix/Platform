@@ -11,12 +11,12 @@ var MyApp = (function (Q, $) {
 		userContextual: function (item) {
 			var action = $(item).attr('data-action');
 			if (MyApp.actions[action]) {
-				Q.handle(MyApp.actions[action], MyApp, [item]);
+				Q.handle(MyApp.actions[action], Q.Users, [item]);
 			}
 		},
 		actions: {
-			logout: Q.Users.logout.bind(Q.Users),
-			setIdentifier: Q.Users.setIdentifier.bind(Q.Users)
+			logout: Q.Users.logout,
+			setIdentifier: Q.Users.setIdentifier
 		}
 	};
 	
