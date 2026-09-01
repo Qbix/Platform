@@ -8,6 +8,12 @@
 	"engines": {
 		"node": ">= 0.6.0"
 	},
+	"optionalDependencies": {
+		"_comment": "Only needed for the non-MySQL Db adapters and SQLite vector search. Install with `npm install --include=optional`, or skip them if you only use MySQL/MariaDB.",
+		"better-sqlite3": "^11.0.0",
+		"pg": "^8.11.0",
+		"sqlite-vec": "^0.1.7"
+	},
 	"dependencies": {
 		"@tensorflow-models/face-landmarks-detection": ">1.0.0",
 		"crypto-js": "^4.2.0",
