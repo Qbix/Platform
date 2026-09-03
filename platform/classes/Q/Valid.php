@@ -350,10 +350,25 @@ class Q_Valid
 			$data = $_REQUEST;
 		}
 		if (!isset($secret)) {
-			$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		}
-		if (!isset($secret)) {
-			return true;
+			// Fail CLOSED. This used to `return true` -- with no internal secret
+			// configured, EVERY payload validated, so an unsigned or forged
+			// request passed every gate built on this: handlers/Q/config/validate.php
+			// (which writes config onto the machine), Streams::invites(),
+			// Media/callCenter. A validator must never read "no key" as "valid".
+			//
+			// This is safe to reject because Q_Utils::signature()/sign() now throw
+			// in the same circumstance rather than quietly HMAC-ing with a
+			// machine-derived string, so a misconfigured app fails loudly at its
+			// first request instead of being silently locked out.
+			try {
+				$secret = Q_Utils::requireInternalSecret();
+			} catch (Q_Exception_MissingConfig $e) {
+				if ($throwIfInvalid) {
+					Q_Response::code(403);
+					throw $e;
+				}
+				return false;
+			}
 		}
 		$invalid = true;
 		if (is_array($fieldKeys)) {

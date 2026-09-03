@@ -19,48 +19,25 @@ var Db_Mysql = Q.require('Db/Mysql');
 var Utils = {};
 
 /**
- * Generate a local secret that is stable but hard to guess from outside.
- * Mirrors Q_Utils::generateLocalSecret() in PHP.
- * @method generateLocalSecret
+ * Returns the configured Q/internal/secret, or throws.
+ * Mirrors Q_Utils::requireInternalSecret() in PHP, including treating the empty
+ * string and the "TODO: ..." placeholder that local.sample ships as
+ * unconfigured -- that placeholder is published in every copy of this
+ * repository, so an install that keeps it holds a secret every attacker already
+ * has, and can therefore sign with it.
+ * @method requireInternalSecret
  * @private
  * @return {string}
  */
-function generateLocalSecret() {
-	var os = require('os');
-	var child_process = require('child_process');
-
-	var parts = [
-		os.hostname(),
-		process.platform === 'win32' ? 'WINNT' : os.type(),
-		Q.app.DIR
-	];
-
-	try {
-		if (process.platform === 'win32') {
-			try {
-				var output = child_process.execSync(
-					'reg query "HKLM\\SOFTWARE\\Microsoft\\Cryptography" /v MachineGuid',
-					{
-						encoding: 'utf8',
-						stdio: ['ignore', 'pipe', 'ignore']
-					}
-				);
-
-				var m = output.match(/MachineGuid\s+REG_SZ\s+([^\r\n]+)/i);
-				if (m) {
-					parts.push(m[1].trim());
-				}
-			} catch (e) {}
-		} else {
-			if (fs.existsSync('/etc/machine-id')) {
-				parts.push(fs.readFileSync('/etc/machine-id', 'utf8').trim());
-			}
+function requireInternalSecret() {
+	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
+	if (typeof secret === 'string') {
+		secret = secret.trim();
+		if (secret !== '' && secret.substr(0, 5) !== 'TODO:') {
+			return secret;
 		}
-	} catch (e) {}
-
-	return crypto.createHash('sha256')
-		.update(parts.join("\t"))
-		.digest('hex');
+	}
+	throw new Error('Q/internal/secret is not configured');
 }
 
 function ksort(obj) {
@@ -132,10 +109,7 @@ function http_build_query (formdata, numeric_prefix, arg_separator) {
  * @return {string}
  */
 Utils.signature = function (data, secret) {
-	secret = secret || Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		secret = generateLocalSecret();
-	}
+	secret = secret || requireInternalSecret();
 	if (typeof(data) !== 'string') {
 		data = http_build_query(ksort(data)).replace(/\+/g, '%20');
 	}
@@ -150,10 +124,7 @@ Utils.signature = function (data, secret) {
  * @return {object} The data object is mutated and returned
  */
 Utils.sign = function (data, fieldKeys) {
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		secret = generateLocalSecret();
-	}
+	var secret = requireInternalSecret();
 	if (!fieldKeys || !fieldKeys.length) {
 		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
 		fieldKeys = ['Q.'+sf];
@@ -177,14 +148,12 @@ Utils.sign = function (data, fieldKeys) {
  * @method validate
  * @param {object} data the signed data to validate
  * @param {array} fieldKeys Optionally specify the array key path for the signature field
- * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
+ * @return {boolean} Whether the signature is valid.
+ * @throws {Error} if "Q"/"internal"/"secret" is not configured
  */
 Utils.validate = function(data, fieldKeys) {
 	var temp = Q.copy(data, null, 100);
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		secret = generateLocalSecret();
-	}
+	var secret = requireInternalSecret();
 	if (!fieldKeys || !fieldKeys.length) {
 		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
 		fieldKeys = ['Q.'+sf];

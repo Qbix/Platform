@@ -338,10 +338,7 @@ class Q_Utils
 	static function signature($data, $secret = null)
 	{
 		if (!isset($secret)) {
-			$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		}
-		if (!isset($secret)) {
-			$secret = Q_Utils::generateLocalSecret();
+			$secret = self::requireInternalSecret();
 		}
 		if (is_array($data)) {
 			$data = self::serialize($data);
@@ -361,10 +358,7 @@ class Q_Utils
 	 */
 	static function sign($data, $fieldKeys = null, $secret = null) {
 		if (!isset($secret)) {
-			$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		}
-		if (!isset($secret)) {
-			$secret = Q_Utils::generateLocalSecret();
+			$secret = self::requireInternalSecret();
 		}
 		if (!$fieldKeys) {
 			$sf = Q_Config::get('Q', 'internal', 'sigField', 'sig');
@@ -387,34 +381,28 @@ class Q_Utils
 	}
 
 	/**
-	 * Generate a local secret that is stable but hard to guess from outside
-	 * @method generateLocalSecret
+	 * Returns the configured "Q"/"internal"/"secret", or throws.
+	 * The empty string and the "TODO: ..." placeholder that local.sample ships
+	 * count as unconfigured -- the placeholder is a fixed value published in
+	 * every copy of this repository, so an install that keeps it holds a secret
+	 * every attacker already has and can therefore sign with.
+	 * @method requireInternalSecret
 	 * @static
+	 * @return {string}
+	 * @throws {Q_Exception_MissingConfig}
 	 */
-	protected static function generateLocalSecret()
+	static function requireInternalSecret()
 	{
-		$parts = array(
-			gethostname(),
-			PHP_OS,
-			APP_DIR
-		);
-
-		if (self::isWindows()) {
-			$guid = trim((string) @shell_exec(
-				'reg query "HKLM\SOFTWARE\Microsoft\Cryptography" /v MachineGuid 2>NUL'
-			));
-
-			if (preg_match('/MachineGuid\s+REG_SZ\s+([^\r\n]+)/i', $guid, $matches)) {
-				$parts[] = trim($matches[1]);
-			}
-		} else {
-			$machineIdFile = '/etc/machine-id';
-			if (is_readable($machineIdFile)) {
-				$parts[] = trim(file_get_contents($machineIdFile));
+		$secret = Q_Config::get('Q', 'internal', 'secret', null);
+		if (is_string($secret)) {
+			$secret = trim($secret);
+			if ($secret !== '' and !Q::startsWith($secret, 'TODO:')) {
+				return $secret;
 			}
 		}
-
-		return hash('sha256', implode("\t", $parts));
+		throw new Q_Exception_MissingConfig(array(
+			'fieldpath' => 'Q/internal/secret'
+		));
 	}
 
 	/**
