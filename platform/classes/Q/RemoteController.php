@@ -57,7 +57,13 @@ class Q_RemoteController
 					'params' => [$e->getMessage(), $e->getCode()],
 					'file' => $e->getFile(),
 					'line' => $e->getLine(),
-					'backtrace' => array_slice($e->getTrace(), 0, 20)
+					// Redacted: a raw getTrace() carries every frame's actual
+					// arguments, so any row, passphrase or key on the way down
+					// would be serialized into this response body. See
+					// Q_Exception::redactTrace().
+					'backtrace' => Q_Exception::redactTrace(
+						array_slice($e->getTrace(), 0, 20)
+					)
                 )
             ));
 		}
