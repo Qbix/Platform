@@ -78,12 +78,6 @@ class Db_Result
 	/**
 	 * Fetches an array of database rows matching the query.
 	 * The query is executed and fetchAll() is called on the result.
-	 *
-	 * The stripping and indexing is done by
-	 * {{#crossLink "Db_Query/arrangeArrayRows"}}{{/crossLink}}, so that rows
-	 * coming from a query's cache are arranged exactly the same way as rows
-	 * coming straight off a statement.
-	 * @method fetchArray
 	 * @param {string} [$fields_prefix=''] This is the prefix, if any, to strip out when fetching the rows.
 	 * @param {string} [$by_field=null] A field name to index the array by.
 	 *  If the field's value is NULL in a given row, that row is just appended
@@ -94,22 +88,47 @@ class Db_Result
 		$fields_prefix = '', 
 		$by_field = null)
 	{
-		return Db_Query::arrangeArrayRows(
-			$this->fetchAll(PDO::FETCH_ASSOC),
-			$fields_prefix,
-			$by_field
-		);
+		if (empty($fields_prefix)) {
+			$fields_prefix = '';
+		}
+		if ($this->stmts) {
+			$rows = array();
+			foreach ($this->stmts as $stmt) {
+				$r = $stmt->fetchAll(PDO::FETCH_ASSOC);
+				if ($r) {
+					$rows = array_merge($rows, $r);
+				}
+			}
+		} else {
+			$rows = $this->stmt->fetchAll(PDO::FETCH_ASSOC);
+		}
+		if (!empty($fields_prefix)) {
+			$prefix_len = strlen($fields_prefix);
+		}
+		$result = array();
+		foreach ($rows as $row) {
+			if (!empty($fields_prefix)) {
+				$row2 = array();
+				foreach ($row as $key => $value) {
+					if (strncmp($key, $fields_prefix, $prefix_len) != 0)
+						continue;
+					$row2[substr($key, $prefix_len)] = $value;
+				}
+				$row = $row2;
+			}
+			if ($by_field and isset($row[$by_field])) {
+				$result[$row[$by_field]] = $row;
+			} else {
+				$result[] = $row;
+			}
+		}
+		return $result;
 	}
 
 	/**
 	 * Fetches an array of Db_Row objects (possibly extended).
 	 * You can pass a prefix to strip from the field names.
 	 * It will also filter the result.
-	 *
-	 * The rows themselves are built by
-	 * {{#crossLink "Db_Query/hydrateDbRows"}}{{/crossLink}}, which is the same
-	 * code path a query uses when it builds rows out of its cache, so the two
-	 * can't drift apart.
 	 * @method fetchDbRows
 	 * @param {string} [$class_name=null] The name of the class to instantiate and fill objects from.
 	 *  Must extend Db_Row. Defaults to $this->query->className
@@ -127,22 +146,64 @@ class Db_Result
 		$fields_prefix = '',
 		$by_field = null)
 	{
-		return Db_Query::hydrateDbRows(
-			$this->fetchAll(PDO::FETCH_ASSOC),
-			$this,
-			$this->resolveClassName($class_name),
-			$fields_prefix,
-			$by_field
-		);
+		if (empty($fields_prefix)) {
+			$fields_prefix = '';
+		}
+		if (empty($class_name) && isset($this->query)
+		and !$this->query->getClause('JOIN')) {
+			$class_name = $this->query->className;
+		}
+		if (empty($class_name)) {
+			$class_name = 'Db_Row';
+		}
+		if ($class_name != 'Db_Row') {
+			$parent_classes = class_parents($class_name);
+			if (! in_array('Db_Row', $parent_classes)) {
+				throw new Exception("Class $class_name does not extend Db_Row");
+			}
+		}
+		
+		// Build an array of Db_Row objects
+		$rows = array();
+		$arrs = $this->fetchAll(PDO::FETCH_ASSOC);
+		foreach ($arrs as $arr) {
+			$method = array($class_name, 'newRow');
+			if (is_callable($method)) {
+				$row = call_user_func($method, $arr, $fields_prefix);
+			} else {
+				$row = new $class_name(array(), false);
+				$row->copyFrom($arr, $fields_prefix, false, false);
+			}
+			$row->init($this);
+			$wasSetByField = false;
+			if ($by_field) {	
+				if (is_string($by_field) and isset($row->$by_field)) {
+					$rows[$row->$by_field] = $row;
+					$wasSetByField = true;
+				} else if (is_array($by_field)) {
+					$byField = reset($by_field);
+					if (isset($row->$byField)) {
+						$rows[$row->$byField][] = $row;
+						$wasSetByField = true;
+					}
+				}
+			}
+			if (!$wasSetByField) {
+				$rows[] = $row;
+			}
+			$callback = array($row, "afterFetch");
+			if (is_callable($callback)) {
+				$row->afterFetch($this);
+			}
+		}
+		
+		return $rows;
 	}
 	
 	/**
 	 * Fetches one Db_Row object (possibly extended).
 	 * You can pass a prefix to strip from the field names.
 	 * It will also filter the result.
-	 *
-	 * Note that unlike fetchDbRows(), this does not fire the row's afterFetch
-	 * callback. That has always been the case, and is preserved here.
 	 * @method fetchDbRow
 	 * @param {string} [$class_name=null] The name of the class to instantiate and fill objects from.
 	 *  Must extend Db_Row. Defaults to $this->query->className
@@ -153,37 +214,36 @@ class Db_Result
 		$class_name = null, 
 		$fields_prefix = '')
 	{
-		$arr = $this->fetch(PDO::FETCH_ASSOC);
-		if (!$arr) {
-			return false;
+		if (empty($fields_prefix)) {
+			$fields_prefix = '';
 		}
-		$rows = Db_Query::hydrateDbRows(
-			array($arr),
-			$this,
-			$this->resolveClassName($class_name),
-			$fields_prefix,
-			null,
-			false // fetchDbRow has never fired afterFetch
-		);
-		return reset($rows);
-	}
-
-	/**
-	 * Works out which class the rows of this result should be loaded into.
-	 * The query's className is only used when there is no JOIN, since the
-	 * columns of a joined query don't belong to any one table's class.
-	 * @method resolveClassName
-	 * @protected
-	 * @param {string} [$class_name=null] An explicitly requested class, if any
-	 * @return {string|null}
-	 */
-	protected function resolveClassName($class_name = null)
-	{
 		if (empty($class_name) and isset($this->query)
 		and !$this->query->getClause('JOIN')) {
 			$class_name = $this->query->className;
 		}
-		return $class_name;
+		if (empty($class_name)) {
+			$class_name = 'Db_Row';
+		}
+		if ($class_name != 'Db_Row') {
+			$parent_classes = class_parents($class_name);
+			if (! in_array('Db_Row', $parent_classes)) {
+				throw new Exception("Class $class_name does not extend Db_Row");
+			}
+		}
+		
+		$arr = $this->fetch(PDO::FETCH_ASSOC);
+		if (!$arr) {
+			return false;
+		}
+		$method = array($class_name, 'newRow');
+		if (is_callable($method)) {
+			$row = call_user_func($method, $arr, $fields_prefix);
+		} else {
+			$row = new $class_name(array(), false);
+			$row->copyFrom($arr, $fields_prefix, false, false);
+		}
+		$row->init($this);
+		return $row;
 	}
 
 	/**
@@ -251,3 +311,4 @@ class Db_Result
 		return call_user_func_array(array($this->stmt, $name), $arguments);
 	}
 }
+;
