@@ -1304,17 +1304,24 @@ class Q_Session
 			$sig = Q_Utils::signature($prefix . $id, "$secret");
 			$id .= substr($sig, 0, 32);
 		}
-		return Q_Utils::hexToBase64($id);
+		// The prefix is part of what was signed, so it has to travel with the
+		// id: prefixSaysInternal() / prefixSaysAuthenticated() and Q_Valid
+		// read it from the id string. Without it, no session this server
+		// issues ever reads as internal or authenticated -- while any id a
+		// client re-labels does (see decodeId).
+		return $prefix . Q_Utils::hexToBase64($id);
 	}
 	
 	/**
-	 * @param string $id
+	 * @param string $id The id with its prefix already stripped
+	 * @param string [$prefix=''] The prefix it was presented under, or '' for none.
+	 *   The signature must have been made over exactly this prefix.
 	 *
 	 * @return array of (boolean $validId, string $firstPart, string $secondPart)
 	 * @throws Q_Exception
 	 * @throws TypeError
 	*/
-	protected static function decodeId($id)
+	protected static function decodeId($id, $prefix = '')
 	{
 		$result = Q_Utils::base64ToHex($id);
 		$a = substr($result, 0, 32);
@@ -1324,26 +1331,27 @@ class Q_Session
 		if (!isset($secret)) {
 			return array(true, $a, $b);
 		}
-		$expectedSigs = array(
-			substr(Q_Utils::signature($a, $secret), 0, 32)
-		);
-		foreach (Q_Config::get('Q', 'session', 'id', 'prefixes', array()) as $prefix) {
-			$expectedSigs[] = substr(Q_Utils::signature($prefix . $a, $secret), 0, 32);
-		}
-		foreach ($expectedSigs as $expected) {
-			if (Q_Utils::hashEquals($b, $expected)) {
-				return array(true, $a, $b);
-			}
-		}
-		return array(false, $a, $b);
+		// generateId() signs $prefix . $id, so a valid id carries the
+		// signature for ONE prefix -- the one it was issued under. Verify
+		// against that prefix and no other. Accepting a match under any
+		// configured prefix (or the bare id) meant the label was never
+		// actually checked: a client could take its own "sessionId_..."
+		// and present it as "sessionId_internal_...", isValidId() agreed,
+		// prefixSaysInternal() then returned true, and Q_Valid::nonce()
+		// short-circuited. Binding the label into what is verified makes
+		// re-labelling change the required signature, which the client
+		// cannot produce without the secret.
+		$expected = substr(Q_Utils::signature($prefix . $a, $secret), 0, 32);
+		return array(Q_Utils::hashEquals($b, $expected), $a, $b);
 	}
 
 	/**
 	 * Verifies a session id, that it was correctly signed with "Q"/"external"/"secret"
 	 * so that the web server won't have to deal with session ids we haven't issued.
 	 * This verification can also be done at the edge (e.g. CDN) without bothering our network.
-	 * Now this function strips prefixes separated by "_" or specified in Q/session/id/prefix config,
-	 * for example for a session ID like "sessionId_authenticated_abc123" it can strip "sessionId_authenticated_"
+	 * The id may carry one of the prefixes configured in Q/session/id/prefixes,
+	 * e.g. "sessionId_authenticated_abc123"; that prefix is stripped, and the
+	 * signature is then required to match that exact prefix.
 	 * @param {string} $id
 	 * @return {boolean}
 	 */
@@ -1352,19 +1360,25 @@ class Q_Session
 		if (!$id) {
 			return false;
 		}
-		$parts = explode('_', $id);
-		if (count($parts) > 1) {
-			$id = end($parts);
-		} else {
-			$prefixes = Q_Config::get('Q', 'session', 'id', 'prefixes', array());
-			foreach ($prefixes as $prefix) {
-				if (Q::startsWith($id, $prefix)) {
-					$id = substr($id, strlen($prefix));
-					break;
-				}
+		// Strip the longest CONFIGURED prefix and remember which one it was, so
+		// decodeId() can require the signature to match that exact prefix.
+		// Splitting on "_" and taking the tail accepted ANY leading text as a
+		// label while verifying a label-independent signature -- which is what
+		// let a client re-label a validly-signed id under a privileged prefix.
+		// Longest match, so "sessionId_internal_" wins over "sessionId_".
+		$prefixes = Q_Config::get('Q', 'session', 'id', 'prefixes', array());
+		usort($prefixes, function ($x, $y) {
+			return strlen($y) - strlen($x);
+		});
+		$matched = '';
+		foreach ($prefixes as $prefix) {
+			if ($prefix !== '' and Q::startsWith($id, $prefix)) {
+				$matched = $prefix;
+				$id = substr($id, strlen($prefix));
+				break;
 			}
 		}
-		$results = self::decodeId($id);
+		$results = self::decodeId($id, $matched);
 		return $results[0];
 	}
 
