@@ -1109,7 +1109,14 @@ class Q_Session
 		}
 		$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		if (!isset($secret)) {
-			$secret = Q::app();
+			// This used to fall back to Q::app(). The app name is public -- it
+			// is in the URL, the page source and the config -- so every nonce
+			// was computable by anyone, which is the one property a nonce must
+			// not have. Derive the key from the same default secret that
+			// Q_Utils::signature() already falls back to, so an install
+			// without "Q"/"internal"/"secret" gets a machine-local key rather
+			// than a published one.
+			$secret = Q_Utils::signature('Q_Session::calculateNonce');
 		}
 		return $longestPrefix . hash_hmac('sha256', $id, $secret);
 	}
@@ -1291,19 +1298,24 @@ class Q_Session
 			? hash('sha256', $seed) // length 64
 			: Q_Utils::randomHexString(64);
 		$prefix = Q_Config::expect('Q', 'session', 'id', 'prefixes', $prefixType);
-		$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		if (isset($secret)) {
-			$id = substr($id, 0, 32);
-			$time = (string)time();
-			$len = strlen($time);
-			if ($len < 11) {
-				$time = '0' . $time;
-				++$len;
-			}
-			$id = $time . substr($id, $len);
-			$sig = Q_Utils::signature($prefix . $id, "$secret");
-			$id .= substr($sig, 0, 32);
+		// Always sign. This used to skip signing when "Q"/"internal"/"secret"
+		// was not configured, and decodeId() correspondingly accepted every
+		// id -- so on such an install a client could present
+		// "sessionId_internal_<anything>" and be believed. Q_Utils::signature()
+		// already resolves the secret consistently (the configured one, else
+		// the same local default it uses for internal request signing), so
+		// there is no configuration in which an unsigned id is necessary.
+		// With the secret configured, the ids issued here are unchanged.
+		$id = substr($id, 0, 32);
+		$time = (string)time();
+		$len = strlen($time);
+		if ($len < 11) {
+			$time = '0' . $time;
+			++$len;
 		}
+		$id = $time . substr($id, $len);
+		$sig = Q_Utils::signature($prefix . $id);
+		$id .= substr($sig, 0, 32);
 		return Q_Utils::hexToBase64($id);
 	}
 	
@@ -1320,15 +1332,17 @@ class Q_Session
 		$a = substr($result, 0, 32);
 		$b = substr($result, 32, 32);
 		$b = $b ? $b : ''; // for older PHP
-		$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		if (!isset($secret)) {
-			return array(true, $a, $b);
-		}
+		// Always verify. Returning "valid" for every id when no secret was
+		// configured made the whole scheme rest on a config key nothing
+		// checked, and the failure was silent: an app whose secret was never
+		// set came up green and served traffic while trusting its callers.
+		// Q_Utils::signature() resolves the secret exactly as generateId()
+		// does, so ids this server issued still verify.
 		$expectedSigs = array(
-			substr(Q_Utils::signature($a, $secret), 0, 32)
+			substr(Q_Utils::signature($a), 0, 32)
 		);
 		foreach (Q_Config::get('Q', 'session', 'id', 'prefixes', array()) as $prefix) {
-			$expectedSigs[] = substr(Q_Utils::signature($prefix . $a, $secret), 0, 32);
+			$expectedSigs[] = substr(Q_Utils::signature($prefix . $a), 0, 32);
 		}
 		foreach ($expectedSigs as $expected) {
 			if (Q_Utils::hashEquals($b, $expected)) {
