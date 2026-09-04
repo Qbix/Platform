@@ -8,8 +8,8 @@
 	"engines": {
 		"node": ">= 0.6.0"
 	},
+	"//": "optionalDependencies are only needed for the non-MySQL Db adapters and SQLite vector search. npm installs them by default; skip them with `npm install --omit=optional` if you only use MySQL/MariaDB.",
 	"optionalDependencies": {
-		"_comment": "Only needed for the non-MySQL Db adapters and SQLite vector search. Install with `npm install --include=optional`, or skip them if you only use MySQL/MariaDB.",
 		"better-sqlite3": "^11.0.0",
 		"pg": "^8.11.0",
 		"sqlite-vec": "^0.1.7"
