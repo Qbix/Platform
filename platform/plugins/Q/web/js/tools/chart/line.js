@@ -66,13 +66,24 @@ Q.Tool.define("Q/chart/line", function () {
         var xScale = d3.scaleLinear()
             .domain(d3.extent(allData, function (d) { return +d.x; }))
             .range([0, iw]);
-        var yMax = d3.max(allData, function (d) { return +d.y; }) * 1.1;
+        // Domain must extend below 0 when the data does (e.g. a GDP-growth
+        // series with a contraction year) -- a fixed [0, yMax] domain
+        // extrapolates negative points far past the chart's bottom edge
+        // instead of clamping, since d3.scaleLinear is unclamped by default.
+        var yMin = Math.min(0, d3.min(allData, function (d) { return +d.y; }));
+        var yMax = Math.max(0, d3.max(allData, function (d) { return +d.y; }));
+        // 10% headroom on whichever side(s) have data past zero -- matches
+        // the old yMax*1.1 exactly when all data is >= 0 (yMin stays 0).
+        var yPad = (yMax - yMin) * 0.1 || 1;
+        yMax += yPad;
+        if (yMin < 0) yMin -= yPad;
         // Apply zoom: _zoomScale > 1 zooms in (tighter Y range), < 1 zooms out
         if (s._zoomScale && s._zoomScale !== 1) {
             yMax = yMax / s._zoomScale;
+            yMin = yMin / s._zoomScale;
         }
         var yScale = d3.scaleLinear()
-            .domain([0, yMax])
+            .domain([yMin, yMax])
             .range([ih, 0]);
 
         g.append('g').attr('transform', 'translate(0,' + ih + ')').call(d3.axisBottom(xScale).ticks(6));
