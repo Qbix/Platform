@@ -2642,11 +2642,28 @@ Q.listen = function _Q_listen(options, callback) {
 
 	var _methodHandlers = {};
 
+	// Basic rate limiting for the IPC endpoint, to mitigate DoS
+	// in case auth is bypassed or legitimate traffic misbehaves.
+	var _ipcRateLimit = {};
+	var _ipcRateLimitWindowMs = Q.Config.get(['Q', 'node', 'ipcRateLimit', 'windowMs'], 1000);
+	var _ipcRateLimitMax = Q.Config.get(['Q', 'node', 'ipcRateLimit', 'max'], 100);
+
 	// IPC + dispatch middleware. Runs for all POSTs to /Q/node.
 	app.post('/Q/node', function Q_ipc_dispatch(req, res, next) {
 		var parsed = req.body;
 		if (!parsed || !parsed['Q/method'] || !req.internal || !req.validated) {
 			return next();
+		}
+
+		var _ipcKey = (req.socket && req.socket.remoteAddress) || 'unknown';
+		var _ipcNow = Date.now();
+		var _ipcEntry = _ipcRateLimit[_ipcKey];
+		if (!_ipcEntry || _ipcNow - _ipcEntry.start > _ipcRateLimitWindowMs) {
+			_ipcEntry = _ipcRateLimit[_ipcKey] = { start: _ipcNow, count: 0 };
+		}
+		if (++_ipcEntry.count > _ipcRateLimitMax) {
+			res.statusCode = 429;
+			return res.end('Too Many Requests');
 		}
 
 		// Extract framework-level IPC fields from the signed payload.
