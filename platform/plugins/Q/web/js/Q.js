@@ -17531,12 +17531,29 @@ Q.Masks = {
 			}
 			var mask = Q.Masks.collection[k];
 			if (!mask.counter) continue;
-			var html = document.documentElement;
 			var bodyRect = document.body.getBoundingClientRect();
 			var scrollLeft = Q.Visual.scrollLeft() - bodyRect.left;
 			var scrollTop = Q.Visual.scrollTop() - bodyRect.top;
 			var ms = mask.element.style;
-			var rect = (mask.shouldCover || html).getBoundingClientRect();
+			if (!mask.shouldCover) {
+				// A mask with no shouldCover is meant to cover *everything*.
+				// Sizing it from <html>'s bounding rect only covers the
+				// viewport when <html> happens to fill it: any layout that
+				// constrains or centers the html box (or a horizontally
+				// scrolled page) leaves part of the screen unmasked, and
+				// scrolling moves the mask off the visible area. Pin it to the
+				// viewport instead — position:fixed also means Q.onLayout no
+				// longer has to chase scroll offsets for these masks.
+				var vw = window.innerWidth;
+				var vh = window.innerHeight;
+				mask.rect = { 'left': 0, 'top': 0, 'right': vw, 'bottom': vh };
+				ms.position = 'fixed';
+				ms.left = ms.top = '0px';
+				ms.width = vw + 'px';
+				ms.height = ms['line-height'] = vh + 'px';
+				continue;
+			}
+			var rect = mask.shouldCover.getBoundingClientRect();
 			mask.rect = {
 				'left': rect.left,
 				'right': rect.right,
