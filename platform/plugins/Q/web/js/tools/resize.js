@@ -434,7 +434,6 @@
                     }
             
                     function initMoving(evt) {
-                        console.log('initMoving START', _elementToMove);
                         if (tool.state.ignoreOnElements.length != 0) {
                             var ignoreEls = tool.state.ignoreOnElements;
                             for (var e in ignoreEls) {
@@ -555,9 +554,7 @@
                             event.stopImmediatePropagation();
                             event.stopPropagation();
                             var checkIfShouldInitMoving = function (e) {
-                                 console.log('initMoving 1', !tool.state.isMoving, tool.pointerInfo.pointerIsPressed, distance(tool.pointerInfo.startX, tool.pointerInfo.startY, tool.pointerInfo.prevX, tool.pointerInfo.prevY))
                                 if (!tool.state.isMoving && tool.pointerInfo.pointerIsPressed && distance(tool.pointerInfo.startX, tool.pointerInfo.startY, tool.pointerInfo.prevX, tool.pointerInfo.prevY) >= (tool.state.dragThreeshold != null ? tool.state.dragThreeshold : 10)) {
-                                    console.log('initMoving 2')
                                     initMoving(e);
                                 }
                             }
@@ -992,7 +989,6 @@
                                 }
                                 let rightBoundX = originalRect.left + width;
                                 if(rightBoundX > containerRect.right) {
-                                    console.log('containerRect rightBoundX', originalX, containerRect, rightBoundX)
                                     width -= rightBoundX - containerRect.right;
                                 }
                                 _elementToResize.style.width = width + 'px';
@@ -1034,7 +1030,6 @@
 
                                 let leftBoundX = originalRect.right - width;
                                 if(leftBoundX < containerRect.left) {
-                                    console.log('containerRect rightBoundX', originalX, containerRect, leftBoundX)
                                     let offsetX = containerRect.left - leftBoundX;
                                     width -= offsetX;
                                     leftPos += offsetX;
