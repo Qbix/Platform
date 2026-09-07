@@ -217,7 +217,8 @@
 					"": "sessionId_",
 					"authenticated": "sessionId_authenticated_",
 					"internal": "sessionId_internal_"
-				}
+				},
+				"requireSignedPrefix": false
 			},
 			"startBefore": "Q/reroute",
 			"appendSuffix": false,

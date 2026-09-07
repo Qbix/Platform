@@ -1109,7 +1109,14 @@ class Q_Session
 		}
 		$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		if (!isset($secret)) {
-			$secret = Q::app();
+			// This used to fall back to Q::app(). The app name is public -- it
+			// is in the URL, the page source and the config -- so every nonce
+			// was computable by anyone, which is the one property a nonce must
+			// not have. Derive the key from the same default secret that
+			// Q_Utils::signature() already falls back to, so an install
+			// without "Q"/"internal"/"secret" gets a machine-local key rather
+			// than a published one.
+			$secret = Q_Utils::signature('Q_Session::calculateNonce');
 		}
 		return $longestPrefix . hash_hmac('sha256', $id, $secret);
 	}
@@ -1291,59 +1298,192 @@ class Q_Session
 			? hash('sha256', $seed) // length 64
 			: Q_Utils::randomHexString(64);
 		$prefix = Q_Config::expect('Q', 'session', 'id', 'prefixes', $prefixType);
-		$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		if (isset($secret)) {
-			$id = substr($id, 0, 32);
-			$time = (string)time();
-			$len = strlen($time);
-			if ($len < 11) {
-				$time = '0' . $time;
-				++$len;
-			}
-			$id = $time . substr($id, $len);
-			$sig = Q_Utils::signature($prefix . $id, "$secret");
-			$id .= substr($sig, 0, 32);
+		// Always sign. This used to skip signing when "Q"/"internal"/"secret"
+		// was not configured, and decodeId() correspondingly accepted every
+		// id -- so on such an install a client could present
+		// "sessionId_internal_<anything>" and be believed. Q_Utils::signature()
+		// already resolves the secret consistently (the configured one, else
+		// the same local default it uses for internal request signing), so
+		// there is no configuration in which an unsigned id is necessary.
+		// With the secret configured, the ids issued here are unchanged.
+		$id = substr($id, 0, 32);
+		$time = (string)time();
+		$len = strlen($time);
+		if ($len < 11) {
+			$time = '0' . $time;
+			++$len;
 		}
-		return Q_Utils::hexToBase64($id);
+		$id = $time . substr($id, $len);
+		$sig = Q_Utils::signature($prefix . $id);
+		$id .= substr($sig, 0, 32);
+		// The prefix is part of what was signed, so it has to travel with the
+		// id: prefixSaysInternal() / prefixSaysAuthenticated() and Q_Valid
+		// read it from the id string. Without it, no session this server
+		// issues ever reads as internal or authenticated -- while any id a
+		// client re-labels does (see decodeId).
+		return $prefix . Q_Utils::hexToBase64($id);
 	}
 	
 	/**
-	 * @param string $id
+	 * @param string $id The id with its prefix already stripped
+	 * @param string [$prefix=''] The prefix it was presented under, or '' for none.
+	 *   The signature must have been made over exactly this prefix.
 	 *
 	 * @return array of (boolean $validId, string $firstPart, string $secondPart)
 	 * @throws Q_Exception
 	 * @throws TypeError
 	*/
-	protected static function decodeId($id)
+	protected static function decodeId($id, $prefix = '', $allowLegacy = false)
 	{
 		$result = Q_Utils::base64ToHex($id);
 		$a = substr($result, 0, 32);
 		$b = substr($result, 32, 32);
 		$b = $b ? $b : ''; // for older PHP
-		$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		if (!isset($secret)) {
+		// Always verify, and verify against exactly the prefix the id was
+		// presented under.
+		//
+		// Returning "valid" for every id when no secret was configured made
+		// the whole scheme rest on a config key nothing checked, and the
+		// failure was silent: an app whose secret was never set came up green
+		// and served traffic while trusting its callers. Q_Utils::signature()
+		// resolves the secret exactly as generateId() does (the configured
+		// one, else the same local default used for internal request
+		// signing), so ids this server issued still verify.
+		//
+		// generateId() signs $prefix . $id, so a valid id carries the
+		// signature for ONE prefix -- the one it was issued under. Accepting a
+		// match under any configured prefix (or the bare id) meant the label
+		// was never actually checked: a client could take its own
+		// "sessionId_..." and present it as "sessionId_internal_...",
+		// isValidId() agreed, prefixSaysInternal() then returned true, and
+		// Q_Valid::nonce() short-circuited. Binding the label into what is
+		// verified makes re-labelling change the required signature, which
+		// the client cannot produce without the secret.
+		$expected = substr(Q_Utils::signature($prefix . $a), 0, 32);
+		if (Q_Utils::hashEquals($b, $expected)) {
 			return array(true, $a, $b);
 		}
-		$expectedSigs = array(
-			substr(Q_Utils::signature($a, $secret), 0, 32)
-		);
-		foreach (Q_Config::get('Q', 'session', 'id', 'prefixes', array()) as $prefix) {
-			$expectedSigs[] = substr(Q_Utils::signature($prefix . $a, $secret), 0, 32);
-		}
-		foreach ($expectedSigs as $expected) {
-			if (Q_Utils::hashEquals($b, $expected)) {
-				return array(true, $a, $b);
-			}
+		if ($allowLegacy and self::legacyIdIsAcceptable($a, $b, $prefix)) {
+			return array(true, $a, $b);
 		}
 		return array(false, $a, $b);
+	}
+
+	/**
+	 * Whether an id that fails the current, prefix-bound check was nonetheless
+	 * issued by this server under one of the older signing schemes.
+	 *
+	 * Sessions last up to ten years by default, so changing the signing basis
+	 * would otherwise log every existing user out. These ids cannot be forged
+	 * -- producing one still requires the secret -- so accepting them costs
+	 * nothing as long as they can never carry a privilege claim. isValidId()
+	 * enforces that: it only passes $allowLegacy for an id presented with no
+	 * prefix or with the ordinary one, never "authenticated" or "internal".
+	 *
+	 * @method legacyIdIsAcceptable
+	 * @static
+	 * @protected
+	 * @param {string} $a The id part
+	 * @param {string} $b The signature part as presented
+	 * @return {boolean}
+	 */
+	protected static function legacyIdIsAcceptable($a, $b, $prefix = '')
+	{
+		// false (default): ids signed under an older scheme are still accepted.
+		// true: only a signature that covers the presented prefix will do.
+		// <unix timestamp>: require that of anything issued at or after it,
+		// which is how the window closes on its own after a deploy.
+		$require = Q_Config::get('Q', 'session', 'id', 'requireSignedPrefix', false);
+		if ($require === true) {
+			return false;
+		}
+		if (!$b) {
+			return false; // never signed at all; nothing to recognize it by
+		}
+		$prefixes = Q_Config::get('Q', 'session', 'id', 'prefixes', array());
+		$ordinary = isset($prefixes['']) ? $prefixes[''] : 'sessionId_';
+		$internal = isset($prefixes['internal'])
+			? $prefixes['internal'] : 'sessionId_internal_';
+		if ($prefix === $internal) {
+			return false; // "internal" is the one label that turns a check OFF
+			// (Q_Valid::nonce short-circuits on it), so it is never granted on
+			// the strength of a signature that didn't cover it.
+		}
+		if ($prefix !== '' and $prefix !== $ordinary) {
+			// A label is being claimed that the current signature didn't cover.
+			// Only the pre-2026-06-22 scheme left the label unsigned, and that
+			// scheme signed the bare id: sig == signature($a), with no prefix
+			// mixed in. Requiring exactly that is what keeps this from becoming
+			// a standing relabel: generateId() always signs $prefix . $id, so
+			// no id issued since produces signature($a), and a current ordinary
+			// session cannot be re-presented as "authenticated".
+			if ($ordinary === '') {
+				return false; // no prefix configured; can't tell the two apart
+			}
+			$bare = substr(Q_Utils::signature($a), 0, 32);
+			if (!Q_Utils::hashEquals($b, $bare)) {
+				return false;
+			}
+			if (is_numeric($require)
+			and self::issuedTime($a) >= (int)$require) {
+				return false;
+			}
+			return true;
+		}
+		// Two older schemes: the id was signed bare, or it was signed over
+		// $prefix . $id but presented without the prefix being verified.
+		$expectedSigs = array(substr(Q_Utils::signature($a), 0, 32));
+		foreach (Q_Config::get('Q', 'session', 'id', 'prefixes', array()) as $p) {
+			$expectedSigs[] = substr(Q_Utils::signature($p . $a), 0, 32);
+		}
+		$matched = false;
+		foreach ($expectedSigs as $expected) {
+			if (Q_Utils::hashEquals($b, $expected)) {
+				$matched = true;
+			}
+		}
+		if (!$matched) {
+			return false;
+		}
+		// generateId() writes the issue time into the first 11 characters, so
+		// a numeric "requireSignedPrefix" closes the window: anything claiming
+		// to be issued at or after it must carry a prefix-bound signature.
+		if (is_numeric($require)) {
+			$issued = self::issuedTime($a);
+			if ($issued >= (int)$require) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Reads the issue time that generateId() writes into the first 11
+	 * characters of the id. Ids minted before that was added carry random hex
+	 * there instead, so anything that isn't a zero-padded 11-digit number is
+	 * treated as older than any cutoff -- which it is.
+	 * @method issuedTime
+	 * @static
+	 * @protected
+	 * @param {string} $a The id part, already signature-verified
+	 * @return {integer} unix timestamp, or 0 if the id predates timestamps
+	 */
+	protected static function issuedTime($a)
+	{
+		$t = substr($a, 0, 11);
+		if (strlen($t) < 11 or !ctype_digit($t) or $t[0] !== '0') {
+			return 0;
+		}
+		return (int)$t;
 	}
 
 	/**
 	 * Verifies a session id, that it was correctly signed with "Q"/"external"/"secret"
 	 * so that the web server won't have to deal with session ids we haven't issued.
 	 * This verification can also be done at the edge (e.g. CDN) without bothering our network.
-	 * Now this function strips prefixes separated by "_" or specified in Q/session/id/prefix config,
-	 * for example for a session ID like "sessionId_authenticated_abc123" it can strip "sessionId_authenticated_"
+	 * The id may carry one of the prefixes configured in Q/session/id/prefixes,
+	 * e.g. "sessionId_authenticated_abc123"; that prefix is stripped, and the
+	 * signature is then required to match that exact prefix.
 	 * @param {string} $id
 	 * @return {boolean}
 	 */
@@ -1352,19 +1492,28 @@ class Q_Session
 		if (!$id) {
 			return false;
 		}
-		$parts = explode('_', $id);
-		if (count($parts) > 1) {
-			$id = end($parts);
-		} else {
-			$prefixes = Q_Config::get('Q', 'session', 'id', 'prefixes', array());
-			foreach ($prefixes as $prefix) {
-				if (Q::startsWith($id, $prefix)) {
-					$id = substr($id, strlen($prefix));
-					break;
-				}
+		// Strip the longest CONFIGURED prefix and remember which one it was, so
+		// decodeId() can require the signature to match that exact prefix.
+		// Splitting on "_" and taking the tail accepted ANY leading text as a
+		// label while verifying a label-independent signature -- which is what
+		// let a client re-label a validly-signed id under a privileged prefix.
+		// Longest match, so "sessionId_internal_" wins over "sessionId_".
+		$prefixes = Q_Config::get('Q', 'session', 'id', 'prefixes', array());
+		usort($prefixes, function ($x, $y) {
+			return strlen($y) - strlen($x);
+		});
+		$matched = '';
+		foreach ($prefixes as $prefix) {
+			if ($prefix !== '' and Q::startsWith($id, $prefix)) {
+				$matched = $prefix;
+				$id = substr($id, strlen($prefix));
+				break;
 			}
 		}
-		$results = self::decodeId($id);
+		// Grandfathering decisions live in legacyIdIsAcceptable(), which is
+		// given the prefix so it can refuse "internal" outright and require an
+		// explicit window before honoring any other unsigned label.
+		$results = self::decodeId($id, $matched, true);
 		return $results[0];
 	}
 
