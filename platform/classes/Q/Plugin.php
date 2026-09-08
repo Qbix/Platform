@@ -844,6 +844,20 @@ class Q_Plugin
 			Q_Bootstrap::checkRequirementsApp();
 		}
 
+		// A missing or placeholder Q/internal/secret is discovered here, where
+		// an operator can act on it, rather than by the first visitor after a
+		// deploy. Without it Q_Valid::signature() rejects every internal
+		// request and Q_Utils::sign() throws, by design.
+		try {
+			Q_Utils::requireInternalSecret();
+		} catch (Q_Exception_MissingConfig $e) {
+			throw new Exception(
+				'Q/internal/secret is not set, or is still the placeholder. '
+				. 'Set it to a long random string in '
+				. APP_LOCAL_DIR . DS . 'app.json under "Q" > "internal" > "secret".'
+			);
+		}
+
 		// Check access to $app_installed_file
 		if(file_exists($app_installed_file) && !is_writable($app_installed_file))
 			throw new Exception("Can not write to $app_installed_file");
