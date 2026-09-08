@@ -11444,14 +11444,11 @@ Q.ServiceWorker = {
 		}
 		var src = Q.info.serviceWorkerUrl;
 		if (!src) {
-			return callback(true);
+			Q.handle(callback, null, [false]);
+			Q.ServiceWorker.onActive.handle(false);
+			return;
 		}
 		Q.ServiceWorker.started = true;
-		function _failed(error) {
-			console.warn("Q.ServiceWorker.start error", error);
-			Q.handle(callback, Q.ServiceWorker, [false]);
-			Q.handle(Q.ServiceWorker.onActive, Q.ServiceWorker, [false]);
-		}
 		navigator.serviceWorker.getRegistration(src)
 		.then(function (registration) {
 			if (registration && registration.active
@@ -11481,11 +11478,12 @@ Q.ServiceWorker = {
 				if (worker) {
 					Q.handle(callback, Q.ServiceWorker, [worker, registration]);
 					Q.handle(Q.ServiceWorker.onActive, Q.ServiceWorker, [worker, registration]);
-				} else {
-					_failed(new Error("registration returned no worker"));
 				}
-			}).catch(_failed);
-		}).catch(_failed);
+			}).catch(function (error) {
+				callback(error);
+				console.warn("Q.ServiceWorker.start error", error);
+			});
+		});
 
 		var SS_KEY = 'Q.cookieJar';
 
@@ -11554,13 +11552,6 @@ function _startCachingWithServiceWorker() {
 		return false;
 	}
 	Q.ServiceWorker.start(function (worker, registration) {
-		if (!worker || typeof worker.postMessage !== 'function') {
-			// start() reports failure by passing false -- there is no worker
-			// to prime the cache on. Treating the failure value as a worker
-			// was the source of the uncaught "worker.postMessage is not a
-			// function" rejection.
-			return;
-		}
 		var items = [];
 		var scripts = document.querySelectorAll("script[data-src]");
 		var styles = document.querySelectorAll("style[data-href]");
@@ -11583,7 +11574,9 @@ function _startCachingWithServiceWorker() {
 				});
 			});
 		});
-		if (items.length) {
+		// belt and braces: start() can legitimately call back without a
+		// worker, and this is the only place that would dereference it
+		if (items.length && worker && worker.postMessage) {
 			worker.postMessage({
 				type: 'Q.Cache.put',
 				items: items
