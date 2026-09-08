@@ -4311,7 +4311,7 @@ Q.ensure = function _Q_ensure(property, callback) {
  *  The loader must call the callback and pass the property as the first parameter.
  */
 Q.ensure.loaders = {
-	'Handlebars': '{{Q}}/js/handlebars-v4.0.10.min.js',
+	'Handlebars': '{{Q}}/js/handlebars-v4.7.9.min.js',
 	'jQuery': '{{Q}}/js/jquery-3.2.1.min.js',
 	'Q.PHPJS': "{{Q}}/js/phpjs.js",
 	'Q.info.baseUrl': Q.onInit
@@ -12899,7 +12899,32 @@ Q.Template.compile = function _Q_Template_compile (content, type, options) {
 	var r = Q.Template.compile.results;
 	if (!r[content]) {
 		if (type === 'handlebars') {
-			r[content] = root.Handlebars.compile(content, Q.extend({}, Q.Template.compile.options, options));
+			var _compiled = root.Handlebars.compile(
+				content, Q.extend({}, Q.Template.compile.options, options)
+			);
+			// Handlebars 4.6+ refuses to read properties that live on an object's
+			// prototype rather than on the object itself, rendering "" plus a
+			// console warning when a template does. Qbix hands class instances to
+			// templates constantly (Streams.Stream, tool instances, Users.User),
+			// so this is the upgrade's whole blast radius.
+			//
+			// This is insurance, not a fix for an observed break: every {{...}}
+			// in this tree that dots into an instance goes own-property to
+			// own-property ({{stream.fields.title}}), and a browser run with the
+			// flag OFF produced zero denials. It is here for app templates that
+			// don't live in this repo, where the failure would be a mute blank
+			// rather than an error.
+			//
+			// Properties only. allowProtoMethodsByDefault stays false, and costs
+			// nothing: Qbix reaches methods through the `call`, `getObject` and
+			// `interpolate` helpers, which resolve via Q.getObject in plain JS
+			// and never touch Handlebars' lookup path. Method access is also the
+			// half of the restriction the RCE advisories are about.
+			r[content] = function (fields, runtimeOptions) {
+				return _compiled(fields, Q.extend(
+					{}, Q.Template.compile.runtimeOptions, runtimeOptions
+				));
+			};
 		} else {
 			r[content] = function (fields, options) {
 				return content; // just renders the template's content itself
@@ -12910,6 +12935,16 @@ Q.Template.compile = function _Q_Template_compile (content, type, options) {
 };
 Q.Template.compile.options = {
 	preventIndent: true
+};
+/**
+ * Runtime options merged into every compiled template call.
+ * @static
+ * @property compile.runtimeOptions
+ */
+Q.Template.compile.runtimeOptions = {
+	// see the note in Q.Template.compile -- restores pre-4.6 lookup for
+	// prototype *properties* only. allowProtoMethodsByDefault stays false.
+	allowProtoPropertiesByDefault: true
 };
 Q.Template.compile.results = {};
 
@@ -18941,7 +18976,7 @@ var _appId = location.search.queryField('Q.appId');
 document.addEventListener("DOMContentLoaded", function () {
     // After all synchronous scripts have loaded
     if (!root.Handlebars) {
-        Q.addScript(Q.currentScriptPath('handlebars-v4.0.10.min.js'));
+        Q.addScript(Q.currentScriptPath('handlebars-v4.7.9.min.js'));
     }
     Q.init();
 });
