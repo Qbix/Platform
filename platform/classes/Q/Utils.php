@@ -341,6 +341,15 @@ class Q_Utils
 			$secret = Q_Config::get('Q', 'internal', 'secret', null);
 		}
 		if (!isset($secret)) {
+			// Producing a signature, or verifying an artifact we issued
+			// ourselves, may degrade to a machine-local key: it lets nobody
+			// in, and it keeps an install missing the secret serving instead
+			// of 500ing at the door (Q_Session::isValidId() calls this on
+			// every request from Q_Bootstrap::validateEarly()). Accepting a
+			// signature from outside never degrades -- see
+			// Q_Valid::signature() -- and handing one out never does either:
+			// see sign(). The install-time check in Q_Plugin::installApp()
+			// is where a missing secret is meant to be discovered.
 			$secret = Q_Utils::generateLocalSecret();
 		}
 		if (is_array($data)) {
@@ -357,14 +366,15 @@ class Q_Utils
 	 * @param {array|string} [$fieldKeys] Path of the key under which to save signature
 	 * @param {string} [$secret] Can pass a different secret to use for generating the signature
 	 *  than the one found in Q/internal/secret config.}
-	 * @return {array} The data, with the signature added unless $secret is null
+	 * @return {array} The data, with the signature added
+	 * @throws {Q_Exception_MissingConfig} if no $secret is passed and
+	 *  "Q"/"internal"/"secret" is not configured. This is an outbound
+	 *  credential, and signing it with a guessable machine-derived key is
+	 *  worse than not signing at all.
 	 */
 	static function sign($data, $fieldKeys = null, $secret = null) {
 		if (!isset($secret)) {
-			$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		}
-		if (!isset($secret)) {
-			$secret = Q_Utils::generateLocalSecret();
+			$secret = self::requireInternalSecret();
 		}
 		if (!$fieldKeys) {
 			$sf = Q_Config::get('Q', 'internal', 'sigField', 'sig');
@@ -418,6 +428,14 @@ class Q_Utils
 	 */
 	protected static function generateLocalSecret()
 	{
+		// Every input is fixed for the life of the process, and since
+		// Q_Session validates ids through signature() several times per
+		// request, this would otherwise re-read /etc/machine-id (or spawn
+		// `reg query` on Windows) each time.
+		static $secret = null;
+		if (isset($secret)) {
+			return $secret;
+		}
 		$parts = array(
 			gethostname(),
 			PHP_OS,
@@ -439,7 +457,7 @@ class Q_Utils
 			}
 		}
 
-		return hash('sha256', implode("\t", $parts));
+		return $secret = hash('sha256', implode("\t", $parts));
 	}
 
 	/**

@@ -25,7 +25,13 @@ var Utils = {};
  * @private
  * @return {string}
  */
+var _localSecret = null;
 function generateLocalSecret() {
+	// Inputs are fixed for the life of the process; memoize so the
+	// per-request signature() calls don't re-read /etc/machine-id.
+	if (_localSecret) {
+		return _localSecret;
+	}
 	var os = require('os');
 	var child_process = require('child_process');
 
@@ -58,7 +64,7 @@ function generateLocalSecret() {
 		}
 	} catch (e) {}
 
-	return crypto.createHash('sha256')
+	return _localSecret = crypto.createHash('sha256')
 		.update(parts.join("\t"))
 		.digest('hex');
 }
@@ -156,6 +162,9 @@ function http_build_query (formdata, numeric_prefix, arg_separator) {
 Utils.signature = function (data, secret) {
 	secret = secret || Q.Config.get(['Q', 'internal', 'secret'], null);
 	if (!secret) {
+		// Producing a signature may degrade to a machine-local key: it lets
+		// nobody in. Accepting one never does (Utils.validate) and handing
+		// one out never does either (Utils.sign). Mirrors Q_Utils in PHP.
 		secret = generateLocalSecret();
 	}
 	if (typeof(data) !== 'string') {
@@ -170,12 +179,12 @@ Utils.signature = function (data, secret) {
  * @param {object} data The data to sign
  * @param {array} fieldKeys Optionally specify the array key path for the signature field
  * @return {object} The data object is mutated and returned
+ * @throws {Error} if "Q"/"internal"/"secret" is not configured -- this is an
+ *  outbound credential, and signing it with a guessable machine-derived key
+ *  is worse than not signing at all.
  */
 Utils.sign = function (data, fieldKeys) {
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		secret = generateLocalSecret();
-	}
+	var secret = requireInternalSecret();
 	if (!fieldKeys || !fieldKeys.length) {
 		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
 		fieldKeys = ['Q.'+sf];
