@@ -154,7 +154,7 @@ class Q_Session
 		 * @return {string}
 		 */
 		$id = Q::event('Q/session/id', array(), 'before', false, $id);
-		if (isset($id)) {
+		if (isset($id) and $id !== session_id()) {
 			session_id($id);
 			return session_id(); // must read it before session_start
 		}
