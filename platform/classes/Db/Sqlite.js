@@ -253,6 +253,18 @@ function Db_Sqlite(connName, dsn) {
 		return {base: base, sidecar: side, drift: base - side};
 	};
 
+	/**
+	 * Inserts many rows in bulk, in chunks, optionally upserting.
+	 * See Db.Query.insertManyAndExecute for the options.
+	 * @method insertManyAndExecute
+	 */
+	dbm.insertManyAndExecute = function (table, rows, options, callback) {
+		if (typeof options === 'function') {
+			callback = options; options = {};
+		}
+		return Db.Query.insertManyAndExecute(dbm, table, rows, options || {}, callback);
+	};
+
 	dbm.prefix = function () { return info.prefix || ''; };
 	dbm.dbname = function () { return 'main'; };
 

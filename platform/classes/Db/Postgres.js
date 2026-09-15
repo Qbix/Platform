@@ -144,6 +144,18 @@ function Db_Postgres(connName, dsn) {
 		});
 	};
 
+	/**
+	 * Inserts many rows in bulk, in chunks, optionally upserting.
+	 * See Db.Query.insertManyAndExecute for the options.
+	 * @method insertManyAndExecute
+	 */
+	dbm.insertManyAndExecute = function (table, rows, options, callback) {
+		if (typeof options === 'function') {
+			callback = options; options = {};
+		}
+		return Db.Query.insertManyAndExecute(dbm, table, rows, options || {}, callback);
+	};
+
 	dbm.prefix = function () { return info.prefix || ''; };
 	dbm.dbname = function () { return dsn.dbname || info.dbname || connName; };
 

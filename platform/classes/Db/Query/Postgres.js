@@ -228,6 +228,29 @@ Query_Postgres.prototype.toString = function () {
 };
 Query_Postgres.prototype.valueOf = function () { return this.toString(); };
 
+Query_Postgres.prototype._insertManyUpsert = function (columns, odku) {
+	if (!odku) { return ''; }
+	var parts = [];
+	for (var k in odku) {
+		var v = odku[k];
+		parts.push(Query_Postgres.column(k) + ' = '
+			+ ((v && v.typename === 'Db.Expression') ? v.toString()
+				: 'EXCLUDED.' + Query_Postgres.column(k)));
+	}
+	if (!parts.length) { return ''; }
+	// Postgres needs an explicit conflict target; the caller names it with
+	// onDuplicateKeyUpdate.conflictTarget, else we fall back to DO NOTHING
+	// rather than emit a statement the server will reject.
+	var target = odku.conflictTarget;
+	if (!target) {
+		return '\n ON CONFLICT DO NOTHING';
+	}
+	if (!Q.isArrayLike(target)) { target = [target]; }
+	parts = parts.filter(function (x) { return x.indexOf('conflictTarget') < 0; });
+	return '\n ON CONFLICT (' + target.map(Query_Postgres.column).join(', ')
+		+ ') DO UPDATE SET ' + parts.join(', ');
+};
+
 Q.mixin(Query_Postgres, Db.Query);
 
 module.exports = Query_Postgres;

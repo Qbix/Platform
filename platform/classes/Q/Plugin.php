@@ -488,6 +488,7 @@ class Q_Plugin
 				if (count($parts) < 2) continue;
 				list($sqlver, $tail) = $parts;
 				if ($tail !== "$conn_name.$dbms"
+				and $tail !== "$conn_name.sql"
 				and $tail !== "$conn_name.$dbms.php"
 				and $tail !== "$conn_name.sql.php") {
 					continue; // not schema file or php script
@@ -499,9 +500,21 @@ class Q_Plugin
 				}
 				echo $entry . "\n";
 
-				// we shall install this script!
+				// We shall install this script. For any one version the
+				// DBMS-specific file REPLACES the generic one rather than running
+				// alongside it, so a plugin can ship a portable .sql for most
+				// versions and override just the version whose DDL is dialect
+				// specific. The dbms branches assign unconditionally and the
+				// generic branches only fill a gap, so priority holds whichever
+				// order readdir happens to return the files in.
 				if ($tail === "$conn_name.$dbms"
 					and Q::compareVersion($sqlver, $current_version) > 0) {
+					$scriptsSQL["$sqlver"] = $entry;
+				} else if ($tail === "$conn_name.sql"
+					and Q::compareVersion($sqlver, $current_version) > 0
+					and !isset($scriptsSQL["$sqlver"])) {
+					// Generic .sql runs on all engines.
+					// A DBMS-specific .mysql / .postgres / .sqlite takes priority.
 					$scriptsSQL["$sqlver"] = $entry;
 				} else if ($tail === "$conn_name.$dbms.php"
 					and Q::compareVersion($sqlver, $current_versionPHP) > 0) {
@@ -546,8 +559,16 @@ class Q_Plugin
 					if (substr($script, -4) === '.php') {
 						echo "Processing PHP file: $script " . PHP_EOL;
 						Q::includeFile($scriptsdir.DS.$script);
+						// Postgres folds unquoted identifiers to lower case, and the
+						// version table is created there with a lowercase
+						// "versionphp" column. Quoting "versionPHP" here made the
+						// UPDATE fail with 'column does not exist', so every PHP
+						// schema script on Postgres aborted the install. The same
+						// per-dbms column name is already used when reading it back.
+						$phpVersionCol = ($db->dbms() === 'postgres')
+							? 'versionphp' : 'versionPHP';
 						$db->update("{{prefix}}Q_{$type}")->set(array(
-							'versionPHP' => $new_version
+							$phpVersionCol => $new_version
 						))->where(array(
 							$type => $name
 						))->execute();

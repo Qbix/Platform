@@ -449,6 +449,30 @@ function Db_Mysql(connName, dsn) {
 		});
 	};
 
+	/**
+	 * Inserts many rows in bulk, in chunks, optionally upserting.
+	 * Mirrors Db_Mysql::insertManyAndExecute() in PHP.
+	 *
+	 * The per-engine part is the upsert clause and the identifier quoting, so
+	 * the row batching lives in Db.Query.insertManyBuild() on the base class
+	 * and each adapter supplies _insertManyUpsert().
+	 *
+	 * @method insertManyAndExecute
+	 * @param {String} table
+	 * @param {Array} rows Array of plain objects (or Db.Row instances)
+	 * @param {Object} [options]
+	 * @param {Array} [options.columns] Defaults to the keys of the first row
+	 * @param {Number} [options.chunkSize=20] Rows per statement
+	 * @param {Object} [options.onDuplicateKeyUpdate] column => value or Db.Expression
+	 * @param {Function} [callback] called with (err, insertedCount)
+	 */
+	dbm.insertManyAndExecute = function (table, rows, options, callback) {
+		if (typeof options === 'function') {
+			callback = options; options = {};
+		}
+		return Db.Query.insertManyAndExecute(dbm, table, rows, options || {}, callback);
+	};
+
 	dbm.prefix = function() {
 		return info.prefix;
 	};
