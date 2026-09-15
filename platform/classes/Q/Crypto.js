@@ -152,7 +152,7 @@ function _hashTypedData(domain, primaryType, message, types) {
         }
         if (/^u?int\d*$/.test(type)) {
             var n = BigInt(value);
-            if (n < 0n) { n = n + (1n << 256n); }
+            if (n < BigInt(0)) { n = n + (BigInt(1) << BigInt(256)); }
             return Buffer.from(n.toString(16).padStart(64, '0'), 'hex');
         }
         if (/^bytes\d+$/.test(type)) {
