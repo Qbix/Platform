@@ -26,7 +26,7 @@ Q.exports(function (Q) {
 	return function Q_Crypto_OpenClaim_EVM_hashTypedData(claim) {
 
 		return Q.Promise.resolve(
-			import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
+			import(Q.url("{{Q}}/js/crypto/sha3.js"))
 		).then(function (sha3) {
 
 			function keccak(bytes) {
@@ -38,7 +38,7 @@ Q.exports(function (Q) {
 			var payload = _buildPayload(claim, keccak);
 
 			return Q.Promise.resolve(
-				import(Q.url("{{Q}}/src/js/crypto/eip712.js"))
+				import(Q.url("{{Q}}/js/crypto/eip712.js"))
 			).then(function (eip712) {
 
 				var digest = new Uint8Array(eip712.hashTypedData(

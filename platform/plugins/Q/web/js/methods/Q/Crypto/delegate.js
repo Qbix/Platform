@@ -102,7 +102,7 @@ Q.exports(function (Q) {
 				// es256:  SHA-256(derivedSecret)
 				// -------------------------------------------------
 				const { keccak_256 } = await import(
-					Q.url("{{Q}}/src/js/crypto/sha3.js")
+					Q.url("{{Q}}/js/crypto/sha3.js")
 				);
 
 				let secretHashHex;

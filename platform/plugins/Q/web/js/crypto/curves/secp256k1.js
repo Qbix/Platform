@@ -6,8 +6,8 @@
  * @module
  */
 /*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) */
-import { sha256 } from '@noble/hashes/sha2.js';
-import { randomBytes } from '@noble/hashes/utils.js';
+import { sha256 } from '../sha2.js';
+import { randomBytes } from '../utils.js';
 import { createKeygen } from "./abstract/curve.js";
 import { createHasher, isogenyMap } from "./abstract/hash-to-curve.js";
 import { Field, mapHashToField, pow2 } from "./abstract/modular.js";

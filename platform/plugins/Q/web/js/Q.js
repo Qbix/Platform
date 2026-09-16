@@ -8200,7 +8200,10 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 			var db = req.result;
 			if (db.version > 1 && !db.objectStoreNames.contains(storeName) && !triedCreatingStore) {
 				triedCreatingStore = true;
-				var store = db.createObjectStore(storeName, { keyPath: params.keyPath });
+				var store = db.createObjectStore(storeName, {
+					keyPath: params.keyPath,
+					autoIncrement: !!params.autoIncrement
+				});
 				for (var i = 0; i < indexes.length; ++i) {
 					var [name, keyPath, opts] = indexes[i];
 					store.createIndex(name, keyPath, opts);

@@ -64,8 +64,8 @@ Q.exports(function (Q) {
 				if (format === "EIP712") {
 
 					const [{ keccak_256 }, secp] = await Promise.all([
-						import(Q.url("{{Q}}/src/js/crypto/sha3.js")),
-						import(Q.url("{{Q}}/src/js/crypto/secp256k1.js"))
+						import(Q.url("{{Q}}/js/crypto/sha3.js")),
+						import(Q.url("{{Q}}/js/crypto/curves/secp256k1.js"))
 					]);
 
 					// Domain-separated deterministic seed:
@@ -78,7 +78,7 @@ Q.exports(function (Q) {
 					const digest = keccak_256(material); // Uint8Array(32)
 
 					// Reduce mod curve order — matches PHP implementation
-					const n = secp.secp256k1.CURVE.n;
+					const n = secp.secp256k1.Point.Fn.ORDER;
 					const k = bytesToBigInt(digest) % n;
 
 					if (k === 0n) {
@@ -114,7 +114,7 @@ Q.exports(function (Q) {
 				if (format === "ES256") {
 
 					const noble = await import(
-						Q.url("{{Q}}/src/js/crypto/nist.js")
+						Q.url("{{Q}}/js/crypto/curves/nist.js")
 					);
 
 					// Deterministic scalar via HKDF-SHA256
