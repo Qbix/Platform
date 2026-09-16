@@ -2815,6 +2815,13 @@ abstract class Db_Query extends Db_Expression
 		// straight into the query parameters, and without this MariaDB sees a
 		// plain '[0.1,...]' string and rejects it as an invalid vector value.
 		$this->vectorParametersPrepare();
+		// A write invalidates any cached reads of the tables it touches.
+		// Without this the static result cache is never cleared, so a
+		// write followed by a read of the same rows in one process returns
+		// the pre-write data, with no error. Scoped to the affected tables
+		// rather than the whole connection so read-heavy paths keep their
+		// cache. Set Db::allowCaching(false) to opt out of caching entirely.
+		$this->cacheClearForWrite();
 		if (class_exists('Q')) {
 			/**
 			 * @event Db/query/execute {before}
@@ -3995,6 +4002,145 @@ abstract class Db_Query extends Db_Expression
 	 * @type array
 	 */
 	static $cache = array();
+
+	/**
+	 * If this query writes, drop cached reads of the tables it affects.
+	 * @method cacheClearForWrite
+	 * @protected
+	 * @return {integer} how many cache entries were removed
+	 */
+	protected function cacheClearForWrite()
+	{
+		switch ($this->type) {
+			case Db_Query::TYPE_INSERT:
+			case Db_Query::TYPE_UPDATE:
+			case Db_Query::TYPE_DELETE:
+				break;
+			case Db_Query::TYPE_RAW:
+				// only raw statements that actually modify something
+				$sql = isset($this->clauses['RAW']) ? $this->clauses['RAW'] : '';
+				if (!preg_match('/^\s*(INSERT|UPDATE|DELETE|REPLACE|TRUNCATE|ALTER|DROP|CREATE)\b/i', $sql)) {
+					return 0;
+				}
+				break;
+			default:
+				return 0;
+		}
+		$conn = $this->db ? $this->db->connectionName() : null;
+		if (!isset($conn) or !isset(self::$cache[$conn])) {
+			return 0;
+		}
+		$tables = $this->tablesAffected();
+		return $tables
+			? self::cacheClear($conn, $tables)
+			: self::cacheClear($conn);   // unknown target: clear the connection
+	}
+
+	/**
+	 * Best-effort list of tables this query writes to, used to scope cache
+	 * invalidation. Returns an empty array when it cannot tell, and the caller
+	 * then clears the whole connection rather than risk a stale read.
+	 * @method tablesAffected
+	 * @return {array}
+	 */
+	function tablesAffected()
+	{
+		$tables = array();
+		foreach (array('INTO', 'UPDATE', 'FROM') as $clause) {
+			if (empty($this->clauses[$clause])) {
+				continue;
+			}
+			$c = $this->clauses[$clause];
+			if (is_array($c)) {
+				$c = implode(' ', $c);
+			}
+			foreach (preg_split('/\s*,\s*/', (string)$c) as $piece) {
+				$piece = trim($piece);
+				if ($piece === '') {
+					continue;
+				}
+				// strip an alias and any quoting
+				$piece = preg_split('/\s+/', $piece);
+				$piece = str_replace(array('`', '"'), '', $piece[0]);
+				if ($piece !== '') {
+					$tables[] = $piece;
+				}
+			}
+		}
+		if (!$tables and $this->type === Db_Query::TYPE_RAW) {
+			$sql = isset($this->clauses['RAW']) ? $this->clauses['RAW'] : '';
+			if (preg_match('/\b(?:INTO|UPDATE|FROM|TABLE)\s+[`"]?([A-Za-z0-9_\.]+)/i', $sql, $m)) {
+				$tables[] = $m[1];
+			}
+		}
+		return array_values(array_unique($tables));
+	}
+
+	/**
+	 * Clears cached query results.
+	 *
+	 * The cache is keyed by connection name and then by the fully substituted
+	 * SQL, and nothing clears it on its own -- so a write followed by a read of
+	 * the same rows in one process returns the pre-write data. Call this after
+	 * writing, or use Db_Query::cacheClearAll() between units of work.
+	 *
+	 * @method cacheClear
+	 * @static
+	 * @param {string} [$connName=null] Limit to one connection. Null clears every connection.
+	 * @param {string|array} [$tables=null] Limit to entries whose SQL mentions
+	 *  any of these tables. Null clears every entry for the connection.
+	 *  Matching is textual on the built SQL, so pass the real table name
+	 *  including its prefix.
+	 * @return {integer} how many cache entries were removed
+	 */
+	static function cacheClear($connName = null, $tables = null)
+	{
+		if (!isset($connName)) {
+			$removed = 0;
+			foreach (array_keys(self::$cache) as $c) {
+				$removed += self::cacheClear($c, $tables);
+			}
+			return $removed;
+		}
+		if (!isset(self::$cache[$connName])) {
+			return 0;
+		}
+		if (!isset($tables)) {
+			$removed = count(self::$cache[$connName]);
+			unset(self::$cache[$connName]);
+			return $removed;
+		}
+		if (!is_array($tables)) {
+			$tables = array($tables);
+		}
+		$removed = 0;
+		foreach (array_keys(self::$cache[$connName]) as $sql) {
+			foreach ($tables as $table) {
+				if ($table !== '' and strpos($sql, $table) !== false) {
+					unset(self::$cache[$connName][$sql]);
+					++$removed;
+					break;
+				}
+			}
+		}
+		if (empty(self::$cache[$connName])) {
+			unset(self::$cache[$connName]);
+		}
+		return $removed;
+	}
+
+	/**
+	 * Empties the entire query result cache, for every connection.
+	 * @method cacheClearAll
+	 * @static
+	 * @return {integer} how many connections' caches were dropped
+	 */
+	static function cacheClearAll()
+	{
+		$n = count(self::$cache);
+		self::$cache = array();
+		return $n;
+	}
 	
 	public $cachedShardIndex = null;
 

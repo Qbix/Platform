@@ -11447,7 +11447,9 @@ Q.ServiceWorker = {
 		}
 		var src = Q.info.serviceWorkerUrl;
 		if (!src) {
-			return callback(true);
+			Q.handle(callback, null, [false]);
+			Q.ServiceWorker.onActive.handle(false);
+			return;
 		}
 		Q.ServiceWorker.started = true;
 		navigator.serviceWorker.getRegistration(src)
@@ -11575,7 +11577,9 @@ function _startCachingWithServiceWorker() {
 				});
 			});
 		});
-		if (items.length) {
+		// belt and braces: start() can legitimately call back without a
+		// worker, and this is the only place that would dereference it
+		if (items.length && worker && worker.postMessage) {
 			worker.postMessage({
 				type: 'Q.Cache.put',
 				items: items

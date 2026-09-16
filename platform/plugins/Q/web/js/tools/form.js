@@ -110,13 +110,31 @@ Q.Tool.define('Q/form', function(options) {
 				}
 				var redirectUrl = Q.getObject('redirect.url', response);
 				if (redirectUrl) {
-					// handle one redirect (if it redirects again, give up)
-					Q.request(redirectUrl, state.slotsToRequest, function (err, data2) {
-						if (err) {
-							return Q.handle(redirectUrl);
-						}
-						_handleResult(data2);
-					});
+					// The server answered the submit by telling the client to go
+					// somewhere else, so this is a NAVIGATION, not an in-place form
+					// result -- hand it to Q.handle and let the destination be loaded
+					// with the slots a page publishes.
+					//
+					// It used to re-request the redirect target with this tool's own
+					// `slotsToRequest`, on the assumption that wherever a form
+					// redirects to also serves the form's slots. That holds for a
+					// same-page result and for nothing else: Users/activate redirects
+					// to the app's home with `slotsToRequest: 'form,user'`, and an app
+					// home publishes neither, so every activation answered
+					// Q_Exception_MissingSlot (424) -- for BOTH slots, which is why
+					// dropping just 'form' would not have fixed it. Q_Response's slot
+					// loop only swallows a missing slot when the response is itself a
+					// redirect, and the destination is not.
+					//
+					// The consequence was not only console noise: `_handleResult` then
+					// ran against an errors payload, so the page kept whatever
+					// client-side state it had. After activation that means a STALE
+					// Q.Users.loggedInUser until the next full document load, which
+					// anything reading it in between -- an onLogin handler, a dashboard
+					// rendering from it -- reads as pre-activation state. A real
+					// navigation loads the destination and its session extras.
+					Q.handle(redirectUrl);
+					return false;
 				} else {
 					_handleResult(data);
 				}

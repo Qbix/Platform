@@ -331,6 +331,24 @@ Query_Sqlite.prototype.nearestTo = function () {
 	return this.vectorNearestTo.apply(this, arguments);
 };
 
+Query_Sqlite.prototype._insertManyUpsert = function (columns, odku) {
+	if (!odku) { return ''; }
+	var parts = [];
+	for (var k in odku) {
+		if (k === 'conflictTarget') { continue; }
+		var v = odku[k];
+		parts.push(Query_Sqlite.column(k) + ' = '
+			+ ((v && v.typename === 'Db.Expression') ? v.toString()
+				: 'excluded.' + Query_Sqlite.column(k)));
+	}
+	if (!parts.length) { return ''; }
+	var target = odku.conflictTarget;
+	if (!target) { return '\n ON CONFLICT DO NOTHING'; }
+	if (!Q.isArrayLike(target)) { target = [target]; }
+	return '\n ON CONFLICT (' + target.map(Query_Sqlite.column).join(', ')
+		+ ') DO UPDATE SET ' + parts.join(', ');
+};
+
 Q.mixin(Query_Sqlite, Db.Query);
 
 module.exports = Query_Sqlite;

@@ -254,6 +254,49 @@ class Q_Exception extends Exception
 	}
 	
 	/**
+	 * Removes the arguments from every frame of a PHP backtrace, leaving the
+	 * frame's file, line, function and class.
+	 *
+	 * buildArray() is the boundary at which a trace stops being a server-side
+	 * diagnostic and becomes part of a response body, and a frame's "args" is
+	 * the whole of the frame that can carry a secret: PHP records the actual
+	 * values every function was called with, so a trace through, say,
+	 * Users_User::addMobile() carries the Users_User object itself. Db_Row
+	 * declares `public $fields`, so json_encode() of one writes every column —
+	 * sessionId, salt, passphraseHash — into the JSON, and the same is true of
+	 * any plaintext passphrase, token or key that happens to be an argument on
+	 * the way down.
+	 *
+	 * The redaction is unconditional rather than a new config key, and that is
+	 * the point. `Q/exception/showTrace` already exists to keep traces out of
+	 * responses, and it is off by default — but Q_Exception.php reads it with a
+	 * fallback of TRUE, apps have shipped it as true, and it is on wherever
+	 * APP_DEBUG is. A flag that can turn a credential disclosure back on is
+	 * a failure mode that recurs in practice, so
+	 * args are removed on the path that reaches a client no matter how the
+	 * flag is set. Nothing is lost server-side: getTraceAsString(), which is
+	 * what logging and Q_Exception::coloredString() use, renders arguments as
+	 * `Object(Users_User)` and truncated scalars, and is untouched here.
+	 *
+	 * @method redactTrace
+	 * @static
+	 * @param {array} $trace A backtrace as returned by Exception::getTrace()
+	 * @return {array} the same frames, each without its "args" key
+	 */
+	static function redactTrace($trace)
+	{
+		if (!is_array($trace)) {
+			return $trace;
+		}
+		foreach ($trace as $i => $frame) {
+			if (is_array($frame)) {
+				unset($trace[$i]['args']);
+			}
+		}
+		return $trace;
+	}
+
+	/**
 	 * Converts an exception or array of exceptions to an array
 	 * @method buildArray
 	 * @static
@@ -290,6 +333,7 @@ class Q_Exception extends Exception
 				} else {
 					$trace = $e->getTrace();
 				}
+				$trace = self::redactTrace($trace);
 			}
 			$params = null;
 			if (is_callable(array($e, 'params'))) {

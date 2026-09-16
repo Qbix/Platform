@@ -1456,6 +1456,18 @@ Query_Mysql.prototype._vectorDistance_expression = function (column, vector) {
 	return fn + '(' + Query_Mysql.column(column) + ', VEC_FromText(:' + name + '))';
 };
 
+Query_Mysql.prototype._insertManyUpsert = function (columns, odku) {
+	if (!odku) { return ''; }
+	var parts = [];
+	for (var k in odku) {
+		var v = odku[k];
+		parts.push(Query_Mysql.column(k) + ' = '
+			+ ((v && v.typename === 'Db.Expression') ? v.toString()
+				: 'VALUES(' + Query_Mysql.column(k) + ')'));
+	}
+	return parts.length ? '\n ON DUPLICATE KEY UPDATE ' + parts.join(', ') : '';
+};
+
 Q.mixin(Query_Mysql, Db.Query);
 
 module.exports = Query_Mysql;

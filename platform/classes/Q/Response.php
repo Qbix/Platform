@@ -587,6 +587,42 @@ class Q_Response
 					array('name' => 'property', 'value' => 'og:image:secure_url', 'content' => $params['content']),
 					array('name' => 'property', 'value' => 'og:image:type', 'content' => $size['mime'])
 				));
+			} else {
+				// og:image itself is keyed by name:value below, so a later call
+				// REPLACES an earlier one -- but these four companions were only
+				// ever written, never cleared. So when a page set a sizeable
+				// og:image first (the app default) and an unsizeable one second
+				// (a stream icon, missing or remote), the survivors described the
+				// image that lost: og:image:secure_url pointed at the default
+				// while og:image pointed at the icon, and the width/height/type
+				// described neither. Unfurlers that prefer secure_url then showed
+				// the wrong image entirely.
+				//
+				// og:image stands alone perfectly well without them, so drop the
+				// stale set rather than leave it describing another image.
+				self::clearMeta(array(
+					'property:og:image:width',
+					'property:og:image:height',
+					'property:og:image:secure_url',
+					'property:og:image:type'
+				));
+			}
+		}
+	}
+
+	/**
+	 * Removes previously set meta tags, by their "name:value" keys,
+	 * from the global set and from every slot that carries them.
+	 * @method clearMeta
+	 * @static
+	 * @param {string|array} $keys One key like "property:og:image:width", or an array of them
+	 */
+	static function clearMeta($keys)
+	{
+		foreach ((array)$keys as $key) {
+			unset(self::$metas[$key]);
+			foreach (self::$metasForSlot as $slot => $metas) {
+				unset(self::$metasForSlot[$slot][$key]);
 			}
 		}
 	}

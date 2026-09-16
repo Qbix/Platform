@@ -603,6 +603,278 @@ class Q_Request
 	}
 
 	/**
+	 * Detect whether the current request is from a known bot, crawler,
+	 * or automated agent based on the User-Agent string.
+	 *
+	 * Returns null if the UA looks human.
+	 * Returns an associative array if it matches a known bot:
+	 *   'category' => string — one of: search, social, seo, ai, monitor,
+	 *                          security, feed, headless, library, archiver
+	 *   'match'    => string — the pattern fragment that matched
+	 *   'name'     => string — human-readable name of the bot/service
+	 *   'url'      => string — info/docs URL for this bot (if known)
+	 *   'purpose'  => string — short description of what it does
+	 *
+	 * Usage:
+	 *   $bot = Q_Request::isBot();
+	 *   if ($bot) {
+	 *       // $bot['category'], $bot['name'], $bot['purpose'], ...
+	 *   }
+	 *
+	 * @method isBot
+	 * @static
+	 * @param {string} [$userAgent=null] Override UA string (defaults to $_SERVER['HTTP_USER_AGENT'])
+	 * @return {array|null} Bot info array, or null if human
+	 */
+	static function isBot($userAgent = null)
+	{
+		if ($userAgent === null) {
+			$userAgent = isset($_SERVER['HTTP_USER_AGENT'])
+				? $_SERVER['HTTP_USER_AGENT'] : '';
+		}
+
+		if (!$userAgent) {
+			return array(
+				'category' => 'other',
+				'match' => '(empty UA)',
+				'name' => 'Unknown',
+				'url' => '',
+				'purpose' => 'Empty user-agent string (likely automated)'
+			);
+		}
+
+		// ── Known bots with metadata ────────────────────────────────
+		// Each entry: pattern, category, name, url, purpose
+		// Patterns are case-insensitive regex fragments.
+
+		static $bots = null;
+
+		if ($bots === null) {
+			$bots = array(
+
+				// ── Search engine crawlers ──────────────────────────
+				array('Googlebot',            'search',   'Googlebot',              'https://developers.google.com/search/docs/crawling-indexing/googlebot',    'Google web search indexing'),
+				array('Googlebot-Image',      'search',   'Googlebot Images',       'https://developers.google.com/search/docs/crawling-indexing/googlebot',    'Google image search indexing'),
+				array('Googlebot-News',       'search',   'Googlebot News',         'https://developers.google.com/search/docs/crawling-indexing/googlebot',    'Google News indexing'),
+				array('Googlebot-Video',      'search',   'Googlebot Video',        'https://developers.google.com/search/docs/crawling-indexing/googlebot',    'Google video search indexing'),
+				array('Google-InspectionTool', 'search',  'Google Inspection Tool',  'https://support.google.com/webmasters/answer/9012289',                    'Google Search Console URL inspection'),
+				array('Google-Extended',      'ai',       'Google Extended',        'https://developers.google.com/search/docs/crawling-indexing/overview-google-crawlers', 'Gemini/Bard AI training'),
+				array('Storebot-Google',      'search',   'Storebot Google',        'https://developers.google.com/search/docs/crawling-indexing/googlebot',    'Google Shopping product crawl'),
+				array('GoogleOther',          'search',   'GoogleOther',            'https://developers.google.com/search/docs/crawling-indexing/googlebot',    'Google generic fetcher'),
+				array('Google-Safety',        'search',   'Google Safety',          'https://safebrowsing.google.com/',                                         'Google Safe Browsing check'),
+				array('APIs-Google',          'search',   'APIs-Google',            'https://developers.google.com/',                                           'Google API service fetcher'),
+				array('AdsBot-Google',        'search',   'AdsBot Google',          'https://support.google.com/google-ads/answer/2404197',                     'Google Ads landing page checker'),
+				array('Mediapartners-Google', 'search',   'Mediapartners Google',   'https://support.google.com/webmasters/answer/1061943',                    'Google AdSense content matching'),
+				array('FeedFetcher-Google',   'feed',     'Google FeedFetcher',     'https://developers.google.com/',                                           'Google feed/subscription fetcher'),
+				array('bingbot',              'search',   'Bingbot',                'https://www.bing.com/webmasters/help/which-crawlers-does-bing-use-8c184ec0', 'Microsoft Bing search indexing'),
+				array('BingPreview',          'search',   'Bing Preview',           'https://www.bing.com/webmasters/',                                         'Bing link preview generation'),
+				array('msnbot',               'search',   'MSNBot',                 'https://www.bing.com/webmasters/',                                         'Legacy Microsoft search crawler'),
+				array('adidxbot',             'search',   'Bing Ads Bot',           'https://www.bing.com/webmasters/',                                         'Bing advertising crawler'),
+				array('Baiduspider',          'search',   'Baiduspider',            'http://www.baidu.com/search/spider.html',                                 'Baidu search indexing (China)'),
+				array('YandexBot',            'search',   'YandexBot',              'https://yandex.com/support/webmaster/robot-workings/check-yandex-robots.html', 'Yandex search indexing (Russia)'),
+				array('YandexImages',         'search',   'Yandex Images',          'https://yandex.com/support/webmaster/',                                    'Yandex image search indexing'),
+				array('Slurp',                'search',   'Yahoo! Slurp',           'https://help.yahoo.com/kb/slurp-crawling-page-sln22600.html',             'Yahoo search indexing'),
+				array('DuckDuckBot',          'search',   'DuckDuckBot',            'https://duckduckgo.com/duckduckbot',                                      'DuckDuckGo search indexing'),
+				array('Sogou',                'search',   'Sogou Spider',           'http://www.sogou.com/docs/help/webmasters.htm',                           'Sogou search indexing (China)'),
+				array('Exabot',               'search',   'Exabot',                 'https://www.exalead.com/search/webmasterguide',                           'Exalead search indexing (France)'),
+				array('Qwantify',             'search',   'Qwantify',               'https://help.qwant.com/bot/',                                             'Qwant search indexing (EU)'),
+				array('Applebot',             'search',   'Applebot',               'https://support.apple.com/en-us/111855',                                  'Apple Siri/Spotlight indexing'),
+				array('PetalBot',             'search',   'PetalBot',               'https://webmaster.petalsearch.com/',                                       'Huawei Petal search indexing'),
+				array('Bytespider',           'search',   'Bytespider',             'https://www.bytedance.com/',                                               'ByteDance/TikTok search indexing'),
+				array('NaverBot',             'search',   'NaverBot',               'https://searchadvisor.naver.com/',                                         'Naver search indexing (South Korea)'),
+				array('Yeti/',                'search',   'Yeti',                   'https://searchadvisor.naver.com/',                                         'Naver Yeti crawler'),
+				array('CocCocBot',            'search',   'CocCocBot',              'https://help.coccoc.com/',                                                 'Coc Coc search indexing (Vietnam)'),
+				array('Seznambot',            'search',   'Seznambot',              'https://napoveda.seznam.cz/en/seznambot/',                                'Seznam search indexing (Czech Republic)'),
+				array('Mail\\.RU_Bot',        'search',   'Mail.RU Bot',            'https://help.mail.ru/',                                                    'Mail.ru search indexing (Russia)'),
+
+				// ── Social / link preview bots ──────────────────────
+				array('facebookexternalhit',  'social',   'Facebook Crawler',       'https://developers.facebook.com/docs/sharing/webmasters/crawler/',         'Facebook/Instagram link preview'),
+				array('Facebot',              'social',   'Facebot',                'https://developers.facebook.com/',                                         'Facebook crawler variant'),
+				array('meta-externalagent',   'social',   'Meta External Agent',    'https://developers.facebook.com/',                                         'Meta (Instagram/Threads) link preview'),
+				array('Twitterbot',           'social',   'Twitterbot',             'https://developer.x.com/en/docs/twitter-for-websites/cards',               'X/Twitter card preview'),
+				array('LinkedInBot',          'social',   'LinkedInBot',            'https://www.linkedin.com/help/linkedin/answer/a521928',                    'LinkedIn link preview'),
+				array('Slackbot',             'social',   'Slackbot',               'https://api.slack.com/robots',                                             'Slack link unfurling'),
+				array('Slack-ImgProxy',       'social',   'Slack Image Proxy',      'https://api.slack.com/robots',                                             'Slack image proxy'),
+				array('vkShare',              'social',   'VK Share',               'https://vk.com/dev/share_details',                                        'VKontakte link preview'),
+				array('Discordbot',           'social',   'Discordbot',             'https://discord.com/',                                                     'Discord embed preview'),
+				array('TelegramBot',          'social',   'TelegramBot',            'https://core.telegram.org/bots',                                          'Telegram link preview'),
+				array('WhatsApp',             'social',   'WhatsApp',               'https://www.whatsapp.com/',                                                'WhatsApp link preview'),
+				array('Viber/',               'social',   'Viber',                  'https://www.viber.com/',                                                   'Viber link preview'),
+				array('SkypeUriPreview',      'social',   'Skype Preview',          'https://www.skype.com/',                                                   'Skype link preview'),
+				array('Pinterestbot',         'social',   'Pinterestbot',           'https://www.pinterest.com/bot.html',                                      'Pinterest pin crawler'),
+				array('Snapchat',             'social',   'Snapchat',               'https://www.snapchat.com/',                                                'Snapchat link preview'),
+				array('Redditbot',            'social',   'Redditbot',              'https://www.reddit.com/r/redditdev/',                                     'Reddit link preview'),
+				array('iMessageBot',          'social',   'iMessage Bot',           'https://developer.apple.com/',                                             'Apple iMessage link preview'),
+				array('Mastodon/',            'social',   'Mastodon',               'https://joinmastodon.org/',                                                'Mastodon/Fediverse link preview'),
+				array('Pleroma/',             'social',   'Pleroma',                'https://pleroma.social/',                                                  'Pleroma/Fediverse link preview'),
+				array('Misskey/',             'social',   'Misskey',                'https://misskey-hub.net/',                                                 'Misskey/Fediverse link preview'),
+
+				// ── SEO / marketing crawlers ────────────────────────
+				array('AhrefsBot',            'seo',      'AhrefsBot',              'https://ahrefs.com/robot/',                                                'Ahrefs backlink/SEO analysis'),
+				array('AhrefsSiteAudit',      'seo',      'Ahrefs Site Audit',      'https://ahrefs.com/robot/',                                                'Ahrefs site audit crawler'),
+				array('SemrushBot',           'seo',      'SemrushBot',             'https://www.semrush.com/bot.html',                                        'Semrush SEO analysis'),
+				array('SiteAuditBot',         'seo',      'Semrush Site Audit',     'https://www.semrush.com/bot.html',                                        'Semrush site audit crawler'),
+				array('MJ12bot',              'seo',      'Majestic MJ12bot',       'https://mj12bot.com/',                                                     'Majestic SEO backlink mapping'),
+				array('DotBot',               'seo',      'DotBot (Moz)',           'https://moz.com/help/moz-procedures/crawlers/dotbot',                     'Moz link analysis'),
+				array('rogerbot',             'seo',      'Rogerbot (Moz)',         'https://moz.com/help/moz-procedures/crawlers/rogerbot',                   'Moz link graph crawler'),
+				array('MojeekBot',            'seo',      'MojeekBot',              'https://www.mojeek.com/bot.html',                                         'Mojeek independent search engine'),
+				array('Screaming Frog',       'seo',      'Screaming Frog',         'https://www.screamingfrog.co.uk/seo-spider/',                             'SEO site audit tool'),
+				array('NetpeakSpider',        'seo',      'Netpeak Spider',         'https://netpeaksoftware.com/spider',                                      'SEO site audit tool'),
+				array('ContentKingApp',       'seo',      'ContentKing',            'https://www.contentkingapp.com/',                                         'Real-time SEO monitoring'),
+				array('SiteimproveBot',       'seo',      'Siteimprove Bot',        'https://siteimprove.com/',                                                'Accessibility/SEO crawler'),
+				array('SEOkicks',             'seo',      'SEOkicks',               'https://www.seokicks.de/robot.html',                                      'SEOkicks backlink crawler'),
+				array('serpstatbot',          'seo',      'Serpstat Bot',            'https://serpstat.com/bot/',                                                'Serpstat SEO analysis'),
+				array('DataForSeoBot',        'seo',      'DataForSEO Bot',         'https://dataforseo.com/dataforseo-bot',                                   'DataForSEO API crawler'),
+				array('BLEXBot',              'seo',      'BLEXBot',                'http://webmeup-crawler.com/',                                              'WebMeUp backlink research'),
+				array('LinkpadBot',           'seo',      'LinkpadBot',             'https://www.linkpad.ru/',                                                  'Linkpad backlink analysis'),
+				array('ZoominfoBot',          'seo',      'ZoomInfo Bot',           'https://www.zoominfo.com/about-zoominfo/privacy-manage-profile',           'ZoomInfo B2B data collection'),
+				array('Grapeshot',            'seo',      'Grapeshot (Oracle)',      'https://www.oracle.com/cx/advertising/',                                  'Oracle contextual targeting'),
+
+				// ── AI / LLM crawlers and RAG scrapers ──────────────
+				array('GPTBot',               'ai',       'GPTBot (OpenAI)',         'https://platform.openai.com/docs/bots',                                   'OpenAI model training data'),
+				array('ChatGPT-User',         'ai',       'ChatGPT User (OpenAI)',   'https://platform.openai.com/docs/bots',                                   'ChatGPT live web browsing for users'),
+				array('OAI-SearchBot',        'ai',       'OAI SearchBot (OpenAI)',  'https://platform.openai.com/docs/bots',                                   'OpenAI search index retrieval'),
+				array('ClaudeBot',            'ai',       'ClaudeBot (Anthropic)',   'https://support.anthropic.com/en/articles/8896518',                       'Anthropic Claude training data'),
+				array('Claude-Web',           'ai',       'Claude-Web (Anthropic)',  'https://support.anthropic.com/',                                          'Anthropic Claude web browsing (deprecated)'),
+				array('anthropic-ai',         'ai',       'Anthropic AI',           'https://support.anthropic.com/',                                          'Anthropic crawler (deprecated)'),
+				array('Claude-User',          'ai',       'Claude User',            'https://support.anthropic.com/',                                          'Anthropic Claude user browsing'),
+				array('Claude-SearchBot',     'ai',       'Claude SearchBot',       'https://support.anthropic.com/',                                          'Anthropic Claude search index'),
+				array('PerplexityBot',        'ai',       'PerplexityBot',          'https://docs.perplexity.ai/docs/perplexity-bot',                          'Perplexity AI answer engine'),
+				array('cohere-ai',            'ai',       'Cohere AI',              'https://cohere.com/',                                                      'Cohere model training'),
+				array('Diffbot',              'ai',       'Diffbot',                'https://www.diffbot.com/',                                                 'Structured data extraction AI'),
+				array('YouBot',               'ai',       'You.com Bot',            'https://you.com/',                                                         'You.com AI search engine'),
+				array('Timpibot',             'ai',       'Timpibot',               'https://timpi.io/',                                                        'Timpi decentralized search'),
+				array('VelenpublicBot',       'ai',       'Velen Bot',              'https://velen.io/',                                                        'Velen AI indexing'),
+				array('Ai2Bot',               'ai',       'AI2 Bot (Allen AI)',     'https://allenai.org/',                                                     'Allen AI research crawling'),
+				array('Kangaroo Bot',         'ai',       'Kangaroo Bot',           '',                                                                         'AI data collection'),
+				array('CCBot',                'ai',       'Common Crawl Bot',       'https://commoncrawl.org/faq/',                                            'Common Crawl open dataset'),
+				array('FacebookBot',          'ai',       'FacebookBot (Meta AI)',   'https://developers.facebook.com/',                                        'Meta AI model training'),
+				array('ImagesiftBot',         'ai',       'ImageSift Bot',          '',                                                                         'Image dataset collection'),
+				array('Omgilibot',            'ai',       'Omgili Bot',             'https://omgili.com/',                                                      'Discussion/forum data mining'),
+				array('Webzio-Extended',      'ai',       'Webz.io Extended',       'https://webz.io/',                                                         'Web data feed for AI'),
+				array('PiplBot',              'ai',       'PiplBot',                'https://pipl.com/',                                                        'People search data collection'),
+				array('img2dataset',          'ai',       'img2dataset',            'https://github.com/rom1504/img2dataset',                                  'Image dataset downloader'),
+
+				// ── Monitoring / uptime bots ────────────────────────
+				array('Pingdom',              'monitor',  'Pingdom',                'https://www.pingdom.com/',                                                 'Website uptime monitoring'),
+				array('UptimeRobot',          'monitor',  'UptimeRobot',            'https://uptimerobot.com/',                                                 'Website uptime monitoring'),
+				array('BetterStackBot',       'monitor',  'BetterStack Bot',        'https://betterstack.com/',                                                 'Uptime and incident monitoring'),
+				array('StatusCake',           'monitor',  'StatusCake',             'https://www.statuscake.com/',                                              'Uptime and performance monitoring'),
+				array('NodeUptime',           'monitor',  'NodePing',               'https://nodeping.com/',                                                    'Server monitoring'),
+				array('Montastic',            'monitor',  'Montastic',              'https://montastic.com/',                                                   'Simple uptime monitoring'),
+				array('Site24x7',             'monitor',  'Site24x7',               'https://www.site24x7.com/',                                               'Website and server monitoring'),
+				array('Checkly/',             'monitor',  'Checkly',                'https://www.checklyhq.com/',                                              'API and browser check monitoring'),
+				array('cron-job\\.org',       'monitor',  'cron-job.org',           'https://cron-job.org/',                                                    'Scheduled URL pings'),
+				array('NewRelicPinger',       'monitor',  'New Relic Pinger',       'https://newrelic.com/',                                                    'New Relic synthetic monitoring'),
+				array('Datadog Agent',        'monitor',  'Datadog Agent',          'https://www.datadoghq.com/',                                              'Datadog infrastructure monitoring'),
+				array('PagerDuty',            'monitor',  'PagerDuty',              'https://www.pagerduty.com/',                                              'Incident management checks'),
+				array('CloudWatchSynth',      'monitor',  'AWS CloudWatch',         'https://aws.amazon.com/cloudwatch/',                                      'AWS synthetic canary monitoring'),
+
+				// ── Security scanners ───────────────────────────────
+				array('Shodan',               'security', 'Shodan',                 'https://www.shodan.io/',                                                   'Internet-wide device/port scanner'),
+				array('CensysInspect',        'security', 'Censys',                 'https://censys.io/',                                                       'Internet-wide security scanner'),
+				array('Nessus',               'security', 'Nessus (Tenable)',       'https://www.tenable.com/products/nessus',                                 'Vulnerability scanner'),
+				array('Qualys',               'security', 'Qualys',                 'https://www.qualys.com/',                                                  'Cloud security/compliance scanner'),
+				array('Nikto',                'security', 'Nikto',                  'https://cirt.net/Nikto2',                                                  'Open-source web server scanner'),
+				array('sqlmap',               'security', 'sqlmap',                 'https://sqlmap.org/',                                                      'SQL injection detection tool'),
+				array('Burp',                 'security', 'Burp Suite',             'https://portswigger.net/burp',                                            'Web security testing proxy'),
+				array('ZAP',                  'security', 'OWASP ZAP',             'https://www.zaproxy.org/',                                                 'Open-source web app security scanner'),
+				array('w3af',                 'security', 'w3af',                   'http://w3af.org/',                                                         'Web application attack framework'),
+				array('Nmap',                 'security', 'Nmap Scripting Engine',  'https://nmap.org/',                                                        'Network scanner with HTTP probes'),
+				array('WPScan',               'security', 'WPScan',                'https://wpscan.com/',                                                      'WordPress vulnerability scanner'),
+				array('wpscan',               'security', 'WPScan',                'https://wpscan.com/',                                                      'WordPress vulnerability scanner'),
+				array('BitSightBot',          'security', 'BitSight Bot',           'https://www.bitsight.com/',                                               'Security ratings scanner'),
+				array('SecurityHeaders',      'security', 'SecurityHeaders.com',    'https://securityheaders.com/',                                            'HTTP security header checker'),
+				array('zgrab',                'security', 'ZGrab',                  'https://github.com/zmap/zgrab2',                                          'ZMap project application scanner'),
+				array('masscan',              'security', 'Masscan',                'https://github.com/robertdavidgraham/masscan',                            'Mass IP port scanner'),
+
+				// ── Feed fetchers / validators ──────────────────────
+				array('Feedly/',              'feed',     'Feedly',                 'https://feedly.com/',                                                      'RSS/Atom feed reader'),
+				array('Feedbin',              'feed',     'Feedbin',                'https://feedbin.com/',                                                     'RSS feed reader'),
+				array('NewsBlur',             'feed',     'NewsBlur',               'https://newsblur.com/',                                                    'RSS feed reader'),
+				array('Inoreader',            'feed',     'Inoreader',              'https://www.inoreader.com/',                                               'RSS feed reader'),
+				array('theoldreader\\.com',   'feed',     'The Old Reader',         'https://theoldreader.com/',                                                'RSS feed reader'),
+				array('Miniflux/',            'feed',     'Miniflux',               'https://miniflux.app/',                                                    'Minimalist feed reader'),
+				array('TinyTinyRSS',          'feed',     'Tiny Tiny RSS',          'https://tt-rss.org/',                                                      'Self-hosted feed reader'),
+				array('FreshRSS/',            'feed',     'FreshRSS',               'https://freshrss.org/',                                                    'Self-hosted feed reader'),
+				array('W3C_Validator',        'feed',     'W3C Validator',          'https://validator.w3.org/',                                                'W3C HTML/CSS validator'),
+				array('W3C-checklink',        'feed',     'W3C Link Checker',       'https://validator.w3.org/checklink',                                      'W3C broken link checker'),
+				array('W3C-mobileOK',         'feed',     'W3C Mobile Checker',     'https://validator.w3.org/mobile/',                                        'W3C mobile compatibility checker'),
+				array('validator\\.nu',       'feed',     'Validator.nu',           'https://validator.nu/',                                                    'HTML5 validator'),
+				array('Google-Structured-Data-Testing-Tool', 'feed', 'Google Rich Results', 'https://search.google.com/test/rich-results', 'Google structured data validator'),
+
+				// ── Headless browsers / testing ──────────────────────
+				array('HeadlessChrome',       'headless', 'Headless Chrome',        'https://developer.chrome.com/docs/chromium/headless',                      'Puppeteer/Playwright headless browser'),
+				array('PhantomJS',            'headless', 'PhantomJS',              'https://phantomjs.org/',                                                   'Headless WebKit browser (legacy)'),
+				array('Selenium',             'headless', 'Selenium',               'https://www.selenium.dev/',                                                'Browser automation framework'),
+				array('WebDriver',            'headless', 'WebDriver',              'https://www.w3.org/TR/webdriver/',                                        'W3C browser automation protocol'),
+				array('PTST/',                'headless', 'Playwright Test',        'https://playwright.dev/',                                                  'Playwright testing framework'),
+				array('Lighthouse',           'headless', 'Google Lighthouse',      'https://developer.chrome.com/docs/lighthouse/',                            'Page quality/performance audit'),
+				array('PageSpeed',            'headless', 'Google PageSpeed',       'https://pagespeed.web.dev/',                                               'Page speed analysis'),
+				array('Chrome-Lighthouse',    'headless', 'Chrome Lighthouse',      'https://developer.chrome.com/docs/lighthouse/',                            'Lighthouse via Chrome DevTools'),
+				array('GTmetrix',             'headless', 'GTmetrix',               'https://gtmetrix.com/',                                                    'Page performance analysis'),
+				array('WebPageTest',          'headless', 'WebPageTest',            'https://www.webpagetest.org/',                                             'Page load performance testing'),
+				array('Speed Insights',       'headless', 'Speed Insights',         'https://pagespeed.web.dev/',                                               'Google PageSpeed Insights'),
+
+				// ── HTTP libraries (scripts, not browsers) ──────────
+				array('curl/',                'library',  'curl',                   'https://curl.se/',                                                         'Command-line HTTP client'),
+				array('Wget/',                'library',  'Wget',                   'https://www.gnu.org/software/wget/',                                      'Command-line file downloader'),
+				array('python-requests',      'library',  'Python Requests',        'https://requests.readthedocs.io/',                                        'Python HTTP library'),
+				array('python-httpx',         'library',  'Python HTTPX',           'https://www.python-httpx.org/',                                            'Python async HTTP library'),
+				array('Python-urllib',        'library',  'Python urllib',          'https://docs.python.org/3/library/urllib.html',                            'Python standard HTTP library'),
+				array('aiohttp/',             'library',  'Python aiohttp',         'https://docs.aiohttp.org/',                                               'Python async HTTP library'),
+				array('scrapy/',              'library',  'Scrapy',                 'https://scrapy.org/',                                                      'Python web scraping framework'),
+				array('httpx/',               'library',  'httpx (Go)',             'https://github.com/projectdiscovery/httpx',                               'Go HTTP toolkit'),
+				array('Go-http-client',       'library',  'Go HTTP Client',         'https://pkg.go.dev/net/http',                                             'Go standard HTTP library'),
+				array('Java/',                'library',  'Java HTTP',              'https://docs.oracle.com/en/java/',                                        'Java HTTP client'),
+				array('Apache-HttpClient',    'library',  'Apache HttpClient',      'https://hc.apache.org/',                                                   'Java Apache HTTP library'),
+				array('okhttp/',              'library',  'OkHttp',                 'https://square.github.io/okhttp/',                                        'Java/Kotlin HTTP client'),
+				array('axios/',               'library',  'Axios',                  'https://axios-http.com/',                                                  'Node.js HTTP client'),
+				array('node-fetch',           'library',  'node-fetch',             'https://github.com/node-fetch/node-fetch',                                'Node.js fetch polyfill'),
+				array('undici/',              'library',  'Undici',                 'https://undici.nodejs.org/',                                               'Node.js HTTP/1.1 client'),
+				array('libwww-perl',          'library',  'libwww-perl (LWP)',      'https://metacpan.org/pod/LWP',                                            'Perl HTTP library'),
+				array('Ruby/',                'library',  'Ruby HTTP',              'https://docs.ruby-lang.org/en/master/Net/HTTP.html',                      'Ruby standard HTTP library'),
+				array('Faraday/',             'library',  'Faraday (Ruby)',         'https://lostisland.github.io/faraday/',                                   'Ruby HTTP client middleware'),
+				array('Typhoeus',             'library',  'Typhoeus (Ruby)',        'https://typhoeus.github.io/',                                              'Ruby parallel HTTP client'),
+				array('Mechanize',            'library',  'Mechanize',              'https://mechanize.readthedocs.io/',                                        'Headless browser library'),
+				array('Guzzle',               'library',  'Guzzle (PHP)',           'https://docs.guzzlephp.org/',                                             'PHP HTTP client'),
+				array('GuzzleHttp',           'library',  'GuzzleHttp (PHP)',       'https://docs.guzzlephp.org/',                                             'PHP HTTP client'),
+				array('ReactorHTTP',          'library',  'ReactPHP HTTP',          'https://reactphp.org/',                                                    'PHP async HTTP client'),
+				array('Dart/',                'library',  'Dart HTTP',              'https://dart.dev/',                                                         'Dart HTTP client'),
+				array('Deno/',                'library',  'Deno',                   'https://deno.com/',                                                         'Deno runtime fetch'),
+				array('Bun/',                 'library',  'Bun',                    'https://bun.sh/',                                                           'Bun runtime fetch'),
+				array('RestSharp',            'library',  'RestSharp (C#)',         'https://restsharp.dev/',                                                   '.NET REST client'),
+				array('PostmanRuntime',       'library',  'Postman',                'https://www.postman.com/',                                                 'API development/testing tool'),
+				array('insomnia/',            'library',  'Insomnia',               'https://insomnia.rest/',                                                   'API client/testing tool'),
+				array('HTTPie/',              'library',  'HTTPie',                 'https://httpie.io/',                                                        'User-friendly HTTP client'),
+
+				// ── Web archivers ───────────────────────────────────
+				array('Wayback',              'archiver', 'Wayback Machine',        'https://web.archive.org/',                                                 'Internet Archive page snapshots'),
+				array('archive\\.org_bot',    'archiver', 'Archive.org Bot',        'https://archive.org/',                                                     'Internet Archive crawler'),
+				array('ia_archiver',          'archiver', 'Alexa/IA Archiver',      'https://archive.org/',                                                     'Internet Archive legacy crawler'),
+				array('ArchiveTeam',          'archiver', 'Archive Team',           'https://archiveteam.org/',                                                 'Community web archiving project'),
+				array('Heritrix/',            'archiver', 'Heritrix',               'https://github.com/internetarchive/heritrix3',                            'Internet Archive web crawler engine'),
+			);
+		}
+
+		// ── Match ───────────────────────────────────────────────────
+		foreach ($bots as $bot) {
+			$escaped = str_replace('/', '\\/', $bot[0]);
+			if (preg_match('/' . $escaped . '/i', $userAgent)) {
+				return array(
+					'category' => $bot[1],
+					'match'    => $bot[0],
+					'name'     => $bot[2],
+					'url'      => $bot[3],
+					'purpose'  => $bot[4]
+				);
+			}
+		}
+
+		return null;
+	}
+
+	/**
 	 * Use this to determine whether or not the request is being made
 	 * to fill a frame or iframe.
 	 * @method isEmbed

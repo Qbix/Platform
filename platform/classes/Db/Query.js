@@ -1515,4 +1515,109 @@ Query.prototype.nearestTo = function () {
 	return this.vectorNearestTo.apply(this, arguments);
 };
 
+/**
+ * Inserts many rows in bulk, in chunks, optionally upserting. The adapters
+ * expose this as db.insertManyAndExecute(); the shared batching lives here and
+ * each adapter contributes only its upsert clause via _insertManyUpsert().
+ *
+ * @method insertManyAndExecute
+ * @static
+ * @param {Db.Mysql|Db.Sqlite|Db.Postgres} db
+ * @param {String} table
+ * @param {Array} rows
+ * @param {Object} [options] columns, chunkSize (default 20), onDuplicateKeyUpdate
+ * @param {Function} [callback] (err, insertedCount)
+ */
+Query.insertManyAndExecute = function (db, table, rows, options, callback) {
+	options = options || {};
+	callback = callback || function () {};
+	if (!table) {
+		return callback(new Q.Exception(
+			"Db.insertManyAndExecute: table not specified"
+		));
+	}
+	if (!rows || !rows.length) {
+		return callback(null, 0);   // nothing to do, not an error
+	}
+	var chunkSize = (options.chunkSize === undefined) ? 20 : parseInt(options.chunkSize);
+	if (!(chunkSize > 0)) {
+		return callback(new Q.Exception(
+			"Db.insertManyAndExecute: chunkSize must be a positive number"
+		));
+	}
+
+	function fieldsOf(row) { return (row && row.fields) ? row.fields : row; }
+
+	var columns = options.columns;
+	if (!columns) {
+		columns = Object.keys(fieldsOf(rows[0]));
+	}
+	if (!columns.length) {
+		return callback(new Q.Exception(
+			"Db.insertManyAndExecute: the first row has no columns"
+		));
+	}
+
+	// One probe query gives us the adapter's quoting and parameter handling
+	var probe = db.SELECT('*', table);
+	var q = function (name) { return probe._column(name); };
+	var quotedTable = q(table);
+	var columnsString = columns.map(q).join(', ');
+	var upsert = probe._insertManyUpsert
+		? probe._insertManyUpsert(columns, options.onDuplicateKeyUpdate) : '';
+	if (options.onDuplicateKeyUpdate && !upsert) {
+		return callback(new Q.Exception(
+			"Db.insertManyAndExecute: " + (probe.typename || 'this adapter')
+			+ " does not support onDuplicateKeyUpdate"
+		));
+	}
+
+	var inserted = 0, i = 0;
+	(function nextChunk() {
+		if (i >= rows.length) {
+			return callback(null, inserted);
+		}
+		var chunk = rows.slice(i, i + chunkSize);
+		i += chunk.length;
+
+		var placeholders = [], parameters = {}, n = 0;
+		chunk.forEach(function (row, ri) {
+			var f = fieldsOf(row), marks = [];
+			columns.forEach(function (c) {
+				var v = f[c];
+				if (v !== undefined && v !== null
+				&& (v.typename === 'Db.Expression')) {
+					marks.push(v.toString());
+					Q.extend(parameters, v.parameters);
+					return;
+				}
+				var name = '_im_' + (ri) + '_' + (n++);
+				marks.push(':' + name);
+				parameters[name] = (v === undefined) ? null : v;
+			});
+			placeholders.push('(' + marks.join(', ') + ')');
+		});
+
+		var sql = 'INSERT INTO ' + quotedTable + ' (' + columnsString + ')'
+			+ ' VALUES ' + placeholders.join(', ') + upsert;
+		var query = db.rawQuery(sql, {});
+		Q.extend(query.parameters, parameters);
+		query.execute(function (params) {
+			var err = params && params[''] && params[''][0];
+			if (err) { return callback(err); }
+			inserted += chunk.length;
+			nextChunk();
+		});
+	})();
+};
+
+/**
+ * Builds this engine's upsert clause for insertManyAndExecute. Adapters
+ * override; the base returns '' meaning "not supported here".
+ * @method _insertManyUpsert
+ */
+Query.prototype._insertManyUpsert = function (columns, onDuplicateKeyUpdate) {
+	return '';
+};
+
 module.exports = Query;
