@@ -8198,15 +8198,29 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 
 		req.onupgradeneeded = function () {
 			var db = req.result;
-			if (db.version > 1 && !db.objectStoreNames.contains(storeName) && !triedCreatingStore) {
-				triedCreatingStore = true;
-				var store = db.createObjectStore(storeName, {
-					keyPath: params.keyPath,
-					autoIncrement: !!params.autoIncrement
-				});
-				for (var i = 0; i < indexes.length; ++i) {
-					var [name, keyPath, opts] = indexes[i];
-					store.createIndex(name, keyPath, opts);
+			if (db.version > 1 && !triedCreatingStore) {
+				var exists = db.objectStoreNames.contains(storeName);
+				var mismatched = false;
+				if (exists) {
+					// A store's keyPath/autoIncrement can't be altered in place —
+					// only detected and, if wrong, dropped and recreated here.
+					try {
+						var existingStore = req.transaction.objectStore(storeName);
+						mismatched = (!!existingStore.autoIncrement !== !!params.autoIncrement)
+							|| (existingStore.keyPath !== params.keyPath);
+					} catch (e) { mismatched = true; }
+				}
+				if (!exists || mismatched) {
+					triedCreatingStore = true;
+					if (mismatched) { db.deleteObjectStore(storeName); }
+					var store = db.createObjectStore(storeName, {
+						keyPath: params.keyPath,
+						autoIncrement: !!params.autoIncrement
+					});
+					for (var i = 0; i < indexes.length; ++i) {
+						var [name, keyPath, opts] = indexes[i];
+						store.createIndex(name, keyPath, opts);
+					}
 				}
 			}
 		};
@@ -8228,6 +8242,19 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 			var storeNeedsRecreate = false;
 			try {
 				if (!db.objectStoreNames.contains(storeName)) {
+					storeNeedsRecreate = true;
+				} else if ((function () {
+					// Detect a store that exists but was created with the wrong
+					// keyPath/autoIncrement (e.g. from before a params change
+					// shipped) — db.objectStoreNames.contains() alone can't
+					// tell a correctly- from an incorrectly-configured store
+					// apart, so every prior open kept "successfully" reusing
+					// a broken store forever, with no way to recover short of
+					// the user manually deleting the database.
+					var tx0 = db.transaction(storeName, 'readonly');
+					var s0  = tx0.objectStore(storeName);
+					return (!!s0.autoIncrement !== !!params.autoIncrement) || (s0.keyPath !== params.keyPath);
+				})()) {
 					storeNeedsRecreate = true;
 				} else if (Q.getObject('Q.Cordova.IndexedDB.forceRecreate')) {
 					var tx = db.transaction(storeName, 'readonly');
