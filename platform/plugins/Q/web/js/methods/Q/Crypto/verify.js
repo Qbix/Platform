@@ -45,8 +45,8 @@ Q.exports(function (Q) {
 					// Always use our encoder for the digest —
 					// single source of truth, byte-identical to PHP Q_Crypto_EIP712
 					const [{ hashTypedData }, { keccak_256 }] = await Promise.all([
-						import(Q.url("{{Q}}/src/js/crypto/eip712.js")),
-						import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
+						import(Q.url("{{Q}}/js/crypto/eip712.js")),
+						import(Q.url("{{Q}}/js/crypto/sha3.js"))
 					]);
 
 					const digest = hashTypedData(
@@ -57,7 +57,7 @@ Q.exports(function (Q) {
 					);
 
 					const secp = await import(
-						Q.url("{{Q}}/src/js/crypto/secp256k1.js")
+						Q.url("{{Q}}/js/crypto/curves/secp256k1.js")
 					);
 
 					let sigBytes = options.signature;
@@ -84,10 +84,10 @@ Q.exports(function (Q) {
 						return;
 					}
 
-					const sig = secp.secp256k1.Signature.fromCompact(sigBytes);
+					const sig = secp.secp256k1.Signature.fromBytes(sigBytes, 'compact');
 
 					// Enforce low-s (EIP-2)
-					if (sig.s > secp.secp256k1.CURVE.n / 2n) {
+					if (sig.s > secp.secp256k1.Point.Fn.ORDER / 2n) {
 						resolve(false);
 						return;
 					}
@@ -102,7 +102,7 @@ Q.exports(function (Q) {
 						try {
 							pub = sig.addRecoveryBit(r)
 								.recoverPublicKey(digest)
-								.toRawBytes(false); // uncompressed
+								.toBytes(false); // uncompressed
 							break;
 						} catch (e) {
 							// try next
@@ -114,7 +114,9 @@ Q.exports(function (Q) {
 						return;
 					}
 
-					if (!secp.secp256k1.verify(sig, digest, pub)) {
+					// prehash:false — digest is already the raw EIP-712 keccak256
+					// digest; must match how sign.js signed it (see sign.js comment).
+					if (!secp.secp256k1.verify(sigBytes, digest, pub, { prehash: false })) {
 						resolve(false);
 						return;
 					}
@@ -150,7 +152,10 @@ Q.exports(function (Q) {
 			 * ES256 (P-256 + SHA-256)
 			 * =================================================
 			 *
-			 * Signatures are DER-encoded ECDSA (WebCrypto compatible).
+			 * Signatures travel as DER-encoded ECDSA (see sign.js /
+			 * encoder.js), but WebCrypto's ECDSA verify only accepts raw
+			 * IEEE P1363 (r(32)||s(32)) signatures — it silently returns
+			 * false for DER, it doesn't throw. So decode DER to raw first.
 			 * subtle.verify hashes internally, so pass raw canonical bytes.
 			 */
 			if (format === "ES256") {
@@ -174,6 +179,14 @@ Q.exports(function (Q) {
 				const data = new TextEncoder().encode(canonical);
 
 				try {
+					const { decodeEcdsaDer } = await import(
+						Q.url("{{Q}}/js/crypto/encoder.js")
+					);
+					const { r, s } = decodeEcdsaDer(options.signature);
+					const rawSig = new Uint8Array(64);
+					rawSig.set(padTo32(r), 0);
+					rawSig.set(padTo32(s), 32);
+
 					const key = await crypto.subtle.importKey(
 						"raw",
 						options.publicKey,
@@ -186,7 +199,7 @@ Q.exports(function (Q) {
 						const ok = await crypto.subtle.verify(
 							{ name: "ECDSA", hash: "SHA-256" },
 							key,
-							options.signature,
+							rawSig,
 							data  // raw canonical bytes — subtle hashes once internally
 						);
 						resolve(ok);
@@ -205,5 +218,16 @@ Q.exports(function (Q) {
 			throw new Error("Unknown signature format: " + format);
 		});
 	};
+
+	// Left-pad/truncate a big-endian byte array (as decoded from DER, which
+	// may carry a leading 0x00 sign-guard byte or be shorter than 32 bytes)
+	// to exactly 32 bytes, as WebCrypto's raw P1363 format requires.
+	function padTo32(bytes) {
+		let n = 0n;
+		for (const b of bytes) { n = (n << 8n) | BigInt(b); }
+		const out = new Uint8Array(32);
+		for (let i = 31; i >= 0; i--) { out[i] = Number(n & 0xffn); n >>= 8n; }
+		return out;
+	}
 
 });

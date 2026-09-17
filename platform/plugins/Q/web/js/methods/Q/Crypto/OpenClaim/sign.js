@@ -39,7 +39,7 @@ Q.exports(function (Q) {
 
 		// Load noble p256, derive keypair, build SPKI key URI — all chained Promises
 		return Q.Promise.resolve(
-			import(Q.url("{{Q}}/src/js/crypto/nist.js"))
+			import(Q.url("{{Q}}/js/crypto/curves/nist.js"))
 		).then(function (noble) {
 
 			return Q.Crypto.internalKeypair({
@@ -72,18 +72,15 @@ Q.exports(function (Q) {
 
 							var digest = new Uint8Array(digestBuffer);
 
-							// Sign with noble p256 — produces Signature object
-							// .normalizeS() enforces low-S (required for OpenClaim interop)
-							var sig     = noble.p256.sign(digest, kp.privateKey).normalizeS();
-							var sigBytes = new Uint8Array(64);
-
-							// r and s as 32-byte big-endian — raw r||s format (not DER)
-							var rHex = sig.r.toString(16).padStart(64, "0");
-							var sHex = sig.s.toString(16).padStart(64, "0");
-							for (var i = 0; i < 32; i++) {
-								sigBytes[i]      = parseInt(rHex.slice(i * 2, i * 2 + 2), 16);
-								sigBytes[i + 32] = parseInt(sHex.slice(i * 2, i * 2 + 2), 16);
-							}
+							// noble.p256.sign's default format is 'compact' (raw
+							// 64-byte r||s — exactly what OpenClaim needs, not DER),
+							// and lowS is already the default, so no separate
+							// normalize step exists or is needed. prehash:false
+							// because digest is already SHA-256(canon); noble's
+							// own default (prehash:true) would hash it again.
+							var sigBytes = noble.p256.sign(digest, kp.privateKey, {
+								prehash: false
+							});
 
 							var idx = state.keys.indexOf(signerKey);
 							state.signatures[idx] = Q.Data.toBase64(sigBytes);

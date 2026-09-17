@@ -80,7 +80,7 @@ Q.exports(function (Q) {
 				// Algorithm matches delegate.js: keccak256 for EIP712, SHA-256 for ES256
 				// -------------------------------------------------
 				const secretHashPromise = format === "EIP712"
-					? import(Q.url("{{Q}}/src/js/crypto/sha3.js"))
+					? import(Q.url("{{Q}}/js/crypto/sha3.js"))
 						.then(function ({ keccak_256 }) {
 							return Q.Data.toHex(keccak_256(derivedSecret));
 						})
