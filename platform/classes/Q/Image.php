@@ -1019,116 +1019,178 @@ class Q_Image
 			}
 		}
 		$dwMax = $dhMax = 0;
-		foreach ($sizes as $size => $name) {
-			if (empty($name)) {
-				// generate a filename
-				do {
-					$name = Q_Utils::randomString(8).'.jpg';
-				} while (file_exists($writePath.$name));
-			}
-			if (strrpos($name, '.') === false) {
-				$name .= '.jpg';
-			}
-			$parts = explode('.', $name);
-			$ext = end($parts);
-			$sw = $isw;
-			$sh = $ish;
-			$sx = $isx;
-			$sy = $isy;
-			// determine destination image size
-			if (empty($size) || $size == 'x') {
-				$size = 'x';
-				$dw = $w2 = $sw;
-				$dh = $h2 = $sh;
-			} else {
-				$sa = explode('x', $size);
-				$square = (count($sa) == 1);
-				if ($square) {
-					$dw = $dh = intval($sa[0]);
+		// Nothing in the size set becomes visible until the WHOLE set exists.
+		// Each size is rendered to a temp file in its own destination directory,
+		// and only once the last size has been rendered are those temp files
+		// renamed into place. rename(2) is atomic per file within a filesystem,
+		// so the window in which another process can observe a partial set
+		// shrinks from the seconds of GD work to the microseconds of the rename
+		// loop below. Before this, a SIGTERM from request_terminate_timeout, an
+		// OOM mid-loop or a container restart left some sizes on disk and the
+		// rest missing, with nothing on disk to distinguish that from a complete
+		// set -- and readers that derive a URL by convention ("<size>.png") got
+		// a 404, or a stale file from an earlier upload to the same path.
+		$renames = array();  // temp path => final path, applied in insertion order
+		$symlinks = array(); // final path => the already-final path to point at
+		$staged = array();   // final path => true, for every size in THIS set
+		try {
+			foreach ($sizes as $size => $name) {
+				if (empty($name)) {
+					// generate a filename
+					do {
+						$name = Q_Utils::randomString(8).'.jpg';
+					} while (file_exists($writePath.$name)
+					or isset($staged[$writePath.$name]));
+				}
+				if (strrpos($name, '.') === false) {
+					$name .= '.jpg';
+				}
+				$parts = explode('.', $name);
+				$ext = end($parts);
+				// Where this size will end up, and where it is built first. The temp
+				// name is in the SAME directory, so the rename is a same-filesystem
+				// (and therefore atomic) one. pid + random keeps two concurrent
+				// uploads to the same path off each other's temp files.
+				$finalPath = $writePath.$name;
+				$tempPath = $finalPath.'.'.getmypid().'.'.Q_Utils::randomString(6).'.tmp';
+				$staged[$finalPath] = true;
+				$sw = $isw;
+				$sh = $ish;
+				$sx = $isx;
+				$sy = $isy;
+				// determine destination image size
+				if (empty($size) || $size == 'x') {
+					$size = 'x';
+					$dw = $w2 = $sw;
+					$dh = $h2 = $sh;
 				} else {
-					if ($sa[0] === '') {
-						if ($sa[1] === '') {
-							$dw = $sw;
-							$dh = $sh;
-						} else {
-							$dh = intval($sa[1]);
-							$dw = round($sw * $dh / $sh);
-						}
+					$sa = explode('x', $size);
+					$square = (count($sa) == 1);
+					if ($square) {
+						$dw = $dh = intval($sa[0]);
 					} else {
-						$dw = intval($sa[0]);
-						if ($sa[1] === '') {
-							$dh = round($sh * $dw / $sw);
+						if ($sa[0] === '') {
+							if ($sa[1] === '') {
+								$dw = $sw;
+								$dh = $sh;
+							} else {
+								$dh = intval($sa[1]);
+								$dw = round($sw * $dh / $sh);
+							}
 						} else {
-							$dh = intval($sa[1]);
+							$dw = intval($sa[0]);
+							if ($sa[1] === '') {
+								$dh = round($sh * $dw / $sw);
+							} else {
+								$dh = intval($sa[1]);
+							}
 						}
 					}
+					// calculate the origin point of source image
+					// we have a cropped image of dimension $sw, $sh and need to make new with dimension $dw, $dh
+					$min = min($sw / $dw, $sh / $dh);
+					$w2 = round($dw * $min);
+					$h2 = round($dh * $min);
+					$sx = round($sx + ($sw - $w2) / 2);
+					$sy = round($sy + ($sh - $h2) / 2);
 				}
-				// calculate the origin point of source image
-				// we have a cropped image of dimension $sw, $sh and need to make new with dimension $dw, $dh
-				$min = min($sw / $dw, $sh / $dh);
-				$w2 = round($dw * $min);
-				$h2 = round($dh * $min);
-				$sx = round($sx + ($sw - $w2) / 2);
-				$sy = round($sy + ($sh - $h2) / 2);
-			}
-			// create destination image
-			$maxWidth = Q_Config::get('Q', 'images', 'maxWidth', null);
-			$maxHeight = Q_Config::get('Q', 'images', 'maxHeight', null);
-			if (isset($maxWidth) and $dw > $maxWidth) {
-				throw new Q_Exception("Image width exceeds maximum width of $dw");
-			}
-			if (isset($maxHeight) and $dh > $maxHeight) {
-				throw new Q_Exception("Image height exceeds maximum height of $dh");
-			}
-			$thumb = imagecreatetruecolor($dw, $dh);
-			imagesavealpha($thumb, true);
-			imagealphablending($thumb, false);
-			$res = ($w2 === $dw && $h2 === $dh)
-				? imagecopy($thumb, $image, 0, 0, $sx, $sy, $w2, $h2)
-				: imagecopyresampled($thumb, $image, 0, 0, $sx, $sy, $dw, $dh, $w2, $h2);
-			if (!$res) {
-				throw new Q_Exception("Failed to save image file of type '$ext'");
-			}
+				// create destination image
+				$maxWidth = Q_Config::get('Q', 'images', 'maxWidth', null);
+				$maxHeight = Q_Config::get('Q', 'images', 'maxHeight', null);
+				if (isset($maxWidth) and $dw > $maxWidth) {
+					throw new Q_Exception("Image width exceeds maximum width of $dw");
+				}
+				if (isset($maxHeight) and $dh > $maxHeight) {
+					throw new Q_Exception("Image height exceeds maximum height of $dh");
+				}
+				$thumb = imagecreatetruecolor($dw, $dh);
+				imagesavealpha($thumb, true);
+				imagealphablending($thumb, false);
+				$res = ($w2 === $dw && $h2 === $dh)
+					? imagecopy($thumb, $image, 0, 0, $sx, $sy, $w2, $h2)
+					: imagecopyresampled($thumb, $image, 0, 0, $sx, $sy, $dw, $dh, $w2, $h2);
+				if (!$res) {
+					throw new Q_Exception("Failed to save image file of type '$ext'");
+				}
 			
-			if ($dw === $dh and !$square) {
-				// save symlinks when possible, instead of copying large images
-				$squarefilename = $writePath."$dw.$ext";
-				if (file_exists($squarefilename)) {
-					Q_Utils::symlink($squarefilename, $writePath.$name);
-					continue;
+				if ($dw === $dh and !$square) {
+					// save symlinks when possible, instead of copying large images
+					$squarefilename = $writePath."$dw.$ext";
+					// The square size is either already on disk from an earlier upload,
+					// or staged as a temp file by an earlier iteration of THIS loop --
+					// before the temp-file staging above, only the first case could
+					// happen within one call, and without the second test this shortcut
+					// would silently stop firing. The link itself is deferred until
+					// after the renames, so Q_Utils::symlink() still sees an existing
+					// target (its Windows fallback copies, which a dangling link would
+					// break) and so no part of the set is published early.
+					if ($squarefilename !== $finalPath
+					and (file_exists($squarefilename) or isset($staged[$squarefilename]))) {
+						$symlinks[$finalPath] = $squarefilename;
+						continue;
+					}
 				}
-			}
-			if ($merge) {
-				$mergethumb = imagecreatetruecolor($mw, $mh);
-				imagesavealpha($mergethumb, false);
-				imagealphablending($mergethumb, false);
-				if (imagecopyresized($mergethumb, $merge, 0, 0, 0, 0, $dw, $dh, $mw, $mh)) {
-					imagecopy($thumb, $mergethumb, 0, 0, 0, 0, $dw, $dh);
+				if ($merge) {
+					$mergethumb = imagecreatetruecolor($mw, $mh);
+					imagesavealpha($mergethumb, false);
+					imagealphablending($mergethumb, false);
+					if (imagecopyresized($mergethumb, $merge, 0, 0, 0, 0, $dw, $dh, $mw, $mh)) {
+						imagecopy($thumb, $mergethumb, 0, 0, 0, 0, $dw, $dh);
+					}
 				}
-			}
-			switch ($ext) {
-				case 'jpeg':
-				case 'jpg':
-					$func = 'imagejpeg';
-					break;
-				case 'gif':
-					$func = 'imagegif';
-					break;
-				case 'png':
-				default:
-					$func = 'imagepng';
-					break;
-			}
-			if ($res = call_user_func($func, $thumb, $writePath.$name)) {
+				switch ($ext) {
+					case 'jpeg':
+					case 'jpg':
+						$func = 'imagejpeg';
+						break;
+					case 'gif':
+						$func = 'imagegif';
+						break;
+					case 'png':
+					default:
+						$func = 'imagepng';
+						break;
+				}
+				// A false return here is a failed write. It used to be swallowed --
+				// the size was simply absent from $data while the other sizes were
+				// published -- which is the same partial set this method now refuses
+				// to produce, so it throws with the message the imagecopy failure
+				// above already uses.
+				if (!call_user_func($func, $thumb, $tempPath)) {
+					throw new Q_Exception("Failed to save image file of type '$ext'");
+				}
+				$renames[$tempPath] = $finalPath;
 				$data[$size] = $subpath ? "$path/$subpath/$name" : "$path/$name";
+				if ($dw > $dwMax and $size !== 'x') {
+					$dwMax = $dw;
+					$data['largestWidthSize'] = $size;
+				}
+				if ($dh > $dhMax and $size !== 'x') {
+					$dhMax = $dh;
+					$data['largestHeightSize'] = $size;
+				}
 			}
-			if ($dw > $dwMax and $size !== 'x') {
-				$dwMax = $dw;
-				$data['largestWidthSize'] = $size;
+			// Publish the set. Keep this loop free of anything slow or fallible:
+			// it is the entire window in which a partial set is observable. Each
+			// entry is dropped as it lands, so `finally` below only ever unlinks
+			// temp files that were never published.
+			foreach ($renames as $tempPath => $finalPath) {
+				if (!@rename($tempPath, $finalPath)) {
+					throw new Q_Exception("Failed to move image file into place: $finalPath");
+				}
+				unset($renames[$tempPath]);
 			}
-			if ($dh > $dhMax and $size !== 'x') {
-				$dhMax = $dh;
-				$data['largestHeightSize'] = $size;
+			// Symlinked sizes last, now that every target is at its final path.
+			foreach ($symlinks as $finalPath => $squarefilename) {
+				Q_Utils::symlink($squarefilename, $finalPath);
+			}
+		} finally {
+			// Anything still here was never published: a throw from GD, from the
+			// size guards, from a failed write, or a catchable fatal converted by
+			// the error handler. Leaving temp files behind would turn one killed
+			// upload into permanent litter in a public directory.
+			foreach ($renames as $tempPath => $finalPath) {
+				@unlink($tempPath);
 			}
 		}
 		$data[''] = $subpath ? "$path/$subpath" : "$path";
