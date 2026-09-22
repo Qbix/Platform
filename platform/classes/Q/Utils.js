@@ -264,6 +264,39 @@ Utils.validateCapability = function (capability, permissions) {
 };
 
 /**
+ * Whether TLS certificate verification should be enforced for an outbound
+ * request, given the host(s) it will reach. Verification is ON by default;
+ * a deployment opts out per host, or wholesale, through config.
+ *
+ * @method _rejectUnauthorized
+ * @private
+ * @param {string} [host]  Logical host from the URL, may include ":port"
+ * @param {string} [target]  Host actually connected to, when an IP overrides the URL's
+ * @return {boolean}  the value to pass as agentOptions.rejectUnauthorized
+ */
+function _rejectUnauthorized(host, target) {
+	// A wholesale opt-out, for an install that cannot present a verifiable cert.
+	if (Q.Config.get(['Q', 'node', 'tls', 'rejectUnauthorized'], true) === false) {
+		return false;
+	}
+	var insecure = Q.Config.get(['Q', 'node', 'tls', 'insecureHosts'], []);
+	if (!insecure || !insecure.length) {
+		return true;
+	}
+	var hostnames = [host, target].map(function (h) {
+		// strip any ":port" and lowercase, so config lists plain hostnames
+		return String(h || '').split(':')[0].toLowerCase();
+	});
+	for (var i = 0; i < insecure.length; ++i) {
+		var allowed = String(insecure[i]).split(':')[0].toLowerCase();
+		if (allowed && hostnames.indexOf(allowed) >= 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/**
  * Issues an HTTP request and returns a Promise.
  * If a callback is provided, it is called on completion and the Promise is also returned.
  *
@@ -314,10 +347,26 @@ function _request(method, uri, data, userAgent, header, callback) {
 		data = http_build_query(data, '', '&');
 	}
 
+	// TLS certificate verification is ON here, and that is the whole point of
+	// this call: this option used to be a hardcoded `false`, which disabled
+	// verification for EVERY node-side outbound HTTPS request -- Telegram bot
+	// tokens, Facebook Graph access tokens, and queryExternal/sendToPHP back to
+	// the app itself -- so anyone able to redirect those connections got a
+	// working man-in-the-middle with no certificate error.
+	// An install that genuinely serves something over a self-signed cert opts
+	// out narrowly, by host:
+	//     Q/node/tls/insecureHosts: ["myapp.local"]
+	// or, as a last resort, wholesale:
+	//     Q/node/tls/rejectUnauthorized: false
+	// Prefer the host list. Note this checks the host actually connected to as
+	// well as the URL's host, because the [url, ip] form of `uri` connects to
+	// `ip` and only sends `host` in the Host header -- over https that presents
+	// the IP to the TLS layer, so such a call needs the IP listed (or should
+	// not be used with https at all).
 	var requestOpts = {
 		headers: header,
 		uri: server + "?" + data,
-		agentOptions: { rejectUnauthorized: false }
+		agentOptions: { rejectUnauthorized: _rejectUnauthorized(host, ip) }
 	};
 
 	var p = new Promise(function(resolve, reject) {
