@@ -344,33 +344,82 @@ class Q_Links
 	}
 
 	/**
-	 * Generates an Ethereum payment URI (EIP-681).
+	 * Generates an Ethereum payment URI per EIP-681.
+	 * Supports native coin transfers (ETH, MATIC, etc.) and
+	 * ERC-20 token transfers via the `transfer` function selector.
+	 *
+	 * Native: ethereum:0xRecipient@chainId?value=amountInWei
+	 * ERC-20: ethereum:0xToken@chainId/transfer?address=0xRecipient&uint256=amountInBaseUnits
 	 *
 	 * @static
 	 * @method ethereumPay
-	 * @param {string} $address
-	 *   Ethereum address or contract.
+	 * @param {string} $to
+	 *   Recipient address (for native) or token contract address (for ERC-20).
 	 * @param {array} [$options]
 	 * @param {string|int} [$options['value']]
-	 *   Amount of ETH or token.
-	 * @param {string|int} [$options['gas']]
-	 *   Gas price.
-	 * @param {string|int} [$options['gasLimit']]
-	 *   Gas limit.
+	 *   Amount in wei for native coin transfers.
+	 * @param {string} [$options['token']]
+	 *   ERC-20 token contract address. When set, $to becomes the
+	 *   recipient and this address is placed in the URI target position.
+	 *   $options['amount'] is then the token amount in base units.
+	 * @param {string|int} [$options['amount']]
+	 *   Token amount. In base units by default (e.g. 1000000 for 1 USDC),
+	 *   or in human-readable units if $options['decimals'] is also provided.
+	 * @param {int} [$options['decimals']]
+	 *   Token decimal places (e.g. 6 for USDC, 18 for DAI). When set,
+	 *   amount is treated as a human-readable value and converted
+	 *   to base units. No network call — the caller provides this.
 	 * @param {string|int} [$options['chainId']]
-	 *   Chain ID.
+	 *   EIP-155 chain ID (1 = Ethereum, 137 = Polygon, etc.).
+	 * @param {string|int} [$options['gas']]
+	 *   Gas limit hint for the wallet.
+	 * @param {string|int} [$options['gasPrice']]
+	 *   Gas price hint in wei.
 	 * @return {string}
-	 *   `ethereum:` payment URI.
+	 *   An `ethereum:` payment URI.
 	 */
-	static function ethereumPay($address, $options = array())
+	static function ethereumPay($to, $options = array())
 	{
-		$url = 'ethereum:' . $address;
 		$params = array();
 
-		foreach (array('value','gas','gasLimit','chainId') as $k) {
-			if (isset($options[$k])) {
-				$params[$k] = $options[$k];
+		if (!empty($options['token'])) {
+			// ERC-20 transfer
+			$url = 'ethereum:' . $options['token'];
+			if (isset($options['chainId'])) {
+				$url .= '@' . $options['chainId'];
 			}
+			$url .= '/transfer';
+			$params['address'] = $to;
+			if (isset($options['amount'])) {
+				$amt = $options['amount'];
+				if (isset($options['decimals'])) {
+					// Convert human-readable amount to base units
+					// using string math to avoid floating-point issues.
+					$d = (int)$options['decimals'];
+					$parts = explode('.', (string)$amt);
+					$whole = $parts[0] ?? '0';
+					$frac = substr(($parts[1] ?? ''), 0, $d);
+					$frac = str_pad($frac, $d, '0');
+					$amt = ltrim($whole . $frac, '0') ?: '0';
+				}
+				$params['uint256'] = $amt;
+			}
+		} else {
+			// Native coin transfer
+			$url = 'ethereum:' . $to;
+			if (isset($options['chainId'])) {
+				$url .= '@' . $options['chainId'];
+			}
+			if (isset($options['value'])) {
+				$params['value'] = $options['value'];
+			}
+		}
+
+		if (isset($options['gas'])) {
+			$params['gas'] = $options['gas'];
+		}
+		if (isset($options['gasPrice'])) {
+			$params['gasPrice'] = $options['gasPrice'];
 		}
 
 		if ($params) {

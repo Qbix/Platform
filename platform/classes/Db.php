@@ -1477,7 +1477,7 @@ class Db
 			$results = self::$connections;
 		}
 		foreach ($results as $name => &$info) {
-			if (!isset($info['prefix'])) {
+			if (!isset($info['prefix']) && $name !== '*') {
 				$info['prefix'] = strtolower($name) . '_';
 			}
 			if (!isset($info['shards'])) {
@@ -1509,7 +1509,7 @@ class Db
 				? self::$connections[$name]
 				: array();
 		}
-		if (!isset($result['prefix'])) {
+		if (!isset($result['prefix']) && $name !== '*') {
 			$result['prefix'] = strtolower($name) . '_';
 		}
 		if (!isset($info['shards'])) {

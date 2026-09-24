@@ -11,7 +11,7 @@
 		"cloudconvert/cloudconvert-php": "3.2.3",
 		"paragonie/ecc": "^2.0",
 		"vimeo/vimeo-api": "3.0.10",
-		"paragonie/sodium_compat": "^1.21 || ^2.0"
+		"paragonie/sodium_compat": ">=1.15.4 <1.18"
 	},
 	"conflict": {
 		"paragonie/random_compat": ">=3.0"
