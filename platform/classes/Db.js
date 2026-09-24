@@ -44,7 +44,7 @@ Db.getConnections = function () {
 	for (var k in result) {
 		result[k] = Q.extend({}, base, result[k]);
 	}
-	if (result.prefix === undefined) {
+	if (result.prefix === undefined && name !== '*') {
 		result['prefix'] = name.toLowerCase() + '_';
 	}
 	delete result['*'];
@@ -64,7 +64,7 @@ Db.getConnection = function(name) {
 	if (name !== '*' && (base = Db.getConnection('*'))) {
 		result = Q.extend({}, base, result);
 	}
-	if (result.prefix === undefined) {
+	if (result.prefix === undefined && name !== '*') {
 		result['prefix'] = name.toLowerCase() + '_';
 	}
 	return result;
