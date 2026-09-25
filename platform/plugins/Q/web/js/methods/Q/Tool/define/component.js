@@ -1,226 +1,208 @@
 Q.exports(function (Q) {
+    /**
+     * Register a Custom Element for a Q tool. Hyphenated attributes resolve to
+     * camelCase keys (publisher-id -> publisherId). A schema may instead declare
+     * a nested path (foo-bar -> options.foo.bar).
+     *
+     * Event attributes such as on-custom-event="App.handlers.changed" require
+     * a matching Q.Event in the tool's default options. Q.extend installs the
+     * dotted handler path on that event; Q.handle resolves it when it fires.
+     */
+    return function Q_Tool_define_component(name, ctor) {
+        if (typeof customElements === 'undefined') return;
 
-	/**
-	 * Registers a Custom Element (Web Component) for a Q tool.
-	 *
-	 * Model:
-	 *   - Attributes are compiled once into data-* (initialization)
-	 *   - Then removed (clean DOM)
-	 *   - Q.Tool runs normally
-	 *   - Later attribute changes are treated as incremental updates
-	 *
-	 * Notes:
-	 *   - Attributes are case-insensitive in HTML; keys are normalized via ctor.options
-	 *   - Hyphenated attributes map to nested paths (e.g. publisher-id → publisher.id)
-	 *   - Non-hyphen attributes map to top-level keys (case-normalized)
-	 *
-	 * @class Q.Tool
-	 * @method define.component
-	 * @static
-	 * @param {String} name
-	 * @param {Function} [ctor]
-	 */
-	return function Q_Tool_define_component(name, ctor) {
-		if (typeof customElements === 'undefined') {
-			return;
-		}
+        var tagName = name.toLowerCase().replace(/[/_]/g, '-');
+        if (customElements.get(tagName)) return;
+        var stateKeys = ctor.stateKeys;
+        var last = Array.isArray(stateKeys) && stateKeys[stateKeys.length - 1];
+        var schema = Q.isPlainObject(last) ? last : null;
+        var attrTypeMap = Object.create(null);
+        var attrNameMap = Object.create(null);
+        var eventMap = Object.create(null);
+        if (schema) flattenSchema(schema, []);
 
-		var tagName = name.toLowerCase().replace(/[/_]/g, '-');
+        var defaults = ctor.options || {};
+        Object.keys(defaults).forEach(function (key) {
+            if (Q.typeOf(defaults[key]) === 'Q.Event') {
+                eventMap[camelToHyphen(key)] = key;
+            }
+        });
 
-		if (customElements.get(tagName)) {
-			return;
-		}
+        function camelToHyphen(s) {
+            return s.replace(/([A-Z])/g, function (c) {
+                return '-' + c.toLowerCase();
+            });
+        }
 
-		function _parse(str) {
-			try {
-				return JSON.parse(str);
-			} catch (e) {
-				return str;
-			}
-		}
+        function hyphenToCamel(s) {
+            return s.replace(/-([a-z])/g, function (_, c) {
+                return c.toUpperCase();
+            });
+        }
 
-		function _normalizeKey(key, defaults) {
-			if (!defaults) return key;
+        function flattenSchema(node, path) {
+            Object.keys(node).forEach(function (key) {
+                var val = node[key];
+                var next = path.concat(key);
+                var attr = next.map(camelToHyphen).join('-');
 
-			var lower = key.toLowerCase();
+                if (val && typeof val.from === 'function') {
+                    attrTypeMap[attr] = val;
+                    attrNameMap[attr] = next;
+                } else if (Q.isPlainObject(val)) {
+                    flattenSchema(val, next);
+                }
+            });
+        }
 
-			for (var k in defaults) {
-				if (k.toLowerCase() === lower) {
-					return k;
-				}
-			}
+        function infer(s) {
+            if (s === 'true') return true;
+            if (s === 'false') return false;
+            if (s === 'null') return null;
+            if (s === '') return true;
+            if (/^-?\d+$/.test(s)) return parseInt(s, 10);
+            if (/^-?\d*\.\d+$/.test(s)) return parseFloat(s);
 
-			return key;
-		}
+            if (s[0] === '{' || s[0] === '[') {
+                try {
+                    return JSON.parse(s);
+                } catch (e) {}
+            }
 
-		function _resolveAttr(attrName, attrValue, defaults) {
-			var lower = attrName.toLowerCase();
-			var parts = lower.split('-');
-			var path;
+            return s;
+        }
 
-			if (parts.length > 1) {
-				path = parts;
-			} else {
-				path = [_normalizeKey(attrName, defaults)];
-			}
+        function resolve(name, value) {
+            var key = name.toLowerCase();
+            var path = attrNameMap[key]
+                || [key.indexOf('-') < 0 ? key : hyphenToCamel(key)];
+            var optionKey = path.length === 1 ? path[0] : null;
+            var isEvent = optionKey
+                && Q.typeOf(defaults[optionKey]) === 'Q.Event';
+            var type = attrTypeMap[key];
+            var converted;
 
-			var value = (attrValue === null)
-				? true
-				: _parse(attrValue);
+            if (isEvent) {
+                // Q.extend recognizes this keyed object when its target is a
+                // Q.Event. Q.handle resolves the string when the event fires.
+                converted = {};
+                converted['component:' + key] = value;
+            } else {
+                converted = type
+                    ? type.from(value === null ? '' : value)
+                    : value === null ? true : infer(value);
+            }
 
-			return { path: path, value: value };
-		}
+            return {
+                path: path,
+                value: converted,
+                event: isEvent
+            };
+        }
 
-		function _attrsToOptions(element, defaults) {
-			var options = {};
-			var skip = { id: 1, 'class': 1, style: 1, slot: 1 };
-			var ownDataAttr = 'data-' + tagName;
-			var attrs = element.attributes;
+        function attrsToOptions(element) {
+            var options = {};
+            var ownDataAttr = 'data-' + tagName;
+            var blob = element.getAttribute(ownDataAttr);
 
-			for (var i = 0; i < attrs.length; i++) {
-				var attr = attrs[i];
-				var aName = attr.name;
+            if (blob) {
+                try {
+                    var parsed = JSON.parse(blob);
+                    if (Q.isPlainObject(parsed)) {
+                        Q.extend(options, Q.Tool.options.levels, parsed);
+                    }
+                } catch (e) {}
+            }
 
-				if (skip[aName]) continue;
+            Array.prototype.forEach.call(element.attributes, function (attr) {
+                var key = attr.name;
 
-				// merge existing canonical data-* if present
-				if (aName === ownDataAttr) {
-					try {
-						var blob = JSON.parse(attr.value);
-						if (Q.isPlainObject(blob)) {
-							Q.extend(options, blob);
-						}
-					} catch (e) {}
-					continue;
-				}
+                if (key === 'id'
+                    || key === 'class'
+                    || key === 'style'
+                    || key === 'slot'
+                    || key.slice(0, 5) === 'data-') {
+                    return;
+                }
 
-				if (aName.slice(0, 5) === 'data-') continue;
+                var resolved = resolve(
+                    key,
+                    attr.value === '' ? null : attr.value
+                );
+                Q.setObject(resolved.path, resolved.value, options);
+            });
 
-				var resolved = _resolveAttr(
-					aName,
-					attr.value === '' ? null : attr.value,
-					defaults
-				);
+            return options;
+        }
 
-				Q.setObject(resolved.path, resolved.value, options);
-			}
+        var observed = Object.keys(attrTypeMap).concat(Object.keys(eventMap));
+        var ntt = name.replace(/\//g, '_');
 
-			return options;
-		}
+        class ToolElement extends HTMLElement {
+            connectedCallback() {
+                this.classList.add('Q_tool', ntt + '_tool');
 
-		function _cleanupAttributes(element) {
-			var ownDataAttr = 'data-' + tagName;
-			var attrs = element.attributes;
+                var options = attrsToOptions(this);
+                if (!Q.isEmpty(options)) {
+                    this.setAttribute(
+                        'data-' + tagName,
+                        JSON.stringify(options)
+                    );
+                }
 
-			for (var i = attrs.length - 1; i >= 0; i--) {
-				var attr = attrs[i];
-				var name = attr.name;
+                Q.activate(this);
+            }
 
-				if (
-					name === ownDataAttr ||
-					name === 'id' ||
-					name === 'class' ||
-					name === 'style' ||
-					name === 'slot'
-				) continue;
+            disconnectedCallback() {
+                if (this.getAttribute('data-Q-retain') !== null) return;
+                Q.Tool.remove(this);
+            }
 
-				if (name.slice(0, 5) === 'data-') continue;
+            attributeChangedCallback(attrName, oldVal, newVal) {
+                if (oldVal === newVal) return;
 
-				element.removeAttribute(name);
-			}
-		}
+                var tool = Q.Tool.from(this, name);
+                if (!tool) return;
 
-		var ntt = name.split('/').join('_');
+                var resolved = resolve(
+                    attrName,
+                    newVal === '' ? null : newVal
+                );
 
-		class ToolElement extends HTMLElement {
+                if (newVal === null && eventMap[attrName]) {
+                    var active = tool.options[eventMap[attrName]];
+                    if (Q.typeOf(active) === 'Q.Event') {
+                        active.remove('component:' + attrName);
+                    }
+                    return;
+                }
 
-			connectedCallback() {
-				var element = this;
+                if (resolved.event) {
+                    var event = tool.options[resolved.path[0]];
+                    if (Q.typeOf(event) !== 'Q.Event') return;
 
-				element.classList.add('Q_tool', ntt + '_tool');
+                    var handlerKey = 'component:' + attrName;
+                    event.remove(handlerKey);
+                    event.set(resolved.value[handlerKey], handlerKey);
+                } else {
+                    var update = {};
+                    Q.setObject(resolved.path, resolved.value, update);
+                    tool.setState(update);
+                }
+            }
 
-				var defaults = (ctor && ctor.options) || {};
+            static get observedAttributes() {
+                return observed;
+            }
+        }
 
-				// compile attributes → canonical data-*
-				var options = _attrsToOptions(element, defaults);
-
-				if (!Q.isEmpty(options)) {
-					element._qUpdating = true;
-					element.setAttribute(
-						'data-' + tagName,
-						JSON.stringify(options)
-					);
-					element._qUpdating = false;
-				}
-
-				// remove original attributes (compile-time only)
-				element._qUpdating = true;
-				_cleanupAttributes(element);
-				element._qUpdating = false;
-
-				// activate Q.Tool
-				Q.activate(element);
-
-				// observe runtime attribute changes (incremental updates)
-				var observer = new MutationObserver(function (mutations) {
-					if (element._qUpdating) return;
-
-					var tool = Q.Tool.from(element, name);
-					if (!tool) return;
-
-					for (var i = 0; i < mutations.length; i++) {
-						var m = mutations[i];
-						if (m.type !== 'attributes') continue;
-
-						var attrName = m.attributeName;
-
-						// ignore canonical + system attrs
-						if (
-							attrName === ('data-' + tagName) ||
-							attrName === 'id' ||
-							attrName === 'class' ||
-							attrName === 'style' ||
-							attrName === 'slot' ||
-							attrName.slice(0, 5) === 'data-'
-						) continue;
-
-						var val = element.getAttribute(attrName);
-
-						var resolved = _resolveAttr(
-							attrName,
-							val === '' ? null : val,
-							defaults
-						);
-
-						var update = {};
-						Q.setObject(resolved.path, resolved.value, update);
-
-						tool.setState(update);
-					}
-				});
-
-				observer.observe(element, { attributes: true });
-
-				element._qObserver = observer;
-			}
-
-			disconnectedCallback() {
-				if (this.getAttribute('data-Q-retain') !== null) return;
-
-				if (this._qObserver) {
-					this._qObserver.disconnect();
-					delete this._qObserver;
-				}
-
-				Q.Tool.remove(this);
-			}
-		}
-
-		try {
-			customElements.define(tagName, ToolElement);
-		} catch (e) {
-			console.warn('Q.Tool: could not register <' + tagName + '>:', e);
-		}
-	};
-
+        try {
+            customElements.define(tagName, ToolElement);
+        } catch (e) {
+            console.warn(
+                'Q.Tool: could not register <' + tagName + '>:',
+                e
+            );
+        }
+    };
 });

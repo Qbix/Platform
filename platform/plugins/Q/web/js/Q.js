@@ -12821,13 +12821,12 @@ Q.nodeUrl.routers = []; // functions returning a custom url
  * @class Q.Template
  * @constructor
  */
-Q.Template = function () {
-
-};
+Q.Template = Q.Method.define({
+	bind: new Q.Method()
+}, "{{Q}}/js/methods/Q/Template", function () { return [Q]; });
 
 Q.Template.collection = {};
 Q.Template.info = {};
-
 
 /**
  * Sets the text and/or info of a template in this document's collection, and compiles it.
@@ -13172,7 +13171,6 @@ Q.leaves = function _Q_leaves(structure, callback) {
 
 Q.sanitize = new Q.Method();
 Q.globalMemoryWalk = new Q.Method();
-Q.registerWebComponent = new Q.Method();
 Q.Method.define(Q, "{{Q}}/js/methods/Q", function () { return [Q]; });
 
 Q.Tool.define.component = new Q.Method();
