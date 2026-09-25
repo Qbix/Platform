@@ -80,8 +80,8 @@ Q.exports(function (Q) {
 				if (format === "EIP712") {
 
 					const [{ hashTypedData }, secp] = await Promise.all([
-						import(Q.url("{{Q}}/src/js/crypto/eip712.js")),
-						import(Q.url("{{Q}}/src/js/crypto/secp256k1.js"))
+						import(Q.url("{{Q}}/js/crypto/eip712.js")),
+						import(Q.url("{{Q}}/js/crypto/curves/secp256k1.js"))
 					]);
 
 					// Single source of truth for EIP-712 digest —
@@ -93,24 +93,17 @@ Q.exports(function (Q) {
 						options.types
 					);
 
-					const sig = secp.secp256k1.sign(digestBytes, kp.privateKey, {
-						recovered: true,
-						der: false
+					// format: 'recovered' returns recovery-byte || r(32) || s(32),
+					// already low-S by default (defaultSigOpts.lowS is true).
+					// prehash:false — digestBytes is already the EIP-712 keccak256
+					// digest; noble's default (prehash:true) would hash it again
+					// with sha256, breaking compatibility with ecrecover/PHP.
+					const recoveredBytes = secp.secp256k1.sign(digestBytes, kp.privateKey, {
+						format: 'recovered',
+						prehash: false
 					});
-
-					let compact, recovery;
-
-					if (Array.isArray(sig)) {
-						compact  = sig[0];
-						recovery = sig[1];
-					} else {
-						compact  = sig.signature;
-						recovery = sig.recovery;
-					}
-
-					if (!(compact instanceof Uint8Array)) {
-						compact = new Uint8Array(compact);
-					}
+					const recovery = recoveredBytes[0];
+					const compact  = recoveredBytes.slice(1);
 
 					// Ethereum-style: r||s||v  (v = 27 + recovery)
 					const signature = new Uint8Array(65);
@@ -150,19 +143,25 @@ Q.exports(function (Q) {
 				const digestBytes = await Q.Data.digest("SHA-256", msgBytes);
 
 				const noble = await import(
-					Q.url("{{Q}}/src/js/crypto/nist.js")
+					Q.url("{{Q}}/js/crypto/curves/nist.js")
 				);
 				const { encodeEcdsaDer } = await import(
-					Q.url("{{Q}}/src/js/crypto/encoder.js")
+					Q.url("{{Q}}/js/crypto/encoder.js")
 				);
 
-				const sig = noble.p256
-					.sign(digestBytes, kp.privateKey)
-					.normalizeS();
+				// Default format is 'compact' (r(32)||s(32)), already low-S
+				// by default (defaultSigOpts.lowS is true) — no separate
+				// normalize step needed. prehash:false because digestBytes is
+				// already SHA-256(canonical) — noble's default (prehash:true)
+				// would hash it a second time, which would never verify
+				// against verify.js's WebCrypto path (which hashes once).
+				const sigBytes = noble.p256.sign(digestBytes, kp.privateKey, {
+					prehash: false
+				});
 
 				const signatureDer = encodeEcdsaDer(
-					bigIntTo32Bytes(sig.r),
-					bigIntTo32Bytes(sig.s)
+					sigBytes.slice(0, 32),
+					sigBytes.slice(32, 64)
 				);
 
 				resolve({
@@ -182,19 +181,5 @@ Q.exports(function (Q) {
 			}
 		});
 	};
-
-	// -------------------------------------------------
-	// Module-private helper
-	// -------------------------------------------------
-
-	// BigInt → 32-byte Uint8Array (big-endian)
-	function bigIntTo32Bytes(n) {
-		const hex = n.toString(16).padStart(64, "0");
-		const out = new Uint8Array(32);
-		for (let i = 0; i < 32; i++) {
-			out[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-		}
-		return out;
-	}
 
 });

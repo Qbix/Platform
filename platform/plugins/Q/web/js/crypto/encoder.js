@@ -2,9 +2,9 @@
 // Strict ECDSA-P256 DER encoder/decoder (protocol-grade)
 // Canonical, minimal, hostile to malformed input
 
-import { p256 } from './nist.js';
+import { p256 } from './curves/nist.js';
 
-const CURVE_N = p256.CURVE.n;
+const CURVE_N = p256.Point.Fn.ORDER;
 
 /* ============================================================
  * Helpers

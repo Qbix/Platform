@@ -410,7 +410,20 @@ OpenClaim.verify = function (claim, policy, callback) {
                                 // rejected every browser- and PHP-signed claim.
                                 var ok = nodeCrypto.verify('sha256', Buffer.from(canon, 'utf8'), pubKeyObj, derSigBuf);
                                 if (ok) { verified = true; break; }
-                            } catch (e) { /* try next */ }
+                                Q.log('Q.Crypto.OpenClaim.verify: ES256 signature check '
+                                    + 'returned false for key ' + k + '\ncanon: ' + canon
+                                    + '\nsig(b64): ' + sig);
+                            } catch (e) {
+                                // try next — but log why, since this used to hide the
+                                // real reason (SPKI parse error, malformed sig, etc.)
+                                // behind a generic "Invalid delegation signature" ack.
+                                // No log name given on purpose: this prints straight to
+                                // the terminal instead of a log file only Q.log(msg,name)
+                                // would write silently.
+                                Q.log('Q.Crypto.OpenClaim.verify: ES256 check threw for key '
+                                    + k + ': ' + e.message + '\ncanon: ' + canon
+                                    + '\nsig(b64): ' + sig);
+                            }
                             continue;
                         }
 

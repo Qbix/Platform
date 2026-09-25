@@ -5,7 +5,7 @@
  *
  * Exports a plain object (sync) — no async setup needed here.
  */
-Q.exports(function (Q) {
+Q.exports(function () {
 
     var _ = {
 

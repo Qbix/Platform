@@ -6,7 +6,7 @@
  *
  * Exports a plain object (sync).
  */
-Q.exports(function (Q) {
+Q.exports(function () {
 
     // -------------------------------------------------------------------------
     // Constants

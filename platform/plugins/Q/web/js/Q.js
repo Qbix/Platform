@@ -7252,33 +7252,78 @@ Q.Links = {
 	},
 
 	/**
-	 * Generates an Ethereum payment URI (EIP-681).
+	 * Generates an Ethereum payment URI per EIP-681.
+	 * Supports native coin transfers (ETH, MATIC, etc.) and
+	 * ERC-20 token transfers via the `transfer` function selector.
+	 *
+	 * Native: ethereum:0xRecipient@chainId?value=amountInWei
+	 * ERC-20: ethereum:0xToken@chainId/transfer?address=0xRecipient&uint256=amountInBaseUnits
 	 *
 	 * @static
 	 * @method ethereumPay
-	 * @param {String} address
-	 *   Ethereum address or contract.
+	 * @param {String} to
+	 *   Recipient address (for native) or token contract address (for ERC-20).
 	 * @param {Object} [options]
 	 * @param {String|Number} [options.value]
-	 *   Amount of ETH or token value.
-	 * @param {String|Number} [options.gas]
-	 *   Gas price.
-	 * @param {String|Number} [options.gasLimit]
-	 *   Gas limit.
+	 *   Amount in wei for native coin transfers.
+	 * @param {String} [options.token]
+	 *   ERC-20 token contract address. When set, `to` becomes the
+	 *   recipient and this address is placed in the URI target position.
+	 *   In that case, `options.amount` is the token amount in base units.
+	 * @param {String|Number} [options.amount]
+	 *   Token amount. In base units by default (e.g. 1000000 for 1 USDC),
+	 *   or in human-readable units if `options.decimals` is also provided.
+	 * @param {Number} [options.decimals]
+	 *   Token decimal places (e.g. 6 for USDC, 18 for DAI). When set,
+	 *   `amount` is treated as a human-readable value and converted
+	 *   to base units. No network call needed — the caller provides this.
 	 * @param {String|Number} [options.chainId]
-	 *   Chain ID.
+	 *   EIP-155 chain ID (1 = Ethereum, 137 = Polygon, etc.).
+	 * @param {String|Number} [options.gas]
+	 *   Gas limit hint for the wallet.
+	 * @param {String|Number} [options.gasPrice]
+	 *   Gas price hint in wei.
 	 * @return {String}
 	 *   An `ethereum:` payment URI.
 	 */
-	ethereumPay: function (address, options) {
+	ethereumPay: function (to, options) {
 		options = options || {};
-		var url = 'ethereum:' + address;
-		var params = [];
+		var url, params = [];
 
-		if (options.value != null) params.push('value=' + options.value);
+		if (options.token) {
+			// ERC-20 transfer: ethereum:tokenAddr@chain/transfer?address=to&uint256=amt
+			url = 'ethereum:' + options.token;
+			if (options.chainId != null) {
+				url += '@' + options.chainId;
+			}
+			url += '/transfer';
+			params.push('address=' + to);
+			if (options.amount != null) {
+				var amt = options.amount;
+				if (options.decimals != null) {
+					// Convert human-readable amount to base units.
+					// Use string math to avoid floating-point issues.
+					var parts = String(amt).split('.');
+					var whole = parts[0] || '0';
+					var frac = (parts[1] || '').slice(0, options.decimals);
+					while (frac.length < options.decimals) frac += '0';
+					amt = (whole + frac).replace(/^0+/, '') || '0';
+				}
+				params.push('uint256=' + amt);
+			}
+		} else {
+			// Native coin transfer: ethereum:to@chain?value=wei
+			url = 'ethereum:' + to;
+			if (options.chainId != null) {
+				url += '@' + options.chainId;
+			}
+			if (options.value != null) {
+				params.push('value=' + options.value);
+			}
+		}
+
 		if (options.gas != null) params.push('gas=' + options.gas);
-		if (options.gasLimit != null) params.push('gasLimit=' + options.gasLimit);
-		if (options.chainId != null) params.push('chainId=' + options.chainId);
+		if (options.gasPrice != null) params.push('gasPrice=' + options.gasPrice);
 
 		if (params.length) {
 			url += '?' + params.join('&');
@@ -7286,6 +7331,7 @@ Q.Links = {
 
 		return url;
 	}
+
 };
 
 Q.Links.whatsapp = Q.Links.whatsApp;
@@ -8198,12 +8244,29 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 
 		req.onupgradeneeded = function () {
 			var db = req.result;
-			if (db.version > 1 && !db.objectStoreNames.contains(storeName) && !triedCreatingStore) {
-				triedCreatingStore = true;
-				var store = db.createObjectStore(storeName, { keyPath: params.keyPath });
-				for (var i = 0; i < indexes.length; ++i) {
-					var [name, keyPath, opts] = indexes[i];
-					store.createIndex(name, keyPath, opts);
+			if (db.version > 1 && !triedCreatingStore) {
+				var exists = db.objectStoreNames.contains(storeName);
+				var mismatched = false;
+				if (exists) {
+					// A store's keyPath/autoIncrement can't be altered in place —
+					// only detected and, if wrong, dropped and recreated here.
+					try {
+						var existingStore = req.transaction.objectStore(storeName);
+						mismatched = (!!existingStore.autoIncrement !== !!params.autoIncrement)
+							|| (existingStore.keyPath !== params.keyPath);
+					} catch (e) { mismatched = true; }
+				}
+				if (!exists || mismatched) {
+					triedCreatingStore = true;
+					if (mismatched) { db.deleteObjectStore(storeName); }
+					var store = db.createObjectStore(storeName, {
+						keyPath: params.keyPath,
+						autoIncrement: !!params.autoIncrement
+					});
+					for (var i = 0; i < indexes.length; ++i) {
+						var [name, keyPath, opts] = indexes[i];
+						store.createIndex(name, keyPath, opts);
+					}
 				}
 			}
 		};
@@ -8225,6 +8288,19 @@ Q.IndexedDB.open = Q.getter(function (dbName, storeName, params, callback) {
 			var storeNeedsRecreate = false;
 			try {
 				if (!db.objectStoreNames.contains(storeName)) {
+					storeNeedsRecreate = true;
+				} else if ((function () {
+					// Detect a store that exists but was created with the wrong
+					// keyPath/autoIncrement (e.g. from before a params change
+					// shipped) — db.objectStoreNames.contains() alone can't
+					// tell a correctly- from an incorrectly-configured store
+					// apart, so every prior open kept "successfully" reusing
+					// a broken store forever, with no way to recover short of
+					// the user manually deleting the database.
+					var tx0 = db.transaction(storeName, 'readonly');
+					var s0  = tx0.objectStore(storeName);
+					return (!!s0.autoIncrement !== !!params.autoIncrement) || (s0.keyPath !== params.keyPath);
+				})()) {
 					storeNeedsRecreate = true;
 				} else if (Q.getObject('Q.Cordova.IndexedDB.forceRecreate')) {
 					var tx = db.transaction(storeName, 'readonly');

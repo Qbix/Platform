@@ -119,7 +119,8 @@ Socket.listen = function (options) {
 		);
 		try {
 			socket = server.attached.socket = new Q.Socket(server, Q.take(options, [
-				'path', 'serveClient', 'adapter', 'origins', 'parser'
+				'path', 'serveClient', 'adapter', 'origins', 'parser',
+				'maxHttpBufferSize', 'pingTimeout', 'pingInterval'
 			]));
 		} catch (e) {
 			log("Socket was not attached.", e);

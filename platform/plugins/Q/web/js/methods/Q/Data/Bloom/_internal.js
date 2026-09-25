@@ -6,7 +6,7 @@
  *   - BloomFilter constructor (used by all four method files)
  *   - _positions, _optimalParams, _setBit, _testBit, _fromUint8Array
  */
-Q.exports(function (Q) {
+Q.exports(function () {
 
     var LN2  = Math.LN2;
     var LN2S = LN2 * LN2;
