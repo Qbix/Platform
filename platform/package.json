@@ -25,7 +25,6 @@
 		"mysql": "2.16.x",
 		"mysql2": "3.0.0",
 		"nodemailer": "^6.9.13",
-		"nodemailer-smtp-transport": "^2.4.2",
 		"request": "2.x.x",
 		"socket.io": "^4.7.5"
 	},
