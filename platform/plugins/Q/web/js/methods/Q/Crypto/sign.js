@@ -130,7 +130,18 @@ Q.exports(function (Q) {
 				 * ES256 (P-256 + SHA-256)
 				 * ================================================= */
 
-				// Canonical JSON payload — must match Q_Crypto::sign() in PHP exactly
+				// Canonical JSON payload — must match Q_Crypto::sign() in PHP exactly.
+				// Q.Data.canonicalize() (RFC 8785 / JCS, byte-identical across
+				// browser/Node/PHP) is the only function in this codebase that
+				// actually does that. Q.serialize() was used here previously —
+				// despite the name, it builds a URL query string
+				// (Q.queryString(...).replace(...)), completely unrelated to
+				// JSON canonicalization, so every ES256 signature ever
+				// produced here was computed over the wrong bytes and could
+				// never match a correct verifier's recomputed digest.
+				// Confirmed live: a statement signed this way failed
+				// Q.Crypto.verify() even though the parent/secretHash fields
+				// (hashed directly, no serialize() involved) matched exactly.
 				const payload = {
 					domain:      domain,
 					primaryType: options.primaryType,
@@ -138,7 +149,7 @@ Q.exports(function (Q) {
 					message:     options.message
 				};
 
-				const canonical   = Q.serialize(payload);
+				const canonical   = Q.Data.canonicalize(payload);
 				const msgBytes    = new TextEncoder().encode(canonical);
 				const digestBytes = await Q.Data.digest("SHA-256", msgBytes);
 

@@ -178,18 +178,6 @@ function _hashTypedData(domain, primaryType, message, types) {
     return _keccak(Buffer.concat([Buffer.from([0x19, 0x01]), domainHash, structHash]));
 }
 
-// ─── Canonical JSON ───────────────────────────────────────────────────────────
-// Must match PHP Q_Utils::serialize and browser Q.serialize exactly.
-
-function _serialize(obj) {
-    if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {
-        return JSON.stringify(obj);
-    }
-    var pairs = Object.keys(obj).sort().map(function (k) {
-        return JSON.stringify(k) + ':' + _serialize(obj[k]);
-    });
-    return '{' + pairs.join(',') + '}';
-}
 
 // ─── Convert compressed secp256k1 point to uncompressed ──────────────────────
 // @noble/secp256k1 v3 recoverPublicKey returns a compressed 33-byte point.
@@ -328,17 +316,35 @@ Crypto.sign = function (options, callback) {
             return Promise.resolve(result);
         }
 
-        // p256 / ES256
-        var canonical  = _serialize({ domain: domain, primaryType: primaryType, types: types, message: message });
-        var digestArr  = nodeCrypto.createHash('sha256').update(Buffer.from(canonical, 'utf8')).digest();
+        // p256 / ES256 — Data.canonicalize(), not the local _serialize()
+        // (see the matching comment in Crypto.verify() for why).
+        var canonical  = Data.canonicalize({ domain: domain, primaryType: primaryType, types: types, message: message });
+        var canonBuf   = Buffer.from(canonical, 'utf8');
+        var digestArr  = nodeCrypto.createHash('sha256').update(canonBuf).digest();
 
-        // Import P-256 scalar via SEC1 DER, then sign(null,...) — no re-hashing
+        // Import P-256 scalar via SEC1 DER, then sign with the NAMED
+        // 'sha256' algorithm over the raw canonical bytes — NOT
+        // sign(null, preHashedDigest, ...). The browser signs via the
+        // vendored noble library, which for a pre-hashed digest expects
+        // (and produces) a signature over that digest taken as-is — but
+        // Node's sign(null, ...)/verify(null, ...) for EC keys does NOT
+        // reliably behave as "verify this raw digest, no hashing" the
+        // same way; it's merely self-consistent with Node's OWN sign(null,
+        // ...) (confirmed live: a Node-signed-and-Node-verified round trip
+        // with algorithm=null succeeded, but a noble-signed signature over
+        // the identical digest and key failed Node's verify(null, ...)
+        // every time, despite noble's own verify() accepting it as valid).
+        // Q.Crypto.OpenClaim's Node-side verify (classes/Q/Crypto/
+        // OpenClaim.js) already gets this right — nodeCrypto.verify(
+        // 'sha256', canonicalBytes, ...) — which is exactly why Drop
+        // registration (built on OpenClaim) has always worked while this
+        // function never had a real cross-language test until now.
         var ecdhP256   = nodeCrypto.createECDH('prime256v1');
         ecdhP256.setPrivateKey(kp.privateKey);
         var rawPubP256 = ecdhP256.getPublicKey();
         var sec1       = _buildP256Sec1(kp.privateKey, rawPubP256);
         var privKeyObj = nodeCrypto.createPrivateKey({ key: sec1, format: 'der', type: 'sec1' });
-        var derSig     = nodeCrypto.sign(null, digestArr, privKeyObj);
+        var derSig     = nodeCrypto.sign('sha256', canonBuf, privKeyObj);
 
         var res = {
             format:       'es256',
@@ -460,13 +466,19 @@ Crypto.verify = function (options, callback) {
         if (!options.publicKey) {
             throw new Error('Q.Crypto.verify: ES256 requires publicKey');
         }
-        var canonical  = _serialize({
+        // Data.canonicalize() (RFC 8785 / JCS) — not the local _serialize()
+        // below, which doesn't recurse into arrays (it falls back to plain
+        // JSON.stringify for them) and so isn't actually byte-identical to
+        // the browser's Q.Data.canonicalize()/PHP's Q_Data::canonicalize()
+        // in every case, only coincidentally for payloads whose arrays
+        // happen to contain no nested objects with out-of-order keys.
+        var canonical  = Data.canonicalize({
             domain:      options.domain || {},
             primaryType: options.primaryType,
             types:       options.types,
             message:     options.message
         });
-        var digestBufP = nodeCrypto.createHash('sha256').update(Buffer.from(canonical, 'utf8')).digest();
+        var canonBufV  = Buffer.from(canonical, 'utf8');
 
         var pubKeyObj  = nodeCrypto.createPublicKey({
             key:    _rawP256ToSpki(_toBuffer(options.publicKey)),
@@ -482,8 +494,16 @@ Crypto.verify = function (options, callback) {
         }
 
         try {
-            // verify(null,...) checks raw bytes without re-hashing — matches sign(null,...)
-            var verified = nodeCrypto.verify(null, digestBufP, pubKeyObj, sigBytes);
+            // 'sha256' + raw canonical bytes, NOT verify(null, preHashedDigest,
+            // ...) — see the matching comment in Crypto.sign()'s ES256 path
+            // for why: Node's null-algorithm EC verify doesn't reliably
+            // accept a signature produced by hashing the digest itself
+            // elsewhere (as the browser's noble-based signer does), even
+            // though it's internally self-consistent with Node's own
+            // null-algorithm signing. Naming the algorithm and handing Node
+            // the pre-digest bytes — exactly Q.Crypto.OpenClaim's Node-side
+            // verify's approach — is what's actually cross-compatible.
+            var verified = nodeCrypto.verify('sha256', canonBufV, pubKeyObj, sigBytes);
             if (callback) { callback(null, verified); }
             return Promise.resolve(verified);
         } catch (e) {
