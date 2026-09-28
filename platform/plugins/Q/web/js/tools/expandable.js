@@ -117,6 +117,24 @@ Q.Tool.define('Q/expandable', function (options) {
         var tool = this;
         var state = tool.state;
         var $te = $(this.element);
+        // Unlike collapse() (which already no-ops via its own "not expanded"
+        // guard below), expand() used to unconditionally replay the whole
+        // measure+animate-open sequence every time it was called, even when
+        // already expanded/expanding. Confirmed live via Streams/interests'
+        // search box: it binds its debounced filter (which calls .expand()
+        // on whatever category currently matches) to both 'keyup' AND
+        // 'blur' on the filter input. Searching a term auto-expands the
+        // matching category on keyup; clicking any now-visible interest
+        // under it shifts focus away from the input, firing 'blur', which
+        // reruns that same filter — still matching the same term — and
+        // calls .expand() a second time on a container that's already
+        // open, visibly replaying the animation. (A second click on the
+        // same item doesn't re-blur an already-blurred input, so it doesn't
+        // recur — matching the exact "only the first click" symptom.)
+        if ($te.hasClass("Q_expanded") || $te.hasClass("Q_expanding")) {
+            Q.handle(callback, tool, [options || {}]);
+            return false;
+        }
         if (false === Q.handle(state.beforeExpand, this, [])) {
             return false;
         }
