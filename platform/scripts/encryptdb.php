@@ -26,8 +26,8 @@ if (isset($argv[1]) && in_array($argv[1], ['--help', '/?', '-h', '-?', '/h'])) d
 
 // Load app
 if (!$FROM_APP && $count < 2) die($usage . PHP_EOL);
-$LOCAL_DIR = $FROM_APP ? APP_DIR : $argv[1];
-if (!is_dir($LOCAL_DIR)) die("[ERROR] $LOCAL_DIR is not a directory" . PHP_EOL);
+$LOCAL_DIR = $FROM_APP ? APP_DIR : realpath($argv[1]);
+if (!$LOCAL_DIR || !is_dir($LOCAL_DIR)) die("[ERROR] " . ($FROM_APP ? APP_DIR : $argv[1]) . " is not a directory" . PHP_EOL);
 if (!defined('APP_DIR')) define('APP_DIR', $LOCAL_DIR);
 $Q_filename = dirname(__FILE__) . DIRECTORY_SEPARATOR . 'Q.inc.php';
 if (!file_exists($Q_filename)) die("[ERROR] $Q_filename not found" . PHP_EOL);
@@ -99,6 +99,10 @@ foreach ($connections as $conn) {
 
         if (preg_match('/(_old|_new)$/', $table)) continue;
         if (!empty($onlyTables) && !in_array(strtolower($table), $onlyTables)) continue;
+        if (!preg_match('/^\w+$/', $table)) {
+            logmsg("Skipping $table (invalid table name)");
+            continue;
+        }
 
         $stmt = $db->query("SHOW CREATE TABLE `$table`");
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
