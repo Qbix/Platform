@@ -173,7 +173,18 @@
 		"node" : {
 			"host": "{{host}}",
 			"port": "10500",
-			"https": false
+			"https": false,
+			/* TLS policy for OUTBOUND https requests made by the node process
+			   (Q.Utils.get/post/queryExternal/sendToPHP and everything built on
+			   them) -- as opposed to "https" above, which is the inbound socket
+			   server's own TLS. Verification is on; opt out per host with
+			   insecureHosts (e.g. ["myapp.local"]) if an install serves
+			   something over a self-signed cert, and only set
+			   rejectUnauthorized false if that is not enough. */
+			"tls": {
+				"rejectUnauthorized": true,
+				"insecureHosts": []
+			}
 		},
 		"nodeInternal": {
 			"host": "{{host}}",
