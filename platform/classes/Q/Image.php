@@ -1035,6 +1035,10 @@ class Q_Image
 			$sh = $ish;
 			$sx = $isx;
 			$sy = $isy;
+			// Assigned per iteration: only the explicit-size branch below sets it,
+			// and the symlink test reads it, so it must never be undefined or carry
+			// over from the previous size.
+			$square = false;
 			// determine destination image size
 			if (empty($size) || $size == 'x') {
 				$size = 'x';
@@ -1090,7 +1094,11 @@ class Q_Image
 				throw new Q_Exception("Failed to save image file of type '$ext'");
 			}
 			
-			if ($dw === $dh and !$square) {
+			// The original size ('x') is always written as its own file. getSizes()
+			// sorts it first, so the square file it could link to is never one this
+			// call wrote -- only one left by an EARLIER upload to the same path, and
+			// linking to that would publish the previous image.
+			if ($size !== 'x' and $dw === $dh and !$square) {
 				// save symlinks when possible, instead of copying large images
 				$squarefilename = $writePath."$dw.$ext";
 				if (file_exists($squarefilename)) {
