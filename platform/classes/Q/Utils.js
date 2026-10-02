@@ -63,6 +63,28 @@ function generateLocalSecret() {
 		.digest('hex');
 }
 
+/**
+ * Returns the configured Q/internal/secret, or throws.
+ * Mirrors Q_Utils::requireInternalSecret() in PHP, including treating the empty
+ * string and the "TODO: ..." placeholder that local.sample ships as
+ * unconfigured -- that placeholder is published in every copy of this
+ * repository, so an install that keeps it holds a secret every attacker already
+ * has, and can therefore sign with it.
+ * @method requireInternalSecret
+ * @private
+ * @return {string}
+ */
+function requireInternalSecret() {
+	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
+	if (typeof secret === 'string') {
+		secret = secret.trim();
+		if (secret !== '' && secret.substr(0, 5) !== 'TODO:') {
+			return secret;
+		}
+	}
+	throw new Error('Q/internal/secret is not configured');
+}
+
 function ksort(obj) {
 	var i, sorted = {}, keys = Object.keys(obj);
 	keys.sort();
@@ -177,13 +199,19 @@ Utils.sign = function (data, fieldKeys) {
  * @method validate
  * @param {object} data the signed data to validate
  * @param {array} fieldKeys Optionally specify the array key path for the signature field
- * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
+ * @return {boolean} Whether the signature is valid. Returns false (never true)
+ *  when "Q"/"internal"/"secret" is not configured: a validator must not read
+ *  "no key" as "valid". Producing a signature may still fall back to a
+ *  machine-local key (see Utils.signature); accepting one never does.
  */
 Utils.validate = function(data, fieldKeys) {
 	var temp = Q.copy(data, null, 100);
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		secret = generateLocalSecret();
+	var secret;
+	try {
+		secret = requireInternalSecret();
+	} catch (e) {
+		console.warn('Q.Utils.validate: rejecting, ' + e.message);
+		return false;
 	}
 	if (!fieldKeys || !fieldKeys.length) {
 		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');

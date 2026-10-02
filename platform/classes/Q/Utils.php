@@ -387,6 +387,31 @@ class Q_Utils
 	}
 
 	/**
+	 * Returns the configured "Q"/"internal"/"secret", or throws.
+	 * The empty string and the "TODO: ..." placeholder that local.sample ships
+	 * count as unconfigured -- the placeholder is a fixed value published in
+	 * every copy of this repository, so an install that keeps it holds a secret
+	 * every attacker already has and can therefore sign with.
+	 * @method requireInternalSecret
+	 * @static
+	 * @return {string}
+	 * @throws {Q_Exception_MissingConfig}
+	 */
+	static function requireInternalSecret()
+	{
+		$secret = Q_Config::get('Q', 'internal', 'secret', null);
+		if (is_string($secret)) {
+			$secret = trim($secret);
+			if ($secret !== '' and !Q::startsWith($secret, 'TODO:')) {
+				return $secret;
+			}
+		}
+		throw new Q_Exception_MissingConfig(array(
+			'fieldpath' => 'Q/internal/secret'
+		));
+	}
+
+	/**
 	 * Generate a local secret that is stable but hard to guess from outside
 	 * @method generateLocalSecret
 	 * @static
