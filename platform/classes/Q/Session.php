@@ -224,7 +224,30 @@ class Q_Session
 		), 'before');
 
 		Q_Session::name($name);
-		session_set_cookie_params($duration, $path, $domain, false, false);
+		// Defense in depth: the platform normally suppresses PHP's own cookie
+		// emission (session.use_cookies=0 + header_remove("Set-Cookie") in
+		// Q_Session::start()) and sets Q_sessionId itself via Q_Response::setCookie().
+		// These params are still what PHP would use on any path that slips past
+		// that suppression, so they must not be weaker than the cookie we send:
+		// Secure (from Q/session/cookie/secure), HttpOnly, SameSite=Lax.
+		// HttpOnly is safe here -- no live JS reads the session cookie. Q.sessionId()
+		// (Q.js) is the only reader and its sole reference is commented out in
+		// Streams/web/js/methods/Streams/socketRequest.js. Q_nonce is a separate
+		// cookie and stays JS-readable.
+		$secure = Q_Config::get('Q', 'session', 'cookie', 'secure', true);
+		if (version_compare(PHP_VERSION, '7.3.0', '>=')) {
+			// only the options-array signature can express SameSite
+			session_set_cookie_params(array(
+				'lifetime' => $duration,
+				'path' => $path,
+				'domain' => $domain,
+				'secure' => $secure,
+				'httponly' => true,
+				'samesite' => 'Lax'
+			));
+		} else {
+			session_set_cookie_params($duration, $path, $domain, $secure, true);
+		}
 
 		if (Q_Config::get('Q', 'session', 'appendSuffix', false)
 		or isset($_GET[$name])) {
@@ -540,9 +563,14 @@ class Q_Session
 			};
 			$secure = Q_Config::get('Q', 'session', 'cookie', 'secure', true);
 			$sessionCookieParams = session_get_cookie_params();
+			// The 'Lax' at the end is not optional: Q_Response::setCookie()
+			// defaults $samesite to null, so omitting it here would re-issue the
+			// session cookie *without* SameSite on every id regeneration --
+			// silently downgrading the cookie that Q_Session::start() sets with
+			// SameSite=Lax. Keep these two call sites in agreement.
 			Q_Response::setCookie(
 				self::name(), $sid, $duration ? time()+$duration : 0,
-				null, Q::ifset($sessionCookieParams, "domain", null), $secure, true
+				null, Q::ifset($sessionCookieParams, "domain", null), $secure, true, 'Lax'
 			);
 		}
 		$_SESSION = $old_SESSION; // restore $_SESSION, which will be saved when session closes
