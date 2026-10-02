@@ -337,8 +337,10 @@ class Q_Valid
 	 * @param {array|string} [$fieldKeys] Path of the key under which signature is stored.
 	 *   You can pass a string here instead, which would be the actual signature to test.
 	 * @param {string} [$secret] A different secret to use for generating the signature
-	 * @return {boolean} Whether the phone number seems like it could be valid
+	 * @return {boolean} Whether the signature checked out
 	 * @throws {Q_Exception_FailedValidation}
+	 * @throws {Q_Exception_MissingConfig} if $throwIfInvalid and no $secret is
+	 *  passed and "Q"/"internal"/"secret" is not configured
 	 */
 	static function signature (
 		$throwIfInvalid = false, 
@@ -350,10 +352,22 @@ class Q_Valid
 			$data = $_REQUEST;
 		}
 		if (!isset($secret)) {
-			$secret = Q_Config::get('Q', 'internal', 'secret', null);
-		}
-		if (!isset($secret)) {
-			return true;
+			// Fail CLOSED. This used to `return true` -- with no internal secret
+			// configured, EVERY payload validated, so an unsigned or forged
+			// request passed every gate built on this: handlers/Q/config/validate.php
+			// (which writes config onto the machine), Streams::invites(),
+			// Media/callCenter. A validator must never read "no key" as "valid".
+			// Producing a signature may still fall back to a machine-local key
+			// (see Q_Utils::signature()); accepting one never does.
+			try {
+				$secret = Q_Utils::requireInternalSecret();
+			} catch (Q_Exception_MissingConfig $e) {
+				if ($throwIfInvalid) {
+					Q_Response::code(403);
+					throw $e;
+				}
+				return false;
+			}
 		}
 		$invalid = true;
 		if (is_array($fieldKeys)) {

@@ -25,7 +25,13 @@ var Utils = {};
  * @private
  * @return {string}
  */
+var _localSecret = null;
 function generateLocalSecret() {
+	// Inputs are fixed for the life of the process; memoize so the
+	// per-request signature() calls don't re-read /etc/machine-id.
+	if (_localSecret) {
+		return _localSecret;
+	}
 	var os = require('os');
 	var child_process = require('child_process');
 
@@ -58,9 +64,31 @@ function generateLocalSecret() {
 		}
 	} catch (e) {}
 
-	return crypto.createHash('sha256')
+	return _localSecret = crypto.createHash('sha256')
 		.update(parts.join("\t"))
 		.digest('hex');
+}
+
+/**
+ * Returns the configured Q/internal/secret, or throws.
+ * Mirrors Q_Utils::requireInternalSecret() in PHP, including treating the empty
+ * string and the "TODO: ..." placeholder that local.sample ships as
+ * unconfigured -- that placeholder is published in every copy of this
+ * repository, so an install that keeps it holds a secret every attacker already
+ * has, and can therefore sign with it.
+ * @method requireInternalSecret
+ * @private
+ * @return {string}
+ */
+function requireInternalSecret() {
+	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
+	if (typeof secret === 'string') {
+		secret = secret.trim();
+		if (secret !== '' && secret.substr(0, 5) !== 'TODO:') {
+			return secret;
+		}
+	}
+	throw new Error('Q/internal/secret is not configured');
 }
 
 function ksort(obj) {
@@ -134,6 +162,9 @@ function http_build_query (formdata, numeric_prefix, arg_separator) {
 Utils.signature = function (data, secret) {
 	secret = secret || Q.Config.get(['Q', 'internal', 'secret'], null);
 	if (!secret) {
+		// Producing a signature may degrade to a machine-local key: it lets
+		// nobody in. Accepting one never does (Utils.validate) and handing
+		// one out never does either (Utils.sign). Mirrors Q_Utils in PHP.
 		secret = generateLocalSecret();
 	}
 	if (typeof(data) !== 'string') {
@@ -148,12 +179,12 @@ Utils.signature = function (data, secret) {
  * @param {object} data The data to sign
  * @param {array} fieldKeys Optionally specify the array key path for the signature field
  * @return {object} The data object is mutated and returned
+ * @throws {Error} if "Q"/"internal"/"secret" is not configured -- this is an
+ *  outbound credential, and signing it with a guessable machine-derived key
+ *  is worse than not signing at all.
  */
 Utils.sign = function (data, fieldKeys) {
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		secret = generateLocalSecret();
-	}
+	var secret = requireInternalSecret();
 	if (!fieldKeys || !fieldKeys.length) {
 		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
 		fieldKeys = ['Q.'+sf];
@@ -177,13 +208,19 @@ Utils.sign = function (data, fieldKeys) {
  * @method validate
  * @param {object} data the signed data to validate
  * @param {array} fieldKeys Optionally specify the array key path for the signature field
- * @return {boolean} Whether the signature is valid. Returns true if secret is empty.
+ * @return {boolean} Whether the signature is valid. Returns false (never true)
+ *  when "Q"/"internal"/"secret" is not configured: a validator must not read
+ *  "no key" as "valid". Producing a signature may still fall back to a
+ *  machine-local key (see Utils.signature); accepting one never does.
  */
 Utils.validate = function(data, fieldKeys) {
 	var temp = Q.copy(data, null, 100);
-	var secret = Q.Config.get(['Q', 'internal', 'secret'], null);
-	if (!secret) {
-		secret = generateLocalSecret();
+	var secret;
+	try {
+		secret = requireInternalSecret();
+	} catch (e) {
+		console.warn('Q.Utils.validate: rejecting, ' + e.message);
+		return false;
 	}
 	if (!fieldKeys || !fieldKeys.length) {
 		var sf = Q.Config.get(['Q', 'internal', 'sigField'], 'sig');
