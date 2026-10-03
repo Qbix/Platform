@@ -940,7 +940,6 @@ class Q_Utils
 			$url = $uri;
 		}
 		$parts = parse_url($url);		
-		$scheme = strtolower((string)Q::ifset($parts, 'scheme', ''));
 		$host = $parts['host'];
 		if (!isset($ip)) $ip = $host;
 		$request_uri = isset($parts['path']) ? $parts['path'] : '';
@@ -1537,6 +1536,7 @@ class Q_Utils
 		}
 
 		$parts = parse_url($url);
+		$scheme = strtolower((string)Q::ifset($parts, 'scheme', ''));
 		$host = $parts['host'];
 		if (!isset($ip)) $ip = $host;
 		$request_uri = isset($parts['path']) ? $parts['path'] : '/';
