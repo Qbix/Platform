@@ -13,8 +13,15 @@ class Q_Exception_UnsafeUrl extends Q_Exception
 	 * @constructor
 	 * @extends Q_Exception
 	 * @param {string} $url
-	 * @param {string} $reason
 	 */
+
+	/**
+	 * Why the URL was refused, for logs and tests. Not in the message or
+	 * params, which reach the client.
+	 * @property $reason
+	 * @type string
+	 */
+	public $reason = null;
 };
 
-Q_Exception::add('Q_Exception_UnsafeUrl', 'Refusing to fetch {{url}}: {{reason}}');
+Q_Exception::add('Q_Exception_UnsafeUrl', 'Refusing to fetch {{url}}');

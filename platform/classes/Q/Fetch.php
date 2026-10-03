@@ -37,7 +37,7 @@ class Q_Fetch
 	 * @param {integer} [$options.maxRedirects=5]
 	 * @param {array} [$options.headers] extra request header lines, e.g. "Accept: text/html"
 	 * @return {array} with keys
-	 *   "url" (final URL, after redirects), "status" (integer),
+	 *   "url" (final URL, after redirects), "status" (integer, never 3xx),
 	 *   "headers" (lowercased name => last value), "body" (string),
 	 *   "truncated" (boolean), "ip" (the address connected to)
 	 * @throws {Q_Exception_UnsafeUrl} if a hop is not allowed
@@ -53,9 +53,15 @@ class Q_Fetch
 			$target = static::check($url);
 			$response = static::_request($url, $target, $timeout, $maxBytes, $extraHeaders);
 			$status = $response['status'];
-			if ($status < 300 || $status >= 400 || empty($response['redirect'])) {
+			if ($status < 300 || $status >= 400) {
 				unset($response['redirect']);
 				return $response;
+			}
+			// A 3xx is never the resource: with no usable Location (none,
+			// or a scheme curl will not resolve) it is a failure, not a
+			// body to hand back as the file.
+			if (empty($response['redirect'])) {
+				throw new Q_Exception("Q_Fetch: HTTP $status without a usable Location");
 			}
 			$url = $response['redirect'];
 		}
@@ -364,8 +370,11 @@ class Q_Fetch
 	}
 
 	/**
-	 * Throw the exception that refuses a URL. Subclasses may throw their own
-	 * subclass of Q_Exception_UnsafeUrl.
+	 * Throw the exception that refuses a URL. The specific reason is logged
+	 * and kept in the exception's $reason property, but left out of its
+	 * message and params, which reach the client: "does not resolve" versus
+	 * "non-public address" would tell a member which internal host names
+	 * exist.
 	 * @method refuse
 	 * @static
 	 * @protected
@@ -375,9 +384,27 @@ class Q_Fetch
 	 */
 	protected static function refuse($url, $reason)
 	{
-		throw new Q_Exception_UnsafeUrl(array(
-			'url' => is_string($url) ? $url : gettype($url),
-			'reason' => $reason
-		));
+		$url = is_string($url) ? $url : gettype($url);
+		try {
+			Q::log(get_called_class() . " refused $url: $reason", 'Q_Fetch');
+		} catch (Throwable $e) {
+			// logging must not turn a refusal into a different error
+		}
+		$class = static::exceptionClass();
+		$e = new $class(array('url' => $url));
+		$e->reason = $reason;
+		throw $e;
+	}
+
+	/**
+	 * The class refuse() throws: Q_Exception_UnsafeUrl or a subclass of it.
+	 * @method exceptionClass
+	 * @static
+	 * @protected
+	 * @return {string}
+	 */
+	protected static function exceptionClass()
+	{
+		return 'Q_Exception_UnsafeUrl';
 	}
 }
