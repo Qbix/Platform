@@ -161,7 +161,17 @@ Q.Tool.define("Q/pdf", function (options) {
 
 		window.canvasSize.maxArea({onSuccess({ width, height, testTime, totalTime }) {
 			state.maxCanvas = width * height;
-			pdfjsLib.getDocument(state.url).promise.then(function(pdf) {
+			// isEvalSupported: false — PDFs here are often member uploads.
+			// With eval on (pdf.js's default), FontFaceObject.getPathGenerator
+			// builds glyph-drawing code from font data in the PDF and runs it
+			// with new Function() in this page's origin, so a crafted font
+			// matrix executes script (CVE-2024-4367; fixed in pdf.js 4.2.67).
+			// The flag also reaches the worker and disables its PostScript
+			// function compiler. Keep it on every getDocument call.
+			pdfjsLib.getDocument({
+				url: state.url,
+				isEvalSupported: false
+			}).promise.then(function(pdf) {
 				state.pdf = pdf;
 
 				tool.cache
