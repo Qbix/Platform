@@ -41,7 +41,7 @@ Q.Tool.define("Q/card/article", function () {
 
 Q.Template.set('Q/card/article',
     '<div class="Q_card Q_card_article">'
-  + '  {{#if hasImage}}<img class="Q_card_article_image" src="{{imageUrl}}" alt="" />{{/if}}'
+  + '  {{#if hasImage}}<img class="Q_card_article_image" src="{{imageUrl}}" alt="" onerror="this.style.display=\'none\'" />{{/if}}'
   + '  {{#if hasMeta}}<div class="Q_card_article_meta">'
   + '    {{#if publication}}<span class="Q_card_article_pub">{{publication}}</span>{{/if}}'
   + '    {{#if date}}<span class="Q_card_article_date">{{date}}</span>{{/if}}'
@@ -50,7 +50,10 @@ Q.Template.set('Q/card/article',
   + '    {{#if url}}<a href="{{url}}" target="_blank" rel="noopener">{{title}}</a>'
   + '    {{else}}{{title}}{{/if}}'
   + '  </div>'
-  + '  {{#if hasClaim}}<div class="Q_card_article_claim">{{keyClaim}}</div>{{/if}}'
+  + '  {{#if hasClaim}}<div class="Q_card_article_claim">'
+  + '    {{keyClaim}}'
+  + '    {{#if url}} <a class="Q_card_article_readmore" href="{{url}}" target="_blank" rel="noopener">Read more &rarr;</a>{{/if}}'
+  + '  </div>{{/if}}'
   + '</div>'
 );
 })(Q, Q.jQuery, window);

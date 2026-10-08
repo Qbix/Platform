@@ -70,7 +70,7 @@ Q.Tool.define("Q/chart/bar", function () {
               + '<div class="Q_chart_bar_track">'
               + '  <div class="Q_chart_bar_fill" style="width:0%;background:' + _safeColor(item.color, '#7c3aed') + '"></div>'
               + '</div>'
-              + '<div class="Q_chart_bar_value">' + String(String(item.value).encodeHTML()) + (s.unit ? ' ' + s.unit : '') + '</div>';
+              + '<div class="Q_chart_bar_value">' + _formatCompactNumber(item.value) + (s.unit ? ' ' + s.unit : '') + '</div>';
             rows.appendChild(row);
         });
         wrapper.appendChild(rows);
@@ -126,6 +126,24 @@ Q.Tool.define("Q/chart/bar", function () {
         }
     }
 });
+// Compact SI-prefix number formatting (50000000 -> "50M") for the value
+// label -- previously a raw digit string (e.g. "49106855"), which reads
+// far worse than a rounded, abbreviated figure for the kind of large
+// counts (population, market cap, revenue) these bars typically show.
+// Falls back to the original value as-is if it's not actually numeric.
+//
+// Precision is explicit (3 significant digits: ".3~s", not bare "~s")
+// because d3.format's "s" type defaults to 6 significant digits when no
+// precision is given -- "~" only trims TRAILING ZEROS, so it only hides
+// that default's excess for round numbers (50000000 -> "50M", all the
+// extra digits genuinely are zero). A non-round value like 33157.84 has
+// real, non-zero digits there, so it rendered as "33.1578k" instead of
+// a sensibly-rounded "33.2k".
+function _formatCompactNumber(value) {
+    var n = +value;
+    if (isNaN(n) || typeof d3 === 'undefined') return String(value).encodeHTML();
+    return d3.format('.3~s')(n);
+}
 // Sanitize color values to prevent CSS injection from LLM-generated data.
 // Allows: hex colors, rgb/rgba/hsl/hsla, named CSS colors (word-chars only).
 function _safeColor(color, fallback) {

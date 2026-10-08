@@ -2,6 +2,22 @@
 /**
  * @module Q-tools
  */
+
+// Offscreen canvas for measuring text width independent of DOM layout/
+// visibility state -- see _fitValueToCard below.
+var _measureCtx = null;
+function _measureTextWidth(text, font) {
+    if (!_measureCtx) {
+        _measureCtx = document.createElement('canvas').getContext('2d');
+    }
+    _measureCtx.font = font;
+    return _measureCtx.measureText(text).width;
+}
+function _fontStringFor(el) {
+    var cs = getComputedStyle(el);
+    return cs.fontWeight + ' ' + cs.fontSize + ' ' + cs.fontFamily;
+}
+
 /**
  * Single-metric stat card with optional animated counter.
  *
@@ -58,8 +74,74 @@ Q.Tool.define("Q/card/stat", function () {
                 }
                 requestAnimationFrame(step);
             }
+            tool._fitValueToCard();
             Q.handle(s.onRefresh, tool);
         });
+    },
+
+    /**
+     * Shrink .Q_card_value_number (and its unit) if the value is wider
+     * than the card -- Q_card_value_number's font-size is a plain
+     * clamp(min, Nvw, max) with no awareness of the VALUE STRING's own
+     * length, so a short value ("61%") and a long one ("39,535,849", an
+     * 11-character population figure) get the exact same huge font-size.
+     * A number has no spaces, so (unlike the label) it can't line-wrap to
+     * avoid overflowing -- it just runs past the card's edge.
+     *
+     * Measures the FINAL text (state.value/state.unit) via an offscreen
+     * canvas rather than reading the live element's current text/width --
+     * when animate+hasNumeric, refresh()'s count-up animation is still
+     * running at this point (its first requestAnimationFrame callback
+     * races this method's own async ResizeObserver callback below, with
+     * no guaranteed order), showing a shorter intermediate value that
+     * would under-measure and under-shrink the font, letting the full
+     * final number overflow anyway once the count finishes.
+     *
+     * The ResizeObserver itself is still needed for a different reason:
+     * refresh() can run before cardEl is even attached to the document
+     * (see presentation.js's _showInlineCard), where clientWidth reads 0.
+     * @method _fitValueToCard
+     */
+    _fitValueToCard: function () {
+        var tool = this, s = tool.state;
+        var numberEl = tool.element.querySelector('.Q_card_value_number');
+        var unitEl   = tool.element.querySelector('.Q_card_value_unit');
+        var cardEl   = tool.element.querySelector('.Q_card_stat') || tool.element;
+        if (!numberEl || !cardEl || typeof ResizeObserver === 'undefined') return;
+        if (tool._fitValueObserver) tool._fitValueObserver.disconnect();
+        var done = false;
+        var ro = tool._fitValueObserver = new ResizeObserver(function () {
+            if (done) return;
+            var width = cardEl.clientWidth;
+            if (!width) return; // not really laid out/attached yet
+            done = true;
+            ro.disconnect();
+            var cs = getComputedStyle(cardEl);
+            var available = width - parseFloat(cs.paddingLeft || 0) - parseFloat(cs.paddingRight || 0);
+            if (available <= 0) return;
+            var gap = parseFloat(getComputedStyle(numberEl.parentNode).gap) || 0;
+            var natural = _measureTextWidth(String(s.value), _fontStringFor(numberEl));
+            if (unitEl) {
+                natural += gap + _measureTextWidth(String(s.unit), _fontStringFor(unitEl));
+            }
+            if (natural > available) {
+                var scale = available / natural;
+                numberEl.style.fontSize = (parseFloat(getComputedStyle(numberEl).fontSize) * scale) + 'px';
+                if (unitEl) {
+                    unitEl.style.fontSize = (parseFloat(getComputedStyle(unitEl).fontSize) * scale) + 'px';
+                }
+            }
+        });
+        ro.observe(cardEl);
+        // Give up (rather than hang forever observing) if it never gets a
+        // real size at all -- e.g. removed before ever being attached.
+        setTimeout(function () { if (!done) { done = true; ro.disconnect(); } }, 2000);
+    },
+
+    Q: {
+        beforeRemove: function () {
+            if (this._fitValueObserver) this._fitValueObserver.disconnect();
+        }
     }
 });
 
