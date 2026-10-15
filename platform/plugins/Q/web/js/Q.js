@@ -17229,6 +17229,12 @@ Q.Speech.Recognition.onResult      = new Q.Event();
 Q.Speech.Recognition.onError       = new Q.Event();
 Q.Speech.Recognition.onSpeechStart = new Q.Event();
 Q.Speech.Recognition.onSpeechEnd   = new Q.Event();
+// Fired when the engine confirmed it was listening (onstart fired) but then
+// went completely silent for too long -- no onresult/onspeechend/onerror/
+// onend at all. See start.js's _armStallWatchdog for the detection logic;
+// a forced restart is attempted automatically, but callers can use this to
+// tell the user recognition stopped responding in the meantime.
+Q.Speech.Recognition.onStall       = new Q.Event();
 
 // Shared state
 Q.Speech.Recognition._supported   = null;   // null = not yet checked

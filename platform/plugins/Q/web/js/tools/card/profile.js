@@ -101,7 +101,7 @@ Q.Template.set('Q/card/profile',
   // Users/avatar handles icon, name, stream subscriptions — the right tool for the job
   + '    {{{tool "Users/avatar" userId=userId icon=iconSize short=true}}}'
   + '    {{else}}'
-  + '    {{#if hasIcon}}<img class="Q_card_profile_icon" src="{{iconUrl}}" alt="{{name}}" />{{/if}}'
+  + '    {{#if hasIcon}}<img class="Q_card_profile_icon" src="{{iconUrl}}" alt="{{name}}" onerror="this.style.display=\'none\'" />{{/if}}'
   + '    <div class="Q_card_profile_name">{{name}}</div>'
   + '    {{/if}}'
   + '    {{#if handle}}<div class="Q_card_profile_handle">{{handle}}</div>{{/if}}'

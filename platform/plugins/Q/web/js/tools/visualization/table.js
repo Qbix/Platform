@@ -20,8 +20,14 @@ Q.Tool.define('Q/visualization/table', function (options) {
     var tool  = this;
     var state = tool.state;
 
-    state.headers = state.headers || [];
-    state.rows    = state.rows    || [];
+    // Normalize here (not in each caller) so this tool renders correctly
+    // regardless of which of the schema's two documented row shapes a
+    // caller hands it -- the AI-proposal path (Media/presentation.js's
+    // _showInlineCard), a durable-message replay, or this tool's own
+    // stream-driven update() below.
+    state.headers = _hasImageRows(state.rows) && state.headers && state.headers.length
+        ? [''].concat(state.headers) : (state.headers || []);
+    state.rows    = _normalizeRows(state.rows);
 
     tool.refresh();
 
@@ -58,7 +64,17 @@ Q.Tool.define('Q/visualization/table', function (options) {
 
         var highlight = state.highlight || [];
 
-        var html = '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--AI-border)">'
+        // background here (not just on individual rows) matters: this
+        // tool's own .Media_presentation_card_screen wrapper is
+        // deliberately transparent (see Q/web/css/tools/cards.css -- "the
+        // card's own glass bg handles visuals"), a pattern every OTHER
+        // card relies on via .Q_card's own solid background. This table's
+        // markup never uses .Q_card, so without a background of its own,
+        // alternating rows' near-transparent rgba(255,255,255,0.024)
+        // tint shows straight through to whatever's behind the page
+        // instead of lightening a solid backdrop.
+        var html = '<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--AI-border);'
+                 + 'background:var(--AI-bg)">'
                  + '<table style="width:100%;border-collapse:collapse;font-family:system-ui;font-size:0.92rem">';
 
         // Header row
@@ -115,13 +131,15 @@ Q.Tool.define('Q/visualization/table', function (options) {
 
         switch (d.action) {
             case 'set':
-                state.headers   = d.headers   || state.headers;
-                state.rows      = d.rows      || [];
+                var headers = d.headers || state.headers;
+                state.headers   = _hasImageRows(d.rows) && headers && headers.length
+                    ? [''].concat(headers) : (headers || []);
+                state.rows      = _normalizeRows(d.rows || []);
                 state.highlight = d.highlight || [];
                 break;
             case 'addRow':
                 if (d.rows && d.rows.length) {
-                    state.rows = state.rows.concat(d.rows);
+                    state.rows = state.rows.concat(_normalizeRows(d.rows));
                 }
                 break;
             case 'removeRow':
@@ -172,6 +190,32 @@ function _escape(str) {
     return String(str)
         .replace(/&/g,'&amp;').replace(/</g,'&lt;')
         .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/**
+ * Normalize rows: the schema documents two row shapes -- flat cell
+ * arrays (legacy/simple), and {image, cells} objects. Convert the
+ * latter to a flat array too, prepending an <img> HTML string as the
+ * first cell when a row has an image. Module-scope (not nested in the
+ * constructor) so both the constructor and update() can use it.
+ */
+function _normalizeRows(rows) {
+    return (rows || []).map(function (row) {
+        if (Array.isArray(row)) return row;
+        var cells = row.cells || [];
+        if (row.image) {
+            var imgHtml = '<img src="' + row.image + '" style="height:36px;width:36px;'
+                + 'object-fit:cover;border-radius:4px;vertical-align:middle"'
+                + ' onerror="this.style.display=\'none\'">';
+            return [imgHtml].concat(cells);
+        }
+        return cells;
+    });
+}
+
+/** True if rows are in the {image, cells} object shape, not flat arrays. */
+function _hasImageRows(rows) {
+    return !!(rows && rows.length && rows[0] && typeof rows[0] === 'object' && !Array.isArray(rows[0]));
 }
 
 })(Q, jQuery, window);

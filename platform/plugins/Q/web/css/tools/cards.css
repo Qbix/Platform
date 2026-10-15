@@ -171,13 +171,48 @@
     font-weight: 700;
     line-height: 1.25;
 }
-.Q_card_article .Q_card_article_title a { color: inherit; text-decoration: none; }
+.Q_card_article .Q_card_article_title a { color: inherit; text-decoration: none; cursor: pointer; }
+/* Underline only on hover -- otherwise a linked headline and a plain-text
+   one (no url given) look identical, so there was no way to tell whether
+   a title was actually clickable before hovering it. */
+.Q_card_article .Q_card_article_title a:hover,
+.Q_card_article .Q_card_article_title a:focus-visible {
+    text-decoration: underline;
+}
 .Q_card_article .Q_card_article_claim {
     font-size: clamp(0.9rem, 1.8vw, 1.25rem);
     opacity: 0.75;
     line-height: 1.5;
     border-left: 3px solid var(--Q-card-accent);
     padding-left: 12px;
+}
+/* keyClaim is documented (AI/config/messages.schema.json) as "2-3
+   sentences", but the model doesn't always comply -- observed verbatim
+   dumping a full multi-sentence article body here, which made the whole
+   card's fit-content height grow well past the viewport (984px tall
+   against a 911px-tall window). Clamp the TEXT specifically (not the
+   whole .Q_card_article_claim block, which also holds the "Read more"
+   link -- that must stay visible unclamped as the escape hatch for
+   whatever this cuts off) so the card's own height stays bounded
+   regardless of how verbose the response is. */
+.Q_card_article .Q_card_article_claim_text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+    overflow: hidden;
+}
+.Q_card_article .Q_card_article_readmore {
+    display: inline-block;
+    margin-left: 6px;
+    white-space: nowrap;
+    font-weight: 600;
+    opacity: 1;
+    color: var(--Q-card-accent);
+    text-decoration: none;
+}
+.Q_card_article .Q_card_article_readmore:hover,
+.Q_card_article .Q_card_article_readmore:focus-visible {
+    text-decoration: underline;
 }
 
 /* ── Comparison ── */
