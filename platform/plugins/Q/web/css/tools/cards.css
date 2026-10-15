@@ -186,6 +186,21 @@
     border-left: 3px solid var(--Q-card-accent);
     padding-left: 12px;
 }
+/* keyClaim is documented (AI/config/messages.schema.json) as "2-3
+   sentences", but the model doesn't always comply -- observed verbatim
+   dumping a full multi-sentence article body here, which made the whole
+   card's fit-content height grow well past the viewport (984px tall
+   against a 911px-tall window). Clamp the TEXT specifically (not the
+   whole .Q_card_article_claim block, which also holds the "Read more"
+   link -- that must stay visible unclamped as the escape hatch for
+   whatever this cuts off) so the card's own height stays bounded
+   regardless of how verbose the response is. */
+.Q_card_article .Q_card_article_claim_text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 5;
+    overflow: hidden;
+}
 .Q_card_article .Q_card_article_readmore {
     display: inline-block;
     margin-left: 6px;
