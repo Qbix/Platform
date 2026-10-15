@@ -86,8 +86,22 @@ Q.Tool.define("Q/chart/line", function () {
             .domain([yMin, yMax])
             .range([ih, 0]);
 
-        g.append('g').attr('transform', 'translate(0,' + ih + ')').call(d3.axisBottom(xScale).ticks(6));
-        g.append('g').call(d3.axisLeft(yScale).ticks(5).tickFormat(function (v) { return v + (s.unit || ''); }));
+        // d3.scaleLinear's default tick format comma-groups (2025 -> "2,025"),
+        // which is wrong for a year/index axis -- force plain ungrouped
+        // integers there. The y-axis gets compact SI-prefix formatting
+        // (50000000 -> "50M") plus a space before the unit, since it was
+        // previously a raw digit string glued directly onto the unit with
+        // no formatting or separator at all (e.g. "50000000people").
+        g.append('g').attr('transform', 'translate(0,' + ih + ')')
+            .call(d3.axisBottom(xScale).ticks(6).tickFormat(d3.format('d')));
+        g.append('g').call(d3.axisLeft(yScale).ticks(5).tickFormat(function (v) {
+            // Explicit precision (3 sig figs), not bare "~s" -- ticks()
+            // always picks round values so this rarely shows in practice,
+            // but bare "~s" defaults to 6 significant digits and only
+            // trims genuinely-trailing zeros, so any non-round tick would
+            // render overly precise (see the matching bar-chart fix).
+            return d3.format('.3~s')(v) + (s.unit ? ' ' + s.unit : '');
+        }));
 
         var line = d3.line()
             .x(function (d) { return xScale(+d.x); })
