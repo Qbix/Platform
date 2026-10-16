@@ -432,14 +432,26 @@ class Q_Request
 	}
 
 	/**
-	 * Returns the origin of the current HTTP request.
-	 * Also works behind proxies if they forward the appropriate headers.
+	 * Returns the origin of the current HTTP request, as the client claimed it:
+	 * the Origin header, else X-Forwarded-Origin, else the scheme, host and
+	 * port of the Referer.
+	 *
+	 * A request that carries none of these has no claimed origin, and this
+	 * returns null. It used to fall back to the Host header, which is the
+	 * server's own name, not the requester's: that made a header-less request
+	 * look same-origin, and Q_Valid::requireOrigin() let it through. A
+	 * cross-site GET navigation from a page with Referrer-Policy: no-referrer
+	 * carries neither header, and with Q.method=post it reaches POST handlers.
+	 * Pass $fallbackToHost = true for the old best-guess behaviour, never for
+	 * an access decision.
 	 *
 	 * @method origin
 	 * @static
+	 * @param {boolean} [$fallbackToHost=false] Whether to guess scheme://Host
+	 *   when the client sent no Origin, X-Forwarded-Origin or Referer.
 	 * @return string|null  The request origin (scheme://host[:port]) or null if unknown.
 	 */
-	public static function origin()
+	public static function origin($fallbackToHost = false)
 	{
 		if (isset($_SERVER['HTTP_ORIGIN'])) {
 			return $_SERVER['HTTP_ORIGIN'];
@@ -459,7 +471,7 @@ class Q_Request
 				return $origin;
 			}
 		}
-		if (isset($_SERVER['HTTP_HOST'])) {
+		if ($fallbackToHost && isset($_SERVER['HTTP_HOST'])) {
 			$scheme = 'http';
 			if (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
 				$scheme = 'https';
@@ -1754,9 +1766,8 @@ class Q_Request
 	 * @see Q_Valid::requireOrigin
 	 * @method requireOrigin
 	 * @static
-	 * @param {array} $fields Array of strings or arrays naming fields that are required
-	 * @param {boolean} [$throwIfMissing=false] Whether to throw an exception if the field is missing
-	 * @param {boolean} [$emptyMeansMissing=false] Whether empty value means missing field
+	 * @param {boolean} [$throwIfInvalid=false] Whether to throw Q_Exception_WrongValue
+	 *   instead of returning false. A request with no Origin and no Referer fails.
 	 * @return {boolean} Whether it was valid
 	 */
 	static function requireOrigin($throwIfInvalid = false)
