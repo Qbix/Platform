@@ -243,7 +243,7 @@
 			"initialExtras": {
 				"Q": {
 					"{{Q}}/js/jquery-3.7.1.min.js": true,
-					"{{Q}}/js/handlebars-v4.0.10.min.js": true,
+					"{{Q}}/js/handlebars-v4.7.9.min.js": true,
 					"{{Q}}/js/Q.js": true
 				}
 			},
