@@ -878,9 +878,7 @@ abstract class Db_Query extends Db_Expression
 				);
 			}
 		}
-		foreach ($this->replacements as $k => $v) {
-			$repres = str_replace($k, $v, $repres);
-		}
+		$repres = $this->applyReplacements($repres);
 		if (isset($callback)) {
 			$args = array($repres);
 			Q::call($callback, $args);
@@ -1385,6 +1383,7 @@ abstract class Db_Query extends Db_Expression
 							$this->parameters, $table->parameters
 						);
 					} else {
+						$table = static::quotedTable($table);
 						$table_string = is_int($alias) ? "$table" : "$table $as $alias";
 					}
 					if ($repeat and in_array($table_string, $prev_tables_list)) {
@@ -1404,6 +1403,7 @@ abstract class Db_Query extends Db_Expression
 			if (! is_string($tables)) {
 				throw new Exception("The tables to select from need to be specified correctly.", -1);
 			}
+			$tables = static::quotedTable($tables);
 
 			if (empty($this->clauses['FROM'])) {
 				$this->clauses['FROM'] = $tables;
@@ -1474,6 +1474,7 @@ abstract class Db_Query extends Db_Expression
 			throw new Exception("The JOIN condition needs to be specified correctly.", -1);
 		}
 
+		$table = static::quotedTable($table);
 		$join = "$join_type JOIN $table ON ($condition)";
 
 		if (empty($this->clauses['JOIN'])) {
@@ -2513,6 +2514,102 @@ abstract class Db_Query extends Db_Expression
 
 	static function quoted($identifier) {
 		return '"' . str_replace('"', '""', $identifier) . '"'; // ANSI default, override per adapter
+	}
+
+	/**
+	 * Quotes $expression if it is a bare identifier, and otherwise returns it
+	 * untouched.
+	 * @method quotedIfBare
+	 * @static
+	 * @param {string} $expression
+	 * @return {string}
+	 */
+	static function quotedIfBare($expression)
+	{
+		return preg_match('/^[A-Za-z0-9_$-]+$/', $expression)
+			? static::quoted($expression)
+			: $expression;
+	}
+
+	/**
+	 * Quotes a table reference of the form "name", "dbname.name", or either of
+	 * those followed by an alias, and returns anything else untouched.
+	 *
+	 * Generated Base_* classes build their table reference by concatenation --
+	 * $db->dbName().'.'.$table_name.$alias -- so a database name that is not a
+	 * bare identifier (a hyphen, a reserved word) produced invalid SQL:
+	 *
+	 *     SELECT identifier, userId FROM my-app.users_identify WHERE ...
+	 *
+	 * Only the leading run of bare, dot-separated identifiers is quoted, and
+	 * only when the whole expression is one of those optionally followed by
+	 * whitespace and an alias. A subquery, a comma-separated list, an
+	 * already-quoted name, or anything else carrying punctuation is returned
+	 * exactly as it came in -- including the "{{dbname}}.{{prefix}}x" token
+	 * form, which applyReplacements() quotes instead.
+	 * @method quotedTable
+	 * @static
+	 * @param {string|Db_Expression} $expression
+	 * @return {string|Db_Expression}
+	 */
+	static function quotedTable($expression)
+	{
+		if (!is_string($expression)) {
+			return $expression;
+		}
+		if (!preg_match(
+			'/^([A-Za-z0-9_$-]+(?:\.[A-Za-z0-9_$-]+)*)(\s[\s\S]*)?$/',
+			$expression, $matches
+		)) {
+			return $expression;
+		}
+		$parts = explode('.', $matches[1]);
+		foreach ($parts as $i => $part) {
+			$parts[$i] = static::quoted($part);
+		}
+		return implode('.', $parts)
+			. (isset($matches[2]) ? $matches[2] : '');
+	}
+
+	/**
+	 * Substitutes {{dbname}}, {{prefix}} and the other replacements into
+	 * generated SQL. A table reference of the shape "{{dbname}}.{{prefix}}base"
+	 * is two bare identifiers, so both halves are quoted here.
+	 *
+	 * The values in $this->replacements are deliberately left unquoted: the
+	 * sharding code substitutes them into a table name and compares the result
+	 * against the dbTable it sends to node.js.
+	 * @method applyReplacements
+	 * @protected
+	 * @param {string} $sql
+	 * @return {string}
+	 */
+	protected function applyReplacements($sql)
+	{
+		if (isset($this->replacements['{{dbname}}'])) {
+			$dbname = $this->replacements['{{dbname}}'];
+			if (isset($this->replacements['{{prefix}}'])) {
+				$prefix = $this->replacements['{{prefix}}'];
+				$class = get_called_class();
+				$sql = preg_replace_callback(
+					'/\{\{dbname\}\}\.\{\{prefix\}\}([A-Za-z0-9_$]+)/',
+					function ($m) use ($dbname, $prefix, $class) {
+						return call_user_func(array($class, 'quotedIfBare'), $dbname)
+							. '.' . call_user_func(
+								array($class, 'quotedIfBare'), $prefix.$m[1]
+							);
+					},
+					$sql
+				);
+			}
+			$sql = str_replace(
+				'{{dbname}}.', static::quotedIfBare($dbname).'.', $sql
+			);
+		}
+		foreach ($this->replacements as $k => $v) {
+			$sql = str_replace($k, $v, $sql);
+		}
+		return $sql;
 	}
 
 	/**
