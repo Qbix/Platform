@@ -7,6 +7,11 @@ Q.inc), then run:
   php  scripts/dbtest.php        37   PHP parity reference, parameter substitution,
                                       limit(0), normalize/hashCode/hash
   node scripts/basetest.js       15   construction through the Sqlite adapter
+  node platform/tests/committest.js
+                                  3   a failed COMMIT reaches the caller as an
+                                      error, not the pre-commit success. The one
+                                      script here that needs no app, no database
+                                      and no Q.inc -- run it where it sits
   node scripts/adaptertest.js    34   live SQLite + live Postgres round-trips
   node scripts/vectortest.js     50   Db.Vector, SQL gen for all 3, version gate,
                                       method-name AND vector-prefix parity,
@@ -34,8 +39,8 @@ Q.inc), then run:
                                       VECTOR column, models.php generates the
                                       class, save + vectorNearestTo both work
 
-                                341   total on MariaDB 11.8
-                                287   total on MariaDB 10.11 (the vector suites
+                                344   total on MariaDB 11.8
+                                290   total on MariaDB 10.11 (the vector suites
                                       skip the MariaDB engine; the gate stays shut)
 
 The four that matter most when you change anything:
@@ -50,6 +55,7 @@ Unavailable engines are reported as SKIP, not failure, so crossvectortest runs
 anywhere without environment special-casing.
 
 Requirements
+  committest          nothing at all -- it stubs Q and scripts the connection
   dbtest.*            a MySQL/MariaDB connection named 'Streams' (your app's own)
   adaptertest         better-sqlite3; pg + a reachable Postgres
                       (user qbix / qbixpass, database qbixtest)
