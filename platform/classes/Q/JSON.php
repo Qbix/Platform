@@ -20,7 +20,10 @@ class Q_JSON
 
 		// Handle FORCE_OBJECT workaround
 		if ($options & Q::JSON_FORCE_OBJECT) {
-			if (is_array($value) && array_keys($value) === range(0, count($value) - 1)) {
+			// An empty array is a list too; range(0, -1) is [0, -1], not [],
+			// so it needs its own test or it would still encode as "[]".
+			if (is_array($value) && ($value === array()
+			|| array_keys($value) === range(0, count($value) - 1))) {
 				$value = (object) $value;
 			}
 			$options &= ~Q::JSON_FORCE_OBJECT;
