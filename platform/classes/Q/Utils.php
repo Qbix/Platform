@@ -1329,6 +1329,44 @@ class Q_Utils
 	}
 
 	/**
+	 * The timeout, in seconds, that an outbound request made by request()
+	 * (and so get(), post(), put(), queryInternal(), queryExternal() and the
+	 * batch) actually gets.
+	 *
+	 * `null` means Q_UTILS_CONNECTION_TIMEOUT, as the docblocks of get() and
+	 * friends have always said. request() used to hand null straight to curl,
+	 * where CURLOPT_TIMEOUT null means "no limit".
+	 *
+	 * Under a web SAPI the result is also capped at Q/web/outboundTimeout
+	 * (default 10). A web request runs inside the server's own execution cap
+	 * (e.g. php-fpm's request_terminate_timeout, a proxy read timeout),
+	 * and one outbound call should not be able to spend most or all of it:
+	 * a 30s library default, or a 600s one from config, only means the
+	 * worker is killed mid-request. A timeout of 0 (curl's "no limit") is
+	 * capped the same way. Set Q/web/outboundTimeout to 0 or false to turn
+	 * the cap off. The CLI SAPI (scripts, cron) is left as the caller asked.
+	 * @method outboundTimeout
+	 * @static
+	 * @param {integer|null} $timeout What the caller asked for. 0 means no limit.
+	 * @param {string} [$sapi=PHP_SAPI] The SAPI to decide for; tests pass one.
+	 * @return {integer}
+	 */
+	static function outboundTimeout($timeout, $sapi = PHP_SAPI)
+	{
+		if (!isset($timeout)) {
+			$timeout = Q_UTILS_CONNECTION_TIMEOUT;
+		}
+		if ($sapi === 'cli' || $sapi === 'phpdbg') {
+			return $timeout;
+		}
+		$cap = Q_Config::get('Q', 'web', 'outboundTimeout', 10);
+		if (!$cap) {
+			return $timeout;
+		}
+		return ($timeout > 0) ? min($timeout, $cap) : $cap;
+	}
+
+	/**
 	 * Issues an http request, and returns the response
 	 * @method request
 	 * @static
@@ -1377,6 +1415,9 @@ class Q_Utils
 		}
 
 		$method = strtoupper($method);
+		// Resolved after the batch check above, so a batched request gets
+		// it too: batchExecute() comes back through here with $returnHandle.
+		$timeout = self::outboundTimeout($timeout);
 		if (!isset($user_agent)) {
 			$user_agent = Q_Config::expect('Q', 'curl', 'userAgent');
 		}
