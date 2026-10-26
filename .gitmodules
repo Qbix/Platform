@@ -64,3 +64,6 @@
 [submodule "platform/plugins/Twitter"]
 	path = platform/plugins/Twitter
 	url = https://github.com/Qbix/Twitter
+[submodule "platform/plugins/Q/web/js/safescript"]
+	path = platform/plugins/Q/web/js/safescript
+	url = https://github.com/SafeScript/safescript
