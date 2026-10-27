@@ -247,6 +247,13 @@ Q.Tool.define("Q/columns", function(options) {
 	 *  @param {Object} [options.title] override the title of the column
 	 *  @param {Object} [options.column] override the html of the column
 	 *  @param {Object} [options.url] a url to request the slots "title" and "column" from
+	 *  @param {Boolean} [options.replace] pass true to, if a column already exists at this
+	 *   index, update its title/column/controls content in place instead of closing it and
+	 *   animating in a brand new column. The existing column's DOM element, position and
+	 *   visibility are left untouched throughout — only its content is swapped once the new
+	 *   content (or the response from options.url) is ready — so there's no close/reopen
+	 *   flash or layout jump. Has no effect when no column currently exists at this index
+	 *   (behaves like a normal open in that case).
 	 *  @param {Object} [options.focusAfterActivate] pass true here to focus the first input after the column is activated
 	 *  @param {Boolean} [options.dontUpdateThemeColor] pass true here to prevent updating the window's theme color
 	 * @param {Number} index The index of the column to open
@@ -279,7 +286,7 @@ Q.Tool.define("Q/columns", function(options) {
 			return false;
 		}
 		
-		if (!internal && state.columns[index]) {
+		if (!internal && !o.replace && state.columns[index]) {
 			this.close(index, null, {animation: {duration: 0}}, true);
 		}
 		
@@ -566,7 +573,7 @@ Q.Tool.define("Q/columns", function(options) {
 					// check url before document location changed
 					var url = $div.attr('data-url');
 					$div.attr('data-title', document.title);
-					if (o.pagePushUrl && createdNewDiv && url && url !== location.href) {
+					if (o.pagePushUrl && (createdNewDiv || o.replace) && url && url !== location.href) {
 						Q.Page.push(url);
 					}
 					Q.Pointer.clearSelection();
@@ -693,50 +700,66 @@ Q.Tool.define("Q/columns", function(options) {
 				}
 				$mask = $('<div class="Q_columns_mask" />')
 				.appendTo($div);
-				$div.css('visibility', 'visible')
-				.addClass('Q_columns_opening')
-				.css(o.animation.css.hide)
-				.stop()
-				.animate(show, duration, function() {
-					if (o.textfill) {
-						$tc.plugin('Q/textfill', o.textfill);
+
+				if (o.replace && !createdNewDiv) {
+					// True in-place replace: this column already exists,
+					// is already visible and correctly positioned, and is
+					// staying at the same index -- so skip the hide->show
+					// CSS dance entirely (jumping to o.animation.css.hide
+					// and animating back to "show" would itself cause the
+					// very flash/jump this option exists to avoid). Content
+					// swaps in directly once the activation pipeline below
+					// finishes (see the o.url / Q.loadUrl handling above),
+					// and afterAnimation() still runs synchronously here so
+					// the pipe's "animation" slot completes normally.
+					$div.addClass('Q_columns_loading');
+					afterAnimation($cs, $sc, $ct);
+				} else {
+					$div.css('visibility', 'visible')
+					.addClass('Q_columns_opening')
+					.css(o.animation.css.hide)
+					.stop()
+					.animate(show, duration, function() {
+						if (o.textfill) {
+							$tc.plugin('Q/textfill', o.textfill);
+						}
+						setTimeout(function () {
+							$div.data(dataKey_opening, false);
+							afterAnimation($cs, $sc, $ct);
+						}, 0);
+					});
+					$div.addClass('Q_columns_loading');
+
+					if (!_suddenlyClosing && o.hideOverlappedColumns) {
+						$div.prev().addClass('Q_columns_overlapped');
 					}
+					$div.addClass('Q_columns_latest');
+					$div.prevAll('.Q_columns_column').removeClass('Q_columns_latest');
+
 					setTimeout(function () {
-						$div.data(dataKey_opening, false);
-						afterAnimation($cs, $sc, $ct);
+						if (Q.info.isMobile) {
+							$div.add($ct).css('width', '100%');
+						} else {
+							var width = 0;
+							var $toScroll = ($te.css('overflow') === 'visible')
+								? $te.parents()
+								: $te;
+							$toScroll.each(function () {
+								var $this = $(this);
+								if (o.animation.scrollDuration) {
+									$this.animate({
+										scrollLeft: this.scrollWidth
+									}, o.animation.scrollDuration);
+								} else {
+									this.scrollTo(this.scrollWidth, 0);
+								}
+								if ($this.css('overflow') !== 'visible') {
+									return false;
+								}
+							});
+						}
 					}, 0);
-				});
-				$div.addClass('Q_columns_loading');
-
-				if (!_suddenlyClosing && o.hideOverlappedColumns) {
-					$div.prev().addClass('Q_columns_overlapped');
 				}
-				$div.addClass('Q_columns_latest');
-				$div.prevAll('.Q_columns_column').removeClass('Q_columns_latest');
-
-				setTimeout(function () {
-					if (Q.info.isMobile) {
-						$div.add($ct).css('width', '100%');
-					} else {
-						var width = 0;
-						var $toScroll = ($te.css('overflow') === 'visible')
-							? $te.parents()
-							: $te;
-						$toScroll.each(function () {
-							var $this = $(this);
-							if (o.animation.scrollDuration) {
-								$this.animate({
-									scrollLeft: this.scrollWidth
-								}, o.animation.scrollDuration);
-							} else {
-								this.scrollTo(this.scrollWidth, 0);
-							}
-							if ($this.css('overflow') !== 'visible') {
-								return false;
-							}
-						});
-					}
-				}, 0);
 			}
 
 			function afterAnimation($cs, $sc, $ct){
@@ -1259,6 +1282,26 @@ Q.invoke.handlers.unshift(function (options, methods) {
 		node = node.parentNode;
 	}
 	if (columns) {
+		var targetIndex = index + 1;
+		if (options.replace) {
+			// Update the column already at targetIndex (e.g. a clip's own
+			// detail column) in place instead of closing it and animating
+			// in a new one -- see open()'s own "replace" option doc
+			// comment. Only close anything deeper than that target (stale
+			// columns from whatever was open past it), never the target
+			// column itself.
+			columns.close({min: targetIndex + 1}, null, {animation: {duration: 0}});
+			columns.open(Q.extend({}, options, {
+				replace: true,
+				column: options.content,
+				onActivate: options.onActivate || function () {}
+			}), targetIndex);
+			var maxReplace = columns.max();
+			methods.close = function (options) {
+				columns.close(maxReplace, function () { }, options);
+			};
+			return false;
+		}
 		var closed = columns.close({min: index+1}, null, {animation: {duration: 0}});
 		columns.push(Q.extend({}, options, {
 			animation: closed ? { scrollDuration: 0 } : {},
