@@ -178,14 +178,21 @@ class Q_Crypto_OpenClaim
     {
         self::_validateNumbers($claim);
 
-        // Derive P-256 keypair from secret (HKDF-SHA256, same as JS internalKeypair ES256)
+        $format = $existing['format'] ?? 'ES256';
+
+        // Derive keypair from secret (format-specific derivation)
         $kp = Q_Crypto::internalKeypair([
             'secret' => $secret,
-            'format' => 'ES256'
+            'format' => $format
         ]);
 
-        // Build SPKI key URI from raw uncompressed public key (65 bytes: 04||X||Y)
-        $signerKey = self::_rawPublicKeyToKeyString($kp['publicKey']);
+        // Build key URI from public key (format-dependent encoding)
+        $fmt = strtoupper($format);
+        if ($fmt === 'ML-DSA-65') {
+            $signerKey = self::_pqPublicKeyToKeyString($kp['publicKey']);
+        } else {
+            $signerKey = self::_rawPublicKeyToKeyString($kp['publicKey']);
+        }
 
         // Merge into sorted key+sig state
         $keys = self::_toArray($existing['keys'] ?? ($claim['key'] ?? []));
@@ -200,19 +207,20 @@ class Q_Crypto_OpenClaim
         $tmp['sig'] = $state['signatures'];
         $canon      = self::canonicalize($tmp);
 
-        // Hash the canonical string — Q_Data::digest returns raw binary
-        $digest = Q_Data::digest('sha256', $canon);
-
-        // Sign via Q_ECC (mdanter/phpecc) — no OpenSSL needed
-        // Returns [rHex, sHex] with low-S normalization already applied
-        $rs = Q_ECC::signDigest($digest, bin2hex($kp['privateKey']), 'P256');
-
-        // Pack to raw r||s (64 bytes) for OCP wire format
-        $rawSig = hex2bin(str_pad($rs[0], 64, '0', STR_PAD_LEFT))
-                . hex2bin(str_pad($rs[1], 64, '0', STR_PAD_LEFT));
-
         $idx = array_search($signerKey, $state['keys'], true);
-        $state['signatures'][$idx] = base64_encode($rawSig);
+
+        if ($fmt === 'ML-DSA-65') {
+            // ML-DSA-65 signs the canonical bytes directly (FIPS 204 internal hashing)
+            $sig = Q_PQ::sign($canon, $kp['privateKey']);
+            $state['signatures'][$idx] = base64_encode($sig);
+        } else {
+            // ES256: SHA-256 digest + ECDSA P-256
+            $digest = Q_Data::digest('sha256', $canon);
+            $rs = Q_ECC::signDigest($digest, bin2hex($kp['privateKey']), 'P256');
+            $rawSig = hex2bin(str_pad($rs[0], 64, '0', STR_PAD_LEFT))
+                    . hex2bin(str_pad($rs[1], 64, '0', STR_PAD_LEFT));
+            $state['signatures'][$idx] = base64_encode($rawSig);
+        }
 
         return array_merge($claim, [
             'key' => $state['keys'],
@@ -303,6 +311,20 @@ class Q_Crypto_OpenClaim
                 if ($fmt === 'EIP712') {
                     try {
                         if (Q_Crypto_OpenClaim_EVM::verify($claim, $sig, (string)$ko['value'])) {
+                            $valid++;
+                            break;
+                        }
+                    } catch (\Exception $e) { /* try next */ }
+                    continue;
+                }
+
+                // ── ML-DSA-65 (FIPS 204 post-quantum) ────────────────────
+                if ($fmt === 'ML-DSA-65') {
+                    try {
+                        $sigRaw = base64_decode($sig);
+                        $pkRaw  = $ko['value'];
+                        // ML-DSA-65 verifies against canonical bytes (not digest)
+                        if (Q_PQ::verify($sigRaw, $canon, $pkRaw)) {
                             $valid++;
                             break;
                         }
@@ -410,6 +432,16 @@ class Q_Crypto_OpenClaim
      *
      * @private
      */
+    /**
+     * Build a data:key/ml-dsa-65;base64,<raw-pk> URI from a 1952-byte ML-DSA-65 public key.
+     * No SPKI wrapping — the raw public key bytes are used directly.
+     * @private
+     */
+    private static function _pqPublicKeyToKeyString(string $publicKey): string
+    {
+        return 'data:key/ml-dsa-65;base64,' . base64_encode($publicKey);
+    }
+
     private static function _rawPublicKeyToKeyString(string $rawPublicKey): string
     {
         // 26-byte fixed P-256 SPKI prefix (hex):

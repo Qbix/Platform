@@ -202,16 +202,36 @@ export function createHmacDrbg(hashLen, qByteLen, hmacFn) {
     };
     return genUntil;
 }
-export function validateObject(object, fields = {}, optFields = {}) {
-    if (!object || typeof object !== 'object')
-        throw new Error('expected valid options object');
+export function aarray(item, title, inner = () => { }) {
+    if (!Array.isArray(item))
+        throw new TypeError(`"${title}" expected array, got type=${typeof item}`);
+    for (let i = 0; i < item.length; i++)
+        inner(item[i], `${title}[${i}]`);
+    return item;
+}
+export function aobject(value, title = 'object') {
+    if (value === null || typeof value !== 'object' || Array.isArray(value))
+        throw new TypeError(title === 'object'
+            ? 'expected valid options object'
+            : `"${title}" expected object, got type=${typeof value}`);
+    return value;
+}
+export function validateObject(object, fields = {}, optFields = {}, title = 'object') {
+    aobject(object, title);
+    aobject(fields, 'fields');
+    aobject(optFields, 'optFields');
     function checkField(fieldName, expectedType, isOpt) {
+        const label = title === 'object' ? `param "${String(fieldName)}"` : `"${title}.${String(fieldName)}"`;
         const val = object[fieldName];
+        if (!Object.hasOwn(object, fieldName) &&
+            (isOpt ? val !== undefined : expectedType !== 'function')) {
+            throw new TypeError(`${label} is invalid: expected own property`);
+        }
         if (isOpt && val === undefined)
             return;
         const current = typeof val;
         if (current !== expectedType || val === null)
-            throw new Error(`param "${fieldName}" is invalid: expected ${expectedType}, got ${current}`);
+            throw new TypeError(`${label} is invalid: expected ${expectedType}, got ${current}`);
     }
     const iter = (f, isOpt) => Object.entries(f).forEach(([k, v]) => checkField(k, v, isOpt));
     iter(fields, false);
