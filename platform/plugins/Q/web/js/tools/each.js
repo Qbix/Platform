@@ -31,6 +31,14 @@
  * Changes made through a bound tool's state or setState() are observed;
  * call stateChanged() after changing state through an unobserved reference.
  *
+ * Expressions parse against the restricted grammar documented on
+ * Q.Template.bind: identifier-chain paths, literals, boolean operators,
+ * equality, comparison, arithmetic, and parentheses. No function calls,
+ * no [] indexing, no window fallback, no property access to constructor /
+ * __proto__ / prototype. Pass options.unsafeEval = true to the surrounding
+ * Q.Template.bind call to opt into the legacy Function-based evaluator for
+ * trusted first-party templates.
+ *
  * @class Q each
  * @constructor
  * @param {Object} [options] Q tool options. The collection and row
@@ -58,7 +66,8 @@ Q.exports(function (Q) {
     Q.Tool.define('Q/each', function () {
         var tool = this, host = tool.element;
         var reserved = { id: 1, 'class': 1, style: 1, slot: 1,
-            key: 1, template: 1, 'q-live': 1 };
+            key: 1, template: 1, 'q-live': 1,
+            selectable: 1, multiselectable: 1 };
         var declarations = Array.prototype.filter.call(host.attributes, function (attr) {
             return !reserved[attr.name] && attr.name.slice(0, 5) !== 'data-';
         });
@@ -113,6 +122,11 @@ Q.exports(function (Q) {
                     row.Q_scope = session.observe(rowScope);
                     entry = { row: row, removed: false };
                     if (templateName !== null) {
+                        if (!session.allowsTemplate(templateName)) {
+                            console.error('Q/each template: '
+                                + templateName + ' not allowed in this session');
+                            return;
+                        }
                         (function (itemEntry, fields) {
                             Q.Template.render(templateName, fields,
                                 { tool: tool }).then(function (html) {
@@ -150,6 +164,13 @@ Q.exports(function (Q) {
                 entry.row.remove();
             });
             rows = next;
+            // If the author marked this q-each selectable, wire the
+            // delegated row-click handler. Q.Embed.initSelection is
+            // idempotent and no-ops when neither attribute is set, so
+            // calling it on every reconcile is safe.
+            if (Q.Embed && typeof Q.Embed.initSelection === 'function') {
+                Q.Embed.initSelection(host);
+            }
         }
         tool.refresh = function () {
             if (session) reconcile(collection());
