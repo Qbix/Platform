@@ -1,0 +1,102 @@
+{
+  "Q": {
+    "Embed": {
+      "maxBytes": 102400,
+      "parseTimeoutMs": 500,
+
+      "allowedTags": [
+        "div", "span", "p",
+        "section", "article", "header", "footer", "nav", "aside", "main",
+        "h1", "h2", "h3", "h4", "h5", "h6",
+        "ul", "ol", "li", "dl", "dt", "dd",
+        "blockquote", "pre", "code",
+        "em", "strong", "b", "i", "u", "s", "mark", "small", "sub", "sup",
+        "br", "hr",
+        "img", "picture", "source",
+        "a", "time", "figure", "figcaption",
+        "q-if", "q-else-if", "q-else", "q-each", "q-submit"
+      ],
+
+      "rejectedTags": [
+        "script", "style", "iframe", "object", "embed", "link", "meta",
+        "base", "applet", "frame", "frameset", "noembed", "noframes", "portal",
+        "form", "input", "button", "select", "textarea",
+        "option", "optgroup", "fieldset", "legend", "output", "datalist",
+        "svg", "math"
+      ],
+
+      "globalAttributes": [
+        "id", "class", "title", "lang", "dir", "role", "tabindex",
+        "aria-label", "aria-labelledby", "aria-describedby", "aria-hidden",
+        "aria-live", "aria-atomic", "aria-expanded"
+      ],
+
+      "perTagAttributes": {
+        "a":    ["href", "rel", "target"],
+        "img":  ["src", "alt", "width", "height", "loading", "data-lazyload-src"],
+        "picture": [],
+        "source": ["src", "srcset", "sizes", "type", "media"],
+        "time": ["datetime"],
+        "blockquote": ["cite"],
+        "q":    ["cite"],
+        "del":  ["cite", "datetime"],
+        "ins":  ["cite", "datetime"],
+
+        "q-if":      ["test", "template", "q-live"],
+        "q-else-if": ["test", "template"],
+        "q-else":    ["template"],
+        "q-each":    ["key", "template", "q-live", "selectable", "multiselectable"],
+        "q-submit":  ["data-action-target"]
+      },
+
+      "actionAttributes": ["data-action", "data-action-target"],
+
+      "urlAttributes": {
+        "href": true, "src": true, "poster": true, "cite": true,
+        "action": true, "formaction": true, "background": true,
+        "longdesc": true, "profile": true, "usemap": true, "ping": true,
+        "data": true, "srcset": true, "xlink:href": true
+      },
+
+      "allowedUrlSchemes": ["http", "https", "mailto", "tel"],
+
+      "allowedTargets": ["_blank", "_self"],
+      "requiredRelOnTargetBlank": "noopener noreferrer",
+
+      "tools": {
+        "Streams/preview": {
+          "optionAttributes": ["publisher-id", "name"]
+        },
+        "Streams/image": {
+          "optionAttributes": ["publisher-id", "name", "alt"]
+        },
+        "Users/avatar": {
+          "optionAttributes": ["user-id", "size"]
+        },
+        "Visibility/toggle": {
+          "optionAttributes": ["target", "label"]
+        }
+      },
+
+      "allowedTemplates": "^Embed/",
+
+      "actions": {
+        "submit":  { "handler": "Q/embed/actions/submit",       "returnShape": "postMessage" },
+        "invite":  { "handler": "Streams/embed/actions/invite", "returnShape": "redirect",   "requiredSelection": true },
+        "rsvp":    { "handler": "Streams/embed/actions/rsvp",   "returnShape": "inline" }
+      },
+
+      "vocabulary": {
+        "page": ["event", "stream", "user", "related", "participants", "messages", "canSee", "canContribute", "canAdmin"],
+        "stream":      ["publisherId", "name", "title", "content", "icon", "type", "createdTime"],
+        "event":       ["title", "description", "imageUrl", "startTime", "endTime", "public", "hidden", "attendees"],
+        "participant": ["userId", "displayName", "roles", "isMe"],
+        "attendee":    ["userId", "displayName", "canSee"],
+        "message":     ["ordinal", "byUserId", "content", "sentTime", "type", "length", "isMine", "isLong"],
+        "user":        ["id", "displayName", "icon"],
+        "person":      ["id", "name", "age", "vip", "staff", "active"],
+        "item":        ["*"]
+      }
+    }
+  }
+}

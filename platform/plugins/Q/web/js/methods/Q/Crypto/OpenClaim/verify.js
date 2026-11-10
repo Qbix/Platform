@@ -139,6 +139,23 @@ Q.exports(function (Q) {
 			});
 		}
 
+		// ── ML-DSA-65 (FIPS 204 post-quantum) ────────────────────────────────
+		if (fmt === "ML-DSA-65") {
+			return Q.Promise.resolve(
+				import(Q.url("{{Q}}/js/crypto/pq/ml-dsa.js"))
+			).then(function (pq) {
+				var sigBytes = Q.Data.fromBase64(sig);
+				var pk = ko.value instanceof Uint8Array
+					? ko.value
+					: Q.Data.fromBase64(String(ko.value));
+				var ok = pq.ml_dsa65.verify(sigBytes, data, pk);
+				if (ok) { return true; }
+				return _tryKeyObjs(keyObjs, idx + 1, sig, data, claim);
+			}).catch(function () {
+				return _tryKeyObjs(keyObjs, idx + 1, sig, data, claim);
+			});
+		}
+
 		// Unknown format — skip
 		return _tryKeyObjs(keyObjs, idx + 1, sig, data, claim);
 	}

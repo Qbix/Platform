@@ -55,6 +55,21 @@ function _rawPublicKeyToKeyString(rawPublicKey) {
     return 'data:key/es256;base64,' + spki.toString('base64');
 }
 
+function _pqPublicKeyToKeyString(publicKey) {
+    return 'data:key/ml-dsa-65;base64,' + Buffer.from(publicKey).toString('base64');
+}
+
+// ── ML-DSA-65 lazy ESM import (cached) ───────────────────────────────────────
+
+var _mlDsaPromise = null;
+
+function _getMlDsa() {
+    if (!_mlDsaPromise) {
+        _mlDsaPromise = import('@noble/post-quantum/ml-dsa.js');
+    }
+    return _mlDsaPromise;
+}
+
 // ── Shared state helpers ──────────────────────────────────────────────────────
 
 function _toArray(v) {
@@ -257,10 +272,15 @@ OpenClaim.sign = function (claim, secret, existing, callback) {
         try {
             _validateNumbers(claim);
 
-            // Derive P-256 keypair — same HKDF derivation as browser + PHP
-            Q.Crypto.internalKeypair({ secret: secret, format: 'ES256' }).then(function (kp) {
+            var format = existing.format || 'ES256';
+
+            // Derive keypair — format-specific derivation
+            Q.Crypto.internalKeypair({ secret: secret, format: format }).then(function (kp) {
                 try {
-                    var signerKey = _rawPublicKeyToKeyString(kp.publicKey);
+                    var fmt = format.toUpperCase();
+                    var signerKey = (fmt === 'ML-DSA-65')
+                        ? _pqPublicKeyToKeyString(kp.publicKey)
+                        : _rawPublicKeyToKeyString(kp.publicKey);
 
                     var keys = _toArray(existing.keys != null ? existing.keys : claim.key).slice();
                     var sigs = _normalizeSigs(existing.signatures != null ? existing.signatures : claim.sig);
@@ -271,20 +291,30 @@ OpenClaim.sign = function (claim, secret, existing, callback) {
                     var tmp   = Object.assign({}, claim, { key: state.keys, sig: state.signatures });
                     var canon = OpenClaim.canonicalize(tmp);
 
-                    // SHA-256 of canonical UTF-8 bytes
-                    var digest = nodeCrypto.createHash('sha256')
-                        .update(Buffer.from(canon, 'utf8'))
-                        .digest();
+                    var idx = state.keys.indexOf(signerKey);
 
-                    // Build PKCS8 DER from raw P-256 scalar so Node can sign.
-                    // ECDH gives us the raw public key; we wrap scalar + public key
-                    // in SEC1 DER, then re-wrap as PKCS8 — the standard Node path.
-                    // sign(null, digest, privKey) treats digest as pre-hashed raw bytes.
+                    if (fmt === 'ML-DSA-65') {
+                        // ML-DSA-65: sign canonical bytes directly (FIPS 204 internal hashing)
+                        var canonBytes = Buffer.from(canon, 'utf8');
+                        _getMlDsa().then(function (mod) {
+                            try {
+                                // ml_dsa65.sign(message, secretKey) → Uint8Array(3309)
+                                var mlSig = mod.ml_dsa65.sign(canonBytes, kp.privateKey);
+                                state.signatures[idx] = Buffer.from(mlSig).toString('base64');
+                                resolve(Object.assign({}, claim, {
+                                    key: state.keys,
+                                    sig: state.signatures
+                                }));
+                            } catch (e) { reject(e); }
+                        }).catch(reject);
+                        return; // async path
+                    }
+
+                    // ES256: SHA-256 digest + ECDSA P-256
                     var ecdhP256 = nodeCrypto.createECDH('prime256v1');
                     ecdhP256.setPrivateKey(Buffer.from(kp.privateKey));
-                    var rawPub = ecdhP256.getPublicKey(); // 65-byte uncompressed point
+                    var rawPub = ecdhP256.getPublicKey();
 
-                    // SEC1 DER for P-256:  SEQUENCE { version, privateKey, [0] OID, [1] pubKey }
                     var sec1 = Buffer.concat([
                         Buffer.from([0x30, 0x77, 0x02, 0x01, 0x01, 0x04, 0x20]),
                         Buffer.from(kp.privateKey),
@@ -293,18 +323,8 @@ OpenClaim.sign = function (claim, secret, existing, callback) {
                         rawPub
                     ]);
                     var privKeyObj = nodeCrypto.createPrivateKey({ key: sec1, format: 'der', type: 'sec1' });
-
-                    // sign over the canonical bytes with SHA-256 (Node hashes
-                    // ONCE) → this signs SHA-256(canon), the same digest the
-                    // browser signs with noble.p256.sign(digest). The earlier
-                    // sign(null, digest) form re-hashed the digest (SHA-256 of the
-                    // digest), which did NOT match the client or PHP — a claim
-                    // signed here could not be verified in the browser.
-                    // Produces DER; OCP wire format stores raw r||s (P1363).
                     var derSig = nodeCrypto.sign('sha256', Buffer.from(canon, 'utf8'), privKeyObj);
-                    var rawSig = Q.Data.DERToRAW(derSig); // 64 bytes — matches browser sig[]
-
-                    var idx = state.keys.indexOf(signerKey);
+                    var rawSig = Q.Data.DERToRAW(derSig);
                     state.signatures[idx] = Buffer.from(rawSig).toString('base64');
 
                     resolve(Object.assign({}, claim, {
@@ -429,8 +449,6 @@ OpenClaim.verify = function (claim, policy, callback) {
 
                         // ── EIP712 ────────────────────────────────────────
                         if (fmt === 'EIP712') {
-                            // Delegate to EVM submodule — it handles the ecrecover path
-                            // We need to handle this asynchronously; set a flag and return
                             (function (address) {
                                 Q.Crypto.OpenClaim.EVM.verify(claim, sig, String(address))
                                     .then(function (evmOk) {
@@ -446,6 +464,39 @@ OpenClaim.verify = function (claim, policy, callback) {
                                     });
                             }(ko.value));
                             return; // async path — pending will be decremented above
+                        }
+
+                        // ── ML-DSA-65 (FIPS 204 post-quantum) ────────────
+                        if (fmt === 'ML-DSA-65') {
+                            (function (pkValue) {
+                                _getMlDsa().then(function (mod) {
+                                    try {
+                                        var sigRaw = Buffer.from(sig, 'base64');
+                                        var pk = Buffer.isBuffer(pkValue) ? pkValue : Buffer.from(pkValue);
+                                        var canonBytes = Buffer.from(canon, 'utf8');
+                                        // ml_dsa65.verify(signature, message, publicKey) → boolean
+                                        var ok = mod.ml_dsa65.verify(sigRaw, canonBytes, pk);
+                                        if (ok) { valid++; }
+                                        else {
+                                            Q.log('Q.Crypto.OpenClaim.verify: ML-DSA-65 signature check '
+                                                + 'returned false for key ' + k);
+                                        }
+                                    } catch (e) {
+                                        Q.log('Q.Crypto.OpenClaim.verify: ML-DSA-65 check threw for key '
+                                            + k + ': ' + e.message);
+                                    }
+                                    if (--pending === 0) {
+                                        resolve(valid >= _parsePolicy(policy, state.keys.length));
+                                    }
+                                }).catch(function (e) {
+                                    Q.log('Q.Crypto.OpenClaim.verify: ML-DSA-65 module load failed: '
+                                        + (e && e.message));
+                                    if (--pending === 0) {
+                                        resolve(valid >= _parsePolicy(policy, state.keys.length));
+                                    }
+                                });
+                            }(ko.value));
+                            return; // async path
                         }
                     }
 

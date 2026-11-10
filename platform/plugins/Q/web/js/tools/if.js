@@ -21,6 +21,14 @@
  * state or setState() are observed; call stateChanged() after changing state
  * through an unobserved reference.
  *
+ * Expressions parse against the restricted grammar documented on
+ * Q.Template.bind: identifier-chain paths, literals, boolean operators,
+ * equality, comparison, arithmetic, and parentheses. No function calls,
+ * no [] indexing, no window fallback, no property access to constructor /
+ * __proto__ / prototype. Pass options.unsafeEval = true to the surrounding
+ * Q.Template.bind call to opt into the legacy Function-based evaluator for
+ * trusted first-party templates.
+ *
  * <q-else-if> and <q-else> are branch elements inside <q-if>. Give them
  * explicit closing tags, even when they have no inline content. A branch
  * with template="Name" calls Q.Template.render with the current scope as
@@ -152,6 +160,11 @@ Q.exports(function (Q) {
             if (index < 0) return;
             var branch = branches[index];
             if (branch.template !== null) {
+                if (!session.allowsTemplate(branch.template)) {
+                    console.error('Q/if template: '
+                        + branch.template + ' not allowed in this session');
+                    return;
+                }
                 Q.Template.render(branch.template, fieldsForTemplate(),
                     { tool: tool }).then(function (html) {
                     if (removed || version !== generation) return;

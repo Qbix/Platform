@@ -81,6 +81,7 @@ function _normalizeFormat(fmt) {
     switch ((fmt || '').toLowerCase()) {
         case 'eip712': case 'k256': return 'k256';
         case 'es256':  case 'p256': return 'p256';
+        case 'ml-dsa-65': return 'ml-dsa-65';
         default: throw new Error('Q.Crypto: unsupported format: ' + fmt);
     }
 }
@@ -232,6 +233,38 @@ function _syncInternalKeypair(secret, format) {
     };
 }
 
+// ─── ML-DSA-65 async keypair (ESM-only @noble/post-quantum) ─────────────────
+
+var _mlDsa65Module = null; // cached import
+
+function _asyncInternalKeypairPQ(secret) {
+    var p;
+    if (_mlDsa65Module) {
+        p = Promise.resolve(_mlDsa65Module);
+    } else {
+        p = import('@noble/post-quantum/ml-dsa.js').then(function (mod) {
+            _mlDsa65Module = mod;
+            return mod;
+        });
+    }
+    return p.then(function (mod) {
+        var ml_dsa65 = mod.ml_dsa65;
+        // HKDF derivation for ML-DSA seed — same pattern as p256
+        var _pqSalt = nodeCrypto.createHash('sha256').update(Buffer.from('', 'utf8')).digest();
+        var seed = Buffer.from(nodeCrypto.hkdfSync(
+            'sha256', secret, _pqSalt,
+            Buffer.from('q.crypto.ml-dsa-65.private-key', 'utf8'), 32
+        ));
+        var kp = ml_dsa65.keygen(seed);
+        return {
+            format:     'ml-dsa-65',
+            hashAlg:    'sha256',
+            privateKey: Buffer.from(kp.secretKey),  // 4032 bytes — signing key
+            publicKey:  new Uint8Array(kp.publicKey) // 1952 bytes
+        };
+    });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Q.Crypto
 // ─────────────────────────────────────────────────────────────────────────────
@@ -248,10 +281,19 @@ var Crypto = module.exports = {};
  * @method internalKeypair
  */
 Crypto.internalKeypair = function (options, callback) {
+    var format = _normalizeFormat(options.format || 'ES256');
+
+    // ML-DSA-65: async path — ESM-only @noble/post-quantum needs dynamic import
+    if (format === 'ml-dsa-65') {
+        var p = _asyncInternalKeypairPQ(_toBuffer(options.secret));
+        if (callback) { p.then(function (r) { callback(null, r); }).catch(callback); }
+        return p;
+    }
+
     try {
         var result = _syncInternalKeypair(
             _toBuffer(options.secret),
-            _normalizeFormat(options.format || 'ES256')
+            format
         );
         if (callback) { callback(null, result); }
         return Promise.resolve(result);

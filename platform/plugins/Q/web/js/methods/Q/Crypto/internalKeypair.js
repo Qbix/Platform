@@ -138,6 +138,34 @@ Q.exports(function (Q) {
 					return;
 				}
 
+				// -------------------------------------------------
+				// ML-DSA-65 / FIPS 204 (post-quantum)
+				// -------------------------------------------------
+				if (format === "ML-DSA-65") {
+
+					const pq = await import(
+						Q.url("{{Q}}/js/crypto/pq/ml-dsa.js")
+					);
+
+					// Deterministic seed via HKDF-SHA256
+					const seed = await Q.Data.derive(
+						secret,
+						"q.crypto.ml-dsa-65.private-key",
+						{ size: 32 }
+					); // Uint8Array(32)
+
+					const kp = pq.ml_dsa65.keygen(seed);
+
+					resolve({
+						format:     "ml-dsa-65",
+						hashAlg:    "sha256",
+						privateKey: kp.secretKey,  // Uint8Array(4032)
+						publicKey:  kp.publicKey   // Uint8Array(1952)
+					});
+
+					return;
+				}
+
 				throw new Error("Unsupported format: " + format);
 
 			} catch (e) {

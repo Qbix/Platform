@@ -793,6 +793,29 @@ class Q_Crypto
             ];
         }
 
+        // -------------------------------------------------
+        // ML-DSA-65 (FIPS 204 post-quantum)
+        // Derivation: HKDF-SHA256(secret, "q.crypto.ml-dsa-65.private-key") → 32-byte seed
+        // → Q_PQ::keygen(seed) → {publicKey(1952), secretKey(4032)}
+        // -------------------------------------------------
+        if ($format === 'ml-dsa-65') {
+
+            $seed = Q_Data::derive(
+                $secret,
+                'q.crypto.ml-dsa-65.private-key',
+                ['size' => 32]
+            );
+
+            $kp = Q_PQ::keygen($seed);
+
+            return [
+                'format'     => 'ML-DSA-65',
+                'hashAlg'    => 'sha256',
+                'privateKey' => $kp['secretKey'],  // 4032 bytes — the ML-DSA signing key
+                'publicKey'  => $kp['publicKey']    // 1952 bytes
+            ];
+        }
+
         throw new Exception("Unsupported format: {$format}");
     }
 
@@ -805,6 +828,8 @@ class Q_Crypto
             case 'es256':
             case 'p256':
                 return 'p256';
+            case 'ml-dsa-65':
+                return 'ml-dsa-65';
             default:
                 throw new Exception("Unsupported format: $format");
         }

@@ -15,6 +15,7 @@
 		"sqlite-vec": "^0.1.7"
 	},
 	"dependencies": {
+		"@noble/post-quantum": "^0.7.1",
 		"@tensorflow-models/face-landmarks-detection": ">1.0.0",
 		"crypto-js": "^4.2.0",
 		"express": "^4.17.1",

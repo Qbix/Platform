@@ -34,10 +34,15 @@ Q.exports(function (Q) {
 	return function Q_Crypto_OpenClaim_sign(claim, secret, existing) {
 
 		existing = existing || {};
+		var format = (existing.format || "ES256").toUpperCase();
 
 		_validateNumbers(claim);
 
-		// Load noble p256, derive keypair, build SPKI key URI — all chained Promises
+		if (format === "ML-DSA-65") {
+			return _signPQ(claim, secret, existing);
+		}
+
+		// ── ES256 path (default) ─────────────────────────────────────────────
 		return Q.Promise.resolve(
 			import(Q.url("{{Q}}/js/crypto/curves/nist.js"))
 		).then(function (noble) {
@@ -47,10 +52,8 @@ Q.exports(function (Q) {
 				format: "ES256"
 			}).then(function (kp) {
 
-				// Build the SPKI-based key URI from the raw uncompressed public key
 				return _rawPublicKeyToKeyString(kp.publicKey).then(function (signerKey) {
 
-					// Merge into sorted key+sig state
 					var keys = _toArray(existing.keys != null ? existing.keys : claim.key);
 					var sigs = _normalizeSigs(existing.signatures != null ? existing.signatures : claim.sig);
 
@@ -60,24 +63,16 @@ Q.exports(function (Q) {
 
 					var state = _buildSortedState(keys, sigs);
 
-					// Canonicalize (RFC 8785, sig stripped)
 					var tmp = Object.assign({}, claim, { key: state.keys, sig: state.signatures });
 
 					return Q.Crypto.OpenClaim.canonicalize(tmp).then(function (canon) {
 
 						var data = new TextEncoder().encode(canon);
 
-						// SHA-256 of canonical bytes — noble.p256.sign takes pre-hashed digest
 						return crypto.subtle.digest("SHA-256", data).then(function (digestBuffer) {
 
 							var digest = new Uint8Array(digestBuffer);
 
-							// noble.p256.sign's default format is 'compact' (raw
-							// 64-byte r||s — exactly what OpenClaim needs, not DER),
-							// and lowS is already the default, so no separate
-							// normalize step exists or is needed. prehash:false
-							// because digest is already SHA-256(canon); noble's
-							// own default (prehash:true) would hash it again.
 							var sigBytes = noble.p256.sign(digest, kp.privateKey, {
 								prehash: false
 							});
@@ -95,6 +90,53 @@ Q.exports(function (Q) {
 			});
 		});
 	};
+
+	// ── ML-DSA-65 signing (post-quantum) ─────────────────────────────────────
+
+	function _signPQ(claim, secret, existing) {
+		return Q.Promise.resolve(
+			import(Q.url("{{Q}}/js/crypto/pq/ml-dsa.js"))
+		).then(function (pq) {
+
+			return Q.Crypto.internalKeypair({
+				secret: secret,
+				format: "ML-DSA-65"
+			}).then(function (kp) {
+
+				var signerKey = _pqPublicKeyToKeyString(kp.publicKey);
+
+				var keys = _toArray(existing.keys != null ? existing.keys : claim.key);
+				var sigs = _normalizeSigs(existing.signatures != null ? existing.signatures : claim.sig);
+
+				_ensureStringKeys(keys);
+				_ensureUniqueKeys(keys);
+				if (keys.indexOf(signerKey) < 0) { keys.push(signerKey); }
+
+				var state = _buildSortedState(keys, sigs);
+
+				var tmp = Object.assign({}, claim, { key: state.keys, sig: state.signatures });
+
+				return Q.Crypto.OpenClaim.canonicalize(tmp).then(function (canon) {
+
+					// ML-DSA-65 signs canonical bytes directly (FIPS 204 hashes internally)
+					var canonBytes = new TextEncoder().encode(canon);
+					var sigRaw = pq.ml_dsa65.sign(canonBytes, kp.privateKey);
+
+					var idx = state.keys.indexOf(signerKey);
+					state.signatures[idx] = Q.Data.toBase64(sigRaw);
+
+					return Object.assign({}, claim, {
+						key: state.keys,
+						sig: state.signatures
+					});
+				});
+			});
+		});
+	}
+
+	function _pqPublicKeyToKeyString(publicKey) {
+		return "data:key/ml-dsa-65;base64," + Q.Data.toBase64(publicKey);
+	}
 
 	// ── Helpers ───────────────────────────────────────────────────────────────
 
