@@ -80,13 +80,30 @@ Q.Tool.define("Q/columns", function(options) {
 		if (Q.info.isMobile && state.closeFromTitleClick) {
 			selector = '.Q_columns_title';
 		}
-		$toolElement.on(Q.Pointer.fastclick, selector, function(){
+		// This constructor is assumed above to run exactly once per
+		// element's lifetime ("no need for key, it will be removed when
+		// tool element is removed") -- true for a normal close+reopen,
+		// but not for Q/tabs' "retain" tab-caching (see tabs.js
+		// switchTo()'s beforeFillSlots/handler), which tears this tool
+		// down via Q.Tool.remove() while leaving this exact element in
+		// the DOM, then reconstructs it on that same surviving element
+		// when the tab is switched back to. Without .off() first, that
+		// reconstruction stacks a second delegated handler here
+		// alongside the original's, which still closes over the
+		// torn-down tool's own (by-then-stale) state -- confirmed live:
+		// clicking close afterward let the stale handler remove the
+		// column div while the current tool's own state.columns/
+		// state.max never got updated, so the next open() saw a
+		// nonexistent column as still present and silently gave up
+		// instead of opening the new content.
+		$toolElement.off(Q.Pointer.fastclick, selector)
+		.on(Q.Pointer.fastclick, selector, function(){
 			var index = $(this).closest('.Q_columns_column').data(dataKey_index);
 			if (state.locked) return;
 			if (index > 0) {
 				tool.close(index);
 			}
-		}); // no need for key, it will be removed when tool element is removed
+		});
 
 		Q.onScroll.set(Q.debounce(function () {
 			if (state.$currentColumn) {
