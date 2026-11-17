@@ -13445,35 +13445,6 @@ Q.SafeScript = Q.Method.define({
 }, "{{Q}}/js/methods/Q/SafeScript", function () { return [Q]; });
 
 /**
- * Register .safe tool and method definitions discovered by the PHP side.
- * Q_SafeScript::registerAll() sends Q.SafeScript.tools and Q.SafeScript.methods
- * via Q_Response::setScriptData(). This function reads those maps and calls
- * Q.Tool.define() / stores method URLs so they load on demand.
- *
- * @method registerDiscovered
- * @static
- */
-Q.SafeScript.registerDiscovered = function () {
-	var tools = Q.SafeScript.tools;
-	if (tools && typeof tools === 'object') {
-		Q.each(tools, function (toolName, safeUrl) {
-			if (!Q.Tool.defined(toolName)) {
-				Q.Tool.define(toolName, Q.url(safeUrl));
-			}
-		});
-	}
-	var methods = Q.SafeScript.methods;
-	if (methods && typeof methods === 'object') {
-		if (!Q.SafeScript._methodUrls) {
-			Q.SafeScript._methodUrls = {};
-		}
-		Q.each(methods, function (methodName, safeUrl) {
-			Q.SafeScript._methodUrls[methodName] = Q.url(safeUrl);
-		});
-	}
-};
-
-/**
  * Transparent cross-context proxying — creates proxy scope objects
  * that forward calls via postMessage, enabling SafeScript code to run
  * in a WebWorker or iframe while scope functions execute on the main thread.
@@ -18039,8 +18010,6 @@ Q.Text.addFor(
 	['Q.Tool.define', 'Q.Template.set'],
 	'Q/', ["Q/content"]
 );
-// Register .safe tool definitions discovered by PHP (Q_SafeScript::registerAll)
-Q.SafeScript.registerDiscovered();
 
 Q.Tool.define({
 	"Q/inplace": "{{Q}}/js/tools/inplace.js",

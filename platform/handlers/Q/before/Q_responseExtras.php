@@ -38,7 +38,4 @@ function Q_before_Q_responseExtras()
 	foreach ($info as $k => $v) {
 		Q_Response::setScriptData("Q.info.$k", $v);
 	}
-
-	// Discover .safe files in all plugins and register tool/method definitions
-	Q_SafeScript::registerAll();
 }

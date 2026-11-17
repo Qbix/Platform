@@ -1105,7 +1105,7 @@ class Q
 		return $result;
 	}
 
-	/**
+/**
 	 * Fires a particular event.
 	 * Might result in several handlers being called.
 	 * @method event
@@ -1233,7 +1233,7 @@ class Q
 	}
 
 	/**
-	 * Tests whether a particular handler exists
+	 * Tests whether a particular handler exists (PHP function or .safe file).
 	 * @method canHandle
 	 * @static
 	 * @param {string} $eventName
@@ -1266,14 +1266,21 @@ class Q
 		try {
 			self::includeFile($filename, array(), true);
 		} catch (Q_Exception_MissingFile $e) {
+			// No PHP handler — check for .safe file
+			$safeFilename = 'handlers'.DS.implode(DS, $eventName_parts).'.safe';
+			if (self::realPath($safeFilename)) {
+				return true;
+			}
 			self::$event_empty[$eventName] = true;
 			return false;
 		}
 		return function_exists($function_name);
 	}
-	
+
 	/**
-	 * Executes a particular handler, optionally offloading to a remote service if configured.
+	 * Executes a particular handler, optionally offloading to a remote service.
+	 * Resolves through: remote override, PHP handler, then `.safe` file fallback
+	 * (same include path, same directory — like `.handlebars` for {@link Q::view}).
 	 * @method handle
 	 * @static
 	 * @protected
@@ -1321,10 +1328,20 @@ class Q
 					return null;
 				}
 				// try to load appropriate file using relative filename
-				// (may search multiple include paths)
 				$filename = 'handlers'.DS.implode(DS, $eventName_parts).'.php';
-				self::includeFile($filename, $params, true);
+				try {
+					self::includeFile($filename, $params, true);
+				} catch (Q_Exception_MissingFile $e) {
+					// No PHP file — fall through to .safe
+				}
 				if (!function_exists($function_name)) {
+					// SafeScript fallback: same path convention, .safe extension
+					$safeFilename = 'handlers'.DS.implode(DS, $eventName_parts).'.safe';
+					$safePath = self::realPath($safeFilename);
+					if ($safePath) {
+						$result = Q_SafeScript::runFile($safePath, $params, array(), 'handler');
+						return $result;
+					}
 					require_once(Q_CLASSES_DIR.DS.'Q'.DS.'Exception'.DS.'MissingFunction.php');
 					throw new Q_Exception_MissingFunction(@compact('function_name'));
 				}
@@ -1338,7 +1355,7 @@ class Q
 		return call_user_func_array($function_name, $args);
 	}
 
-/**
+	/**
 	 * Executes a particular event handler remotely, if configured via Q_Config.
 	 * This method is called internally by Q::handle when a handler is marked for remote execution
 	 * in the 'Q/handlersUsingRemote/$eventName' configuration path.
@@ -1373,30 +1390,30 @@ class Q
 		if (!isset($remote['baseUrl'])) {
 			$remote['baseUrl'] = Q_Request::baseUrl();
 		}
-	
+
 		$context = array(
 			'globals' => array(),
 			'backtrace' => debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS)
 		);
-	
+
 		foreach (Q::ifset($remote, 'globals', array()) as $g) {
 			if (isset($GLOBALS[$g])) {
 				$context['globals'][$g] = $GLOBALS[$g];
 			}
 		}
-	
+
 		$payload = json_encode(array(
 			'function' => $eventName,
 			'params' => $params,
 			'context' => $context,
 			'timestamp' => time()
 		));
-	
+
 		$secret = Q_Config::expect('Q', 'remote', 'secret');
 		$hmac = hash_hmac('sha256', $payload, $secret);
 		$remoteController = Q_Config::get('Q', 'remote', 'controller', 'remote.php');
 		$url = rtrim($remote['baseUrl'], '/') . '/' . $remoteController;
-	
+
 		$ch = curl_init($url);
 		$curlOpts = array(
 			CURLOPT_RETURNTRANSFER => true,
@@ -1409,16 +1426,12 @@ class Q
 			CURLOPT_TIMEOUT => Q::ifset($remote, 'timeout', 5)
 		);
 
-		// Unix domain socket: route the HTTP request over a UDS instead of TCP.
-		// The baseUrl is still used for Host header resolution and URL path;
-		// curl sends the HTTP request over the socket file instead of connecting
-		// to the host:port in the URL.
 		if (!empty($remote['socket'])) {
 			$curlOpts[CURLOPT_UNIX_SOCKET_PATH] = $remote['socket'];
 		}
 
 		curl_setopt_array($ch, $curlOpts);
-	
+
 		$response = curl_exec($ch);
 		if ($response === false) {
 			$err = curl_error($ch);
@@ -1426,18 +1439,18 @@ class Q
 			throw new Exception("Remote handler call failed: " . $err);
 		}
 		curl_close($ch);
-	
+
 		$result = json_decode($response, true);
 		if (!is_array($result) || !array_key_exists('success', $result)) {
 			throw new Exception("Malformed response from remote handler for $eventName");
 		}
-	
+
 		if (!$result['success'] && isset($result['exception'])) {
 			$e = $result['exception'];
 			$type = Q::ifset($e, 'type', 'Exception');
 			$params = Q::ifset($e, 'params', array());
 			if (!class_exists($type)) $type = 'Exception';
-	
+
 			switch (count($params)) {
 				case 0: $ex = new $type(); break;
 				case 1: $ex = new $type($params[0]); break;
@@ -1447,10 +1460,10 @@ class Q
 			if (isset($e['file'])) $ex->remoteFile = $e['file'];
 			if (isset($e['line'])) $ex->remoteLine = $e['line'];
 			if (isset($e['backtrace'])) $ex->remoteTrace = $e['backtrace'];
-	
+
 			throw $ex;
 		}
-	
+
 		switch (Q::ifset($remote, 'returnType', 'raw')) {
 			case 'bool': return (bool)$result['data'];
 			case 'int': return (int)$result['data'];
