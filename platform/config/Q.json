@@ -47,7 +47,10 @@
 			"hosts": []
 		},
 		"filename": {
-			"extensions": ["txt", "xml", "png", "jpeg", "gif", "jpg", "pdf", "js", "ogg", "mp3", "css", "cur"]
+			"extensions": ["txt", "xml", "png", "jpeg", "gif", "jpg", "pdf", "js", "ogg", "mp3", "css", "cur", "safe"]
+		},
+		"SafeScript": {
+			"src": "{{Q}}/js/safescript/index.js"
 		},
 		"cache": {
 			"duration": 600,

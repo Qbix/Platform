@@ -5683,8 +5683,11 @@ Q.Tool.define = function (name, /* require, */ ctor, defaultOptions, stateKeys, 
 
 		var c = _qtc[n] || {};
 		if (typeof c === 'string') {
-			if (c.split('.').pop() === 'js') {
+			var ext = c.split('.').pop();
+			if (ext === 'js') {
 				c = { js: c };
+			} else if (ext === 'safe') {
+				c = { safe: c };
 			} else {
 				c = { html: c };
 			}
@@ -6750,6 +6753,90 @@ function _loadToolScript(toolElement, callback, shared, parentId, options, white
 				});
 				_processTemplateElements(div);
 			}
+			// SafeScript .safe file: compile once, wire lifecycle methods.
+			// The .safe file returns { construct, refresh, beforeRemove }
+			// (rawReturn: true preserves functions in the return value).
+			if (params.safe && !params.safe[0] && params.safe[1]
+			&& typeof _qtc[toolName] !== 'function') {
+				var safeFactory = params.safe[1];
+				var _safeLifecycle = null;
+				var _safeLifecycleReady = new Q.Promise(function (resolve, reject) {
+					var initScope = Q.Tool.SafeScript.buildScope(null);
+					safeFactory(initScope, { rawReturn: true }).then(function (result) {
+						if (result && typeof result === 'object') {
+							_safeLifecycle = result;
+						}
+						resolve(_safeLifecycle);
+					}).catch(function (err) {
+						console.warn('SafeScript tool init error (' + toolName + '):', err);
+						resolve(null);
+					});
+				});
+				_qtc[toolName] = function _Q_Tool_SafeScript_constructor(options) {
+					var tool = this;
+					_safeLifecycleReady.then(function (lifecycle) {
+						if (!lifecycle) return;
+						var scope = Q.Tool.SafeScript.buildScope(tool);
+						if (typeof lifecycle.construct === 'function') {
+							try {
+								var constructResult = lifecycle.construct.call(null, scope, options || {});
+								if (constructResult && typeof constructResult.then === 'function') {
+									constructResult.then(function (r) {
+										if (r && typeof r === 'object') {
+											Q.each(r, function (key, val) {
+												if (typeof val !== 'function') {
+													tool.state[key] = val;
+												}
+											});
+										}
+										Q.handle(tool.state.onSafeScriptReady, tool);
+									}).catch(function (err) {
+										console.warn('SafeScript construct error (' + toolName + '):', err);
+									});
+								} else {
+									Q.handle(tool.state.onSafeScriptReady, tool);
+								}
+							} catch (err) {
+								console.warn('SafeScript construct error (' + toolName + '):', err);
+							}
+						} else {
+							Q.handle(tool.state.onSafeScriptReady, tool);
+						}
+						if (typeof lifecycle.refresh === 'function') {
+							tool.refresh = function () {
+								var refreshScope = Q.Tool.SafeScript.buildScope(tool);
+								try {
+									return lifecycle.refresh.call(null, refreshScope);
+								} catch (err) {
+									console.warn('SafeScript refresh error (' + toolName + '):', err);
+								}
+							};
+						}
+						if (typeof lifecycle.beforeRemove === 'function') {
+							tool.Q.beforeRemove.set(function () {
+								var removeScope = Q.Tool.SafeScript.buildScope(tool);
+								try {
+									lifecycle.beforeRemove.call(null, removeScope);
+								} catch (err) {
+									console.warn('SafeScript beforeRemove error (' + toolName + '):', err);
+								}
+							}, 'Q.Tool.SafeScript');
+						}
+						if (typeof lifecycle.stateChanged === 'function') {
+							tool.Q.onStateChanged('').set(function (name) {
+								var stateScope = Q.Tool.SafeScript.buildScope(tool);
+								try {
+									lifecycle.stateChanged.call(null, stateScope, name);
+								} catch (err) {
+									console.warn('SafeScript stateChanged error (' + toolName + '):', err);
+								}
+							}, 'Q.Tool.SafeScript');
+						}
+					});
+				};
+				_qtc[toolName].toolName = Q.normalize.memoized(toolName);
+				_qtc[toolName].options = {};
+			}
 			toolConstructor = _qtc[toolName];
 			if (typeof toolConstructor !== 'function') {
 				_handleMissingConstructor(true);
@@ -6784,8 +6871,11 @@ function _loadToolScript(toolElement, callback, shared, parentId, options, white
 			return;
 		}
 		if (typeof toolConstructor === 'string') {
-			if (toolConstructor.split('.').pop() === 'js') {
+			var ext = toolConstructor.split('.').pop();
+			if (ext === 'js') {
 				toolConstructor = { js: toolConstructor };
+			} else if (ext === 'safe') {
+				toolConstructor = { safe: toolConstructor };
 			} else {
 				toolConstructor = { html: toolConstructor };
 			}
@@ -6793,7 +6883,7 @@ function _loadToolScript(toolElement, callback, shared, parentId, options, white
 		if (!Q.isPlainObject(toolConstructor)) {
 			throw new Q.Error("Q.Tool.loadScript: toolConstructor cannot be " + Q.typeOf(toolConstructor));
 		}
-		var toolConstructorSrc = toolConstructor.js || toolConstructor.html;
+		var toolConstructorSrc = toolConstructor.js || toolConstructor.html || toolConstructor.safe;
 		if (!toolConstructorSrc) {
 			throw new Q.Error("Q.Tool.loadScript: missing tool constructor file");
 		}
@@ -6805,6 +6895,15 @@ function _loadToolScript(toolElement, callback, shared, parentId, options, white
 		if (toolConstructor.html) {
 			waitFor.push('html');
 			Q.request.once(toolConstructor.html, pipe.fill('html'), { extend: false, parse: false });
+		}
+		if (toolConstructor.safe) {
+			waitFor.push('safe');
+			Q.SafeScript.load(toolConstructor.safe, function (err, factory) {
+				if (err) {
+					console.warn('Q.Tool.loadScript: SafeScript compile error for ' + toolName, err);
+				}
+				pipe.fill('safe')(err, factory);
+			});
 		}
 		// start loading css and text at the same time as the js and html
 		if (toolConstructor.css) {
@@ -6879,6 +6978,83 @@ Q.Tool.onLoadedConstructor = Q.Event.factory({}, ["", function (name) {
 	return [Q.normalize.memoized(name)];
 }]);
 Q.Tool.onMissingConstructor = new Q.Event();
+
+/**
+ * Helpers for SafeScript-based tool constructors.
+ * @class Q.Tool.SafeScript
+ */
+Q.Tool.SafeScript = {
+	/**
+	 * Builds a scope object for a SafeScript tool constructor.
+	 * The scope provides the tool's element, state, and common Q helpers
+	 * as flat functions that SafeScript code can call directly.
+	 *
+	 * When tool is null (during lifecycle extraction), only safe globals
+	 * are provided — no DOM or tool-specific scope.
+	 *
+	 * @method buildScope
+	 * @static
+	 * @param {Q.Tool|null} tool The tool instance, or null for lifecycle extraction
+	 * @return {Object} Scope object for SafeScript.run()
+	 */
+	buildScope: function (tool) {
+		var scope = {
+			Math: Math,
+			JSON: JSON,
+			parseInt: parseInt,
+			parseFloat: parseFloat,
+			isNaN: isNaN,
+			isFinite: isFinite,
+			encodeURIComponent: encodeURIComponent,
+			decodeURIComponent: decodeURIComponent,
+			log: function () { console.log.apply(console, arguments); },
+			warn: function () { console.warn.apply(console, arguments); },
+			url: function (u) { return Q.url(u); }
+		};
+		if (!tool) {
+			return scope;
+		}
+		var element = tool.element;
+		scope.createElement = function (tag) { return document.createElement(tag); };
+		scope.createText = function (text) { return document.createTextNode(text); };
+		scope.getElementById = function (id) { return document.getElementById(id); };
+		scope.querySelector = function (sel) { return element.querySelector(sel); };
+		scope.querySelectorAll = function (sel) {
+			return Array.prototype.slice.call(element.querySelectorAll(sel));
+		};
+		scope.appendChild = function (parent, child) { parent.appendChild(child); return parent; };
+		scope.appendTo = function (child, parent) { (parent || element).appendChild(child); return child; };
+		scope.removeChild = function (parent, child) { parent.removeChild(child); return child; };
+		scope.setAttribute = function (el, name, val) { el.setAttribute(name, val); };
+		scope.getAttribute = function (el, name) { return el.getAttribute(name); };
+		scope.addClass = function (el, cls) { el.classList.add(cls); };
+		scope.removeClass = function (el, cls) { el.classList.remove(cls); };
+		scope.toggleClass = function (el, cls) { el.classList.toggle(cls); };
+		scope.hasClass = function (el, cls) { return el.classList.contains(cls); };
+		scope.setStyle = function (el, prop, val) { el.style[prop] = val; };
+		scope.getStyle = function (el, prop) { return getComputedStyle(el)[prop]; };
+		scope.setText = function (el, text) { el.textContent = text; };
+		scope.getText = function (el) { return el.textContent; };
+		scope.setHTML = function (el, html) { el.innerHTML = html; };
+		scope.getHTML = function (el) { return el.innerHTML; };
+		scope.element = element;
+		scope.state = tool.state || {};
+		scope.options = tool.state || {};
+		scope.on = function (el, event, handler) { el.addEventListener(event, handler); };
+		scope.off = function (el, event, handler) { el.removeEventListener(event, handler); };
+		scope.request = function (url, callback, options) {
+			return Q.request(url, callback, options);
+		};
+		scope.setUpElement = function (el, tag, attrs) {
+			return Q.Tool.setUpElement(el, tag, attrs);
+		};
+		scope.child = function (name, index) { return tool.child(name, index); };
+		scope.children = function (name, levels) { return tool.children(name, levels); };
+		scope.sibling = function () { return tool.sibling(); };
+		scope.stateChanged = function (fields) { return tool.stateChanged(fields); };
+		return scope;
+	}
+};
 
 /**
  * Methods for working with links
@@ -13257,11 +13433,67 @@ Q.Tool.define.components = false;
 
 
 /**
+ * SafeScript compiler and runner — wraps the SafeScript library
+ * for use within the Qbix framework.
+ * @class Q.SafeScript
+ */
+Q.SafeScript = Q.Method.define({
+	compile: new Q.Method(),
+	run: new Q.Method(),
+	load: new Q.Method(),
+	ensureLoaded: new Q.Method()
+}, "{{Q}}/js/methods/Q/SafeScript", function () { return [Q]; });
+
+/**
+ * Register .safe tool and method definitions discovered by the PHP side.
+ * Q_SafeScript::registerAll() sends Q.SafeScript.tools and Q.SafeScript.methods
+ * via Q_Response::setScriptData(). This function reads those maps and calls
+ * Q.Tool.define() / stores method URLs so they load on demand.
+ *
+ * @method registerDiscovered
+ * @static
+ */
+Q.SafeScript.registerDiscovered = function () {
+	var tools = Q.SafeScript.tools;
+	if (tools && typeof tools === 'object') {
+		Q.each(tools, function (toolName, safeUrl) {
+			if (!Q.Tool.defined(toolName)) {
+				Q.Tool.define(toolName, Q.url(safeUrl));
+			}
+		});
+	}
+	var methods = Q.SafeScript.methods;
+	if (methods && typeof methods === 'object') {
+		if (!Q.SafeScript._methodUrls) {
+			Q.SafeScript._methodUrls = {};
+		}
+		Q.each(methods, function (methodName, safeUrl) {
+			Q.SafeScript._methodUrls[methodName] = Q.url(safeUrl);
+		});
+	}
+};
+
+/**
+ * Transparent cross-context proxying — creates proxy scope objects
+ * that forward calls via postMessage, enabling SafeScript code to run
+ * in a WebWorker or iframe while scope functions execute on the main thread.
+ * Supports MessagePort, Worker, and Window (iframe) targets.
+ * For iframes, pass options.targetOrigin to use window.postMessage(data, origin)
+ * and filter incoming messages by event.source and event.origin.
+ * @class Q.Proxy
+ */
+Q.Proxy = Q.Method.define({
+	create: new Q.Method(),
+	handle: new Q.Method()
+}, "{{Q}}/js/methods/Q/Proxy", function () { return [Q]; });
+
+/**
  * Sandboxed code execution utilities
  * @class Q.Sandbox
  */
 Q.Sandbox = Q.Method.define({
-	run: new Q.Method()
+	run: new Q.Method(),
+	runSafe: new Q.Method()
 }, "{{Q}}/js/methods/Q/Sandbox", function () { return [Q]; });
 
 /**
@@ -17807,6 +18039,9 @@ Q.Text.addFor(
 	['Q.Tool.define', 'Q.Template.set'],
 	'Q/', ["Q/content"]
 );
+// Register .safe tool definitions discovered by PHP (Q_SafeScript::registerAll)
+Q.SafeScript.registerDiscovered();
+
 Q.Tool.define({
 	"Q/inplace": "{{Q}}/js/tools/inplace.js",
 	"Q/tabs": {

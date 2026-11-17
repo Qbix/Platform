@@ -6,81 +6,8 @@ Q.exports(function (Q) {
 	 */
 
 	/**
-	 * Builds a preamble that explodes flat "ns.method" methodNames into
-	 * ergonomic namespace objects available inside the sandbox, e.g.:
-	 *   methods["streams.get"]  =>  Streams.get(...)
-	 *   methods["crypto.openClaim.sign"]  =>  Crypto.openClaim.sign(...)
-	 *
-	 * Three-level names (e.g. "crypto.openClaim.sign") are nested one level
-	 * deep on the top-level namespace object so tool authors can write
-	 * Crypto.openClaim.sign(...) naturally.
-	 *
-	 * The preamble is injected into the sandbox but NOT included in the
-	 * execution hash — it is deterministically derived from methodNames,
-	 * and methodNames IS included in the execution hash (sorted), so the
-	 * available method surface is recorded authoritatively.
-	 *
-	 * @method buildPreamble
-	 * @param {Array} methodNames Flat list of method keys e.g. ["streams.get", ...]
-	 * @return {String} JS source to prepend to user code
-	 */
-	function buildPreamble(methodNames) {
-		// Every namespace SEGMENT (all parts except the final method leaf) is
-		// PascalCased, arbitrary-depth. The method leaf keeps its authored case,
-		// so "safebox.protocol.HTTP" is reachable as Safebox.Protocol.HTTP and
-		// "safebox.protocol.Files.read" as Safebox.Protocol.Files.read — matching
-		// how shipped capabilities call their protocols.
-		function cap(x) { return x ? x.charAt(0).toUpperCase() + x.slice(1) : x; }
-
-		var tree = {};
-		methodNames.forEach(function (name) {
-			var parts = name.split(".");
-			if (parts.length < 2) { tree[name] = { __leaf: name }; return; }
-			var node = tree;
-			for (var i = 0; i < parts.length - 1; i++) {
-				var seg = cap(parts[i]);
-				if (!node[seg] || typeof node[seg] !== "object" || node[seg].__leaf) node[seg] = {};
-				node = node[seg];
-			}
-			node[parts[parts.length - 1]] = { __leaf: name };
-		});
-
-		function emit(node, indent) {
-			var props = [];
-			Object.keys(node).forEach(function (key) {
-				var v = node[key];
-				if (v && v.__leaf) {
-					props.push(indent + JSON.stringify(key)
-						+ ': function() { return methods[' + JSON.stringify(v.__leaf)
-						+ '].apply(null, arguments); }');
-				} else {
-					props.push(indent + JSON.stringify(key) + ': ' + emit(v, indent + '  '));
-				}
-			});
-			return '{\n' + props.join(',\n') + '\n' + indent + '}';
-		}
-
-		var lines = [];
-		Object.keys(tree).forEach(function (topKey) {
-			var v = tree[topKey];
-			if (v && v.__leaf) {
-				lines.push('var ' + topKey + ' = function() { return methods['
-					+ JSON.stringify(v.__leaf) + '].apply(null, arguments); };');
-			} else {
-				lines.push('var ' + topKey + ' = ' + emit(v, '  ') + ';');
-			}
-		});
-		return lines.join('\n');
-	}
-
-	/**
 	 * Runs code safely inside a sandboxed Web Worker.
 	 * If `options.name` is provided, a persistent worker is reused.
-	 *
-	 * Inside the sandbox, flat method names like "streams.get" and
-	 * "crypto.openClaim.sign" are automatically available as ergonomic
-	 * namespace objects: Streams.get(...), Crypto.openClaim.sign(...) etc.
-	 * The raw `methods` object is also available for dynamic dispatch.
 	 *
 	 * @static
 	 * @method run
@@ -91,10 +18,9 @@ Q.exports(function (Q) {
 	 * @param {String} [options.name] Reuse a persistent sandbox worker under this name
 	 * @param {Number} [options.timeout=2000] Timeout in milliseconds before aborting execution
 	 * @param {Boolean} [options.db=false] Whether to expose indexedDB inside sandbox
-	 * @param {Boolean|Object} [options.deterministic=false] Deterministic execution mode
+	 * @param {Boolean|Object} [options.deterministic=false] Set to true or object to make the code run deterministically
 	 * @param {Number} [options.deterministic.seed=1] Seed for deterministic RNG
-	 * @param {Object} [options.input=null] Input passed as first argument to the sandboxed function
-	 * @return {Q.Promise} Resolves with { result, hash } or rejects on error
+	 * @return {Q.Promise} Resolves with result or rejects on error
 	 */
 	return function Q_Sandbox_run(code, context, methods, options) {
 		context = context || {};
@@ -110,115 +36,60 @@ Q.exports(function (Q) {
 			};
 			this.worker = null;
 			this.url = null;
-			// FIX (Bug 10): track whether this worker has ever run in deterministic
-			// mode. Deterministic mode uses Object.defineProperty(Math, "random",
-			// { configurable: false }) which cannot be undone. Reusing the worker
-			// for a non-deterministic run would silently return seeded random
-			// numbers. If true, run() disposes the worker after use regardless of
-			// opts.name.
-			this._deterministicBurned = false;
 		}
 
 		SandboxRunner.prototype.createWorker = function () {
-			var allowDB = !!this.defaults.db;
+			const allowDB = !!this.defaults.db;
+			const indexedDBExpr = allowDB ? 'indexedDB' : 'undefined';
 
-			var script = `
+			const script = `
 				// --- Hard-disable network & import capabilities ---
-				// FIX (Bug 17): the original used plain assignment (self.fetch = undefined),
-				// which is reversible by any user-code call to Object.defineProperty.
-				// Lock these down with { value: undefined, writable: false, configurable: false }
-				// so they cannot be restored from inside the sandbox.
-				try {
-					Object.defineProperty(self, "fetch",           { value: undefined, writable: false, configurable: false });
-					Object.defineProperty(self, "XMLHttpRequest",  { value: undefined, writable: false, configurable: false });
-					Object.defineProperty(self, "WebSocket",       { value: undefined, writable: false, configurable: false });
-					Object.defineProperty(self, "EventSource",     { value: undefined, writable: false, configurable: false });
-					Object.defineProperty(self, "importScripts",   { value: undefined, writable: false, configurable: false });
-				} catch (e) {
-					// Fallback for environments that refuse defineProperty on those
-					// globals — plain assignment is at least cosmetically correct.
-					self.fetch = undefined;
-					self.XMLHttpRequest = undefined;
-					self.WebSocket = undefined;
-					self.EventSource = undefined;
-					self.importScripts = undefined;
-				}
+				self.fetch = undefined;
+				self.XMLHttpRequest = undefined;
+				self.WebSocket = undefined;
+				self.EventSource = undefined;
+				self.importScripts = undefined;
 
-				// FIX (Bug 16): fail-closed assertion. If any network hatch is still
-				// reachable after the block above, crash the worker before it ever
-				// accepts user code. A silent hardening failure would produce a
-				// sandbox that LOOKS secure but leaks fetch/WebSocket to every tool.
-				if (typeof self.fetch          !== 'undefined' ||
-					typeof self.XMLHttpRequest !== 'undefined' ||
-					typeof self.WebSocket      !== 'undefined' ||
-					typeof self.EventSource    !== 'undefined' ||
-					typeof self.importScripts  !== 'undefined') {
-					self.postMessage({
-						type: "done", ok: false,
-						error: "Sandbox hardening failed — network/import hatches still reachable"
-					});
-					// Do not register onmessage — throw so the worker becomes inert
-					// (top-level return would be a SyntaxError in a classic worker script).
-					throw new Error("Sandbox hardening failed");
-				}
-
+				// --- Safe stubs instead of deleting env ---
 				try {
 					Object.defineProperty(self, "navigator", {
 						value: { userAgent: "sandbox", language: "en-US" },
 						configurable: false
 					});
-				} catch (e) {}
+				} catch {}
 
 				self.location = undefined;
 				self.caches = undefined;
 
+				// Optional DB
 				if (!${allowDB}) {
 					self.indexedDB = undefined;
 				}
 
 				// --- Block prototype mutation entry points (Safari-safe) ---
-				// FIX (Bug 17): original nulled these with only { value: undefined }.
-				// Without { writable: false, configurable: false }, user code can
-				// re-add them with another Object.defineProperty call. The hardening
-				// was cosmetic.
 				try {
-					Object.defineProperty(Object.prototype, "__defineSetter__",  { value: undefined, writable: false, configurable: false });
-					Object.defineProperty(Object.prototype, "__defineGetter__",  { value: undefined, writable: false, configurable: false });
-					Object.defineProperty(Object.prototype, "__lookupGetter__",  { value: undefined, writable: false, configurable: false });
-					Object.defineProperty(Object.prototype, "__lookupSetter__",  { value: undefined, writable: false, configurable: false });
-				} catch (e) {}
+					Object.defineProperty(Object.prototype, "__defineSetter__", { value: undefined });
+					Object.defineProperty(Object.prototype, "__defineGetter__", { value: undefined });
+					Object.defineProperty(Object.prototype, "__lookupGetter__", { value: undefined });
+					Object.defineProperty(Object.prototype, "__lookupSetter__", { value: undefined });
+				} catch {}
 
-				// FIX (Bug 7): freeze Object.prototype and other core prototypes so
-				// user code cannot pollute shared chains. Prototype pollution can't
-				// reach the host today (RPC uses JSON stringify/parse), but it
-				// poisons every object the tool itself creates and becomes a host
-				// RCE vector instantly if anyone ever changes the RPC to pass raw
-				// objects. Defense-in-depth: freeze now, while we still can.
-				try {
-					Object.freeze(Object.prototype);
-					Object.freeze(Array.prototype);
-					Object.freeze(Function.prototype);
-					Object.freeze(String.prototype);
-					Object.freeze(Number.prototype);
-					Object.freeze(Boolean.prototype);
-				} catch (e) {}
-
-				var rpcCounter = 0;
-				var pending = {};
+				let rpcCounter = 0;
+				const pending = {};
 
 				function call(method, args) {
-					return new Promise(function (resolve, reject) {
-						var id = ++rpcCounter;
-						pending[id] = { resolve: resolve, reject: reject };
-						self.postMessage({ type: "rpc", id: id, method: method, args: args });
+					return new Promise((resolve, reject) => {
+						const id = ++rpcCounter;
+						pending[id] = { resolve, reject };
+						self.postMessage({ type: "rpc", id, method, args });
 					});
 				}
 
 				self.onmessage = async function (e) {
-					var msg = e.data;
+					const msg = e.data;
 
 					if (msg && msg.type === "rpcResult") {
-						var p = pending[msg.id];
+						const p = pending[msg.id];
 						if (!p) return;
 						delete pending[msg.id];
 						msg.ok ? p.resolve(msg.result) : p.reject(msg.error);
@@ -226,31 +97,21 @@ Q.exports(function (Q) {
 					}
 
 					try {
-						var code          = msg.code;
-						var context       = msg.context;
-						var methodNames   = msg.methodNames;
-						var deterministic = msg.deterministic;
-						var input         = msg.input;
-						var preamble      = msg.preamble;
+						const { code, context, methodNames, deterministic } = msg;
 
-						// FIX (Bug 11): seed 0 is now a legal, distinct seed. The
-						// original \`(__seed >>> 0) || 1\` coerced seed 0 back to 1,
-						// making seeds 0 and 1 produce identical RNG streams. We
-						// keep the >>> 0 coercion for type safety but no longer
-						// force a minimum — the LCG below is valid for seed 0 and
-						// diverges from seed 1 immediately on the first call.
-						var __seed = 1;
+						let __seed = 1;
 						if (deterministic && typeof deterministic === "object" && deterministic.seed !== undefined) {
 							__seed = deterministic.seed >>> 0;
 						}
 
-						var __timers = [];
-						var __timerGuard = 1000;
+						const __timers = [];
+						let __timerGuard = 1000;
 
+						// --- Deterministic runtime injected only if requested ---
 						if (deterministic) {
-							var __randSeed = __seed >>> 0;
+							let __randSeed = (__seed >>> 0) || 1;
 
-							function __rand() {
+							function __rand(){
 								__randSeed = (__randSeed * 1664525 + 1013904223) >>> 0;
 								return __randSeed / 4294967296;
 							}
@@ -268,55 +129,53 @@ Q.exports(function (Q) {
 								configurable: false
 							});
 
-							var __start = 0;
+							const __start = 0;
 
-							Date.now = function () { return __start; };
+							Date.now = function(){ return __start };
 
 							if (typeof performance !== "undefined") {
-								performance.now = function () { return 0; };
+								performance.now = function(){ return 0 };
 							}
 
-							var __RealDate = Date;
+							const __RealDate = Date;
 
-							function DeterministicDate() {
+							function DeterministicDate(...args) {
 								if (!(this instanceof DeterministicDate)) {
 									return new __RealDate(__start).toString();
 								}
-								if (arguments.length === 0) {
+								if (args.length === 0) {
 									return new __RealDate(__start);
 								}
-								var args = Array.prototype.slice.call(arguments);
-								return new (Function.prototype.bind.apply(__RealDate, [null].concat(args)));
+								return new __RealDate(...args);
 							}
 
-							DeterministicDate.UTC       = __RealDate.UTC;
-							DeterministicDate.parse      = __RealDate.parse;
-							DeterministicDate.prototype  = __RealDate.prototype;
+							DeterministicDate.UTC = __RealDate.UTC;
+							DeterministicDate.parse = __RealDate.parse;
+							DeterministicDate.prototype = __RealDate.prototype;
 							DeterministicDate.prototype.constructor = DeterministicDate;
 
 							Date = DeterministicDate;
 
-							setTimeout  = function (fn) { __timers.push(fn); return __timers.length; };
-							setInterval = function (fn) { __timers.push(fn); return __timers.length; };
-							clearTimeout  = function () {};
-							clearInterval = function () {};
+							setTimeout = function(fn){ __timers.push(fn); return __timers.length };
+							setInterval = function(fn){ __timers.push(fn); return __timers.length };
+
+							clearTimeout = function(){};
+							clearInterval = function(){};
 
 							if (typeof crypto !== "undefined") {
-								crypto.getRandomValues = function (arr) {
-									for (var i = 0; i < arr.length; i++) {
-										arr[i] = Math.floor(__rand() * 256);
+								crypto.getRandomValues = function(arr){
+									for (let i=0;i<arr.length;i++){
+										arr[i] = Math.floor(__rand()*256);
 									}
 									return arr;
 								};
-								crypto.randomUUID = function () {
-									return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-										var r = Math.floor(__rand() * 16);
-										return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+
+								crypto.randomUUID = function(){
+									return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){
+										const r = Math.floor(__rand()*16);
+										return (c==='x'?r:(r&0x3|0x8)).toString(16);
 									});
 								};
-								if (crypto.subtle) {
-									crypto.subtle = undefined;
-								}
 							}
 
 							self.fetch = undefined;
@@ -325,101 +184,62 @@ Q.exports(function (Q) {
 							self.EventSource = undefined;
 							self.navigator = undefined;
 
-							try { Object.freeze(Math); } catch (e) {}
-							try { Object.freeze(Date); } catch (e) {}
+							try {
+								Object.freeze(Math);
+								Object.freeze(Date);
+							} catch {}
 						}
 
-						// Build flat methods stubs
-						var methods = {};
-						for (var i = 0; i < methodNames.length; i++) {
-							methods[methodNames[i]] = (function (name) {
-								return function () { return call(name, Array.prototype.slice.call(arguments)); };
-							})(methodNames[i]);
+						const methods = {};
+						for (const name of methodNames) {
+							methods[name] = (...args) => call(name, args);
 						}
 
-						var __env = Object.assign({}, context || {}, { methods: methods });
-						var __envKeys = Object.keys(__env);
+						const keys = Object.keys(context || {}).concat("methods");
+						const values = Object.values(context || {}).concat(methods);
 
-						var AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+						const AsyncFunction =
+							Object.getPrototypeOf(async function () {}).constructor;
 
-						// preamble declares ergonomic namespace vars (Streams, Crypto, etc.)
-						// and is prepended BEFORE user code but AFTER env destructuring.
-						// It is NOT part of the execution hash; methodNames (sorted) is.
-						var userSource = [
-							'"use strict";',
-							'var {' + __envKeys.join(', ') + '} = __env;',
-							'var fetch = undefined;',
-							'var XMLHttpRequest = undefined;',
-							'var WebSocket = undefined;',
-							'var EventSource = undefined;',
-							'var importScripts = undefined;',
-							'var indexedDB = ' + (${allowDB} ? 'self.indexedDB' : 'undefined') + ';',
-							'var IDBFactory = undefined;',
-							'var IDBDatabase = undefined;',
-							'var IDBObjectStore = undefined;',
-							// Read-only Q.Config.get(path, default) from a plain config snapshot
-							// passed as context.__configTree (capabilities read config-driven
-							// defaults via Q.Config.get). No functions cross the boundary.
-							'var Q = { Config: { get: function(__p, __d){ var __t = (__env && __env.__configTree) || {}; var __ps = Array.isArray(__p) ? __p : String(__p == null ? "" : __p).split("."); for (var __i = 0; __i < __ps.length; __i++){ if (__t == null || typeof __t !== "object") return __d; __t = __t[__ps[__i]]; } return (__t === undefined) ? __d : __t; } } };',
-							preamble,
-							// body style (top-level await + return) OR module style
-							// (module.exports = async function(input){...}) both supported
-							'var module = { exports: undefined };',
-							'var exports = undefined;',
-							'var __user = async function (input) {',
-							'  var __bodyResult = await (async function () {',
-							code,
-							'  }).call(undefined);',
-							'  if (typeof module.exports === "function") { return await module.exports(input); }',
-							'  if (module.exports !== undefined) { return module.exports; }',
-							'  return __bodyResult;',
-							'};',
-							'return __user(__input);'
-						].join('\n');
+						const fn = new AsyncFunction(
+							...keys,
+							'"use strict";\\n' +
+							'const fetch = undefined;\\n' +
+							'const XMLHttpRequest = undefined;\\n' +
+							'const WebSocket = undefined;\\n' +
+							'const EventSource = undefined;\\n' +
+							'const importScripts = undefined;\\n' +
+							'const indexedDB = ${allowDB ? 'self.indexedDB' : 'undefined'};\\n' +
+							'const IDBFactory = undefined;\\n' +
+							'const IDBDatabase = undefined;\\n' +
+							'const IDBObjectStore = undefined;\\n' +
+							'const __user = async function(){\\n' +
+							code + '\\n' +
+							'};\\n' +
+							'return __user();'
+						);
 
-						var fn = new AsyncFunction('__env', '__input', userSource);
+						const result = await fn(...values);
 
-						fn(__env, input === undefined ? null : input)
-						.then(function (result) {
-							while (__timers.length && __timerGuard--) {
-								try { __timers.shift()(); } catch (e) {}
-							}
-							__timers.length = 0;
-							self.postMessage({ type: "done", ok: true, result: result });
-						})
-						.catch(function (err) {
-							// FIX (Bug 13): fix operator-precedence pitfall. The
-							// original \`String(err && err.message || err)\` is
-							// \`String((err && err.message) || err)\`. If err is a
-							// thrown object with no .message, String() runs on the
-							// object (yielding "[object Object]"). Be explicit.
-							var errMsg;
-							if (err && typeof err.message === 'string') errMsg = err.message;
-							else if (err === undefined || err === null)  errMsg = String(err);
-							else try { errMsg = JSON.stringify(err); } catch (e2) { errMsg = String(err); }
-							self.postMessage({
-								type: "done",
-								ok: false,
-								error: errMsg
-							});
-						});
+						// run deterministic timers
+						while (__timers.length && __timerGuard--) {
+							try { __timers.shift()(); } catch {}
+						}
+						__timers.length = 0;
+
+						self.postMessage({ type: "done", ok: true, result });
 
 					} catch (err) {
-						// FIX (Bug 13): same precedence fix here.
-						var errMsg;
-						if (err && typeof err.message === 'string') errMsg = err.message;
-						else if (err === undefined || err === null)  errMsg = String(err);
-						else try { errMsg = JSON.stringify(err); } catch (e2) { errMsg = String(err); }
 						self.postMessage({
 							type: "done",
 							ok: false,
-							error: errMsg
+							error: String(err && err.message || err)
 						});
 					}
 				};
 			`;
 
-			var blob = new Blob([script], { type: "application/javascript" });
+			const blob = new Blob([script], { type: "application/javascript" });
 			this.url = URL.createObjectURL(blob);
 			this.worker = new Worker(this.url);
 			return this.worker;
@@ -427,83 +247,40 @@ Q.exports(function (Q) {
 
 		SandboxRunner.prototype.run = function (code, ctx, methods, opts) {
 			opts = opts || {};
-			var self = this;
-			var worker = this.worker || this.createWorker();
-			// FIX (Bug 14): \`opts.timeout || default\` makes timeout=0 impossible to
-			// express. Treat undefined-or-null as "use default" but pass 0 through
-			// as-is. 0 means "fail immediately", a legitimate (if rare) test case.
-			var timeoutMs = (opts.timeout !== undefined && opts.timeout !== null)
-				? opts.timeout
-				: this.defaults.timeout;
+			const worker = this.worker || this.createWorker();
+			const timeoutMs = opts.timeout || this.defaults.timeout;
 
-			var safeCtx;
+			let safeCtx;
 			try {
 				safeCtx = JSON.parse(JSON.stringify(ctx));
-			} catch (e) {
+			} catch {
 				safeCtx = {};
 			}
 
-			var safeInput;
-			try {
-				safeInput = JSON.parse(JSON.stringify(
-					opts.input === undefined ? null : opts.input
-				));
-			} catch (e) {
-				safeInput = null;
-			}
-
-			var methodNames = Object.keys(methods);
-
-			// Build the preamble on the host side from methodNames.
-			// Sent to the worker alongside the code but kept out of the
-			// execution hash (methodNames, sorted, is in the hash instead).
-			var preamble = buildPreamble(methodNames);
-
-			// FIX (Bug 10): if deterministic, mark the runner as burned so we
-			// never reuse this worker afterwards. Math.random is locked with
-			// configurable:false once deterministic mode runs; a subsequent
-			// non-deterministic run on the same worker would silently get
-			// seeded random numbers.
-			var isDeterministicRun = !!opts.deterministic;
-			if (isDeterministicRun) self._deterministicBurned = true;
+			const methodNames = Object.keys(methods);
 
 			return new Q.Promise(function (resolve, reject) {
-				var timer;
-				var finished = false;
+				let timer;
 
-				// FIX (Bug 9): use per-run listener refs instead of assigning
-				// worker.onmessage/onerror, so concurrent run()s on a named
-				// runner don't strip each other's handlers. Each run installs
-				// its own message+error listener via addEventListener and
-				// cleans up only its own via removeEventListener.
-				var onMessage;
-				var onError;
-
-				var cleanup = function () {
+				const runner = this;
+				const cleanup = () => {
 					clearTimeout(timer);
-					try { if (onMessage) worker.removeEventListener('message', onMessage); } catch (e) {}
-					try { if (onError)   worker.removeEventListener('error',   onError);   } catch (e) {}
-					// FIX (Bug 8): null out self.worker and self.url after
-					// terminate so the next run() doesn't try to reuse a dead
-					// worker or a revoked blob URL. Also terminate if the
-					// worker was used for deterministic mode (Bug 10)
-					// regardless of opts.name.
-					var shouldTerminate = !opts.name || self._deterministicBurned;
-					if (shouldTerminate) {
-						try { if (self.url) URL.revokeObjectURL(self.url); } catch (e) {}
-						try { worker.terminate(); } catch (e) {}
-						self.worker = null;
-						self.url = null;
+					if (!opts.name) {
+						try {
+							URL.revokeObjectURL(runner.url);
+							worker.terminate();
+						} catch {}
 					}
 				};
 
-				var rpcLog = [];
+				const rpcLog = [];
+				let finished = false;
 
-				onMessage = function (e) {
-					var msg = e.data;
+				worker.onmessage = function (e) {
+					const msg = e.data;
 
 					if (msg && msg.type === "rpc") {
-						var fn = methods[msg.method];
+						const fn = methods[msg.method];
 						if (!fn) {
 							worker.postMessage({
 								type: "rpcResult",
@@ -515,19 +292,33 @@ Q.exports(function (Q) {
 						}
 
 						Promise.resolve()
-							.then(function () { return fn.apply(null, msg.args); })
-							.then(function (result) {
-								rpcLog.push({ method: msg.method, args: msg.args, result: result });
-								worker.postMessage({ type: "rpcResult", id: msg.id, ok: true, result: result });
+							.then(() => fn(...msg.args))
+							.then(result => {
+								rpcLog.push({
+									method: msg.method,
+									args: msg.args,
+									result
+								});
+								worker.postMessage({
+									type: "rpcResult",
+									id: msg.id,
+									ok: true,
+									result
+								});
 							})
-							.catch(function (err) {
-								// FIX (Bug 13): same operator-precedence fix on the host side.
-								var errStr;
-								if (err && typeof err.message === 'string') errStr = err.message;
-								else if (err === undefined || err === null)  errStr = String(err);
-								else try { errStr = JSON.stringify(err); } catch (e2) { errStr = String(err); }
-								rpcLog.push({ method: msg.method, args: msg.args, error: errStr });
-								worker.postMessage({ type: "rpcResult", id: msg.id, ok: false, error: errStr });
+							.catch(err => {
+								rpcLog.push({
+									method: msg.method,
+									args: msg.args,
+									error: String(err && err.message || err)
+								});
+
+								worker.postMessage({
+									type: "rpcResult",
+									id: msg.id,
+									ok: false,
+									error: String(err && err.message || err)
+								});
 							});
 						return;
 					}
@@ -535,33 +326,17 @@ Q.exports(function (Q) {
 					if (msg && msg.type === "done") {
 						if (finished) return;
 						finished = true;
-
-						// FIX (Bug 12): include methodNames (sorted) in the
-						// hashed execution payload. The original hash did not
-						// record what method surface was available to the
-						// code, so identical user code running with different
-						// method sets produced identical hashes — breaking
-						// the audit guarantee. Sorting normalizes against
-						// accidental key-order differences across host-side
-						// methods-object constructions.
-						var sortedMethodNames = methodNames.slice().sort();
-
-						// Execution hash covers original code + context +
-						// input + seed + available methods + rpc log +
-						// outcome. Preamble intentionally excluded — it is
-						// pure derivation of sortedMethodNames.
-						var execution = {
-							code:         code,
-							context:      safeCtx,
-							input:        safeInput,
-							methodNames:  sortedMethodNames,
+						
+						const execution = {
+							code,
+							context: safeCtx,
 							seed: (opts.deterministic && typeof opts.deterministic === "object")
 								? opts.deterministic.seed
 								: (opts.deterministic ? 1 : undefined),
-							rpc:    rpcLog,
-							ok:     !!msg.ok,
-							result: msg.ok  ? msg.result : undefined,
-							error:  !msg.ok ? msg.error  : undefined
+							rpc: rpcLog,
+							ok: !!msg.ok,
+							result: msg.ok ? msg.result : undefined,
+							error: msg.ok ? undefined : msg.error
 						};
 
 						Q.Data.digest("SHA-256", JSON.stringify(execution))
@@ -569,9 +344,12 @@ Q.exports(function (Q) {
 							var hash = Q.Data.toHex(bytes);
 							cleanup();
 							if (msg.ok) {
-								resolve({ result: msg.result, hash: hash });
+								resolve({
+									result: msg.result,
+									hash
+								});
 							} else {
-								var err = new Error(msg.error || "Sandbox error");
+								const err = new Error(msg.error || "Sandbox error");
 								err.hash = hash;
 								reject(err);
 							}
@@ -579,45 +357,28 @@ Q.exports(function (Q) {
 					}
 				};
 
-				onError = function (err) {
-					if (finished) return;
-					finished = true;
+				worker.onerror = function (err) {
 					cleanup();
-					reject(new Error(err.message || String(err)));
+					reject(err.message || String(err));
 				};
 
-				worker.addEventListener('message', onMessage);
-				worker.addEventListener('error',   onError);
-
 				timer = setTimeout(function () {
-					if (finished) return;
-					finished = true;
 					cleanup();
 					reject(new Error("Worker timeout / infinite loop"));
 				}, timeoutMs);
 
 				worker.postMessage({
-					code:          code,
-					context:       safeCtx,
-					methodNames:   methodNames,
-					preamble:      preamble,
-					deterministic: opts.deterministic || false,
-					input:         safeInput
+					code,
+					context: safeCtx,
+					methodNames,
+					deterministic: opts.deterministic || false
 				});
-			});
+			}.bind(this));
 		};
 
-		var runner;
+		let runner;
 		if (options.name) {
 			runner = Q.Sandbox._runners[options.name];
-			// FIX (Bug 10): if the cached runner was burned by deterministic
-			// mode (or the worker was terminated and nulled for any reason),
-			// drop the cache entry and create a fresh one. Reusing a burned
-			// runner would silently run on a worker with locked Math.random.
-			if (runner && (runner._deterministicBurned || !runner.worker)) {
-				delete Q.Sandbox._runners[options.name];
-				runner = null;
-			}
 			if (!runner) {
 				runner = new SandboxRunner(options);
 				Q.Sandbox._runners[options.name] = runner;
