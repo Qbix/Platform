@@ -5073,6 +5073,9 @@ Q.Exception.prototype = Error.prototype;
  * @param {Object} [options] More information about the method
  * @param {boolean} [options.isGetter] set to true to indicate that the method will be wrapped with Q.getter()
  * @param {boolean} [options.customPath] set to a custom path to load the method from, instead of the default
+ * @param {boolean} [options.safe] set to true to load from a .safe file instead of a .js file.
+ *   The .safe file must return a function (the method body).
+ *   If a customPath ending in .safe is given, .safe loading is used automatically.
  */
 Q.Method = function (properties, options) {
 	Q.extend(this, properties);
@@ -5241,16 +5244,44 @@ Q.Method.define = function (o, prefix, closure, options) {
 	 * @private
 	 */
 	function _makeShim(method, k, callName) {
+		var original;
 		return function _Q_Method_shim() {
 			if (_Q_Method_shim.__loaded) {
 				return _Q_Method_shim.__loaded.apply(this, arguments);
 			}
-			var url = Q.url(
-				(method.__options && method.__options.customPath)
-					? method.__options.customPath
-					: (prefix + '/' + k + '.js')
-			);
+			original = original || o[k];
+
+			// {safe: true} auto-generates methodName.safe; customPath overrides both.
+			var isSafe = !!(method.__options && method.__options.safe);
+			var customPath = method.__options && method.__options.customPath;
+			var url = Q.url(customPath || (prefix + '/' + k + (isSafe ? '.safe' : '.js')));
+			// Also catches customPath ending in .safe
+			var loadSafe = url.split('?')[0].slice(-5) === '.safe';
 			var t = this, a = arguments;
+
+			if (loadSafe) {
+				return Q.SafeScript.load(url).then(function (factory) {
+					// Design A: .safe file runs as the method body each call.
+					// scope.args holds the method's arguments; the file accesses args[0] etc.
+					var loaded = function () {
+						var scope = {};
+						scope.args = Array.prototype.slice.call(arguments);
+						return factory(scope);
+					};
+					for (var property in original) {
+						if (!(property in loaded)) loaded[property] = original[property];
+					}
+					o[k] = loaded;
+					original.__loaded = loaded;
+					_Q_Method_shim.__loaded = loaded;
+					var srcPlain = url.split('?')[0];
+					_exports[url] = [loaded];
+					_exports[srcPlain] = [loaded];
+					Q.Method.onLoad.handle(o, k, loaded, closure);
+					return loaded.apply(t, a);
+				});
+			}
+
 			return _resolveArgs().then(function (args) {
 				var augmented = function () { return args; };
 				return Q.Method.load(o, k, url, augmented);
@@ -6898,12 +6929,13 @@ function _loadToolScript(toolElement, callback, shared, parentId, options, white
 		}
 		if (toolConstructor.safe) {
 			waitFor.push('safe');
-			Q.SafeScript.load(toolConstructor.safe, function (err, factory) {
-				if (err) {
+			Q.SafeScript.load(toolConstructor.safe).then(
+				function (factory) { pipe.fill('safe')(null, factory); },
+				function (err) {
 					console.warn('Q.Tool.loadScript: SafeScript compile error for ' + toolName, err);
+					pipe.fill('safe')(err);
 				}
-				pipe.fill('safe')(err, factory);
-			});
+			);
 		}
 		// start loading css and text at the same time as the js and html
 		if (toolConstructor.css) {
