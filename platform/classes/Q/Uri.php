@@ -1462,9 +1462,35 @@ class Q_Uri
 call_user_func(function () {
 	// trying to get caching $urls
 	if (empty(Q_Uri::$urls)) {
-		$urlsFile = implode(DS, array(APP_CONFIG_DIR, "Q", "urls.php"));
-		if (is_file($urlsFile)) {
-			$result = require_once($urlsFile);
+		// Prefer JSON format (no PHP file generation needed).
+		// Uses APCu when available: the decoded array is cached in shared
+		// memory and invalidated when the file's mtime changes.
+		$jsonFile = implode(DS, array(APP_CONFIG_DIR, "Q", "urls.json"));
+		if (is_file($jsonFile)) {
+			$mtime = filemtime($jsonFile);
+			$result = null;
+			if (function_exists('apcu_fetch')) {
+				$cacheKey = 'Q_Uri::urls:' . $jsonFile;
+				$cached = apcu_fetch($cacheKey, $hit);
+				if ($hit && is_array($cached) && ($cached['_mtime'] ?? 0) === $mtime) {
+					$result = $cached['_data'];
+				}
+			}
+			if ($result === null) {
+				$result = json_decode(file_get_contents($jsonFile), true);
+				if (is_array($result) && function_exists('apcu_store')) {
+					apcu_store($cacheKey, ['_mtime' => $mtime, '_data' => $result]);
+				}
+			}
+			if (is_array($result)) {
+				Q_Uri::$urls = $result;
+			}
+			return;
+		}
+		// Legacy fallback: load from .php
+		$phpFile = implode(DS, array(APP_CONFIG_DIR, "Q", "urls.php"));
+		if (is_file($phpFile)) {
+			$result = require_once($phpFile);
 			if (is_array($result)) {
 				Q_Uri::$urls = $result;
 			}

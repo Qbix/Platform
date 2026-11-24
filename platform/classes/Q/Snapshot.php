@@ -162,8 +162,9 @@ class Q_Snapshot
 		$json = Q::json_encode($result);
 		file_put_contents($this->entriesDir . DS . $this->time . '.json', $json);
 		file_put_contents($this->entriesDir . DS . 'latest.json', $json);
-		$export = Q::var_export($result);
-		file_put_contents($this->configDir . DS . $this->name . '.php', "<?php\nreturn $export;");
+		// Write JSON config instead of PHP — avoids generating executable .php
+		// files at runtime, which the SafeScript-PHP security layer blocks.
+		file_put_contents($this->configDir . DS . $this->name . '.json', $json);
 		$this->previous = $result;
 		return $this;
 	}
@@ -200,14 +201,45 @@ class Q_Snapshot
 	}
 
 	/**
-	 * Load cached snapshot from the PHP file (for runtime).
+	 * Load cached snapshot (for runtime).
+	 * Uses APCu when available: caches the decoded array keyed by file path,
+	 * invalidated when the file's mtime changes. Falls back to plain
+	 * json_decode, then to legacy PHP format.
 	 * @method load
 	 * @return {array|null}
 	 */
 	function load()
 	{
-		$f = $this->configDir . DS . $this->name . '.php';
-		return file_exists($f) ? include($f) : null;
+		$jsonFile = $this->configDir . DS . $this->name . '.json';
+		if (file_exists($jsonFile)) {
+			return self::_loadJsonCached($jsonFile);
+		}
+		// Legacy fallback: load from .php if .json doesn't exist yet
+		$phpFile = $this->configDir . DS . $this->name . '.php';
+		return file_exists($phpFile) ? include($phpFile) : null;
+	}
+
+	/**
+	 * Load a JSON file with APCu mtime-based caching.
+	 * @param string $file  Absolute path to the JSON file
+	 * @return array|null
+	 */
+	private static function _loadJsonCached($file)
+	{
+		$mtime = filemtime($file);
+		if (function_exists('apcu_fetch')) {
+			$cacheKey = 'Q_Snapshot:' . $file;
+			$cached = apcu_fetch($cacheKey, $hit);
+			if ($hit && is_array($cached) && ($cached['_mtime'] ?? 0) === $mtime) {
+				return $cached['_data'];
+			}
+		}
+		$data = json_decode(file_get_contents($file), true);
+		if (!is_array($data)) return null;
+		if (function_exists('apcu_store')) {
+			apcu_store($cacheKey, ['_mtime' => $mtime, '_data' => $data]);
+		}
+		return $data;
 	}
 
 	/**
