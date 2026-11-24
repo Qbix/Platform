@@ -185,10 +185,34 @@
     };
 
     /**
+     * Resolve the host-configured callback URL from the iframe's own
+     * location.hash (set by Q.Users.Embed.stream({callbackUrl: ...}) on
+     * the parent side). Returns null when none was configured or when
+     * the value fails the http(s) check. We re-read on every call so
+     * a page that sets the hash late still works.
+     */
+    Q.Embed._readCallbackUrl = function () {
+        try {
+            var h = window.location.hash || '';
+            if (h.charAt(0) === '#') h = h.slice(1);
+            if (!h) return null;
+            var params = new URLSearchParams(h);
+            var cb = params.get('callbackUrl');
+            if (!cb) return null;
+            // Only http/https allowed; a hostile #callbackUrl=javascript:...
+            // crafted by a third party could otherwise redirect-into-xss.
+            if (!/^https?:\/\//i.test(cb)) return null;
+            return cb;
+        } catch (e) {
+            return null;
+        }
+    };
+
+    /**
      * Apply a server-side action result per its returnShape.
      *
      * The dispatcher at /action.php/Q/embedAction always normalizes the
-     * handler's return to one of three shapes, so this switch covers the
+     * handler's return to one of four shapes, so this switch covers the
      * whole protocol:
      *   - redirect: assign to window.location (iframe navigates; the
      *     parent sees a new load event and can observe through
@@ -204,12 +228,40 @@
      *     fields of the page root; any other keys merge at the root.
      *     Writes land on the Proxy, so every @{...} binding that depends
      *     on a changed path re-evaluates automatically.
+     *   - callbackUrl: navigate the iframe's own window to the
+     *     callbackUrl the host configured via
+     *     Q.Users.Embed.stream({callbackUrl: ...}), with the payload
+     *     JSON-encoded as a `data` query param. This is the escape
+     *     hatch for contexts where postMessage cannot deliver -- most
+     *     notably when a browser extension intercepts the iframe and
+     *     serves it from the extension's own origin, so the parent
+     *     and iframe no longer share a stable origin pair. The host's
+     *     callback page (which the host controls) is then responsible
+     *     for whatever happens next, including notifying the top
+     *     window via its own mechanism.
      */
     Q.Embed._applyResult = function (result, el) {
         if (!result) return;
         if (result.redirect) {
             try { window.location = result.redirect; } catch (e) {}
             return;
+        }
+        if (result.callbackUrl) {
+            var cb = Q.Embed._readCallbackUrl();
+            if (!cb) {
+                console.warn('Q.Embed: action returned callbackUrl shape but'
+                    + ' no #callbackUrl is configured on this iframe; falling'
+                    + ' back to postMessage');
+                // Fall through into the postMessage branch below so the
+                // event at least surfaces somewhere.
+                result = { postMessage: true, payload: result.payload || {} };
+            } else {
+                var payload = result.payload || {};
+                var sep = cb.indexOf('?') >= 0 ? '&' : '?';
+                var full = cb + sep + 'data=' + encodeURIComponent(JSON.stringify(payload));
+                try { window.location.href = full; } catch (e) {}
+                return;
+            }
         }
         if (result.postMessage) {
             try {
