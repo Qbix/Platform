@@ -90,6 +90,21 @@ function Q_embedAction_post()
 
     // If the handler didn't name a return shape, fall back to the
     // declared one. Normalize the output so the client can switch on it.
+    // Four shapes total:
+    //   - redirect:    server names the URL; iframe navigates there.
+    //   - postMessage: iframe posts the payload up to the parent via
+    //                  Q.Users.Embed.sendEvent.
+    //   - inline:      iframe merges the payload into its reactive
+    //                  page object, no navigation, no postMessage.
+    //   - callbackUrl: iframe navigates its OWN window to the URL the
+    //                  host configured via
+    //                  Q.Users.Embed.stream({callbackUrl: ...}), with
+    //                  the payload JSON-encoded as a `data` query param.
+    //                  Use this when postMessage cannot deliver -- e.g.
+    //                  a browser extension is intercepting the iframe
+    //                  and serving its own content from the extension
+    //                  origin, so the parent/iframe origin pair the
+    //                  postMessage check depends on is no longer stable.
     $shape = isset($spec['returnShape']) ? $spec['returnShape'] : 'inline';
     $out = array();
     switch ($shape) {
@@ -98,6 +113,10 @@ function Q_embedAction_post()
             break;
         case 'postMessage':
             $out['postMessage'] = true;
+            $out['payload'] = isset($result['payload']) ? $result['payload'] : $result;
+            break;
+        case 'callbackUrl':
+            $out['callbackUrl'] = true;
             $out['payload'] = isset($result['payload']) ? $result['payload'] : $result;
             break;
         case 'inline':
