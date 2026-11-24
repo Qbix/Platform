@@ -9,14 +9,40 @@ class Q_Zip
 	protected $extr_dirc;
 
 	/**
+	 * Whether the ZipArchive PHP extension is available.
+	 * When false, shell commands (zip/unzip) are used as fallback.
+	 * @method hasExtension
+	 * @static
+	 * @return {bool}
+	 */
+	public static function hasExtension() {
+		return class_exists('ZipArchive');
+	}
+
+	/**
+	 * Find a shell binary by name, checking common paths then PATH.
+	 * @method findBin
+	 * @static
+	 * @param {string} $name Binary name (e.g. 'zip', 'unzip')
+	 * @return {string|null} Absolute path or null
+	 */
+	private static function findBin($name) {
+		foreach (array('/usr/bin/', '/usr/local/bin/', '/bin/') as $dir) {
+			if (file_exists($dir . $name)) return $dir . $name;
+		}
+		$which = trim(shell_exec('which ' . escapeshellarg($name) . ' 2>/dev/null') ?: '');
+		return ($which && file_exists($which)) ? $which : null;
+	}
+
+	/**
 	 * Starts a zip session to create or update a zip file.
 	 * @method zip_start
 	 * @param {string} $file_path Path to the zip file
 	 * @return {bool}
 	 */
 	public function zip_start($file_path) {
-		if (!class_exists('ZipArchive')) {
-			throw new Exception("ZipArchive not available.");
+		if (!self::hasExtension() && !self::findBin('zip')) {
+			throw new Exception("Q_Zip: Neither ZipArchive extension nor zip command available.");
 		}
 		$this->new_file_path = $file_path;
 		$this->org_files = [];
@@ -53,15 +79,46 @@ class Q_Zip
 	 * @return {bool}
 	 */
 	public function zip_end() {
-		$this->zip = new ZipArchive();
-		if (!$this->zip->open($this->new_file_path, ZipArchive::CREATE)) {
-			throw new Exception("Q_Zip: Failed to open/create archive.");
+		if (self::hasExtension()) {
+			$this->zip = new ZipArchive();
+			if (!$this->zip->open($this->new_file_path, ZipArchive::CREATE)) {
+				throw new Exception("Q_Zip: Failed to open/create archive.");
+			}
+			$names = $this->commonPath($this->org_files, true);
+			foreach ($this->org_files as $i => $path) {
+				$this->zip->addFile($path, $names[$i]);
+			}
+			$this->zip->close();
+		} else {
+			$bin = self::findBin('zip');
+			if (!$bin) {
+				throw new Exception("Q_Zip: zip command not found.");
+			}
+			$names = $this->commonPath($this->org_files, true);
+			// Build a file list in a temp file (avoids arg-length limits)
+			$listFile = tempnam(sys_get_temp_dir(), 'qzip_') . '.txt';
+			$lines = [];
+			foreach ($this->org_files as $i => $path) {
+				$lines[] = $names[$i];
+			}
+			file_put_contents($listFile, implode("\n", $lines));
+			// Determine the common root to cd into
+			$commonDirs = $this->commonPath($this->org_files, false);
+			$commonRoot = isset($commonDirs[0]) ? $commonDirs[0] : dirname($this->org_files[0]);
+			$outPath = realpath(dirname($this->new_file_path))
+				. DIRECTORY_SEPARATOR . basename($this->new_file_path);
+			$cmd = 'cd ' . escapeshellarg($commonRoot)
+				. ' && ' . escapeshellarg($bin) . ' -r '
+				. escapeshellarg($outPath)
+				. ' -@ < ' . escapeshellarg($listFile) . ' 2>&1';
+			$output = [];
+			$exitCode = -1;
+			exec($cmd, $output, $exitCode);
+			@unlink($listFile);
+			if ($exitCode !== 0) {
+				throw new Exception("Q_Zip: zip command failed: " . implode("\n", array_slice($output, -3)));
+			}
 		}
-		$names = $this->commonPath($this->org_files, true);
-		foreach ($this->org_files as $i => $path) {
-			$this->zip->addFile($path, $names[$i]);
-		}
-		$this->zip->close();
 		$this->org_files = [];
 		return true;
 	}
@@ -110,15 +167,68 @@ class Q_Zip
 		if (!is_dir($target_dir) && !mkdir($target_dir, 0777, true)) {
 			throw new Exception("Q_Zip: Failed to create target directory.");
 		}
-		$zip = new ZipArchive();
-		if (!$zip->open($this->extr_file)) {
-			throw new Exception("Q_Zip: Cannot open archive.");
+		if (self::hasExtension()) {
+			$zip = new ZipArchive();
+			if (!$zip->open($this->extr_file)) {
+				throw new Exception("Q_Zip: Cannot open archive.");
+			}
+			if (!$zip->extractTo($target_dir)) {
+				throw new Exception("Q_Zip: Extraction failed.");
+			}
+			$zip->close();
+		} else {
+			$bin = self::findBin('unzip');
+			if (!$bin) {
+				throw new Exception("Q_Zip: Neither ZipArchive extension nor unzip command available.");
+			}
+			$output = [];
+			$exitCode = -1;
+			exec(
+				escapeshellarg($bin) . ' -o '
+				. escapeshellarg($this->extr_file)
+				. ' -d ' . escapeshellarg($target_dir) . ' 2>&1',
+				$output, $exitCode
+			);
+			if ($exitCode !== 0) {
+				throw new Exception("Q_Zip: unzip failed: " . implode("\n", array_slice($output, -3)));
+			}
 		}
-		if (!$zip->extractTo($target_dir)) {
-			throw new Exception("Q_Zip: Extraction failed.");
-		}
-		$zip->close();
 		return true;
+	}
+
+	/**
+	 * Lists the contents of a zip file without extracting.
+	 * @method listContents
+	 * @param {string} $file_path Path to the zip file
+	 * @return {array} Array of entry names
+	 */
+	public function listContents($file_path) {
+		if (!file_exists($file_path)) {
+			throw new Exception("Q_Zip: File does not exist.");
+		}
+		$entries = [];
+		if (self::hasExtension()) {
+			$zip = new ZipArchive();
+			if (!$zip->open($file_path)) {
+				throw new Exception("Q_Zip: Cannot open archive.");
+			}
+			for ($i = 0; $i < $zip->numFiles; $i++) {
+				$entries[] = $zip->getNameIndex($i);
+			}
+			$zip->close();
+		} else {
+			$bin = self::findBin('unzip');
+			if (!$bin) {
+				throw new Exception("Q_Zip: Neither ZipArchive extension nor unzip command available.");
+			}
+			$output = [];
+			exec(escapeshellarg($bin) . ' -Z -1 ' . escapeshellarg($file_path) . ' 2>&1', $output);
+			foreach ($output as $line) {
+				$line = trim($line);
+				if ($line !== '') $entries[] = $line;
+			}
+		}
+		return $entries;
 	}
 
 	/**
