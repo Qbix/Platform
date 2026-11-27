@@ -222,7 +222,16 @@ class Q_Image
 			}
 		}
 		if ($gravatar) {
-			$avatar = @file_get_contents("http://www.gravatar.com/avatar/$hash?r=g&d=$type&s=$size");
+			// $hash, $type and $size can come from a request: escape them so
+			// they cannot add path segments or query parameters.
+			$query = http_build_query(array(
+				'r' => 'g',
+				'd' => is_string($type) ? $type : '',
+				's' => (int)$size
+			), '', '&', PHP_QUERY_RFC3986);
+			$avatar = @file_get_contents(
+				"http://www.gravatar.com/avatar/" . rawurlencode((string)$hash) . "?$query"
+			);
 		}
 		if (isset($avatar) && $avatar !== false) {
 			return $avatar;
