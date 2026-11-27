@@ -298,7 +298,7 @@ class Db_Sqlite implements Db_Interface
 			$valuesString = '';
 		}
 		$clauses = array(
-			'INTO' => "$table_into ($columnsString)",
+			'INTO' => Db_Query_Sqlite::quotedTable($table_into)." ($columnsString)",
 			'VALUES' => $valuesString
 		);
 		return new $queryClass($this, Db_Query::TYPE_INSERT, $clauses, $fields, $table_into);
@@ -313,7 +313,7 @@ class Db_Sqlite implements Db_Interface
 		if (empty($table))
 			throw new Exception("table not specified in call to 'update'.");
 		$queryClass = Db_Query::adapterClass($this);
-		$clauses = array('UPDATE' => "$table");
+		$clauses = array('UPDATE' => (string)Db_Query_Sqlite::quotedTable($table));
 		return new $queryClass($this, Db_Query::TYPE_UPDATE, $clauses, array(), $table);
 	}
 
@@ -330,9 +330,10 @@ class Db_Sqlite implements Db_Interface
 		}
 		$queryClass = Db_Query::adapterClass($this);
 		if (isset($table_using))
-			$clauses = array('FROM' => "$table_from USING $table_using");
+			$clauses = array('FROM' => Db_Query_Sqlite::quotedTable($table_from)
+				." USING ".Db_Query_Sqlite::quotedTable($table_using));
 		else
-			$clauses = array('FROM' => "$table_from");
+			$clauses = array('FROM' => (string)Db_Query_Sqlite::quotedTable($table_from));
 		return new $queryClass($this, Db_Query::TYPE_DELETE, $clauses, array(), $table_from);
 	}
 
