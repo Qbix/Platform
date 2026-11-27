@@ -55,9 +55,7 @@ class Q_Video_Muse extends Q_Video {
 		curl_setopt($ch, CURLOPT_POST,1);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $fields);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-		curl_setopt($ch, CURLOPT_AUTOREFERER, 1);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+		self::_secure($ch);
 		$result = Q::json_decode(curl_exec($ch), true);
 		curl_close($ch);
 
@@ -88,9 +86,7 @@ class Q_Video_Muse extends Q_Video {
 		curl_setopt($ch, CURLOPT_HTTPHEADER, $this->headers);
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "DELETE");
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-		curl_setopt($ch, CURLOPT_AUTOREFERER, 1);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+		self::_secure($ch);
 		curl_exec($ch);
 		curl_close($ch);
 	}
@@ -105,6 +101,29 @@ class Q_Video_Muse extends Q_Video {
 
 	}
 
+	/**
+	 * Options every request to muse.ai gets (ro#1027). The Key header goes
+	 * with each request, and curl resends custom headers to every redirect
+	 * hop whatever its host, so redirects are not followed (the 3xx comes
+	 * back); only https is spoken, and the certificate is verified, since
+	 * that key is what an interceptor would want.
+	 * @method _secure
+	 * @static
+	 * @private
+	 * @param {resource|CurlHandle} $ch
+	 */
+	private static function _secure($ch)
+	{
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+		if (defined('CURLOPT_PROTOCOLS_STR')) {
+			curl_setopt($ch, CURLOPT_PROTOCOLS_STR, 'https');
+		} else {
+			curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+		}
+	}
+
 	function test($videoId, $sec) {
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, "https://muse.ai/api/files/set/71944d7430c461f0cd6e7fd10cee7eb72786352a3678fc7bc0ae3d410f72aece/cover?t=".$sec);
@@ -115,9 +134,7 @@ class Q_Video_Muse extends Q_Video {
 			't' => $sec
 		]);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-		curl_setopt($ch, CURLOPT_AUTOREFERER, 1);
-		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+		self::_secure($ch);
 
 		try {
 			$result = Q::json_decode(curl_exec($ch), true);
