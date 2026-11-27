@@ -200,7 +200,7 @@ class Q_Request
 			// then just query it via Q_Config::get().
 
 			self::$requested_without_port = (
-				strpos($_SERVER['HTTP_HOST'], ':') === false
+				!self::hostHasPort($_SERVER['HTTP_HOST'])
 			);
 			
 			// Infer things
@@ -319,7 +319,7 @@ class Q_Request
 
 			// Only append if $server_name does not already contain a port.
 			$port = '';
-			if (strpos($server_name, ':') === false
+			if (!self::hostHasPort($server_name)
 			&& isset($_SERVER['SERVER_PORT'])
 			&& !in_array($_SERVER['SERVER_PORT'], array(80, 443))) {
 				$port = ':' . $_SERVER['SERVER_PORT'];
@@ -1904,7 +1904,7 @@ class Q_Request
 		} else {
 			// Only append if $server_name does not already contain a port.
 			if (isset($_SERVER['SERVER_PORT'])
-			&& strpos($server_name, ':') === false) {
+			&& !self::hostHasPort($server_name)) {
 				$port = ':' . $_SERVER['SERVER_PORT'];
 			}
 		}
@@ -1927,6 +1927,25 @@ class Q_Request
 		);
 	}
 	
+	/**
+	 * Whether a Host header value (or SERVER_NAME) already carries a port.
+	 * Bracketed IPv6 literals contain colons of their own, so "[::1]" has
+	 * no port while "[::1]:8443" does.
+	 * @method hostHasPort
+	 * @static
+	 * @protected
+	 * @param {string} $host
+	 * @return {boolean}
+	 */
+	protected static function hostHasPort($host)
+	{
+		if (substr($host, 0, 1) === '[') {
+			$end = strpos($host, ']');
+			return $end !== false && substr($host, $end + 1, 1) === ':';
+		}
+		return strpos($host, ':') !== false;
+	}
+
 	/**
 	 * Gets the app root url
 	 * @method getAppRootUrl
@@ -1968,7 +1987,7 @@ class Q_Request
 		} else {
 			// Only append if $server_name does not already contain a port.
 			if (isset($_SERVER['SERVER_PORT'])
-			&& strpos($server_name, ':') === false) {
+			&& !self::hostHasPort($server_name)) {
 				$port = ':' . $_SERVER['SERVER_PORT'];
 			}
 		}
