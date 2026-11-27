@@ -200,7 +200,21 @@ var Query_Mysql = function(mysql, type, clauses, parameters, table) {
 						if (!sql) return _doTheCallback();
 						var t = query, a = arguments;
 						if (!err && query.clauses['COMMIT']) {
-							connection.query('COMMIT;', _doTheCallback);
+							connection.query('COMMIT;', function (commitErr) {
+								if (commitErr) {
+									// A failed COMMIT is a FAILED WRITE, and `a` is what
+									// _doTheCallback forwards to the caller: the arguments the
+									// statement BEFORE the commit succeeded with, i.e. err=null
+									// and affectedRows=1 for changes the server discarded when
+									// the transaction did not commit. Report the commit error
+									// instead, the way _queryConnection below reports a failed
+									// statement.
+									commitErr.message += "\nQuery was:\n"+mq;
+									mq.db.emit('error', commitErr, mq);
+									a = [commitErr];
+								}
+								_doTheCallback();
+							});
 						} else {
 							_doTheCallback();
 						}
