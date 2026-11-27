@@ -238,6 +238,17 @@ body { position: relative; margin: 0; }
 .Q_notice_mask,
 .Q_screen_mask,
 .Q_dialog_mask { background-color: rgba(0, 0, 0, 0.2); }
+/* The blur behind a dialog lives on the mask, not on the content. Filtering
+   #page / #dashboard_slot instead blurred only as much of the screen as those
+   elements covered, and removing the filter on close forced a visible repaint
+   of a fixed header (Q_fixed_top) — cards appeared to lose their borders and
+   shadows for a frame. backdrop-filter blurs whatever is painted below the
+   mask, so it follows the mask's own (viewport-sized) box and disappears with
+   it. */
+.Q_dialog_mask {
+	backdrop-filter: blur(5px);
+	-webkit-backdrop-filter: blur(5px);
+}
 .Q_load_mask { background-color: rgba(0, 0, 0, 0.3); background-image: radial-gradient(circle at center 200px,hsla(0,0%,100%,.1),#000); background-attachment: fixed; }
 .Q_click_mask { background: transparent; }
 .Q_button.Q_load_cancel_button { position: absolute; left: 50vw; top: 50vh; margin-left: -25px; margin-top: -50px; box-shadow: 0 0 25px 5px rgba(255, 255, 255, 0.5); }
@@ -988,10 +999,8 @@ input[type=password] {
     -moz-appearance: none;
 }
 
-html.Q_dialog_shown #page,
-html.Q_dialog_shown #dashboard_slot {
-	filter:blur(5px);
-}
+/* No `filter: blur()` on #page / #dashboard_slot while a dialog is open —
+   see .Q_dialog_mask above for where the blur lives now and why. */
 
 .Q_notMobile #dashboard_slot>* { color: var(--dashboard-main-color); font-size: 20px; }
 .Q_mobile #dashboard_slot>* { color: var(--dashboard-mobile-color, var(--dashboard-main-color)); }
