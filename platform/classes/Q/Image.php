@@ -1697,7 +1697,10 @@ class Q_Image
      *   - Confirms file existence and readability
      *   - Verifies MIME type (if finfo is available)
      *
-     * - Remote URLs:
+     * - Remote URLs (any value with a URL scheme):
+     *   - Requested only through Q_Fetch: http/https, public targets,
+     *     every redirect re-checked; any other scheme (file://, php://, ...)
+     *     or a private target returns FALSE without a request
      *   - Verifies HTTP 200 response
      *   - Confirms image Content-Type
      *
@@ -1720,10 +1723,19 @@ class Q_Image
      */
     static function isRealImage($path)
     {
+        if (!is_string($path) || $path === '') {
+            return false;
+        }
+        // A value with a scheme is a URL: never a stream wrapper such as
+        // file:// or phar:// (is_file() would open those), and never a
+        // HEAD request sent to a private target or along unchecked
+        // redirects, as the stream-wrapper probe here used to.
+        $isUrl = (bool)preg_match('#^[a-z][a-z0-9+.-]*:#i', $path);
+
         // ----------------------------
         // LOCAL FILE
         // ----------------------------
-        if (is_file($path)) {
+        if (!$isUrl && is_file($path)) {
 
             if (!is_readable($path)) {
                 return false;
@@ -1754,32 +1766,27 @@ class Q_Image
         // ----------------------------
         // REMOTE URL
         // ----------------------------
-        if (!filter_var($path, FILTER_VALIDATE_URL)) {
+        if (!$isUrl || !filter_var($path, FILTER_VALIDATE_URL)) {
             return false;
         }
 
-        // 1) Headers check
-        $context = stream_context_create(array(
-            'http' => array(
-                'method' => 'HEAD',
-                'follow_location' => 1,
-                'max_redirects' => 5,
-                'header' => array(
-                    'User-Agent: '.Q_Config::expect('Q', 'curl', 'userAgent'),
-                    'Accept: image/webp,image/*,*/*;q=0.8'
-                ),
-                'timeout' => 15
-            )
-        ));
-        $headers = @get_headers($path, 1, $context);
-        if (!$headers || strpos($headers[0], '200') === false) {
+        // 1) Headers check: a GET through Q_Fetch that keeps only the
+        // first bytes (Q_Fetch sends no HEAD), so the scheme, the target
+        // and every redirect hop are checked before anything is requested.
+        try {
+            $response = Q_Fetch::get($path, array(
+                'timeout' => 10,
+                'maxBytes' => 65536,
+                'headers' => array('Accept: image/webp,image/*,*/*;q=0.8')
+            ));
+        } catch (Exception $e) {
+            return false;
+        }
+        if ($response['status'] !== 200) {
             return false;
         }
 
-        $headers = array_change_key_case($headers, CASE_LOWER);
-
-        $contentType = Q::ifset($headers, 'content-type', "");
-        $contentType = is_array($contentType) ? end($contentType) : $contentType;
+        $contentType = (string)Q::ifset($response, 'headers', 'content-type', "");
 
         if (stripos($contentType, 'image/') !== 0) {
             return false;
