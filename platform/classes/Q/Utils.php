@@ -1329,6 +1329,129 @@ class Q_Utils
 	}
 
 	/**
+	 * Names the request headers that carry a credential, which request()
+	 * must not let a redirect carry to another host.
+	 *
+	 * A header counts when its name contains auth, key, token, secret, pass,
+	 * sig (sign, signature), hmac, jwt, bearer, session, cookie or credential
+	 * (Api-Key, X-Api-Key, X-Goog-Api-Key, Proxy-Authorization, X-Auth-Token,
+	 * X-Q-HMAC, X-Hub-Signature, ...), or is listed
+	 * in the Q/curl/credentialHeaders config. Authorization and Cookie are
+	 * left out when $curlStripsAuth and libcurl is 7.83.0 or later: that
+	 * libcurl withholds them itself from a hop to another host, port or
+	 * scheme, so those requests may keep following redirects.
+	 * @method credentialHeaders
+	 * @static
+	 * @param {array} $headerLines Lines like "Name: value"
+	 * @param {boolean} [$curlStripsAuth=true] Whether the request goes through curl
+	 * @return {array} The names of the credential headers found, lowercased
+	 */
+	static function credentialHeaders($headerLines, $curlStripsAuth = true)
+	{
+		$extra = array_map('strtolower',
+			(array)Q_Config::get('Q', 'curl', 'credentialHeaders', array())
+		);
+		if ($curlStripsAuth && function_exists('curl_version')) {
+			$v = curl_version();
+			$curlStripsAuth = !empty($v['version_number'])
+				&& $v['version_number'] >= 0x075300;
+		} else {
+			$curlStripsAuth = false;
+		}
+		$found = array();
+		foreach ((array)$headerLines as $line) {
+			$pos = strpos((string)$line, ':');
+			if (!$pos) {
+				continue;
+			}
+			$name = strtolower(trim(substr($line, 0, $pos)));
+			if ($curlStripsAuth
+			&& ($name === 'authorization' || $name === 'cookie')) {
+				continue;
+			}
+			if (in_array($name, $extra, true) || preg_match(
+				'/auth|key|token|secret|pass|sig|hmac|jwt|bearer|session|cookie|credential/',
+				$name
+			)) {
+				$found[] = $name;
+			}
+		}
+		return array_values(array_unique($found));
+	}
+
+	/**
+	 * Names the fields of a request body that carry a credential, such as
+	 * the apiKey that Websites_News_Newsapi and Websites_News_Eventregistry
+	 * post. curl resends a POST body on a 307 or 308 redirect to whatever
+	 * host the Location names, so request() does not follow redirects for
+	 * such a body.
+	 *
+	 * Field names are split into words (apiKey, api_key, api-key, X.apiKey
+	 * all give "key"), and a field counts when a word is one of key, apikey,
+	 * token, secret, password, passwd, pass, passphrase, auth, authorization,
+	 * credential(s), sig, signature, hmac, jwt, bearer, session, sessionid or
+	 * cookie, or its whole name is listed in the Q/curl/credentialFields
+	 * config. Whole words, unlike the header check, because body fields are
+	 * many and freely named: "keywords" or "design" must not count.
+	 * @method credentialFields
+	 * @static
+	 * @param {array|string} $data An array of fields, or a urlencoded or JSON string
+	 * @return {array} The names of the credential fields found, as given
+	 */
+	static function credentialFields($data)
+	{
+		if (is_string($data)) {
+			$trimmed = trim($data);
+			if ($trimmed === '') {
+				return array();
+			}
+			$decoded = null;
+			if ($trimmed[0] === '{' || $trimmed[0] === '[') {
+				$decoded = json_decode($trimmed, true);
+			}
+			if (!is_array($decoded)) {
+				$decoded = array();
+				parse_str($trimmed, $decoded);
+			}
+			$data = $decoded;
+		}
+		if (!is_array($data)) {
+			return array();
+		}
+		$extra = array_map('strtolower',
+			(array)Q_Config::get('Q', 'curl', 'credentialFields', array())
+		);
+		$words = array(
+			'key', 'apikey', 'token', 'secret', 'password', 'passwd', 'pass',
+			'passphrase', 'auth', 'authorization', 'credential', 'credentials',
+			'sig', 'signature', 'hmac', 'jwt', 'bearer', 'session', 'sessionid',
+			'cookie'
+		);
+		$found = array();
+		$stack = array($data);
+		while ($stack) {
+			foreach (array_pop($stack) as $k => $v) {
+				if (is_array($v)) {
+					$stack[] = $v;
+				}
+				if (!is_string($k)) {
+					continue;
+				}
+				if (in_array(strtolower($k), $extra, true)) {
+					$found[] = $k;
+					continue;
+				}
+				$split = preg_replace('/([a-z0-9])([A-Z])/', '$1 $2', $k);
+				$parts = preg_split('/[^a-z0-9]+/', strtolower($split), -1, PREG_SPLIT_NO_EMPTY);
+				if (array_intersect($parts, $words)) {
+					$found[] = $k;
+				}
+			}
+		}
+		return array_values(array_unique($found));
+	}
+
+	/**
 	 * Issues an http request, and returns the response
 	 * @method request
 	 * @static
@@ -1346,7 +1469,16 @@ class Q_Utils
 	 *  called with the CURL handle before it's closed, if CURL was used.
 	 * @param {boolean} [$returnHandle=false] Set to true to return the curl handle instead of executing it
 	 * @return {string|false} The response, or false if not received
-	 * 
+	 *
+	 * Only http and https URLs are requested, on the first hop (unless
+	 * $curl_opts sets CURLOPT_PROTOCOLS_STR or CURLOPT_PROTOCOLS) and on
+	 * every redirect. Redirects are not followed at all when a header names
+	 * a credential (see credentialHeaders()), when $curl_opts sets
+	 * CURLOPT_COOKIE, or when a non-GET body has a credential field (see
+	 * credentialFields()): the 3xx response is returned instead. Pass
+	 * CURLOPT_UNRESTRICTED_AUTH => true in $curl_opts to follow anyway,
+	 * sending those headers and that body to every hop.
+	 *
 	 * **NOTE:** *The function waits for it, which might take a while! But you can call startBatch()*
 	 */
 	static function request(
@@ -1394,7 +1526,17 @@ class Q_Utils
 			$curl_opts = array();
 		}
 
-		$parts = parse_url($url);		
+		// A string of header lines used to reach neither curl nor the
+		// redirect check below: split it into lines like the array
+		// form, so the caller's headers are sent and checked.
+		if (is_string($header)) {
+			$header = trim($header) === ''
+				? null
+				: preg_split('/\r\n|\n/', trim($header));
+		}
+
+		$parts = parse_url($url);
+		$scheme = strtolower((string)Q::ifset($parts, 'scheme', ''));
 		$host = $parts['host'];
 		if (!isset($ip)) $ip = $host;
 		$request_uri = isset($parts['path']) ? $parts['path'] : '/';
@@ -1496,8 +1638,53 @@ class Q_Utils
 			$header = explode("\r\n", $header);
 		}
 
+		// Redirects: curl resends every CURLOPT_HTTPHEADER line
+		// to every hop, so a header like Api-Key went wherever a Location
+		// pointed, on any protocol curl speaks. Hops are limited to http and
+		// https, and a request carrying a credential header is not
+		// redirected at all unless the caller sets CURLOPT_UNRESTRICTED_AUTH.
+		// Authorization and Cookie are left to curl, which drops them on a
+		// change of host, port or scheme since 7.83.0.
+		$sentHeaders = array_merge(
+			$headers,
+			is_array($header) ? $header : explode("\r\n", (string)$header)
+		);
+		$credentialHeaders = self::credentialHeaders(
+			$sentHeaders, function_exists('curl_init')
+		);
+		// CURLOPT_COOKIE is resent to every hop, whatever the host, unlike a
+		// Cookie header line, so it counts as a credential header.
+		if (defined('CURLOPT_COOKIE') && !empty($curl_opts[CURLOPT_COOKIE])) {
+			$credentialHeaders[] = 'CURLOPT_COOKIE';
+		}
+		// A credential in the body (apiKey=...) goes to whatever host a 307
+		// or 308 names; curl offers no way to follow 301-303 but not those,
+		// so such a request is not redirected at all. A GET puts
+		// $data in the query, which a redirect target does not inherit.
+		$credentialFields = ($method !== 'GET' && $data)
+			? self::credentialFields($data)
+			: array();
+		$followRedirects = (!$credentialHeaders && !$credentialFields)
+			|| !empty($curl_opts[CURLOPT_UNRESTRICTED_AUTH]);
+
+		// The first hop is limited to http and https like the redirects.
+		// A caller that needs another scheme passes
+		// CURLOPT_PROTOCOLS_STR (or CURLOPT_PROTOCOLS) in $curl_opts.
+
 		if (function_exists('curl_init')) {
 			$ch = curl_init();
+			if (!$followRedirects) {
+				$curl_opts[CURLOPT_FOLLOWLOCATION] = false;
+			}
+			if (!isset($curl_opts[CURLOPT_PROTOCOLS])
+			and !(defined('CURLOPT_PROTOCOLS_STR')
+				&& isset($curl_opts[CURLOPT_PROTOCOLS_STR]))) {
+				if (defined('CURLOPT_PROTOCOLS_STR')) {
+					$curl_opts[CURLOPT_PROTOCOLS_STR] = 'http,https';
+				} else {
+					$curl_opts[CURLOPT_PROTOCOLS] = CURLPROTO_HTTP | CURLPROTO_HTTPS;
+				}
+			}
 			$curl_opts = $curl_opts + array(
 				CURLOPT_USERAGENT => $user_agent,
 				CURLOPT_RETURNTRANSFER => true,
@@ -1509,6 +1696,13 @@ class Q_Utils
 				CURLOPT_TIMEOUT => $timeout,
 				CURLOPT_MAXREDIRS => 10,
 			);
+			if (defined('CURLOPT_REDIR_PROTOCOLS_STR')) {
+				$curl_opts += array(CURLOPT_REDIR_PROTOCOLS_STR => 'http,https');
+			} else {
+				$curl_opts += array(
+					CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS
+				);
+			}
 			curl_setopt_array($ch, $curl_opts);
 
 			switch ($method) {
@@ -1547,11 +1741,18 @@ class Q_Utils
 			}
 			curl_close($ch);
 		} else {
+			if ($scheme !== 'http' && $scheme !== 'https') {
+				throw new Q_Exception_WrongValue(array(
+					'field' => 'url',
+					'range' => 'an http or https URL'
+				));
+			}
 			$context = stream_context_create(array(
 				'http' => array(
 					'method' => $method,
 					'header' => $header,
 					'content' => $dataContent,
+					'follow_location' => $followRedirects ? 1 : 0,
 					'max_redirects' => 10,
 					'timeout' => $timeout
 				)
