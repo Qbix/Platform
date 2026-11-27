@@ -499,7 +499,10 @@ class Q_Valid
 
 	/**
 	 * Convenience method to require that the request origin matches
-	 * the base URL origin.
+	 * the base URL origin. A request that sends no Origin and no Referer
+	 * fails, unless the browser marked it Sec-Fetch-Site: same-origin.
+	 * Server-to-server callers of a handler that uses this must send an
+	 * Origin header naming the app.
 	 *
 	 * @method requireOrigin
 	 * @static
@@ -527,7 +530,17 @@ class Q_Valid
 			$allowedOrigin = null;
 		}
 
+		// Fails closed: a request that names no origin (no Origin, no
+		// X-Forwarded-Origin, no Referer) is rejected. The one exception is
+		// Sec-Fetch-Site: same-origin, which only the browser can set (page
+		// script cannot) and which it sends even when a Referrer-Policy or a
+		// privacy setting suppresses Referer on a same-origin GET.
 		$origin = Q_Request::origin();
+		if (!$origin && $allowedOrigin
+		&& isset($_SERVER['HTTP_SEC_FETCH_SITE'])
+		&& $_SERVER['HTTP_SEC_FETCH_SITE'] === 'same-origin') {
+			$origin = $allowedOrigin;
+		}
 
 		if (!$origin || $origin !== $allowedOrigin) {
 			if ($throwIfInvalid) {
